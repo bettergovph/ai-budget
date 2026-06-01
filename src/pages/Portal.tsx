@@ -369,6 +369,7 @@ function HierarchyView({
   midError,
   onRequestMid,
   deptId,
+  onDepthChange,
 }: {
   data: DeptData;
   year: number;
@@ -377,8 +378,25 @@ function HierarchyView({
   midError: string | null;
   onRequestMid: () => void;
   deptId: string;
+  onDepthChange: (depth: number) => void;
 }) {
   const [path, setPath] = useState<PathEntry[]>([]);
+  const drillBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    onDepthChange(path.length);
+    if (path.length === 0) return;
+    if (!window.matchMedia('(max-width: 720px)').matches) return;
+
+    const id = window.setTimeout(() => {
+      const target = drillBarRef.current;
+      if (!target) return;
+      const masthead = document.querySelector('.masthead') as HTMLElement | null;
+      const offset = (masthead?.offsetHeight ?? 0) + 8;
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [onDepthChange, path.length]);
   // If user is mid-drill but Stage B data hasn't loaded yet, surface a loader.
   const needsMid = path.length > 0 && !data.midLoaded;
 
@@ -447,6 +465,9 @@ function HierarchyView({
     if (idx < 0) setPath([]);
     else setPath(path.slice(0, idx + 1));
   }
+  function back() {
+    setPath((prev) => prev.slice(0, -1));
+  }
 
   // Build a CSV filter that matches the deepest entry in `path`,
   // so a download from this branch only includes its line items.
@@ -472,11 +493,22 @@ function HierarchyView({
       : `gaa-${data.department.id}-${path[path.length - 1].label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.csv`;
 
   return (
-    <div>
+    <div className={`hierarchy-view ${path.length > 0 ? 'hierarchy-view-drilled' : ''}`}>
       <YearStrip data={data} year={year} setYear={setYear} />
 
-      <div style={{ marginBottom: 14, marginTop: 28 }}>
+      <div className="hierarchy-view-label" style={{ marginBottom: 14, marginTop: 28 }}>
         <Eyebrow>Hierarchy · drill from department to expense class</Eyebrow>
+      </div>
+
+      <div ref={drillBarRef} className="drill-mobile-bar" aria-label="Current drilldown level">
+        <button type="button" onClick={back} disabled={path.length === 0}>
+          ← Back
+        </button>
+        <div>
+          <span>{levelTitle}</span>
+          <strong>{path.length === 0 ? data.department.description : path[path.length - 1].label}</strong>
+        </div>
+        <em>{records.length.toLocaleString()}</em>
       </div>
 
       <div className="crumbs">
@@ -510,7 +542,7 @@ function HierarchyView({
         />
       ) : (
         <>
-          <table className="hier-table">
+          <table className="hier-table drill-table">
             <thead>
               <tr>
                 <th>{levelTitle.toUpperCase()}</th>
@@ -2051,6 +2083,9 @@ export default function Portal() {
   const location = useLocation();
   const navigate = useNavigate();
   const view: View = VIEW_BY_SUFFIX[pathSuffix(location.pathname, deptId)] || 'hierarchy';
+  const [hierarchyDepth, setHierarchyDepth] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+  const didMountViewScroll = useRef(false);
 
   useEffect(() => {
     if (!deptId) return;
@@ -2095,6 +2130,28 @@ export default function Portal() {
     triggerMidLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, deptId, midState]);
+
+  useEffect(() => {
+    if (view !== 'hierarchy') setHierarchyDepth(0);
+  }, [deptId, view]);
+
+  useEffect(() => {
+    if (!didMountViewScroll.current) {
+      didMountViewScroll.current = true;
+      return;
+    }
+    if (!window.matchMedia('(max-width: 720px)').matches) return;
+
+    const id = window.setTimeout(() => {
+      const target = mainRef.current;
+      if (!target) return;
+      const masthead = document.querySelector('.masthead') as HTMLElement | null;
+      const offset = (masthead?.offsetHeight ?? 0) + 8;
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [deptId, view]);
 
   // Stage C is no longer triggered from the SPA. The Objects and Data views
   // both server-paginate via /api/dept/:id/objects/page (and the CSV button
@@ -2211,7 +2268,11 @@ export default function Portal() {
         }
       />
 
-      <main style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
+      <main
+        ref={mainRef}
+        className={`portal-main ${view === 'hierarchy' && hierarchyDepth > 0 ? 'portal-main-drilled' : ''}`}
+        style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}
+      >
         <div className="page-headline">
           <p className="page-eyebrow">Department {deptId} · FY 2020 – 2026</p>
           <h1 className="page-title">{data.department.description}</h1>
@@ -2231,6 +2292,7 @@ export default function Portal() {
             midError={midError}
             onRequestMid={triggerMidLoad}
             deptId={deptId}
+            onDepthChange={setHierarchyDepth}
           />
         )}
         {view === 'byyear' && <ByYearView data={data} year={year} setYear={setYear} />}

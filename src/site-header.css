@@ -231,7 +231,29 @@
   .logo-tag-em { display: none; }
 
   .primary-nav { display: none; }
-  .primary-subnav { display: none; }
+  .primary-subnav {
+    display: block;
+    margin: 0 -16px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--ink);
+    background: var(--paper);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .primary-subnav::-webkit-scrollbar { display: none; }
+  .primary-subnav .view-tabs.section-tabs {
+    gap: 0 !important;
+    min-height: 46px;
+    padding: 0 12px !important;
+    width: max-content;
+  }
+  .primary-subnav .view-tabs.section-tabs button {
+    min-height: 46px;
+    padding: 0 12px !important;
+    border-bottom-width: 3px !important;
+    white-space: nowrap;
+  }
 }
 
 /* ---- Desktop: hamburger hidden, drawer hidden ---- */

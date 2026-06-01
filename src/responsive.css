@@ -265,6 +265,131 @@
     min-width: 50px !important;
   }
 
+  /* Department hierarchy drilldown: use a tappable list instead of a compressed table. */
+  .portal-main.portal-main-drilled {
+    padding-top: 12px !important;
+  }
+  .portal-main.portal-main-drilled > .page-headline,
+  .portal-main.portal-main-drilled > .kpi-strip,
+  .portal-main.portal-main-drilled > .trend {
+    display: none !important;
+  }
+  .hierarchy-view.hierarchy-view-drilled > .year-strip-wrap,
+  .hierarchy-view.hierarchy-view-drilled > .hierarchy-view-label,
+  .hierarchy-view.hierarchy-view-drilled > .crumbs {
+    display: none !important;
+  }
+  .drill-mobile-bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    background: var(--paper);
+    padding: 10px 0;
+    margin: 0 0 12px;
+  }
+  .drill-mobile-bar button {
+    min-height: 38px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    padding: 0 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .drill-mobile-bar button:disabled {
+    opacity: 0.35;
+  }
+  .drill-mobile-bar div {
+    min-width: 0;
+  }
+  .drill-mobile-bar span,
+  .drill-mobile-bar em {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-style: normal;
+  }
+  .drill-mobile-bar strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-hero);
+    font-size: 14px;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .drill-mobile-bar em {
+    color: var(--ink-3);
+  }
+  .drill-table {
+    border-top: 1px solid var(--rule);
+    display: block;
+  }
+  .drill-table thead {
+    display: none;
+  }
+  .drill-table tbody,
+  .drill-table tr,
+  .drill-table td {
+    display: block;
+    width: 100%;
+  }
+  .drill-table tbody tr {
+    position: relative;
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 40px 14px 0;
+  }
+  .drill-table tbody tr:hover {
+    background: transparent;
+  }
+  .drill-table td {
+    padding: 0 !important;
+  }
+  .drill-table .name {
+    max-width: none !important;
+    font-size: 15px !important;
+    line-height: 1.25;
+    padding-right: 6px !important;
+  }
+  .drill-table .bar-cell {
+    width: 100% !important;
+    margin: 10px 0 8px;
+    padding-right: 0 !important;
+  }
+  .drill-table .num {
+    text-align: left;
+    font-size: 16px !important;
+    color: var(--ink);
+  }
+  .drill-table .delta {
+    margin-top: 2px;
+    text-align: left;
+  }
+  .drill-table .chev {
+    position: absolute;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    right: 0;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--rule);
+    transform: translateY(-50%);
+    color: var(--accent);
+    font-size: 20px;
+    background: var(--paper);
+  }
+
   /* Year tabs - allow wrap */
   .year-tabs {
     flex-wrap: wrap;

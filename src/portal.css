@@ -271,6 +271,7 @@ html, body {
   font-weight: 600;
   text-transform: uppercase;
 }
+.drill-mobile-bar { display: none; }
 
 /* ---------- Hierarchy table ---------- */
 .hier-table {

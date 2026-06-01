@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
 interface SiteHeaderProps {
-  /** Page-specific sub-nav rendered as a strip below the primary nav (desktop only). */
+  /** Page-specific sub-nav rendered as a strip below the primary nav. */
   subNav?: ReactNode;
   /** Extra content placed inside the mobile drawer (e.g., per-page section nav, download links). */
   drawerExtras?: ReactNode;
