@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  fetchObjectsPage,
   isMidHeavy,
   isObjectsHeavy,
   loadDeptData,
   loadDeptMidInto,
-  loadDeptObjectsInto,
-  midSizeHintMb,
-  objectsSizeHintMb,
   YEARS,
 } from '../lib/dept-data';
 import * as fmt from '../lib/format';
@@ -1129,12 +1127,60 @@ function ObjectDetail({
 /* ---------- Objects view ---------- */
 const ROWS_PER_PAGE = 50;
 
+/**
+ * Browser-driven CSV download — builds the same /api/dept/:id/objects/csv
+ * URL the Worker streams, then clicks it as an `<a download>`. No JS in
+ * the middle, so even DepEd's million rows download without spiking
+ * client memory.
+ */
+function ObjectsCsvLink({
+  deptId,
+  year,
+  bureau,
+  expense,
+  q,
+  rowCount,
+}: {
+  deptId: string;
+  year: number;
+  bureau: string;
+  expense: string;
+  q: string;
+  rowCount: number;
+}) {
+  const params = new URLSearchParams();
+  params.set('year', String(year));
+  if (bureau !== 'all') params.set('bureau', bureau);
+  if (expense !== 'all') params.set('expense', expense);
+  if (q) params.set('q', q);
+  const href = `/api/dept/${deptId}/objects/csv?${params.toString()}`;
+  const disabled = rowCount === 0;
+  const label =
+    rowCount > 0
+      ? `Download CSV · ${rowCount.toLocaleString()} rows`
+      : 'Download CSV';
+  return (
+    <a
+      className={`csv-btn csv-btn-pill${disabled ? ' csv-btn-disabled' : ''}`}
+      href={disabled ? undefined : href}
+      onClick={(e) => { if (disabled) e.preventDefault(); }}
+      aria-disabled={disabled}
+      style={{ display: 'inline-flex' }}
+    >
+      <span className="csv-btn-arrow">↓</span>
+      <span>{label}</span>
+    </a>
+  );
+}
+
 function ObjectsView({
   data,
+  deptId,
   year,
   setYear,
 }: {
   data: DeptData;
+  deptId: string;
   year: number;
   setYear: (y: number) => void;
 }) {
@@ -1146,6 +1192,15 @@ function ObjectsView({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // Debounce the text input so we don't fire a new server query on every
+  // keystroke. 300ms is short enough to feel responsive, long enough that
+  // typing "internet" stays a single fetch.
+  const [qDebounced, setQDebounced] = useState(q);
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -1172,50 +1227,98 @@ function ObjectsView({
     return Array.from(set.entries()).map(([code, label]) => ({ code, label }));
   }, [data]);
 
-  const rows = useMemo(() => {
-    const ql = q.trim().toLowerCase();
-    let list = data.objects.filter((o) => {
-      if (!o.description || o.description === 'nan') return false;
-      if (!o.years[year] || !o.years[year].amount) return false;
-      if (bureau !== 'all' && o.agency_id !== bureau) return false;
-      if (expense !== 'all') {
-        const code = (o.expense_id || '').split('-').pop();
-        if (code !== expense) return false;
-      }
-      if (ql) {
-        const hay = `${o.description} ${o.object_code} ${o.slug || ''}`.toLowerCase();
-        if (!hay.includes(ql)) return false;
-      }
-      return true;
-    });
-    list = list.slice().sort((a, b) => {
-      const av =
-        sortKey === 'amount'
-          ? a.years[year]?.amount || 0
-          : sortKey === 'code'
-            ? a.object_code || ''
-            : a.description || '';
-      const bv =
-        sortKey === 'amount'
-          ? b.years[year]?.amount || 0
-          : sortKey === 'code'
-            ? b.object_code || ''
-            : b.description || '';
-      const cmp = typeof av === 'number' ? av - (bv as number) : String(av).localeCompare(String(bv));
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return list;
-  }, [data, year, q, bureau, expense, sortKey, sortDir]);
+  // ----- server-driven pagination -----
+  // Each filter signature kicks off a fresh sequence of page fetches. We
+  // keep ALL fetched pages cached in `pages` so back/forward navigation is
+  // instant; cursors[i] is the cursor that produced pages[i] (cursor 0 is
+  // empty for the first page). On filter change we wipe both.
+  const [pages, setPages] = useState<ObjectItem[][]>([]);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{ count: number; sum: number } | null>(null);
+  const [unfilteredCount, setUnfilteredCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
+  // Filter signature — bumps when anything that affects the result set changes.
+  const filterKey = `${year}|${bureau}|${expense}|${qDebounced}|${sortKey}|${sortDir}`;
   useEffect(() => {
+    // Reset everything; first page fetches in the effect below.
+    setPages([]);
+    setCursors([null]);
+    setNextCursor(null);
+    setSummary(null);
     setPage(0);
     setOpenId(null);
-  }, [q, bureau, expense, year, sortKey, sortDir]);
+    setPageError(null);
+    // unfilteredCount is independent of filters — don't reset it.
+  }, [filterKey]);
 
-  const totalRows = rows.length;
-  const pageCount = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
-  const pageRows = rows.slice(page * ROWS_PER_PAGE, (page + 1) * ROWS_PER_PAGE);
-  const filteredTotal = rows.reduce((s, r) => s + (r.years[year]?.amount || 0), 0);
+  // Fetch the page at index `page` if we don't already have it cached. The
+  // server returns a cursor pointing to the NEXT page; we capture both that
+  // and (on the first page) the summary count/sum for the filtered set.
+  useEffect(() => {
+    if (pages[page]) return;
+    let cancelled = false;
+    setLoading(true);
+    setPageError(null);
+    fetchObjectsPage(deptId, {
+      year,
+      bureau: bureau !== 'all' ? bureau : null,
+      expense: expense !== 'all' ? expense : null,
+      q: qDebounced,
+      sort: sortKey,
+      dir: sortDir,
+      cursor: cursors[page] ?? null,
+      limit: ROWS_PER_PAGE,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setPages((prev) => {
+          const next = prev.slice();
+          next[page] = res.data;
+          return next;
+        });
+        setCursors((prev) => {
+          if (!res.nextCursor) return prev;
+          const next = prev.slice();
+          next[page + 1] = res.nextCursor;
+          return next;
+        });
+        setNextCursor(res.nextCursor);
+        if (res.summary) setSummary(res.summary);
+      })
+      .catch((e) => {
+        if (!cancelled) setPageError(String(e?.message || e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, filterKey, deptId]);
+
+  // One-shot fetch of the unfiltered total for the current year, so the
+  // eyebrow can show "X of Y line items" even before the user touches
+  // filters. Independent of the page query so we don't refire it on each
+  // filter change.
+  useEffect(() => {
+    let cancelled = false;
+    fetchObjectsPage(deptId, { year, limit: 1 })
+      .then((res) => {
+        if (!cancelled && res.summary) setUnfilteredCount(res.summary.count);
+      })
+      .catch(() => { /* non-fatal — eyebrow will fall back to filtered count */ });
+    return () => { cancelled = true; };
+  }, [deptId, year]);
+
+  const pageRows = pages[page] ?? [];
+  const totalRows = summary?.count ?? 0;
+  const filteredTotal = summary?.sum ?? 0;
+  const hasNext = page + 1 < pages.length || nextCursor != null;
+  const showPagerNumbers = totalRows > ROWS_PER_PAGE;
+  const fromRow = page * ROWS_PER_PAGE + (pageRows.length > 0 ? 1 : 0);
+  const toRow = page * ROWS_PER_PAGE + pageRows.length;
 
   function setSort(key: 'amount' | 'description' | 'code') {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -1233,9 +1336,9 @@ function ObjectsView({
 
       <div style={{ marginTop: 28 }}>
         <SectionHead
-          eyebrow={`Objects · all ${data.objects
-            .filter((o) => o.description !== 'nan')
-            .length.toLocaleString()} UACS line items · FY ${year}`}
+          eyebrow={`Objects · ${
+            unfilteredCount != null ? unfilteredCount.toLocaleString() : '…'
+          } UACS line items · FY ${year}`}
           headline="Every line item, searchable"
           dek="The lowest level of the budget hierarchy: each row is a single object code in a single fund, in a single operating unit, under a single program. This is the data your auditor reads. Search by name (e.g. “internet”), filter by bureau or expense class, click a row for the full breadcrumb."
         />
@@ -1247,7 +1350,9 @@ function ObjectsView({
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search 4,868 line items — try “internet”, “salary”, “travelling”…"
+            placeholder={`Search ${
+              unfilteredCount != null ? unfilteredCount.toLocaleString() : ''
+            } line items — try “internet”, “salary”, “travelling”…`}
           />
         </div>
         <div className="objects-filters">
@@ -1277,28 +1382,37 @@ function ObjectsView({
       </div>
 
       <div className="objects-summary">
-        <span>
-          <strong>{totalRows.toLocaleString()}</strong> line items match
-        </span>
-        <span className="sep">·</span>
-        <span>
-          Total: <strong>{fmt.php(filteredTotal, { unit: filteredTotal >= 1e9 ? 'B' : 'M' })}</strong>
-        </span>
-        <span className="sep">·</span>
-        <span>
-          {((filteredTotal / data.total(year)) * 100).toFixed(1)}% of FY {year} budget
-        </span>
+        {summary == null ? (
+          <span>Loading totals…</span>
+        ) : (
+          <>
+            <span>
+              <strong>{totalRows.toLocaleString()}</strong> line items match
+            </span>
+            <span className="sep">·</span>
+            <span>
+              Total: <strong>{fmt.php(filteredTotal, { unit: filteredTotal >= 1e9 ? 'B' : 'M' })}</strong>
+            </span>
+            <span className="sep">·</span>
+            <span>
+              {((filteredTotal / data.total(year)) * 100).toFixed(1)}% of FY {year} budget
+            </span>
+          </>
+        )}
         <span className="objects-summary-spacer" />
-        <DownloadCsvButton
-          data={data}
-          filter={{
-            agencyId: bureau !== 'all' ? bureau : undefined,
-            expenseClassCode: expense !== 'all' ? expense : undefined,
-            year,
-            query: q,
-          }}
-          filename={`gaa-${data.department.id}-objects-fy${year}${bureau !== 'all' ? '-' + bureau : ''}${expense !== 'all' ? '-class' + expense : ''}${q ? '-q' : ''}.csv`}
-          variant="pill"
+        {/*
+          CSV is streamed straight from the Worker — the browser handles the
+          download via Content-Disposition: attachment, so we don't need to
+          hold any of the rows in JS. Works for DepEd's million rows just as
+          well as for a tiny dept.
+        */}
+        <ObjectsCsvLink
+          deptId={deptId}
+          year={year}
+          bureau={bureau}
+          expense={expense}
+          q={qDebounced}
+          rowCount={summary?.count ?? 0}
         />
       </div>
 
@@ -1366,27 +1480,34 @@ function ObjectsView({
                 </Fragment>
               );
             })}
-            {pageRows.length === 0 && (
+            {pageRows.length === 0 && !loading && (
               <tr>
                 <td colSpan={4} className="no-results">
-                  No line items match these filters in FY {year}.
+                  {pageError
+                    ? `Could not load these results: ${pageError}`
+                    : `No line items match these filters in FY ${year}.`}
                 </td>
+              </tr>
+            )}
+            {loading && pageRows.length === 0 && (
+              <tr>
+                <td colSpan={4} className="no-results">Loading line items…</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {pageCount > 1 && (
+      {showPagerNumbers && (
         <div className="objects-pager">
-          <button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+          <button disabled={page === 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
             ← Prev
           </button>
           <span>
-            Page <strong>{page + 1}</strong> of {pageCount} · showing {page * ROWS_PER_PAGE + 1}–
-            {Math.min((page + 1) * ROWS_PER_PAGE, totalRows)} of {totalRows.toLocaleString()}
+            Showing {fromRow.toLocaleString()}–{toRow.toLocaleString()} of {totalRows.toLocaleString()}
+            {loading && ' · loading…'}
           </span>
-          <button disabled={page >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}>
+          <button disabled={!hasNext || loading} onClick={() => setPage((p) => p + 1)}>
             Next →
           </button>
         </div>
@@ -1428,16 +1549,43 @@ function formatCell(col: ColumnDef, val: RawCell): string {
   return String(val);
 }
 
-function DataBrowserView({ data }: { data: DeptData }) {
+/**
+ * Server-side sort options accepted by /api/dept/:id/objects/page. Other
+ * columns in the Data table render but their headers aren't clickable
+ * (sorting on a JOINed parent column would need either server-side joins
+ * for the sort or a denormalised column on the objects table — both bigger
+ * refactors than this view warrants).
+ */
+type DataSortKey = 'total_amount_php' | 'object_description' | 'object_code' | `amount_${number}`;
+
+/** Map a Data-table sort key to the Worker's sort/dir/year params. */
+function dataSortToServer(key: DataSortKey, dir: 'asc' | 'desc'): { sort: 'amount' | 'description' | 'code' | 'total'; year?: number; dir: 'asc' | 'desc' } {
+  if (key === 'total_amount_php') return { sort: 'total', dir };
+  if (key === 'object_description') return { sort: 'description', dir };
+  if (key === 'object_code') return { sort: 'code', dir };
+  const m = /^amount_(\d{4})$/.exec(key);
+  if (m) return { sort: 'amount', year: Number(m[1]), dir };
+  return { sort: 'total', dir }; // fallback
+}
+
+function DataBrowserView({ data, deptId }: { data: DeptData; deptId: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [q, setQ] = useState(() => searchParams.get('q') || '');
   const [bureau, setBureau] = useState(() => searchParams.get('bureau') || 'all');
   const [expense, setExpense] = useState(() => searchParams.get('expense') || 'all');
-  const [sortKey, setSortKey] = useState<string>('total_amount_php');
+  const [sortKey, setSortKey] = useState<DataSortKey>('total_amount_php');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [hidden, setHidden] = useState<Set<string>>(new Set(DEFAULT_HIDDEN_COLS));
   const [colsOpen, setColsOpen] = useState(false);
+
+  // Debounce the search box for the same reason ObjectsView does — each
+  // keystroke would otherwise fire a fresh server query.
+  const [qDebounced, setQDebounced] = useState(q);
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q), 300);
+    return () => clearTimeout(t);
+  }, [q]);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -1460,88 +1608,124 @@ function DataBrowserView({ data }: { data: DeptData }) {
     return Array.from(set.entries()).map(([code, label]) => ({ code, label }));
   }, [data]);
 
-  const allRows = useMemo(() => {
-    return data.objects
-      .filter((o) => o.description && o.description !== 'nan')
-      .map((o) => buildRow(data, o, YEARS));
-  }, [data]);
+  // ----- server-driven pagination (mirrors ObjectsView) -----
+  // Each filter+sort signature kicks off a fresh sequence of page fetches.
+  // We cache every page we've seen so back-paging is instant.
+  const [pages, setPages] = useState<ObjectItem[][]>([]);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{ count: number; sum: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const ql = q.trim().toLowerCase();
-    return allRows.filter((r) => {
-      if (bureau !== 'all' && r.agency_id !== bureau) return false;
-      if (expense !== 'all' && r.expense_class_code !== expense) return false;
-      if (ql) {
-        // Search across all visible string-ish columns.
-        for (const c of columns) {
-          if (c.numeric) continue;
-          const v = r[c.key];
-          if (v && String(v).toLowerCase().includes(ql)) return true;
-        }
-        return false;
-      }
-      return true;
-    });
-  }, [allRows, q, bureau, expense, columns]);
-
-  const sorted = useMemo(() => {
-    const list = filtered.slice();
-    list.sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      let cmp: number;
-      if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
-      else cmp = String(av ?? '').localeCompare(String(bv ?? ''));
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-    return list;
-  }, [filtered, sortKey, sortDir]);
+  const filterKey = `${bureau}|${expense}|${qDebounced}|${sortKey}|${sortDir}`;
+  useEffect(() => {
+    setPages([]);
+    setCursors([null]);
+    setNextCursor(null);
+    setSummary(null);
+    setPage(0);
+    setPageError(null);
+  }, [filterKey]);
 
   useEffect(() => {
-    setPage(0);
-  }, [q, bureau, expense, sortKey, sortDir]);
+    if (pages[page]) return;
+    let cancelled = false;
+    setLoading(true);
+    setPageError(null);
+    const serverSort = dataSortToServer(sortKey, sortDir);
+    fetchObjectsPage(deptId, {
+      // Data tab is all-years; the year param only matters for sort=amount
+      // (which lets a user re-sort by a single column header). Default to
+      // 2026 for that case; for `total` the year just gates summary scope
+      // and we want the all-years sum so the server picks total there.
+      year: serverSort.year ?? 2026,
+      bureau: bureau !== 'all' ? bureau : null,
+      expense: expense !== 'all' ? expense : null,
+      q: qDebounced,
+      sort: serverSort.sort,
+      dir: serverSort.dir,
+      cursor: cursors[page] ?? null,
+      limit: RAW_ROWS_PER_PAGE,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setPages((prev) => {
+          const next = prev.slice();
+          next[page] = res.data;
+          return next;
+        });
+        setCursors((prev) => {
+          if (!res.nextCursor) return prev;
+          const next = prev.slice();
+          next[page + 1] = res.nextCursor;
+          return next;
+        });
+        setNextCursor(res.nextCursor);
+        if (res.summary) setSummary(res.summary);
+      })
+      .catch((e) => {
+        if (!cancelled) setPageError(String(e?.message || e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, filterKey, deptId]);
 
-  const totalRows = sorted.length;
-  const pageCount = Math.max(1, Math.ceil(totalRows / RAW_ROWS_PER_PAGE));
-  const pageRows = sorted.slice(page * RAW_ROWS_PER_PAGE, (page + 1) * RAW_ROWS_PER_PAGE);
+  // Hydrate the current page's rows into the wide breadcrumb shape using
+  // Stage B data already in memory — same join the legacy in-memory path did.
+  const pageRows = useMemo(() => {
+    const objs = pages[page] ?? [];
+    return objs.map((o) => buildRow(data, o, YEARS));
+  }, [pages, page, data]);
+
+  const totalRows = summary?.count ?? 0;
+  const hasNext = page + 1 < pages.length || nextCursor != null;
+  const fromRow = page * RAW_ROWS_PER_PAGE + (pageRows.length > 0 ? 1 : 0);
+  const toRow = page * RAW_ROWS_PER_PAGE + pageRows.length;
   const visibleCols = columns.filter((c) => !hidden.has(c.key));
 
+  // Columns the server can sort by — every other header renders flat.
+  const sortableServerKeys = new Set<string>([
+    'total_amount_php',
+    'object_description',
+    'object_code',
+    ...YEARS.map((y) => `amount_${y}`),
+  ]);
+
   function toggleSort(key: string, numeric: boolean) {
+    if (!sortableServerKeys.has(key)) return;
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else {
-      setSortKey(key);
+      setSortKey(key as DataSortKey);
       setSortDir(numeric ? 'desc' : 'asc');
     }
   }
   const arrow = (k: string) => (sortKey === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
 
+  /**
+   * CSV download — streams from /api/dept/:id/objects/csv via the browser,
+   * no client-side JSON parsing. Works for DepEd's million rows the same
+   * way it works for tiny depts.
+   */
   function downloadFiltered() {
-    const objects = data.objects.filter((o) => {
-      if (!o.description || o.description === 'nan') return false;
-      if (bureau !== 'all' && o.agency_id !== bureau) return false;
-      if (expense !== 'all') {
-        const code = (o.expense_id || '').split('-').pop();
-        if (code !== expense) return false;
-      }
-      const ql = q.trim().toLowerCase();
-      if (ql) {
-        const r = buildRow(data, o, YEARS);
-        let hit = false;
-        for (const c of columns) {
-          if (c.numeric) continue;
-          const v = r[c.key];
-          if (v && String(v).toLowerCase().includes(ql)) {
-            hit = true;
-            break;
-          }
-        }
-        if (!hit) return false;
-      }
-      return true;
-    });
-    const csv = objectsToCsv(data, objects, YEARS);
-    const fn = `gaa-${data.department.id}-data${bureau !== 'all' ? '-' + bureau : ''}${expense !== 'all' ? '-class' + expense : ''}${q ? '-q' : ''}.csv`;
-    downloadCsv(fn, csv);
+    const params = new URLSearchParams();
+    // Data tab is all-years, so we use include_zero=1 to match what's
+    // displayed (rows that may be zero for any given year but non-zero
+    // somewhere else still show up in the table).
+    params.set('include_zero', '1');
+    if (bureau !== 'all') params.set('bureau', bureau);
+    if (expense !== 'all') params.set('expense', expense);
+    if (qDebounced) params.set('q', qDebounced);
+    // Year doesn't filter the row set in include_zero mode but is required
+    // by the server's query parser; pin to the latest.
+    params.set('year', '2026');
+    const href = `/api/dept/${deptId}/objects/csv?${params.toString()}`;
+    // Trigger the browser download. window.open keeps the current SPA route
+    // intact; the response's Content-Disposition handles the rest.
+    window.location.href = href;
   }
 
   function toggleCol(key: string) {
@@ -1556,7 +1740,9 @@ function DataBrowserView({ data }: { data: DeptData }) {
   return (
     <div className="raw-browser">
       <SectionHead
-        eyebrow={`Raw dataset · ${allRows.length.toLocaleString()} line items × ${columns.length} columns`}
+        eyebrow={`Raw dataset · ${
+          summary != null ? summary.count.toLocaleString() : '…'
+        } line items × ${columns.length} columns`}
         headline="Raw data browser"
         dek="The same flat table the CSV download produces — every UACS line item denormalised with its full department → agency → program → operating unit → fund → expense-class breadcrumb, plus seven years of amount + count columns. Search, filter, sort, paginate. Hidden ID columns can be toggled on for joins."
       />
@@ -1632,13 +1818,13 @@ function DataBrowserView({ data }: { data: DeptData }) {
       )}
 
       <div className="raw-summary">
-        <span>
-          <strong>{totalRows.toLocaleString()}</strong> rows match
-        </span>
-        <span className="sep">·</span>
-        <span>
-          page <strong>{page + 1}</strong> of {pageCount}
-        </span>
+        {summary == null ? (
+          <span>Loading totals…</span>
+        ) : (
+          <span>
+            <strong>{totalRows.toLocaleString()}</strong> rows match
+          </span>
+        )}
         <span className="raw-summary-spacer" />
         <button
           type="button"
@@ -1647,7 +1833,10 @@ function DataBrowserView({ data }: { data: DeptData }) {
           onClick={downloadFiltered}
         >
           <span className="csv-btn-arrow">↓</span>
-          <span>Download CSV · {totalRows.toLocaleString()} rows</span>
+          <span>
+            Download CSV
+            {totalRows > 0 && ` · ${totalRows.toLocaleString()} rows`}
+          </span>
         </button>
       </div>
 
@@ -1683,10 +1872,19 @@ function DataBrowserView({ data }: { data: DeptData }) {
                 ))}
               </tr>
             ))}
-            {pageRows.length === 0 && (
+            {pageRows.length === 0 && !loading && (
               <tr>
                 <td className="no-results" colSpan={visibleCols.length}>
-                  No rows match these filters.
+                  {pageError
+                    ? `Could not load these results: ${pageError}`
+                    : 'No rows match these filters.'}
+                </td>
+              </tr>
+            )}
+            {loading && pageRows.length === 0 && (
+              <tr>
+                <td className="no-results" colSpan={visibleCols.length}>
+                  Loading rows…
                 </td>
               </tr>
             )}
@@ -1694,20 +1892,16 @@ function DataBrowserView({ data }: { data: DeptData }) {
         </table>
       </div>
 
-      {pageCount > 1 && (
+      {totalRows > RAW_ROWS_PER_PAGE && (
         <div className="objects-pager">
-          <button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+          <button disabled={page === 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}>
             ← Prev
           </button>
           <span>
-            Page <strong>{page + 1}</strong> of {pageCount} · showing{' '}
-            {totalRows === 0 ? 0 : page * RAW_ROWS_PER_PAGE + 1}–
-            {Math.min((page + 1) * RAW_ROWS_PER_PAGE, totalRows)} of {totalRows.toLocaleString()}
+            Showing {fromRow.toLocaleString()}–{toRow.toLocaleString()} of {totalRows.toLocaleString()}
+            {loading && ' · loading…'}
           </span>
-          <button
-            disabled={page >= pageCount - 1}
-            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-          >
+          <button disabled={!hasNext || loading} onClick={() => setPage((p) => p + 1)}>
             Next →
           </button>
         </div>
@@ -1718,6 +1912,48 @@ function DataBrowserView({ data }: { data: DeptData }) {
 
 /* ---------- Lazy-load affordances for heavy stages ---------- */
 type StageState = 'idle' | 'loading' | 'loaded' | 'error';
+
+function capitalize(s: string): string {
+  return s.length === 0 ? s : s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Field-level slices of `DeptData` that each lazy stage is responsible for.
+ * Used to merge Stage B/C results into the latest React state via the
+ * functional form of setData, so concurrent stage completions don't
+ * overwrite each other's flags by spreading a stale Stage-A snapshot.
+ */
+function midDelta(next: DeptData): Partial<DeptData> {
+  return {
+    fpaps: next.fpaps,
+    fpapById: next.fpapById,
+    fpapsByAgency: next.fpapsByAgency,
+    fpapFamilies: next.fpapFamilies,
+    opUnits: next.opUnits,
+    opUnitById: next.opUnitById,
+    funds: next.funds,
+    fundById: next.fundById,
+    expenses: next.expenses,
+    expenseClassByYear: next.expenseClassByYear,
+    expenseClassByAgencyYear: next.expenseClassByAgencyYear,
+    midLoaded: true,
+    expensesSkipped: next.expensesSkipped,
+    topMovers: next.topMovers,
+  };
+}
+
+// objectsDelta was used by the old Stage C auto-loader to merge into the
+// React state after a full /objects dump. Both /objects and /data views
+// server-paginate now and don't need it. Kept defined here (unused) to
+// stay symmetric with midDelta for any future callers that opt back into
+// loadDeptObjectsInto. eslint-disable-next-line @typescript-eslint/no-unused-vars
+// @ts-expect-error: intentionally unused — see comment above.
+function objectsDelta(next: DeptData): Partial<DeptData> {
+  return {
+    objects: next.objects,
+    objectsLoaded: true,
+  };
+}
 
 /** Ticks elapsed seconds while mounted. Used inside loading-state UI to
  *  give users a visible sign that work is happening on long parquet queries. */
@@ -1743,26 +1979,23 @@ function StageLoader({
   deptId: string;
   onLoad?: () => void;
 }) {
-  const sizeHint = stage === 'mid' ? midSizeHintMb(deptId) : objectsSizeHintMb(deptId);
+  // User-facing labels — kept in language a civic-society or journalist
+  // audience will recognise. No backend table names, payload sizes, or
+  // database/CDN references in any of the copy below.
   const stageLabel =
-    stage === 'mid' ? 'programs, bureaus, funds & expense classes' : 'line-item appropriations';
-  const stageTechnical =
     stage === 'mid'
-      ? 'fpaps + operating_units + fund_subcategories + expenses'
-      : 'objects (UACS line items)';
-  const heavyHint =
-    stage === 'objects' &&
-    'Large groups can return hundreds of thousands of rows — the query runs entirely in your browser via DuckDB-WASM.';
+      ? 'this department’s programs and bureaus'
+      : 'the individual budget items';
+  const isHeavy =
+    stage === 'mid' ? isMidHeavy(deptId) : isObjectsHeavy(deptId);
 
   if (state === 'idle' && onLoad) {
     return (
       <div className="stage-loader stage-loader-idle">
         <p>
-          This group’s {stageLabel} aren’t loaded automatically
-          {sizeHint != null && ` (~${sizeHint} MB on the wire)`}.
-        </p>
-        <p className="stage-loader-tech">
-          <code>{stageTechnical}</code>
+          {isHeavy
+            ? `${capitalize(stageLabel)} are not loaded yet — this is a large department, so the load may take a little longer than usual.`
+            : `${capitalize(stageLabel)} are not loaded yet.`}
         </p>
         <button
           type="button"
@@ -1771,7 +2004,7 @@ function StageLoader({
           style={{ display: 'inline-flex' }}
         >
           <span className="csv-btn-arrow">↓</span>
-          <span>Load this data</span>
+          <span>Load this section</span>
         </button>
       </div>
     );
@@ -1780,8 +2013,8 @@ function StageLoader({
   if (state === 'error') {
     return (
       <div className="stage-loader stage-loader-error">
-        <p>Could not load {stageLabel} for group {deptId}.</p>
-        <p className="stage-loader-detail">{error}</p>
+        <p>Sorry — we couldn’t load {stageLabel} right now. Please try again in a moment.</p>
+        {error && <p className="stage-loader-detail">{error}</p>}
       </div>
     );
   }
@@ -1791,19 +2024,17 @@ function StageLoader({
   return (
     <div className="stage-loader stage-loader-loading">
       <p className="stage-loader-title">
-        Querying {stageLabel}…
+        Loading {stageLabel}…
       </p>
       <div className="loading-bar" aria-hidden="true" />
       <p className="stage-loader-detail">
-        Range-reading parquet from the CDN, then aggregating in your browser.
-        {sizeHint != null && ` ~${sizeHint} MB worst-case payload.`}
+        {isHeavy
+          ? 'This is a large department, so it can take a few seconds. Thanks for your patience.'
+          : 'This usually takes just a few seconds.'}
       </p>
       <p className="stage-loader-elapsed" aria-live="polite">
         <Elapsed />
       </p>
-      {heavyHint && (
-        <p className="stage-loader-hint">{heavyHint}</p>
-      )}
     </div>
   );
 }
@@ -1816,8 +2047,6 @@ export default function Portal() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [midState, setMidState] = useState<StageState>('idle');
   const [midError, setMidError] = useState<string | null>(null);
-  const [objectsState, setObjectsState] = useState<StageState>('idle');
-  const [objectsError, setObjectsError] = useState<string | null>(null);
   const [year, setYear] = useState(FALLBACK_YEAR);
   const location = useLocation();
   const navigate = useNavigate();
@@ -1829,8 +2058,6 @@ export default function Portal() {
     setLoadError(null);
     setMidState('idle');
     setMidError(null);
-    setObjectsState('idle');
-    setObjectsError(null);
     let cancelled = false;
     loadDeptData(deptId)
       .then((d) => { if (!cancelled) setData(d); })
@@ -1844,7 +2071,13 @@ export default function Portal() {
     setMidState('loading');
     loadDeptMidInto(data, deptId)
       .then((next) => {
-        setData(next);
+        // Stage B and Stage C run concurrently after Stage A, each closing
+        // over the same Stage-A `data`. Functional setData merges the mid
+        // delta onto whatever `prev` is now — without it, a slower Stage C
+        // resolving second would clobber Stage B's update with stale
+        // Stage-A state and the UI would stay on the "loading" screen
+        // forever despite midState === 'loaded'.
+        setData((prev) => (prev ? { ...prev, ...midDelta(next) } : next));
         setMidState('loaded');
       })
       .catch((e) => {
@@ -1863,32 +2096,10 @@ export default function Portal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, deptId, midState]);
 
-  const triggerObjectsLoad = () => {
-    if (!data || objectsState !== 'idle') return;
-    setObjectsState('loading');
-    loadDeptObjectsInto(data, deptId)
-      .then((next) => {
-        setData(next);
-        setObjectsState('loaded');
-      })
-      .catch((e) => {
-        setObjectsError(String(e?.message || e));
-        setObjectsState('error');
-      });
-  };
-
-  // Auto-fire objects load when user enters Objects or Data view, unless the
-  // dept is in HEAVY_OBJECTS_DEPTS (DepEd, DPWH) — those have ~1M aggregated
-  // rows which lock the React render thread on filter/sort even with
-  // pagination. Heavy depts require an explicit click instead.
-  useEffect(() => {
-    if (!data) return;
-    if (objectsState !== 'idle') return;
-    if (view !== 'objects' && view !== 'data') return;
-    if (isObjectsHeavy(deptId)) return;
-    triggerObjectsLoad();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, data, deptId, objectsState]);
+  // Stage C is no longer triggered from the SPA. The Objects and Data views
+  // both server-paginate via /api/dept/:id/objects/page (and the CSV button
+  // streams from /api/dept/:id/objects/csv). `loadDeptObjectsInto` stays
+  // exported from dept-data.ts for callers that still want the full dump.
 
   if (loadError) {
     return (
@@ -1900,9 +2111,9 @@ export default function Portal() {
           color: 'var(--accent)',
         }}
       >
-        <p>Could not load group <code>{deptId}</code>.</p>
+        <p>Sorry — we couldn’t load this department right now. Please try again in a moment.</p>
         <p style={{ color: 'var(--ink-3)', fontSize: 12 }}>{loadError}</p>
-        <p><Link to="/">← Back to national overview</Link></p>
+        <p><Link to="/">← Back to the national overview</Link></p>
       </div>
     );
   }
@@ -1910,9 +2121,9 @@ export default function Portal() {
   if (!data) {
     return (
       <div className="page-shell-loader">
-        <p className="page-shell-loader-title">Loading group {deptId}…</p>
+        <p className="page-shell-loader-title">Loading this department…</p>
         <div className="loading-bar" aria-hidden="true" />
-        <p className="page-shell-loader-detail">FY 2020 – 2026 totals & bureaus</p>
+        <p className="page-shell-loader-detail">Pulling budget figures for 2020 – 2026.</p>
         <p className="page-shell-loader-elapsed" aria-live="polite">
           <Elapsed />
         </p>
@@ -2036,43 +2247,27 @@ export default function Portal() {
             />
           ))}
         {view === 'objects' &&
-          (data.midLoaded && data.objectsLoaded ? (
-            <ObjectsView data={data} year={year} setYear={setYear} />
-          ) : !data.midLoaded ? (
+          (data.midLoaded ? (
+            <ObjectsView data={data} deptId={deptId} year={year} setYear={setYear} />
+          ) : (
             <StageLoader
               stage="mid"
               state={midState}
               error={midError}
               deptId={deptId}
               onLoad={midState === 'idle' ? triggerMidLoad : undefined}
-            />
-          ) : (
-            <StageLoader
-              stage="objects"
-              state={objectsState}
-              error={objectsError}
-              deptId={deptId}
-              onLoad={objectsState === 'idle' ? triggerObjectsLoad : undefined}
             />
           ))}
         {view === 'data' &&
-          (data.midLoaded && data.objectsLoaded ? (
-            <DataBrowserView data={data} />
-          ) : !data.midLoaded ? (
+          (data.midLoaded ? (
+            <DataBrowserView data={data} deptId={deptId} />
+          ) : (
             <StageLoader
               stage="mid"
               state={midState}
               error={midError}
               deptId={deptId}
               onLoad={midState === 'idle' ? triggerMidLoad : undefined}
-            />
-          ) : (
-            <StageLoader
-              stage="objects"
-              state={objectsState}
-              error={objectsError}
-              deptId={deptId}
-              onLoad={objectsState === 'idle' ? triggerObjectsLoad : undefined}
             />
           ))}
         {view === 'methodology' && <MethodologyView data={data} />}

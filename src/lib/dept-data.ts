@@ -90,6 +90,104 @@ async function loadJson<T>(path: string): Promise<T> {
 }
 
 /**
+ * Selects between the D1-backed Worker API (default) and the legacy
+ * parquet/DuckDB-WASM path (opt-in via `?source=parquet`). Read at every
+ * loader call so a user can flip between sources without a full reload.
+ *
+ * Keeping the parquet path alive as a fallback (rather than ripping it out)
+ * lets us compare load times on the same dept and gives us a known-good
+ * escape hatch if D1 misbehaves for a specific department.
+ */
+function useD1Source(): boolean {
+  if (typeof window === 'undefined') return true;
+  return new URLSearchParams(window.location.search).get('source') !== 'parquet';
+}
+
+interface D1CoreResponse {
+  departments: RawDataset<Department>;
+  yearly_totals: RawDataset<{ year: number; count: number; amount: number }>;
+  agencies: RawDataset<Agency>;
+}
+
+interface D1MidResponse {
+  fpaps: RawDataset<FPAP>;
+  operating_units: RawDataset<OperatingUnit>;
+  fund_subcategories: RawDataset<Fund>;
+  expenses: RawDataset<Expense>;
+}
+
+async function fetchD1<T>(path: string): Promise<T> {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`D1 API ${path} returned ${r.status}`);
+  return (await r.json()) as T;
+}
+
+/**
+ * Server-side filter+sort+paginate for the Objects view. See the Worker's
+ * /api/dept/:id/objects/page route. The page payload is intentionally small
+ * (~100-200 KB even for DepEd) so this is cheap to call on every filter/
+ * sort/cursor change.
+ */
+export interface ObjectsPageQuery {
+  year?: number;
+  /** agency_id; null/undefined = all */
+  bureau?: string | null;
+  /** expense code suffix; null/undefined = all */
+  expense?: string | null;
+  /** free-text search across description / object_code / slug */
+  q?: string;
+  sort?: 'amount' | 'description' | 'code' | 'total';
+  dir?: 'asc' | 'desc';
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface ObjectsPageResult {
+  data: ObjectItem[];
+  /** Opaque base64 cursor; null when there are no more pages. */
+  nextCursor: string | null;
+  /** Only populated on the first page (no input cursor); null on subsequent pages. */
+  summary: { count: number; sum: number } | null;
+  /** Echo of metadata so the caller can correlate (e.g. validate matching year). */
+  meta: { year: number; sort: 'amount' | 'description' | 'code' | 'total'; dir: 'asc' | 'desc'; limit: number };
+}
+
+interface RawObjectsPageResponse {
+  metadata: { department_id: string; year: number; sort: 'amount' | 'description' | 'code' | 'total'; dir: 'asc' | 'desc'; limit: number };
+  data: ObjectItem[];
+  next_cursor: string | null;
+  summary: { count: number; sum: number } | null;
+}
+
+export async function fetchObjectsPage(deptId: string, q: ObjectsPageQuery = {}): Promise<ObjectsPageResult> {
+  const sp = new URLSearchParams();
+  if (q.year != null) sp.set('year', String(q.year));
+  if (q.bureau) sp.set('bureau', q.bureau);
+  if (q.expense) sp.set('expense', q.expense);
+  if (q.q) sp.set('q', q.q);
+  if (q.sort) sp.set('sort', q.sort);
+  if (q.dir) sp.set('dir', q.dir);
+  if (q.cursor) sp.set('cursor', q.cursor);
+  if (q.limit != null) sp.set('limit', String(q.limit));
+  const qs = sp.toString();
+  const path = `/api/dept/${deptId}/objects/page${qs ? '?' + qs : ''}`;
+
+  const resp = await fetchD1<RawObjectsPageResponse>(path);
+  // Apply the same SCALE multiplier (×1000) and NaN-row drop the legacy
+  // parquet loader applies, so caller-side code (sorts, totals) sees pesos
+  // not "thousands" and never hits the source's sentinel rows.
+  const rescaled = resp.data.filter((o) => !isNan(o)).map(rescale);
+  return {
+    data: rescaled,
+    nextCursor: resp.next_cursor,
+    summary: resp.summary
+      ? { count: resp.summary.count, sum: resp.summary.sum * SCALE }
+      : null,
+    meta: { year: resp.metadata.year, sort: resp.metadata.sort, dir: resp.metadata.dir, limit: resp.metadata.limit },
+  };
+}
+
+/**
  * Per-table parquet metadata: which `*_code` column the table has and which
  * foreign-key columns to project. Used to rebuild RawDataset<T> from the
  * year-unpivoted parquet rows.
@@ -249,13 +347,23 @@ function emptyExpenseClassByYear(): Record<number, ExpenseClassBreakdown> {
  * `loadDeptObjectsInto`.
  */
 export async function loadDeptData(deptId: string): Promise<DeptData> {
-  const url = (p: string) => deptUrl(deptId, p);
+  let departments: RawDataset<Department>;
+  let yearly: RawDataset<{ year: number; count: number; amount: number }>;
+  let agencies: RawDataset<Agency>;
 
-  const [departments, yearly, agencies] = await Promise.all([
-    loadJson<RawDataset<Department>>(url('departments.json')),
-    loadJson<RawDataset<{ year: number; count: number; amount: number }>>(url('yearly_totals.json')),
-    loadJson<RawDataset<Agency>>(url('agencies.json')),
-  ]);
+  if (useD1Source()) {
+    const r = await fetchD1<D1CoreResponse>(`/api/dept/${deptId}/core`);
+    departments = r.departments;
+    yearly = r.yearly_totals;
+    agencies = r.agencies;
+  } else {
+    const url = (p: string) => deptUrl(deptId, p);
+    [departments, yearly, agencies] = await Promise.all([
+      loadJson<RawDataset<Department>>(url('departments.json')),
+      loadJson<RawDataset<{ year: number; count: number; amount: number }>>(url('yearly_totals.json')),
+      loadJson<RawDataset<Agency>>(url('agencies.json')),
+    ]);
+  }
 
   const dept = departments.data[0];
   const deptTotal: Record<number, YearData> = {};
@@ -321,16 +429,29 @@ export async function loadDeptData(deptId: string): Promise<DeptData> {
  */
 export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<DeptData> {
   const skipExpenses = SKIP_EXPENSES.has(deptId);
-  const manifest = await loadManifest(deptId);
 
-  const [fpapsRaw, opUnitsRaw, fundsRaw, expensesRaw] = await Promise.all([
-    loadParquetTable<FPAP>(deptId, 'fpaps', manifest),
-    loadParquetTable<OperatingUnit>(deptId, 'operating_units', manifest),
-    loadParquetTable<Fund>(deptId, 'fund_subcategories', manifest),
-    skipExpenses
-      ? Promise.resolve<RawDataset<Expense>>({ data: [] })
-      : loadParquetTable<Expense>(deptId, 'expenses', manifest),
-  ]);
+  let fpapsRaw: RawDataset<FPAP>;
+  let opUnitsRaw: RawDataset<OperatingUnit>;
+  let fundsRaw: RawDataset<Fund>;
+  let expensesRaw: RawDataset<Expense>;
+
+  if (useD1Source()) {
+    const r = await fetchD1<D1MidResponse>(`/api/dept/${deptId}/mid`);
+    fpapsRaw = r.fpaps;
+    opUnitsRaw = r.operating_units;
+    fundsRaw = r.fund_subcategories;
+    expensesRaw = skipExpenses ? { data: [] } : r.expenses;
+  } else {
+    const manifest = await loadManifest(deptId);
+    [fpapsRaw, opUnitsRaw, fundsRaw, expensesRaw] = await Promise.all([
+      loadParquetTable<FPAP>(deptId, 'fpaps', manifest),
+      loadParquetTable<OperatingUnit>(deptId, 'operating_units', manifest),
+      loadParquetTable<Fund>(deptId, 'fund_subcategories', manifest),
+      skipExpenses
+        ? Promise.resolve<RawDataset<Expense>>({ data: [] })
+        : loadParquetTable<Expense>(deptId, 'expenses', manifest),
+    ]);
+  }
 
   const fpapArr: FPAP[] = fpapsRaw.data
     .filter((f) => !isNan(f))
@@ -440,8 +561,13 @@ export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<D
  * Objects or Data view.
  */
 export async function loadDeptObjectsInto(data: DeptData, deptId: string): Promise<DeptData> {
-  const manifest = await loadManifest(deptId);
-  const raw = await loadParquetTable<ObjectItem>(deptId, 'objects', manifest);
+  let raw: RawDataset<ObjectItem>;
+  if (useD1Source()) {
+    raw = await fetchD1<RawDataset<ObjectItem>>(`/api/dept/${deptId}/objects`);
+  } else {
+    const manifest = await loadManifest(deptId);
+    raw = await loadParquetTable<ObjectItem>(deptId, 'objects', manifest);
+  }
   const objects: ObjectItem[] = raw.data.filter((o) => !isNan(o)).map(rescale);
   return { ...data, objects, objectsLoaded: true };
 }

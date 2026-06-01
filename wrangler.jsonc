@@ -2,13 +2,27 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "budget",
   "compatibility_date": "2026-05-18",
+  "main": "src/worker/index.ts",
   "observability": {
     "enabled": true
   },
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    // Worker handles every request first; it dispatches `/api/*` to D1 and
+    // falls back to env.ASSETS.fetch() for everything else (including the
+    // SPA fallback). Without this, `not_found_handling` intercepts /api/*
+    // and returns index.html before the Worker ever sees it.
+    "run_worker_first": true
   },
   "compatibility_flags": [
     "nodejs_compat"
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "budget",
+      "database_id": "2c4d338d-10a5-4cc7-a34f-21ca74edab9a"
+    }
   ]
 }
