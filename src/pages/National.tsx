@@ -15,9 +15,9 @@ export default function National() {
     fetch(dataUrl('national/index.json'))
       .then((r) => {
         if (!r.ok) throw new Error(`Failed to load national index (HTTP ${r.status}). Run \`npm run build:index\`.`);
-        return r.json();
+        return r.json() as Promise<NationalIndex>;
       })
-      .then(setIdx)
+      .then((data) => setIdx(data))
       .catch((e) => setErr(String(e?.message || e)));
   }, []);
 
