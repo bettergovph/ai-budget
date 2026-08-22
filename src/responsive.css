@@ -390,6 +390,96 @@
     background: var(--paper);
   }
 
+  .national-section-tabs button {
+    min-width: 118px;
+    justify-content: center;
+  }
+  .national-groups-head {
+    margin-top: 28px !important;
+  }
+  .national-groups-table {
+    border-top: 1px solid var(--rule);
+    display: block;
+  }
+  .national-groups-table thead {
+    display: none;
+  }
+  .national-groups-table tbody,
+  .national-groups-table tr,
+  .national-groups-table td {
+    display: block;
+    width: 100%;
+  }
+  .national-groups-table tbody tr {
+    position: relative;
+    border-bottom: 1px solid var(--rule);
+    padding: 14px 40px 14px 0;
+  }
+  .national-groups-table tbody tr:hover {
+    background: transparent;
+  }
+  .national-groups-table td {
+    padding: 0 !important;
+  }
+  .national-groups-table .national-groups-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .national-groups-table .name {
+    max-width: none !important;
+    font-size: 15px !important;
+    line-height: 1.25;
+    padding-right: 6px !important;
+  }
+  .national-groups-table .bar-cell {
+    width: 100% !important;
+    margin: 10px 0 8px;
+    padding-right: 0 !important;
+  }
+  .national-groups-table .bar-val {
+    display: block;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .national-groups-table .national-groups-delta {
+    text-align: left !important;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .national-groups-table .national-groups-open {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: 30px;
+    height: 30px;
+    transform: translateY(-50%);
+  }
+  .national-groups-table .national-groups-open a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    color: transparent;
+    text-decoration: none;
+    background: var(--paper);
+  }
+  .national-groups-table .national-groups-open a::after {
+    content: "›";
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 20px;
+    line-height: 1;
+  }
+
   /* Year tabs - allow wrap */
   .year-tabs {
     flex-wrap: wrap;

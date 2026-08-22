@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Eyebrow, SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
@@ -10,6 +10,16 @@ import { dataUrl } from '../lib/data-url';
 export default function National() {
   const [idx, setIdx] = useState<NationalIndex | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const groupsRef = useRef<HTMLDivElement>(null);
+
+  function scrollToEl(el: HTMLElement | null) {
+    if (!el) return;
+    const masthead = document.querySelector('.masthead') as HTMLElement | null;
+    const offset = (masthead?.offsetHeight ?? 0) + 8;
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }
 
   useEffect(() => {
     fetch(dataUrl('national/index.json'))
@@ -30,9 +40,7 @@ export default function National() {
     if (!id) return;
     // Defer one frame: the section we're scrolling to renders after `idx`
     // hydrates the table, and scrollIntoView needs the layout pass to land.
-    requestAnimationFrame(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    requestAnimationFrame(() => scrollToEl(document.getElementById(id)));
   }, [idx]);
 
   if (err) {
@@ -74,9 +82,19 @@ export default function National() {
     <>
       <SiteHeader
         compiledMeta={`Compiled · FY${latestYear} · ₱${fmt.shortPhp(totalLatest, 'T').replace('₱', '')}`}
+        subNav={
+          <nav className="view-tabs section-tabs national-section-tabs" aria-label="National sections">
+            <button type="button" onClick={() => scrollToEl(mainRef.current)}>
+              Overview
+            </button>
+            <button type="button" onClick={() => scrollToEl(groupsRef.current)}>
+              All groups
+            </button>
+          </nav>
+        }
       />
 
-      <main style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
+      <main ref={mainRef} className="national-main" style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
         <div className="page-headline">
           <p className="page-eyebrow">National overview</p>
           <h1 className="page-title">Philippines GAA Budget AI Review</h1>
@@ -114,7 +132,7 @@ export default function National() {
         </div>
         <NationalTrend yearly={idx.national_yearly} />
 
-        <div id="groups" style={{ marginTop: 40, scrollMarginTop: 220 }}>
+        <div ref={groupsRef} id="groups" className="national-groups-head" style={{ marginTop: 40, scrollMarginTop: 220 }}>
           <SectionHead
             eyebrow="Ranking · FY 2026"
             headline="All groups, sorted by latest appropriation"
@@ -122,7 +140,7 @@ export default function National() {
           />
         </div>
 
-        <table className="hier-table" style={{ marginTop: 16 }}>
+        <table className="hier-table national-groups-table" style={{ marginTop: 16 }}>
           <thead>
             <tr>
               <th style={{ width: 60 }}>ID</th>
@@ -140,7 +158,7 @@ export default function National() {
               const pct = maxDept ? (curr / maxDept) * 100 : 0;
               return (
                 <tr key={d.id}>
-                  <td className="mono">{d.id}</td>
+                  <td className="mono national-groups-id">{d.id}</td>
                   <td className="name">
                     <Link to={`/d/${d.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                       {d.description}
@@ -152,10 +170,17 @@ export default function National() {
                     </div>
                     <span className="bar-val">{fmt.shortPhp(curr, curr >= 1e12 ? 'T' : 'B')}</span>
                   </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: dpct == null ? 'var(--ink-mute)' : dpct >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                  <td
+                    className="national-groups-delta"
+                    style={{
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      color: dpct == null ? 'var(--ink-mute)' : dpct >= 0 ? 'var(--positive)' : 'var(--negative)',
+                    }}
+                  >
                     {dpct == null ? '—' : `${dpct >= 0 ? '+' : ''}${dpct.toFixed(1)}%`}
                   </td>
-                  <td style={{ textAlign: 'right' }}>
+                  <td className="national-groups-open" style={{ textAlign: 'right' }}>
                     <Link to={`/d/${d.id}`} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                       Open →
                     </Link>
