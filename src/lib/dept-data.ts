@@ -76,6 +76,10 @@ export const EXPENSE_CLASS: Record<string, ExpenseClassMeta> = {
   '3': { key: 'FE', label: 'Financial Expenses', color: 'var(--ec-fe)' },
   '4': { key: 'CO', label: 'Capital Outlays', color: 'var(--ec-co)' },
   '5': { key: 'CO', label: 'Capital Outlays', color: 'var(--ec-co)' },
+  // The dataset's actual capital-outlays code. 4 and 5 appear in no row of
+  // the loaded data; without '6' every expense-class breakdown silently
+  // reported zero capital outlays.
+  '6': { key: 'CO', label: 'Capital Outlays', color: 'var(--ec-co)' },
 };
 
 export function normName(s: string): string {
