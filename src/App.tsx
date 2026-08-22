@@ -5,7 +5,7 @@ const National = lazy(() => import('./pages/National'));
 const Portal = lazy(() => import('./pages/Portal'));
 const Methodology = lazy(() => import('./pages/Methodology'));
 const Explore = lazy(() => import('./pages/Explore'));
-const Nep2027National = lazy(() => import('./pages/Nep2027National'));
+const Nep2027Story = lazy(() => import('./pages/Nep2027Story'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
 const Nep2027Browse = lazy(() => import('./pages/Nep2027Browse'));
 const Nep2027Explore = lazy(() => import('./pages/Nep2027Explore'));
@@ -44,7 +44,8 @@ export default function App() {
           <Route path="/d/:deptId/report" element={<Portal />} />
           <Route path="/d/:deptId/methodology" element={<Portal />} />
           {/* FY2027 National Expenditure Program microsite */}
-          <Route path="/2027" element={<Nep2027National />} />
+          <Route path="/2027/overview" element={<Nep2027Story />} />
+          <Route path="/2027" element={<Navigate to="/2027/overview" replace />} />
           <Route path="/2027/browse" element={<Nep2027Browse />} />
           <Route path="/2027/search" element={<Nep2027Explore />} />
           {/* Former name of the search page; keep links working. */}

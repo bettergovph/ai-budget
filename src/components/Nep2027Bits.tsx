@@ -217,7 +217,7 @@ export function CompareTable({
 }
 
 const NEP_NAV: Array<{ to: string; label: string }> = [
-  { to: '/2027', label: 'Overview' },
+  { to: '/2027/overview', label: 'Overview' },
   { to: '/2027/browse', label: 'Browse' },
   { to: '/2027/search', label: 'Search' },
   { to: '/2027/methodology', label: 'Methodology' },
@@ -236,7 +236,7 @@ export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiled
   const path = pathname.replace(/\/+$/, '') || '/2027';
 
   const isActive = (to: string) => {
-    if (to === '/2027') return path === '/2027';
+    if (to === '/2027/overview') return path === '/2027' || path === '/2027/overview';
     if (to === '/2027/browse') return path === '/2027/browse' || path.startsWith('/2027/d/');
     return path === to || path.startsWith(`${to}/`);
   };
