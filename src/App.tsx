@@ -40,6 +40,7 @@ export default function App() {
           <Route path="/d/:deptId/overview" element={<Portal />} />
           <Route path="/d/:deptId/by-year" element={<Portal />} />
           <Route path="/d/:deptId/programs" element={<Portal />} />
+          <Route path="/d/:deptId/budget-cycle" element={<Portal />} />
           <Route path="/d/:deptId/objects" element={<Portal />} />
           <Route path="/d/:deptId/data" element={<Portal />} />
           <Route path="/d/:deptId/report" element={<Portal />} />

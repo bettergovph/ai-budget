@@ -169,3 +169,94 @@ export interface NationalMoverRow {
   prev_amount: number;
   curr_amount: number;
 }
+
+export type BudgetCycleStage =
+  | 'nep'
+  | 'gaa'
+  | 'authorized_appropriation'
+  | 'adjusted_appropriation'
+  | 'adjusted_allotment'
+  | 'obligations'
+  | 'disbursements';
+
+export type BudgetCycleExpenseClass = 'ps' | 'mooe' | 'finex' | 'co' | 'total';
+
+export type BudgetCycleMatchMethod =
+  | 'exact_code'
+  | 'organization_history'
+  | 'agency_name_and_pap_code'
+  | 'agency_name_and_pap_label'
+  | 'ambiguous'
+  | 'unmatched';
+
+export interface BudgetCycleMetadata {
+  department_id: string;
+  available: boolean;
+  generated_at: string | null;
+  source_filename: string | null;
+  source_sha256: string | null;
+  scope: string;
+  units: string;
+  years: number[];
+  stages: BudgetCycleStage[];
+  expense_classes: BudgetCycleExpenseClass[];
+  counts: {
+    programs: number;
+    reported_facts: number;
+    reported_zeros: number;
+    unmatched_programs: number;
+  };
+}
+
+export interface BudgetCycleSubject {
+  subject_id: string;
+  source_sheet: string;
+  display_name: string;
+  is_primary_subject: number | boolean;
+  canonical_portal_department_id: string | null;
+  canonical_portal_agency_id: string | null;
+  source_pairs: string[];
+  coverage: Partial<Record<BudgetCycleStage, number[]>>;
+}
+
+export interface BudgetCycleProgram {
+  source_row_id: string;
+  subject_id: string;
+  source_department_code: string;
+  source_department_name: string | null;
+  source_agency_code: string;
+  source_agency_name: string | null;
+  display_agency_id: string;
+  display_agency_name: string;
+  source_pap_code: string;
+  source_pap_label: string | null;
+  historical_portal_fpap_id: string | null;
+  canonical_portal_fpap_id: string | null;
+  portal_pap_label: string | null;
+  match_method: BudgetCycleMatchMethod;
+  match_confidence: 'high' | 'medium' | 'none';
+  candidate_portal_fpap_ids: string[];
+  review_note: string | null;
+}
+
+export interface BudgetCycleFact {
+  source_row_id: string;
+  fiscal_year: number;
+  stage: BudgetCycleStage;
+  expense_class: BudgetCycleExpenseClass;
+  amount_pesos: number | null;
+}
+
+export interface BudgetCycleQualitySummary {
+  severity: 'info' | 'warning' | 'error';
+  code: string;
+  count: number;
+}
+
+export interface BudgetCycleResponse {
+  metadata: BudgetCycleMetadata;
+  subjects: BudgetCycleSubject[];
+  programs: BudgetCycleProgram[];
+  facts: BudgetCycleFact[];
+  quality_summary: BudgetCycleQualitySummary[];
+}

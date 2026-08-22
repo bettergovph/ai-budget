@@ -13,6 +13,7 @@ import {
 import * as fmt from '../lib/format';
 import { Eyebrow, SectionHead, Spark } from '../components/shared';
 import ReportView from '../components/ReportView';
+import BudgetCycleView from '../components/BudgetCycleView';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { buildColumns, buildRow, downloadCsv, filterObjects, objectsToCsv } from '../lib/csv';
@@ -27,6 +28,7 @@ const VIEW_BY_SUFFIX: Record<string, View> = {
   '/overview': 'hierarchy',
   '/by-year': 'byyear',
   '/programs': 'programs',
+  '/budget-cycle': 'cycle',
   '/objects': 'objects',
   '/data': 'data',
   '/report': 'report',
@@ -37,6 +39,7 @@ const SUFFIX_BY_VIEW: Record<View, string> = {
   hierarchy: '/overview',
   byyear: '/by-year',
   programs: '/programs',
+  cycle: '/budget-cycle',
   objects: '/objects',
   data: '/data',
   report: '/report',
@@ -50,7 +53,7 @@ function pathSuffix(pathname: string, deptId: string): string {
   return pathname;
 }
 
-type View = 'hierarchy' | 'byyear' | 'programs' | 'objects' | 'data' | 'report' | 'methodology';
+type View = 'hierarchy' | 'byyear' | 'programs' | 'cycle' | 'objects' | 'data' | 'report' | 'methodology';
 
 interface DownloadButtonProps {
   data: DeptData;
@@ -2410,6 +2413,7 @@ export default function Portal() {
     ['report', 'Report'],
     ['byyear', 'By year'],
     ['programs', 'Programs'],
+    ['cycle', 'Budget cycle'],
     ['objects', 'Objects'],
     ['data', 'Data'],
     ['methodology', 'Methodology'],
@@ -2480,10 +2484,12 @@ export default function Portal() {
         style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}
       >
         <div className="page-headline">
-          <p className="page-eyebrow">Department {deptId} · FY 2020 – 2026</p>
+          <p className="page-eyebrow">
+            Department {deptId} · {view === 'cycle' ? 'FY 2018 – 2026 · Current New Appropriations' : 'FY 2020 – 2026'}
+          </p>
           <h1 className="page-title">{data.department.description}</h1>
         </div>
-        {view !== 'methodology' && view !== 'data' && view !== 'report' && (
+        {view !== 'methodology' && view !== 'data' && view !== 'report' && view !== 'cycle' && (
           <KpiStrip data={data} hideOnMobile={view !== 'hierarchy'} />
         )}
         {view === 'hierarchy' && <TrendChart data={data} />}
@@ -2514,6 +2520,9 @@ export default function Portal() {
               onLoad={midState === 'idle' ? triggerMidLoad : undefined}
             />
           ))}
+        {view === 'cycle' && (
+          <BudgetCycleView key={deptId} deptId={deptId} departmentName={data.department.description} />
+        )}
         {view === 'objects' &&
           (data.midLoaded ? (
             <ObjectsView data={data} deptId={deptId} year={year} setYear={setYear} />
@@ -2540,7 +2549,7 @@ export default function Portal() {
           ))}
         {view === 'methodology' && <MethodologyView data={data} />}
 
-        {view !== 'methodology' && view !== 'data' && (
+        {view !== 'methodology' && view !== 'data' && view !== 'cycle' && (
           <p className="note-block">
             <strong>Note.</strong> All amounts are appropriations under the General Appropriations Act, in
             pesos. Source data is published in thousands; values shown here are converted to full pesos and
