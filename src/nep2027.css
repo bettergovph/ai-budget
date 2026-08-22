@@ -1,7 +1,12 @@
 /* FY2027 NEP microsite (/2027).
    Reuses the portal's tokens (--ink, --rule, --accent, --positive/--negative,
    --font-*); everything below is scoped to .nep-* so it can't leak into the
-   GAA portal's views. */
+   GAA portal's views.
+
+   Type follows the national brand guidelines, section 04: Figtree for display
+   (--font-hero), Inter for anything that reads as a sentence (--font-body),
+   and JetBrains Mono strictly for labels, codes and tabular figures
+   (--font-mono) — never for prose. */
 
 .nep-main {
   max-width: 1440px;
@@ -13,7 +18,7 @@
   max-width: 760px;
   margin: 80px auto;
   padding: 0 32px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 13px;
   color: var(--ink-3);
   text-align: center;
@@ -56,6 +61,7 @@
   align-items: flex-end;
   line-height: 1.25;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 .nep-delta-abs { font-size: 12px; }
 .nep-delta-pct { font-size: 11px; opacity: 0.75; }
@@ -96,7 +102,7 @@
 }
 .nep-filter { flex: 0 1 320px; }
 .nep-table-count {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--ink-mute);
   text-transform: uppercase;
@@ -152,7 +158,12 @@
 .nep-th-name { min-width: 260px; }
 
 .nep-table tbody tr:hover { background: var(--paper-2); }
-.nep-table .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.nep-table .num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 .nep-td-name { color: var(--ink); }
 .nep-td-name a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
@@ -200,7 +211,7 @@
 .nep-more:hover { border-color: var(--accent); color: var(--accent); }
 
 .nep-empty {
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 12px;
   color: var(--ink-mute);
   padding: 18px 0;
@@ -229,6 +240,7 @@
 }
 .nep-class-amt {
   font-family: var(--font-hero);
+  font-variant-numeric: tabular-nums;
   font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -401,7 +413,7 @@ a.nep-mover-name:hover { color: var(--accent); }
 .nep-busy { color: var(--accent); }
 .nep-ms { color: var(--ink-mute); }
 .nep-explore-empty { padding: 40px 0; }
-.nep-query-err { font-family: var(--font-mono); font-size: 12px; }
+.nep-query-err { font-family: var(--font-body); font-size: 12px; }
 
 .nep-sql { margin-bottom: 10px; }
 .nep-sql summary {
@@ -430,7 +442,7 @@ a.nep-mover-name:hover { color: var(--accent); }
 
 .nep-truncated {
   margin-top: 10px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11.5px;
   color: var(--ink-mute);
 }
@@ -473,7 +485,7 @@ a.nep-mover-name:hover { color: var(--accent); }
   margin-top: 48px;
   padding-top: 16px;
   border-top: 1px solid var(--rule);
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11.5px;
   color: var(--ink-mute);
 }
@@ -611,7 +623,7 @@ a.nep-mover-name:hover { color: var(--accent); }
 
 .nep-hier-note {
   margin-top: 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11px;
   line-height: 1.6;
   color: var(--ink-mute);

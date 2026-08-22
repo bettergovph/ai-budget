@@ -1,8 +1,9 @@
 /* =============================================================
    A Budget for the Future — editorial restyle
    Palette: cream / charcoal / muted oxblood + deep slate
-   Type: Antonio (condensed display sans) + Source Serif (body)
-            + Inter Tight (UI) + JetBrains Mono (labels)
+   Type: inherited from the design system (styles.css) — Figtree display,
+         Inter body, JetBrains Mono labels. This file used to set its own
+         faces from a global :root, which overrode the whole site.
    ============================================================= */
 
 :root {
@@ -37,15 +38,9 @@
   --stage-6: #2d3e4f;
   --stage-7: #1a2935;
 
-  /* Typography overrides — "PesoFix" prepended so U+20B1 (peso glyph)
-     never falls into the italic Source Serif. The unicode-range
-     @font-face is declared in narrative.css. */
-  --font-display: "PesoFix", "Antonio", "Bebas Neue", "Oswald", "Impact", sans-serif;
-  --font-hero: "PesoFix", "Antonio", "Bebas Neue", "Oswald", sans-serif;
-  --font-serif: "PesoFix", "Source Serif 4", "Source Serif Pro", "Charter", Georgia, serif;
-  --font-body: "PesoFix", "Source Serif 4", "Charter", Georgia, serif;
-  --font-ui: "PesoFix", "Inter Tight", -apple-system, sans-serif;
-  --font-mono: "PesoFix", "JetBrains Mono", ui-monospace, monospace;
+  /* Type tokens deliberately NOT redefined here — see the note in
+     narrative.css. This :root block is global, so redefining the faces here
+     overrode the design system site-wide. Faces come from styles.css. */
 }
 
 body {

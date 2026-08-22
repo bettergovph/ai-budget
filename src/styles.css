@@ -31,11 +31,25 @@
   --stage-6: #5e3f1c;
   --stage-7: #2e1f0e;
 
-  /* Type — driven by --font-hero / --font-head / --font-body / --font-mono via Tweaks */
-  --font-hero: "Manrope", "Plus Jakarta Sans", "Inter Tight", -apple-system, sans-serif;
-  --font-head: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-body: "Inter Tight", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  /* Type — Republic of the Philippines brand guidelines, section 04.
+     "Figtree speaks. Inter works. Mono labels."
+
+     --font-hero  display: titles, headings, figures. Semibold/bold only (600/700).
+     --font-head  headings that are not display scale — same face as display.
+     --font-body  everything people actually read: copy, forms, navigation.
+     --font-mono  labels and metadata ONLY. Never sentences. */
+  --font-hero: "Figtree", "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-head: "Figtree", "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Interface face, named as the guideline names it. Referenced by shared
+     classes (.eyebrow) that other stylesheets style with !important. */
+  --font-ui: var(--font-body);
+  /* Owned here so no globally-imported stylesheet can quietly reassign the
+     display face; the portal narrows these for its own views. */
+  --font-display: var(--font-hero);
+  --font-serif: var(--font-hero);
 
   /* Aliases for legacy refs */
   --serif: var(--font-head);
@@ -709,9 +723,8 @@ table.editorial tr.clickable { cursor: pointer; }
 
 /* ---------- Footer note ---------- */
 .footnote {
-  font-family: var(--serif);
+  font-family: var(--font-body);
   font-size: 12px;
-  font-style: italic;
   color: var(--ink-3);
   margin-top: 12px;
   max-width: 720px;

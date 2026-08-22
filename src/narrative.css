@@ -4,7 +4,8 @@
 
 /* ---------- Peso glyph fallback ----------
    The Philippine peso sign (U+20B1) renders inconsistently across
-   the display fonts we use — Fraunces draws it as a swooping italic
+   the display fonts this view was designed against — Fraunces drew it as a
+   swooping italic
    serif, which clashes with mono numerals next to it. Map U+20B1 to
    a non-italic, non-serif system font with a unicode-range @font-face,
    then prepend "PesoFix" to every --font-* stack so the substitution
@@ -56,10 +57,10 @@
   --stage-6: #5e3f1c;
   --stage-7: #2e1f0e;
 
-  --font-display: "PesoFix", "Fraunces", "Playfair Display", "GT Sectra", Georgia, serif;
-  --font-hero: "PesoFix", "Manrope", "Plus Jakarta Sans", -apple-system, sans-serif;
-  --font-body: "PesoFix", "Inter Tight", -apple-system, sans-serif;
-  --font-mono: "PesoFix", "JetBrains Mono", ui-monospace, monospace;
+  /* Type tokens deliberately NOT redefined here. This file is imported
+     globally, so a :root font override silently beat the design-system tokens
+     in styles.css for the whole site. Faces now come from there (national
+     brand guidelines, section 04); only colour lives in this block. */
 }
 
 * { box-sizing: border-box; }
