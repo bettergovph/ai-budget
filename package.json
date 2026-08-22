@@ -8,6 +8,10 @@
     "import:nep2027": "tsx scripts/import-nep-2027.ts",
     "verify:nep2027": "tsx scripts/verify-nep-2027.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
+    "import:cycle": "tsx scripts/import-budget-cycle.ts",
+    "verify:cycle": "tsx scripts/verify-budget-cycle.ts",
+    "dump:cycle-sql": "tsx scripts/dump-budget-cycle-to-sql.ts",
+    "load:cycle-local": "wrangler d1 execute budget --local --file=data/budget-cycle/d1-import.sql",
     "build:index": "tsx scripts/build-national-index.ts",
     "build:parquet": "tsx scripts/convert-to-parquet.ts",
     "build:sqlite": "tsx scripts/convert-to-sqlite.ts",
@@ -15,10 +19,11 @@
     "upload:r2": "tsx scripts/upload-to-r2.ts",
     "upload:nep2027": "tsx scripts/upload-nep-2027-to-r2.ts",
     "cleanup:r2": "tsx scripts/cleanup-r2-jsons.ts",
+    "prepare:deploy-assets": "tsx scripts/prepare-deploy-assets.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && npm run prepare:deploy-assets && wrangler deploy"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev45.0",
@@ -41,6 +46,7 @@
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "exceljs": "^4.4.0",
     "globals": "^17.5.0",
     "mime": "^4.1.0",
     "tsx": "^4.19.2",
