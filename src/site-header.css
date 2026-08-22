@@ -4,6 +4,11 @@
    Typography is inherited from styles.css tokens.
    ============================================================= */
 
+/* Hero-blend pages (the story deck, department pages) drop the chrome rule so
+   the navy subnav runs straight into a navy hero. Lives here, not in a
+   page-scoped stylesheet, because any page may opt in via NepHeader. */
+.masthead-hero-blend .masthead-chrome { border-bottom: none !important; }
+
 /* The masthead's one horizontal rule. It lives on this full-width wrapper
    rather than on .primary-nav so it runs the entire viewport width, while the
    nav itself stays inside the centred container. Everything above the rule is

@@ -6,7 +6,7 @@
  * unbounded detail — every line item — lives behind the "Line items" tab,
  * which hands off to the DuckDB explorer.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
@@ -60,8 +60,6 @@ export default function Nep2027Department() {
   const summary = current?.summary ?? null;
   const err = current?.err ?? null;
 
-  const siblings = useMemo(() => idx?.departments ?? [], [idx]);
-
   if (err) return <NepError message={err} />;
   if (!summary) return <NepLoading what={`department ${deptId}`} />;
 
@@ -77,28 +75,33 @@ export default function Nep2027Department() {
       <NepHeader
         crumb={d.description}
         compiledMeta={`${fmt.shortPhp(d.amount)} proposed`}
+        heroBlend
       />
 
-      <main className="nep-main">
-        <nav className="crumbs" aria-label="Breadcrumb">
-          <Link to="/2027">FY{NEP_YEAR} NEP</Link>
-          <span className="crumb-sep">›</span>
-          <span>{d.description}</span>
-        </nav>
-
-        <div className="page-headline">
-          <p className="page-eyebrow">
+      {/* Compact navy hero — the story deck's band, at page scale. The navy
+          subnav above runs straight into it (heroBlend drops the chrome rule),
+          so header and title read as one piece. */}
+      <section className="nep-dept-hero">
+        <div className="nep-dept-hero-inner">
+          <nav className="nep-dept-hero-crumbs" aria-label="Breadcrumb">
+            <Link to="/2027">FY{NEP_YEAR} NEP</Link>
+            <span aria-hidden="true">›</span>
+            <span>{d.description}</span>
+          </nav>
+          <p className="nep-dept-hero-eyebrow">
             Group {d.id}
             {d.source_department_code && d.source_department_code !== d.id &&
               ` · source department code ${d.source_department_code}`}
           </p>
-          <h1 className="page-title">{d.description}</h1>
-          <p className="page-dek">
+          <h1 className="nep-dept-hero-title">{d.description}</h1>
+          <p className="nep-dept-hero-dek">
             FY{NEP_YEAR} National Expenditure Program, measured against the FY{BASE_YEAR} GAA.
           </p>
-          {note && <p className="nep-note">{note}</p>}
+          {note && <p className="nep-dept-hero-note">{note}</p>}
         </div>
+      </section>
 
+      <main className="nep-main">
         <KpiStrip
           items={[
             {
@@ -167,24 +170,6 @@ export default function Nep2027Department() {
             </div>
           </div>
         </section>
-
-        {siblings.length > 0 && (
-          <section className="nep-section">
-            <SectionHead eyebrow="Jump to" headline="Another spending group" size="sm" />
-            <div className="nep-sibling-grid">
-              {siblings.map((s) => (
-                <Link
-                  key={s.id}
-                  to={`/2027/d/${s.id}`}
-                  className={`nep-sibling ${s.id === deptId ? 'is-current' : ''}`}
-                >
-                  <span className="nep-sibling-name">{s.description}</span>
-                  <span className="nep-sibling-amt">{fmt.shortPhp(s.amount)}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
 
         <p className="nep-provenance">
           {(summary.generated_at ?? idx?.generated_at)

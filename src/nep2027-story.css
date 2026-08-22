@@ -3,10 +3,6 @@
    page: numbered chapters, one display statement per screen, navy bands top
    and bottom, paper in between. Figtree speaks, Inter works, mono labels. */
 
-/* Hero blend: the navy subnav is now the site default; on the story page the
-   chrome rule also goes, so the band runs straight into the navy hero. */
-.masthead-hero-blend .masthead-chrome { border-bottom: none; }
-
 .story {
   overflow-x: hidden;
 }

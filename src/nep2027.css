@@ -348,28 +348,66 @@ a.nep-mover-name:hover { color: var(--accent); }
 
 .nep-drawer-nav { display: flex; flex-direction: column; gap: 10px; }
 
-/* --- department siblings ------------------------------------------------ */
+/* --- department hero: the story deck's navy band at page scale ----------- */
 
-.nep-sibling-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 8px;
+.nep-dept-hero {
+  background: var(--accent-deep);
+  color: var(--paper);
 }
-.nep-sibling {
+.nep-dept-hero-inner {
+  max-width: 1504px;
+  margin: 0 auto;
+  padding: 34px 32px 44px;
+}
+.nep-dept-hero-crumbs {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--rule-soft);
-  border-radius: 3px;
-  text-decoration: none;
-  font-size: 12px;
-  color: var(--ink-2);
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  margin-bottom: 22px;
+  color: rgba(255, 255, 255, 0.6);
 }
-.nep-sibling:hover { border-color: var(--accent); color: var(--accent); }
-.nep-sibling.is-current { background: var(--accent-soft); border-color: var(--accent); }
-.nep-sibling-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nep-sibling-amt { font-family: var(--font-mono); color: var(--ink-3); white-space: nowrap; }
+.nep-dept-hero-crumbs a {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+}
+.nep-dept-hero-crumbs a:hover { color: #fff; text-decoration: underline; }
+.nep-dept-hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+  margin: 0 0 10px;
+}
+.nep-dept-hero-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(32px, 3.8vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0;
+  max-width: 1000px;
+}
+.nep-dept-hero-dek {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 12px 0 0;
+}
+.nep-dept-hero-note {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-left: 3px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 720px;
+}
+
 
 /* --- explorer ----------------------------------------------------------- */
 
