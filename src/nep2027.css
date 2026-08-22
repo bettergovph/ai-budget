@@ -359,21 +359,6 @@ a.nep-mover-name:hover { color: var(--accent); }
   margin: 0 auto;
   padding: 34px 32px 44px;
 }
-.nep-dept-hero-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  margin-bottom: 22px;
-  color: rgba(255, 255, 255, 0.6);
-}
-.nep-dept-hero-crumbs a {
-  color: rgba(255, 255, 255, 0.85);
-  text-decoration: none;
-}
-.nep-dept-hero-crumbs a:hover { color: #fff; text-decoration: underline; }
 .nep-dept-hero-eyebrow {
   font-family: var(--font-mono);
   font-size: 11px;

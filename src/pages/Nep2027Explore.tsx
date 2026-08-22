@@ -77,7 +77,8 @@ export default function Nep2027Explore() {
     if (needle) {
       where.push(
         `(object_dsc ILIKE '%${needle}%' OR fpap_dsc ILIKE '%${needle}%' OR program_dsc ILIKE '%${needle}%'` +
-        ` OR operunit_dsc ILIKE '%${needle}%' OR agency_dsc ILIKE '%${needle}%' OR object_code LIKE '%${needle}%')`,
+        ` OR operunit_dsc ILIKE '%${needle}%' OR agency_dsc ILIKE '%${needle}%' OR fund_dsc ILIKE '%${needle}%'` +
+        ` OR div_dsc ILIKE '%${needle}%' OR object_code LIKE '%${needle}%')`,
       );
     }
     if (expense) where.push(`expense_code = '${expense.replace(/'/g, "''")}'`);

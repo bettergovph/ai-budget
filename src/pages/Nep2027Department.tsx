@@ -83,11 +83,6 @@ export default function Nep2027Department() {
           so header and title read as one piece. */}
       <section className="nep-dept-hero">
         <div className="nep-dept-hero-inner">
-          <nav className="nep-dept-hero-crumbs" aria-label="Breadcrumb">
-            <Link to="/2027">FY{NEP_YEAR} NEP</Link>
-            <span aria-hidden="true">›</span>
-            <span>{d.description}</span>
-          </nav>
           <p className="nep-dept-hero-eyebrow">
             Group {d.id}
             {d.source_department_code && d.source_department_code !== d.id &&
@@ -183,6 +178,25 @@ export default function Nep2027Department() {
 }
 
 function renderTab(tab: TabKey, s: NepDeptSummary) {
+  const deptId = s.department?.id ?? '';
+
+  /**
+   * Every table row links to the line items behind it on the Search page.
+   * Expense class and region have exact Search filters; the other dimensions
+   * go through the text search, which scans exactly these description fields.
+   * Bucket rows ((not attributed), the Other fold) have nothing to search
+   * for, so they stay plain.
+   */
+  const isBucket = (r: NepRollupRow) => r.code === '__unassigned__' || r.code === '__other__';
+  const byQuery = (r: NepRollupRow) =>
+    isBucket(r) ? null : `/2027/search?dept=${deptId}&q=${encodeURIComponent(r.description)}`;
+  const byCodeQuery = (r: NepRollupRow) =>
+    isBucket(r) ? null : `/2027/search?dept=${deptId}&q=${encodeURIComponent(r.code)}`;
+  const byExpense = (r: NepRollupRow) =>
+    isBucket(r) ? null : `/2027/search?dept=${deptId}&expense=${encodeURIComponent(r.code)}`;
+  const byRegion = (r: NepRollupRow) =>
+    isBucket(r) ? null : `/2027/search?dept=${deptId}&region=${encodeURIComponent(r.code)}`;
+
   switch (tab) {
     case 'programs':
       return (
@@ -192,7 +206,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Programs, activities and projects"
             dek="Rolled up to the program (4-digit P/A/P prefix); the 200 largest are listed."
           />
-          <CompareTable rows={s.programs} label="Program" showCount initial={30} showCode={false} />
+          <CompareTable rows={s.programs} label="Program" showCount initial={30} showCode={false} linkTo={byQuery} />
         </>
       );
     case 'expense':
@@ -203,7 +217,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Personnel, operating, financial, capital"
             dek="The full split — these four rows always reconcile to the group total."
           />
-          <CompareTable rows={s.expense_classes} label="Expense class" showCount initial={10} />
+          <CompareTable rows={s.expense_classes} label="Expense class" showCount initial={10} linkTo={byExpense} />
         </>
       );
     case 'funds':
@@ -214,7 +228,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Where the money comes from"
             dek="Top 40 fund subcategories — general fund, loan proceeds, grants, special accounts."
           />
-          <CompareTable rows={s.fund_subcategories} label="Fund" showCount initial={20} />
+          <CompareTable rows={s.fund_subcategories} label="Fund" showCount initial={20} linkTo={byQuery} />
         </>
       );
     case 'regions':
@@ -225,7 +239,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Regional distribution"
             dek="Region as tagged on each line item. Central-office and nationwide items are not regionalized."
           />
-          <CompareTable rows={s.regions} label="Region" showCount initial={20} />
+          <CompareTable rows={s.regions} label="Region" showCount initial={20} linkTo={byRegion} />
         </>
       );
     case 'units':
@@ -236,11 +250,11 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Operating units"
             dek="Top 60 operating units by FY2027 amount. Schools divisions, where present, are listed separately below."
           />
-          <CompareTable rows={s.top_operating_units} label="Operating unit" showCount initial={20} />
+          <CompareTable rows={s.top_operating_units} label="Operating unit" showCount initial={20} linkTo={byQuery} />
           {s.top_divisions.length > 0 && (
             <>
               <SectionHead eyebrow="Sub-unit" headline="Divisions" size="sm" />
-              <CompareTable rows={s.top_divisions} label="Division" showCount initial={15} />
+              <CompareTable rows={s.top_divisions} label="Division" showCount initial={15} linkTo={byQuery} />
             </>
           )}
         </>
@@ -253,7 +267,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="What the money buys"
             dek="Top 60 object codes by FY2027 amount — salaries, allowances, supplies, infrastructure, transfers."
           />
-          <CompareTable rows={s.top_objects} label="Object" showCount initial={25} />
+          <CompareTable rows={s.top_objects} label="Object" showCount initial={25} linkTo={byCodeQuery} />
         </>
       );
     case 'agencies':
@@ -265,7 +279,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="How the group splits internally"
             dek="Every agency under this group, FY2026 enacted vs FY2027 proposed."
           />
-          <CompareTable rows={s.agencies} label="Agency" showCount initial={30} />
+          <CompareTable rows={s.agencies} label="Agency" showCount initial={30} linkTo={byQuery} />
         </>
       );
   }
