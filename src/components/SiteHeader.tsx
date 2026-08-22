@@ -77,6 +77,10 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
   return (
     <>
       <header className="masthead">
+        {/* Full-bleed wrapper: carries the masthead's single horizontal rule
+            so it runs edge to edge, while the content inside stays within the
+            centred container. */}
+        <div className="masthead-chrome">
         <div className="masthead-inner">
           <div className="masthead-top">
             <span className="masthead-meta-l">
@@ -179,8 +183,13 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
             </a>
           </nav>
 
-          {subNav && <div className="primary-subnav">{subNav}</div>}
         </div>
+        </div>
+        {subNav && (
+          <div className="primary-subnav">
+            <div className="primary-subnav-inner">{subNav}</div>
+          </div>
+        )}
       </header>
 
       {menuOpen && (

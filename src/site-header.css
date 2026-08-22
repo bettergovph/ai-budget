@@ -4,6 +4,21 @@
    Typography is inherited from styles.css tokens.
    ============================================================= */
 
+/* The masthead's one horizontal rule. It lives on this full-width wrapper
+   rather than on .primary-nav so it runs the entire viewport width, while the
+   nav itself stays inside the centred container. Everything above the rule is
+   site chrome; everything below belongs to the page. */
+.masthead-chrome {
+  border-bottom: 1.5px solid var(--ink);
+}
+
+/* Subnav sits below the rule and matches the container's gutters. */
+.primary-subnav-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
 .masthead {
   position: sticky;
   top: 0;
@@ -12,7 +27,7 @@
 }
 
 /* ---- Override portal.css's old masthead inner constraints ---- */
-.masthead > .masthead-inner {
+.masthead .masthead-inner {
   display: block !important;
   max-width: 1440px;
   margin: 0 auto;
@@ -136,9 +151,6 @@
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
-  /* The masthead's one horizontal rule. Everything above it is site chrome,
-     everything below it belongs to the page. */
-  border-bottom: 1.5px solid var(--ink);
 }
 .primary-nav-link {
   display: inline-flex;
@@ -208,12 +220,13 @@
 
 /* ---- Tablet (≤ 1024px): tighten padding ---- */
 @media (max-width: 1024px) {
-  .masthead > .masthead-inner { padding: 0 20px !important; }
+  .masthead .masthead-inner { padding: 0 20px !important; }
+  .primary-subnav-inner { padding: 0 20px; }
 }
 
 /* ---- Mobile (≤ 720px): collapse rows, hide desktop nav, show hamburger ---- */
 @media (max-width: 720px) {
-  .masthead > .masthead-inner { padding: 0 16px !important; }
+  .masthead .masthead-inner { padding: 0 16px !important; }
 
   .masthead-inner > .masthead-top {
     flex-direction: column !important;
@@ -234,11 +247,12 @@
   .logo-tag-em { display: none; }
 
   .primary-nav { display: none; }
+  .masthead-chrome { border-bottom: none; }
+  .primary-subnav-inner { padding: 0; width: max-content; }
   .primary-subnav {
     display: block;
-    margin: 0 -16px;
-    border-top: 1px solid var(--rule);
-    border-bottom: 1px solid var(--ink);
+    margin: 0;
+    border-bottom: 1.5px solid var(--ink);
     background: var(--paper);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
