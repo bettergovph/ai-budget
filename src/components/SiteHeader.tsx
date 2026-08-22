@@ -140,31 +140,13 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               to="/2027"
               className={`primary-nav-link ${location.pathname.startsWith('/2027') ? 'active' : ''}`}
             >
-              NEP 2027
+              National Expenditures 2027
             </Link>
             <Link
               to="/"
               className={`primary-nav-link ${isActivePath(location.pathname, '/') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
-              GAA
-            </Link>
-            <Link
-              to="/#groups"
-              className="primary-nav-link"
-              onClick={(e) => {
-                // When already on the National page, <Link> won't re-navigate
-                // and the browser ignores hash-only changes that match. Force
-                // the scroll ourselves.
-                if (location.pathname === '/') {
-                  e.preventDefault();
-                  document
-                    .getElementById('groups')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  history.replaceState(null, '', '/#groups');
-                }
-              }}
-            >
-              All 40 Groups
+              General Appropriations 2020–2026
             </Link>
             <a
               href="https://2026-budget.bettergov.ph"
@@ -212,7 +194,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             NEP 2027 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/" onClick={() => setMenuOpen(false)}>
-            GAA <span className="drawer-link-arrow">→</span>
+            GAA 2020–2026 <span className="drawer-link-arrow">→</span>
           </Link>
           <a
             className="drawer-link"
