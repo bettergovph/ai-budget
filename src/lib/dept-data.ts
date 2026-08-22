@@ -36,7 +36,7 @@ const SCALE = 1000;
  * Heavy departments still get a gate — DPWH (18) has ~80 MB of Stage B
  * parquet which is OK on broadband but worth confirming before firing.
  */
-const HEAVY_MID_DEPTS = new Set<string>(['18']);
+const HEAVY_MID_DEPTS = new Set<string>(['18', '07', '05', '08']);
 const SKIP_EXPENSES = new Set<string>([]);
 /**
  * Depts whose objects parquet aggregates to so many rows (DepEd ~995k, DPWH
@@ -48,6 +48,9 @@ const HEAVY_OBJECTS_DEPTS = new Set<string>(['07', '18']);
 
 const MID_SIZE_HINT_MB: Record<string, number> = {
   '18': 80,
+  '07': 35,
+  '05': 15,
+  '08': 12,
 };
 const OBJECT_SIZE_HINT_MB: Record<string, number> = {
   '07': 125,

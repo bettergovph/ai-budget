@@ -7,6 +7,7 @@
  *
  *   GET /api/dept/:id/core         Stage A — departments + yearly_totals + agencies
  *   GET /api/dept/:id/mid          Stage B — fpaps + operating_units + fund_subcategories + expenses
+ *   GET /api/dept/:id/budget-cycle NEP → GAA → execution facts related at P/A/P level
  *   GET /api/dept/:id/objects      Stage C — full objects dump (legacy; streamed; used by /data view)
  *   GET /api/dept/:id/objects/page Server-paginated objects with filter/sort/keyset cursor + summary
  *
@@ -132,7 +133,40 @@ async function handleCore(env: Env, deptId: string): Promise<Response> {
   );
 }
 
+/**
+ * Stage B rows above this and the Worker dies mid-serialisation with a raw
+ * Cloudflare 1102 ("Worker exceeded resource limits") -- and because a memory
+ * kill takes the whole isolate, concurrent requests on ANY route can die with
+ * it. Measured per-department totals: DPWH 1,192,606, DepEd 228,915, DA
+ * 90,084, SUCs 69,251, then a cliff to 23,444. The threshold sits in that
+ * gap; over it we refuse fast with a JSON 503 the client already answers by
+ * loading the same tables as parquet in the browser, where no such limit
+ * exists.
+ */
+const MID_ROW_LIMIT = 50_000;
+
 async function handleMid(env: Env, deptId: string): Promise<Response> {
+  const [{ n }] = await queryBound<{ n: number }>(
+    env,
+    `SELECT (SELECT count(*) FROM fpaps WHERE department_id = ?1)
+          + (SELECT count(*) FROM operating_units WHERE department_id = ?1)
+          + (SELECT count(*) FROM fund_subcategories WHERE department_id = ?1)
+          + (SELECT count(*) FROM expenses WHERE department_id = ?1) AS n`,
+    deptId,
+  );
+  if (n > MID_ROW_LIMIT) {
+    return Response.json(
+      {
+        error: "payload_too_large",
+        message: `Stage B for department ${deptId} is ${n.toLocaleString()} rows, ` +
+          `beyond what this Worker can serialise. Load it from the parquet tree instead.`,
+        rows: n,
+        fallback: "parquet",
+      },
+      { status: 503 },
+    );
+  }
+
   const [fpaps, opUnits, funds, expenses] = await Promise.all([
     queryDept(env, `SELECT * FROM fpaps WHERE department_id = ? ORDER BY id`, deptId),
     queryDept(env, `SELECT * FROM operating_units WHERE department_id = ? ORDER BY id`, deptId),
@@ -157,6 +191,168 @@ async function handleMid(env: Env, deptId: string): Promise<Response> {
         metadata: { table: "expenses", department_id: deptId, total_items: expenses.length },
         data: expenses.map(widenToNested),
       },
+    },
+    {
+      headers: { "Cache-Control": "public, max-age=60, s-maxage=3600" },
+    },
+  );
+}
+
+interface CycleManifestRow {
+  generated_at: string;
+  source_filename: string;
+  source_sha256: string;
+  scope: string;
+  units: string;
+  years_json: string;
+  stages_json: string;
+  expense_classes_json: string;
+}
+
+interface CycleSubjectRow extends WideRow {
+  source_pairs_json: string;
+  coverage_json: string;
+}
+
+function parseJson<T>(value: string, fallback: T): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Department-scoped serving endpoint for the imported budget-cycle workbook.
+ *
+ * Canonically related rows (for example PCW 26-029 → 14-010) are served under
+ * the current portal department. A row without a canonical relationship is
+ * still served under its source department, which keeps historical unmatched
+ * P/A/Ps discoverable without inventing a join.
+ */
+async function handleBudgetCycle(env: Env, deptId: string): Promise<Response> {
+  const departmentFilter = `(
+    x.canonical_portal_department_id = ?
+    OR (x.canonical_portal_department_id IS NULL AND x.source_department_code = ?)
+  )`;
+
+  const [manifestRows, subjects, programs, facts, qualitySummary] = await Promise.all([
+    queryBound<CycleManifestRow>(
+      env,
+      `SELECT generated_at, source_filename, source_sha256, scope, units,
+              years_json, stages_json, expense_classes_json
+       FROM budget_cycle_manifest
+       ORDER BY generated_at DESC LIMIT 1`,
+    ),
+    queryBound<CycleSubjectRow>(
+      env,
+      `SELECT subject_id, source_sheet, display_name, is_primary_subject,
+              canonical_portal_department_id, canonical_portal_agency_id,
+              source_pairs_json, coverage_json
+       FROM budget_cycle_subjects
+       WHERE canonical_portal_department_id = ?
+       ORDER BY is_primary_subject DESC, display_name`,
+      deptId,
+    ),
+    queryBound(
+      env,
+      `SELECT
+         x.source_row_id,
+         x.subject_id,
+         x.source_department_code,
+         r.source_department_name,
+         x.source_agency_code,
+         r.source_agency_name,
+         COALESCE(
+           x.canonical_portal_agency_id,
+           x.source_department_code || '-' || x.source_agency_code
+         ) AS display_agency_id,
+         COALESCE(a.description, r.source_agency_name) AS display_agency_name,
+         x.source_pap_code,
+         x.source_pap_label,
+         x.historical_portal_fpap_id,
+         x.canonical_portal_fpap_id,
+         x.portal_pap_label,
+         x.match_method,
+         x.match_confidence,
+         x.candidate_portal_fpap_ids_json,
+         x.review_note
+       FROM budget_cycle_crosswalk x
+       JOIN budget_cycle_source_rows r ON r.source_row_id = x.source_row_id
+       LEFT JOIN agencies a ON a.id = COALESCE(
+         x.canonical_portal_agency_id,
+         x.source_department_code || '-' || x.source_agency_code
+       )
+       WHERE ${departmentFilter}
+       ORDER BY display_agency_name, COALESCE(x.source_pap_label, x.portal_pap_label), x.source_row_id`,
+      deptId,
+      deptId,
+    ),
+    queryBound(
+      env,
+      `SELECT
+         v.source_row_id,
+         v.fiscal_year,
+         v.stage,
+         v.expense_class,
+         v.amount_pesos
+       FROM budget_cycle_values v
+       JOIN budget_cycle_crosswalk x ON x.source_row_id = v.source_row_id
+       WHERE ${departmentFilter}
+       ORDER BY v.fiscal_year, v.stage, v.expense_class, v.source_row_id`,
+      deptId,
+      deptId,
+    ),
+    queryBound(
+      env,
+      `SELECT q.severity, q.code, COUNT(*) AS count
+       FROM budget_cycle_quality_flags q
+       JOIN budget_cycle_crosswalk x ON x.source_row_id = q.source_row_id
+       WHERE ${departmentFilter}
+       GROUP BY q.severity, q.code
+       ORDER BY q.severity, q.code`,
+      deptId,
+      deptId,
+    ),
+  ]);
+
+  const manifest = manifestRows[0];
+  const normalizedSubjects = subjects.map(({ source_pairs_json, coverage_json, ...subject }) => ({
+    ...subject,
+    source_pairs: parseJson<string[]>(source_pairs_json, []),
+    coverage: parseJson<Record<string, number[]>>(coverage_json, {}),
+  }));
+  const normalizedPrograms = programs.map(({ candidate_portal_fpap_ids_json, ...program }) => ({
+    ...program,
+    candidate_portal_fpap_ids: parseJson<string[]>(String(candidate_portal_fpap_ids_json ?? "[]"), []),
+  }));
+  const unmatchedPrograms = programs.filter((row) => row.match_method === "unmatched" || row.match_method === "ambiguous").length;
+  const reportedZeros = facts.filter((row) => Number(row.amount_pesos) === 0).length;
+
+  return Response.json(
+    {
+      metadata: {
+        department_id: deptId,
+        available: programs.length > 0,
+        generated_at: manifest?.generated_at ?? null,
+        source_filename: manifest?.source_filename ?? null,
+        source_sha256: manifest?.source_sha256 ?? null,
+        scope: manifest?.scope ?? "current_new_appropriations",
+        units: manifest?.units ?? "PHP",
+        years: manifest ? parseJson<number[]>(manifest.years_json, []) : [],
+        stages: manifest ? parseJson<string[]>(manifest.stages_json, []) : [],
+        expense_classes: manifest ? parseJson<string[]>(manifest.expense_classes_json, []) : [],
+        counts: {
+          programs: programs.length,
+          reported_facts: facts.length,
+          reported_zeros: reportedZeros,
+          unmatched_programs: unmatchedPrograms,
+        },
+      },
+      subjects: normalizedSubjects,
+      programs: normalizedPrograms,
+      facts,
+      quality_summary: qualitySummary,
     },
     {
       headers: { "Cache-Control": "public, max-age=60, s-maxage=3600" },
@@ -986,6 +1182,19 @@ export default {
       }
     }
 
+    const cycleMatch = /^\/api\/dept\/([^/]+)\/budget-cycle\/?$/.exec(url.pathname);
+    if (cycleMatch) {
+      const [, deptId] = cycleMatch;
+      if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
+      try {
+        return await handleBudgetCycle(env, deptId);
+      } catch (e) {
+        return Response.json(
+          { error: "query_failed", message: (e as Error).message },
+          { status: 500 },
+        );
+      }
+    }
 
     // /api/dept/:id/objects/page — server-paginated Objects view
     const pageMatch = /^\/api\/dept\/([^/]+)\/objects\/page\/?$/.exec(url.pathname);
