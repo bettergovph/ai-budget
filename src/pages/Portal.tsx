@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
+  fetchMidChildren,
   fetchObjectsPage,
+  fetchProgramsPage,
   isMidHeavy,
   isObjectsHeavy,
   loadDeptData,
@@ -402,6 +404,57 @@ function HierarchyView({
 
   const current = path[path.length - 1];
 
+  // Interactive Stage B (the four departments whose bulk dump the Worker
+  // refuses to serve): children for the current drill node come from D1 per
+  // interaction, cached per (level, parent, year). Absence of a cache entry
+  // doubles as the loading state so no setState runs synchronously in the
+  // effect. Everything downstream works off `records` exactly as bulk mode.
+  const interactive = data.midMode === 'interactive';
+  const remoteKey = current ? `${current.level}|${current.id}|${year}` : '';
+  const [remoteChildren, setRemoteChildren] = useState<
+    Record<string, { records: BaseEntity[]; cursor: string | null; total: number }>
+  >({});
+  useEffect(() => {
+    if (!interactive || !remoteKey || remoteChildren[remoteKey]) return;
+    const lvl = remoteKey.split('|', 1)[0];
+    const parent = remoteKey.slice(lvl.length + 1, remoteKey.lastIndexOf('|'));
+    const table =
+      lvl === 'agency' ? 'fpaps'
+      : lvl === 'fpap' ? 'operating_units'
+      : lvl === 'opUnit' ? 'fund_subcategories'
+      : 'expenses';
+    let live = true;
+    const t = setTimeout(() => {
+      fetchMidChildren(deptId, table, parent, year)
+        .then((r) => {
+          if (live) setRemoteChildren((m) => ({ ...m, [remoteKey]: { records: r.records, cursor: r.cursor, total: r.total } }));
+        })
+        .catch(() => {
+          if (live) setRemoteChildren((m) => ({ ...m, [remoteKey]: { records: [], cursor: null, total: 0 } }));
+        });
+    }, 0);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, remoteKey, deptId, year]);
+  const remoteEntry = interactive && current ? remoteChildren[remoteKey] : undefined;
+  const childrenLoading = interactive && !!current && !remoteEntry;
+  const loadMoreChildren = () => {
+    if (!current || !remoteEntry?.cursor) return;
+    const lvl = current.level;
+    const table =
+      lvl === 'agency' ? 'fpaps'
+      : lvl === 'fpap' ? 'operating_units'
+      : lvl === 'opUnit' ? 'fund_subcategories'
+      : 'expenses';
+    fetchMidChildren(deptId, table, current.id, year, remoteEntry.cursor).then((r) => {
+      setRemoteChildren((m) => {
+        const cur = m[remoteKey];
+        if (!cur) return m;
+        return { ...m, [remoteKey]: { records: [...cur.records, ...r.records], cursor: r.cursor, total: r.total } };
+      });
+    });
+  };
+
   let level: 'agency' | 'fpap' | 'opUnit' | 'fund' | 'expense' = 'agency';
   let records: BaseEntity[] = [];
   let drillable = true;
@@ -420,7 +473,7 @@ function HierarchyView({
       .slice()
       .sort((a, b) => (b.years[year]?.amount || 0) - (a.years[year]?.amount || 0));
     drillable = true;
-    parentLabel = data.agencyById[current.id].description;
+    parentLabel = current.label;
     levelTitle = 'Programs (FPAPs)';
   } else if (current.level === 'fpap') {
     const fpapId = current.id;
@@ -429,7 +482,7 @@ function HierarchyView({
       .filter((o) => o.fpap_id === fpapId)
       .sort((a, b) => (b.years[year]?.amount || 0) - (a.years[year]?.amount || 0));
     drillable = true;
-    parentLabel = data.fpapById[fpapId].description;
+    parentLabel = current.label;
     levelTitle = 'Operating Units';
   } else if (current.level === 'opUnit') {
     const ouId = current.id;
@@ -438,7 +491,7 @@ function HierarchyView({
       .filter((f) => f.operating_unit_id === ouId)
       .sort((a, b) => (b.years[year]?.amount || 0) - (a.years[year]?.amount || 0));
     drillable = true;
-    parentLabel = data.opUnitById[ouId].description;
+    parentLabel = current.label;
     levelTitle = 'Funds';
   } else if (current.level === 'fund') {
     const fundId = current.id;
@@ -447,8 +500,12 @@ function HierarchyView({
       .filter((e) => e.fund_id === fundId)
       .sort((a, b) => (b.years[year]?.amount || 0) - (a.years[year]?.amount || 0));
     drillable = false;
-    parentLabel = data.fundById[fundId].description;
+    parentLabel = current.label;
     levelTitle = 'Expense Classes';
+  }
+
+  if (interactive && current) {
+    records = remoteEntry?.records ?? [];
   }
 
   const max = maxAcrossYears(records);
@@ -554,7 +611,14 @@ function HierarchyView({
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 && (
+              {childrenLoading && (
+                <tr className="disabled">
+                  <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                    Loading {levelTitle.toLowerCase()}…
+                  </td>
+                </tr>
+              )}
+              {records.length === 0 && !childrenLoading && (
                 <tr className="disabled">
                   <td
                     colSpan={6}
@@ -591,6 +655,17 @@ function HierarchyView({
             </tbody>
           </table>
 
+          {interactive && remoteEntry?.cursor && (
+            <button
+              type="button"
+              className="csv-btn"
+              style={{ marginTop: 12 }}
+              onClick={loadMoreChildren}
+            >
+              Show more · {records.length.toLocaleString()} of {remoteEntry.total.toLocaleString()} loaded
+            </button>
+          )}
+
           {level === 'expense' && (
             <p className="note-block" style={{ marginTop: 24, borderTop: '1px solid var(--rule)', paddingTop: 18 }}>
               <strong>Why no further drill-down?</strong> Below expense class, the data goes to <em>Object</em>{' '}
@@ -618,7 +693,27 @@ interface TreemapTile {
   h: number;
 }
 
-function Treemap({ data, year, height = 480 }: { data: DeptData; year: number; height?: number }) {
+interface TreemapItem {
+  id: string;
+  name: string;
+  agency: string;
+  agency_id: string;
+  value: number;
+}
+
+function Treemap({
+  data,
+  year,
+  height = 480,
+  overrideItems,
+}: {
+  data: DeptData;
+  year: number;
+  height?: number;
+  /** Interactive departments keep data.fpaps empty; the caller supplies the
+      top program families fetched from D1 instead. */
+  overrideItems?: TreemapItem[];
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1000);
   useEffect(() => {
@@ -630,14 +725,16 @@ function Treemap({ data, year, height = 480 }: { data: DeptData; year: number; h
     return () => ro.disconnect();
   }, []);
 
-  const items = data.fpaps
-    .map((f) => ({
+  const items: TreemapItem[] = (
+    overrideItems ??
+    data.fpaps.map((f) => ({
       id: f.id,
       name: f.description,
       agency: data.agencyById[f.agency_id]?.description || '—',
       agency_id: f.agency_id,
       value: f.years[year]?.amount || 0,
     }))
+  )
     .filter((i) => i.value > 0)
     .sort((a, b) => b.value - a.value);
 
@@ -774,6 +871,55 @@ function ProgramsView({
       .sort((a, b) => b.v - a.v || b.total - a.total);
   }, [data, year, q, agency]);
 
+  // Server mode: DPWH's 149k program families cannot ship inline, so the
+  // list pages from D1 with the same filters (year sort, bureau, search).
+  // Every other department keeps the local path above. The result is keyed
+  // by its filters so a stale response never renders under fresh ones.
+  const paginated = !!data.programsPaginated;
+  const serverKey = `${data.department.id}|${year}|${agency}|${q}`;
+  const [serverRows, setServerRows] = useState<{
+    key: string;
+    families: DeptData['fpapFamilies'];
+    cursor: string | null;
+    total: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!paginated) return;
+    let live = true;
+    const t = setTimeout(() => {
+      fetchProgramsPage(data.department.id, { year, q: q || undefined, bureau: agency, limit: 100 })
+        .then((r) => {
+          if (live) setServerRows({ key: serverKey, families: r.families, cursor: r.cursor, total: r.total });
+        })
+        .catch(() => {
+          if (live) setServerRows({ key: serverKey, families: [], cursor: null, total: 0 });
+        });
+    }, q ? 300 : 0);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paginated, serverKey]);
+  const serverFresh = serverRows && serverRows.key === serverKey ? serverRows : null;
+  const serverLoading = paginated && !serverFresh;
+  const loadMorePrograms = () => {
+    if (!serverFresh?.cursor) return;
+    fetchProgramsPage(data.department.id, {
+      year, q: q || undefined, bureau: agency, cursor: serverFresh.cursor, limit: 100,
+    }).then((r) => {
+      setServerRows((prev) =>
+        prev && prev.key === serverKey
+          ? { ...prev, families: [...prev.families, ...r.families], cursor: r.cursor }
+          : prev,
+      );
+    });
+  };
+  const shownRows = paginated
+    ? (serverFresh?.families ?? []).map((f) => ({
+        f,
+        v: f.years[year]?.amount || 0,
+        total: YEARS.reduce((s, y) => s + (f.years[y]?.amount || 0), 0),
+      }))
+    : rows;
+
   return (
     <div>
       <YearStrip data={data} year={year} setYear={setYear} />
@@ -822,7 +968,14 @@ function ProgramsView({
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, 60).map((r) => (
+          {serverLoading && (
+            <tr className="disabled">
+              <td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                Loading programs…
+              </td>
+            </tr>
+          )}
+          {(paginated ? shownRows : shownRows.slice(0, 60)).map((r) => (
             <tr key={r.f.key} className="disabled">
               <td className="name">
                 <span>{r.f.name}</span>
@@ -852,7 +1005,17 @@ function ProgramsView({
         </tbody>
       </table>
 
-      {rows.length > 60 && (
+      {paginated && serverFresh && (
+        <p style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)' }}>
+          Showing {shownRows.length.toLocaleString()} of {serverFresh.total.toLocaleString()} programs.
+          {serverFresh.cursor && (
+            <button type="button" className="csv-btn" style={{ marginLeft: 12 }} onClick={loadMorePrograms}>
+              Show more
+            </button>
+          )}
+        </p>
+      )}
+      {!paginated && rows.length > 60 && (
         <p style={{ marginTop: 12, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--ink-3)' }}>
           Showing top 60 of {rows.length}. Refine your search to see more.
         </p>
@@ -941,6 +1104,47 @@ function ByYearView({
     .sort((x, z) => z.v - x.v);
   const max = Math.max(...items.map((i) => i.v));
 
+  // Interactive departments keep the entity arrays empty, so the treemap's
+  // programs come from D1: the top families for the selected year. Inline
+  // departments already carry fpapFamilies; only the paginated one fetches.
+  const interactive = data.midMode === 'interactive';
+  const treemapKey = `${data.department.id}|${year}`;
+  const [treemapFetch, setTreemapFetch] = useState<{ key: string; items: TreemapItem[] } | null>(null);
+  useEffect(() => {
+    if (!interactive || !data.programsPaginated) return;
+    let live = true;
+    const t = setTimeout(() => {
+      fetchProgramsPage(data.department.id, { year, limit: 150 })
+        .then((r) => {
+          if (!live) return;
+          setTreemapFetch({
+            key: treemapKey,
+            items: r.families.map((f) => ({
+              id: f.key,
+              name: f.name,
+              agency: data.agencyById[f.agency_id]?.description || '—',
+              agency_id: f.agency_id,
+              value: f.years[year]?.amount || 0,
+            })),
+          });
+        })
+        .catch(() => { if (live) setTreemapFetch({ key: treemapKey, items: [] }); });
+    }, 0);
+    return () => { live = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive, treemapKey]);
+  const treemapOverride: TreemapItem[] | undefined = !interactive
+    ? undefined
+    : data.programsPaginated
+      ? (treemapFetch && treemapFetch.key === treemapKey ? treemapFetch.items : [])
+      : data.fpapFamilies.map((f) => ({
+          id: f.key,
+          name: f.name,
+          agency: data.agencyById[f.agency_id]?.description || '—',
+          agency_id: f.agency_id,
+          value: f.years[year]?.amount || 0,
+        }));
+
   return (
     <div>
       <YearStrip data={data} year={year} setYear={setYear} />
@@ -1004,7 +1208,7 @@ function ByYearView({
         headline={`Where the ₱${fmt.shortPhp(data.total(year), 'B').replace('B', '')}B goes — every program at scale`}
         dek={`Each rectangle is a program (FPAP) — area is proportional to FY ${year} appropriation. Hover for exact figures. Color = bureau.`}
       />
-      <Treemap data={data} year={year} height={520} />
+      <Treemap data={data} year={year} height={520} overrideItems={treemapOverride} />
 
       <div className="grid grid-2" style={{ marginTop: 28 }}>
         <div className="card">
@@ -1969,6 +2173,8 @@ function midDelta(next: DeptData): Partial<DeptData> {
     expenseClassByYear: next.expenseClassByYear,
     expenseClassByAgencyYear: next.expenseClassByAgencyYear,
     midLoaded: true,
+    midMode: next.midMode,
+    programsPaginated: next.programsPaginated,
     expensesSkipped: next.expensesSkipped,
     topMovers: next.topMovers,
   };

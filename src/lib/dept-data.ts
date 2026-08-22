@@ -1,4 +1,5 @@
 import type {
+  BaseEntity,
   Agency,
   DeptData,
   Department,
@@ -36,7 +37,15 @@ const SCALE = 1000;
  * Heavy departments still get a gate — DPWH (18) has ~80 MB of Stage B
  * parquet which is OK on broadband but worth confirming before firing.
  */
-const HEAVY_MID_DEPTS = new Set<string>(['18', '07', '05', '08']);
+/**
+ * Departments whose Stage B exceeds the Worker's MID_ROW_LIMIT. They load a
+ * small precomputed summary instead of the bulk dump, and the hierarchy /
+ * programs views query D1 per interaction. Keep in sync with the Worker's
+ * guard.
+ */
+export const INTERACTIVE_MID_DEPTS = new Set<string>(['18', '07', '05', '08']);
+/** The interactive summary is light, so no confirmation gate is needed. */
+const HEAVY_MID_DEPTS = new Set<string>([]);
 const SKIP_EXPENSES = new Set<string>([]);
 /**
  * Depts whose objects parquet aggregates to so many rows (DepEd ~995k, DPWH
@@ -428,6 +437,171 @@ export async function loadDeptData(deptId: string): Promise<DeptData> {
   };
 }
 
+/** Nested-years row as served by the interactive endpoints. */
+interface WireRow {
+  [k: string]: unknown;
+  years: Record<string | number, YearData | undefined>;
+}
+
+/** Rescale a wire row's years map into pesos (source is thousands). */
+function wireYears(row: WireRow): YearMap {
+  const out = emptyYearMap();
+  YEARS.forEach((y) => {
+    const s = row.years[y] || row.years[String(y)];
+    if (s) {
+      out[y].count = s.count || 0;
+      out[y].amount = (s.amount || 0) * SCALE;
+    }
+  });
+  return out;
+}
+
+function wireFamily(row: WireRow): FPAPFamily {
+  return {
+    key: String(row.fam_key),
+    agency_id: String(row.agency_id),
+    name: String(row.name),
+    // Only .length is ever consumed (the "N program codes (renames)" badge).
+    ids: new Array(Number(row.ids_count) || 1).fill(''),
+    years: wireYears(row),
+  };
+}
+
+export interface MidChildrenPage {
+  records: BaseEntity[];
+  total: number;
+  totalAmount: number;
+  cursor: string | null;
+}
+
+/** One drill level's children, served by D1 per interaction. Pesos. */
+export async function fetchMidChildren(
+  deptId: string,
+  level: 'fpaps' | 'operating_units' | 'fund_subcategories' | 'expenses',
+  parent: string,
+  year: number,
+  cursor?: string | null,
+  limit = 200,
+): Promise<MidChildrenPage> {
+  const p = new URLSearchParams({ level, parent, year: String(year), limit: String(limit) });
+  if (cursor) p.set('cursor', cursor);
+  const r = await fetchD1<{ summary: { n: number; total: number }; data: WireRow[]; cursor: string | null }>(
+    `/api/dept/${deptId}/mid/children?${p}`,
+  );
+  return {
+    records: r.data.map((row) => ({ ...(row as Record<string, unknown>), years: wireYears(row) }) as unknown as BaseEntity),
+    total: r.summary.n,
+    totalAmount: (r.summary.total || 0) * SCALE,
+    cursor: r.cursor,
+  };
+}
+
+export interface ProgramsPageResult {
+  families: FPAPFamily[];
+  total: number;
+  totalAmount: number;
+  cursor: string | null;
+}
+
+/** Server-paginated program families (DPWH-scale departments). Pesos. */
+export async function fetchProgramsPage(
+  deptId: string,
+  opts: { year: number; q?: string; bureau?: string; cursor?: string | null; limit?: number },
+): Promise<ProgramsPageResult> {
+  const p = new URLSearchParams({ year: String(opts.year), limit: String(opts.limit ?? 100) });
+  if (opts.q) p.set('q', opts.q);
+  if (opts.bureau && opts.bureau !== 'all') p.set('bureau', opts.bureau);
+  if (opts.cursor) p.set('cursor', opts.cursor);
+  const r = await fetchD1<{ summary: { n: number; total: number }; data: WireRow[]; cursor: string | null }>(
+    `/api/dept/${deptId}/programs/page?${p}`,
+  );
+  return {
+    families: r.data.map(wireFamily),
+    total: r.summary.n,
+    totalAmount: (r.summary.total || 0) * SCALE,
+    cursor: r.cursor,
+  };
+}
+
+interface MidSummaryResponse {
+  expense_classes: WireRow[];
+  families_total: number;
+  families_inline: boolean;
+  families: WireRow[];
+  movers: Record<string, { up: WireRow[]; down: WireRow[] }>;
+}
+
+/**
+ * Interactive Stage B: a summary instead of the bulk dump. Populates the same
+ * derivatives the bulk path computes; entity arrays stay empty and the views
+ * that walk them (hierarchy drill, DPWH programs) query per interaction.
+ */
+async function loadDeptMidInteractive(data: DeptData, deptId: string): Promise<DeptData> {
+  const r = await fetchD1<MidSummaryResponse>(`/api/dept/${deptId}/mid/summary`);
+
+  const expenseClassByYear = emptyExpenseClassByYear();
+  const expenseClassByAgencyYear: Record<string, Record<number, ExpenseClassBreakdown>> = {};
+  r.expense_classes.forEach((row) => {
+    const cls = EXPENSE_CLASS[String(row.expense_code)]?.key;
+    if (!cls) return;
+    const a = String(row.agency_id);
+    if (!expenseClassByAgencyYear[a]) {
+      expenseClassByAgencyYear[a] = {};
+      YEARS.forEach((y) => (expenseClassByAgencyYear[a][y] = { PS: 0, MOOE: 0, CO: 0, FE: 0 }));
+    }
+    const yrs = wireYears(row);
+    YEARS.forEach((y) => {
+      const v = yrs[y]?.amount || 0;
+      expenseClassByAgencyYear[a][y][cls] += v;
+      expenseClassByYear[y][cls] += v;
+    });
+  });
+
+  const fpapFamiliesArr: FPAPFamily[] = r.families_inline ? r.families.map(wireFamily) : [];
+
+  const topMovers = (
+    direction: 'up' | 'down' = 'up',
+    year = 2026,
+    prev = 2025,
+    n = 6,
+  ): MoverEntry[] => {
+    if (r.families_inline) {
+      const moves: MoverEntry[] = fpapFamiliesArr.map((fam) => ({
+        fam,
+        delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0),
+      }));
+      moves.sort((a, b) => (direction === 'up' ? b.delta - a.delta : a.delta - b.delta));
+      return moves.slice(0, n);
+    }
+    const pair = r.movers[`${year}|${prev}`];
+    if (!pair) return [];
+    return pair[direction].slice(0, n).map((row) => {
+      const fam = wireFamily(row);
+      return { fam, delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0) };
+    });
+  };
+
+  return {
+    ...data,
+    fpaps: [],
+    fpapById: {},
+    fpapsByAgency: {},
+    fpapFamilies: fpapFamiliesArr,
+    opUnits: [],
+    opUnitById: {},
+    funds: [],
+    fundById: {},
+    expenses: [],
+    expenseClassByYear,
+    expenseClassByAgencyYear,
+    midLoaded: true,
+    midMode: 'interactive',
+    programsPaginated: !r.families_inline,
+    expensesSkipped: false,
+    topMovers,
+  };
+}
+
 /**
  * Stage B. Queries fpaps/operating_units/fund_subcategories/expenses from
  * the dept's Hive-partitioned parquet tree, reshapes back into the
@@ -435,6 +609,10 @@ export async function loadDeptData(deptId: string): Promise<DeptData> {
  * (fpapFamilies, fpapsByAgency, expense-class breakdowns, topMovers).
  */
 export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<DeptData> {
+  if (useD1Source() && INTERACTIVE_MID_DEPTS.has(deptId)) {
+    return loadDeptMidInteractive(data, deptId);
+  }
+
   const skipExpenses = SKIP_EXPENSES.has(deptId);
 
   let fpapsRaw: RawDataset<FPAP>;

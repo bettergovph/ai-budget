@@ -7,6 +7,7 @@
     "dev": "vite",
     "import:nep2027": "tsx scripts/import-nep-2027.ts",
     "verify:nep2027": "tsx scripts/verify-nep-2027.ts",
+    "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "build:index": "tsx scripts/build-national-index.ts",
     "build:parquet": "tsx scripts/convert-to-parquet.ts",
     "build:sqlite": "tsx scripts/convert-to-sqlite.ts",

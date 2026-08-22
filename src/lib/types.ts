@@ -120,6 +120,13 @@ export interface DeptData {
 
   /** True once the Stage B files (fpaps, op_units, fund_subcategories, expenses) are loaded. */
   midLoaded: boolean;
+  /** How Stage B was served. 'interactive' departments (the four the Worker
+      refuses to bulk-serve) keep the entity arrays empty and drive the
+      hierarchy/programs views through per-interaction D1 queries. */
+  midMode?: 'bulk' | 'interactive';
+  /** True when program families exceed the inline limit (DPWH's 149k) and
+      the Programs view must page through /api/dept/:id/programs/page. */
+  programsPaginated?: boolean;
   /** True once objects.json has been lazy-loaded into this dataset. */
   objectsLoaded: boolean;
   /** True if expenses.json was too large to ship and was skipped. */
