@@ -31,7 +31,7 @@
 
 /* Subnav sits below the rule and matches the container's gutters. */
 .primary-subnav-inner {
-  max-width: 1440px;
+  max-width: 1504px;
   margin: 0 auto;
   padding: 0 32px;
 }
@@ -46,7 +46,9 @@
 /* ---- Override portal.css's old masthead inner constraints ---- */
 .masthead .masthead-inner {
   display: block !important;
-  max-width: 1440px;
+  /* Outer 1504 = 1440 of content + the 32px gutters, so header content sits
+     on the same edge as the story hero's 1440 content box. */
+  max-width: 1504px;
   margin: 0 auto;
   padding: 0 32px !important;
   gap: 0 !important;
@@ -168,6 +170,9 @@
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
+  /* Pull the first tab's 18px padding out of the container so its TEXT sits
+     on the content edge, aligned with the subnav tabs and the hero title. */
+  margin-left: -18px;
 }
 .primary-nav-link {
   display: inline-flex;
@@ -186,16 +191,15 @@
   transition: background .12s, color .12s;
 }
 .primary-nav-link:hover {
-  background: var(--paper-2);
   color: var(--accent);
 }
 .primary-nav-link.active {
-  background: var(--accent);
-  color: var(--paper);
+  background: var(--paper-2); /* ED-PAPER-2 paper tint */
+  color: var(--accent);
 }
 .primary-nav-link.active:hover {
-  background: var(--accent-deep);
-  color: var(--paper);
+  background: var(--paper-2);
+  color: var(--accent-deep);
 }
 .primary-nav-external {
   margin-left: auto;

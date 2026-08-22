@@ -6,7 +6,7 @@
 :root {
   /* Clean white canvas + cool neutral accents (was warm cream — overridden) */
   --paper:   #ffffff;
-  --paper-2: #f6f7f9;
+  --paper-2: #f4f7fc;   /* Paper Tint - ED-PAPER-2 */
   --paper-3: #eceef2;
   --rule:    #d4d8e0;
   --rule-soft: #e7eaef;
