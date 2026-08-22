@@ -1,0 +1,625 @@
+/* FY2027 NEP microsite (/2027).
+   Reuses the portal's tokens (--ink, --rule, --accent, --positive/--negative,
+   --font-*); everything below is scoped to .nep-* so it can't leak into the
+   GAA portal's views. */
+
+.nep-main {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 32px 80px;
+}
+
+.nep-status {
+  max-width: 760px;
+  margin: 80px auto;
+  padding: 0 32px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.nep-status-error { color: var(--negative); text-align: left; }
+.nep-status-hint { color: var(--ink-3); margin-top: 10px; }
+.nep-status code {
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.nep-section { margin-top: 44px; }
+.nep-two-up {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+/* Grid items default to min-width:auto, which lets a wide table push its
+   column past the track and widen the whole page. Let them shrink so the
+   .nep-table-wrap scroll container does its job. */
+.nep-two-up > *,
+.nep-movers > * { min-width: 0; }
+
+.nep-note {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  font-size: 13px;
+  color: var(--ink-2);
+  max-width: 760px;
+}
+
+/* --- deltas ------------------------------------------------------------- */
+
+.nep-delta {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+  font-family: var(--font-mono);
+}
+.nep-delta-abs { font-size: 12px; }
+.nep-delta-pct { font-size: 11px; opacity: 0.75; }
+
+/* --- bars --------------------------------------------------------------- */
+
+.nep-bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 60px;
+  height: 14px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.nep-bar-base {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--rule);
+}
+.nep-bar-fill {
+  position: absolute;
+  inset: 3px auto 3px 0;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* --- tables ------------------------------------------------------------- */
+
+.nep-table-block { margin-top: 8px; }
+
+.nep-table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.nep-filter { flex: 0 1 320px; }
+.nep-table-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nep-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--rule);
+}
+
+.nep-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.nep-table th,
+.nep-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: middle;
+}
+.nep-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.nep-table thead th button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.nep-table thead th button:hover { color: var(--ink); }
+.nep-th-active { color: var(--ink); }
+.nep-sort-caret { font-size: 8px; }
+.nep-th-bar { width: 140px; }
+.nep-th-name { min-width: 260px; }
+
+.nep-table tbody tr:hover { background: var(--paper-2); }
+.nep-table .num { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+
+.nep-td-name { color: var(--ink); }
+.nep-td-name a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.nep-td-name a:hover { color: var(--accent); border-color: var(--accent); }
+.nep-td-amt { font-weight: 600; color: var(--ink); }
+.nep-td-base { color: var(--ink-3); }
+.nep-td-bar { width: 140px; }
+.nep-td-dim {
+  color: var(--ink-3);
+  font-size: 12px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nep-code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  letter-spacing: 0.02em;
+}
+
+.nep-pill {
+  margin-left: 8px;
+  font-size: 9.5px;
+  background: var(--paper-3);
+  color: var(--ink-3);
+}
+
+.nep-more {
+  margin-top: 10px;
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.nep-more:hover { border-color: var(--accent); color: var(--accent); }
+
+.nep-empty {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+  padding: 18px 0;
+}
+
+/* --- expense-class cards ------------------------------------------------ */
+
+.nep-class-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.nep-class-card {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 14px 16px 16px;
+  background: var(--paper);
+}
+.nep-class-name {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  min-height: 26px;
+}
+.nep-class-amt {
+  font-family: var(--font-hero);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 2px 0 6px;
+}
+.nep-class-meta {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.nep-class-delta { font-weight: 600; }
+.nep-class-base {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+/* --- movers ------------------------------------------------------------- */
+
+.nep-movers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+.nep-mover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+.nep-mover-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 110px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 13px;
+}
+.nep-mover-name {
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.nep-mover-name:hover { color: var(--accent); }
+.nep-mover-bar {
+  display: block;
+  height: 8px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.nep-mover-bar span { display: block; height: 100%; }
+.nep-mover-num { text-align: right; font-family: var(--font-mono); font-size: 12px; }
+
+/* --- controls ----------------------------------------------------------- */
+
+.nep-controls { display: flex; align-items: center; gap: 14px; }
+.nep-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.nep-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 28px;
+  border-bottom: 1px solid var(--rule);
+}
+.nep-tabs button,
+.nep-tabs .nep-tab-link {
+  all: unset;
+  cursor: pointer;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+}
+.nep-tabs button:hover,
+.nep-tabs .nep-tab-link:hover { color: var(--ink); }
+.nep-tabs button.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.nep-tabs .nep-tab-link { margin-left: auto; color: var(--accent); }
+
+.nep-drawer-nav { display: flex; flex-direction: column; gap: 10px; }
+
+/* --- department siblings ------------------------------------------------ */
+
+.nep-sibling-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.nep-sibling {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+  text-decoration: none;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.nep-sibling:hover { border-color: var(--accent); color: var(--accent); }
+.nep-sibling.is-current { background: var(--accent-soft); border-color: var(--accent); }
+.nep-sibling-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nep-sibling-amt { font-family: var(--font-mono); color: var(--ink-3); white-space: nowrap; }
+
+/* --- explorer ----------------------------------------------------------- */
+
+.nep-explore-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper-2);
+}
+.nep-explore-controls label { display: flex; flex-direction: column; gap: 5px; }
+.nep-explore-controls label > span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+.nep-explore-controls .select-input,
+.nep-explore-controls .text-input { width: 100%; }
+
+.nep-explore-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.nep-explore-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.nep-explore-actions a { color: var(--accent); text-decoration: none; }
+.nep-busy { color: var(--accent); }
+.nep-ms { color: var(--ink-mute); }
+.nep-explore-empty { padding: 40px 0; }
+.nep-query-err { font-family: var(--font-mono); font-size: 12px; }
+
+.nep-sql { margin-bottom: 10px; }
+.nep-sql summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+.nep-sql pre {
+  margin: 8px 0 0;
+  padding: 12px 14px;
+  background: var(--paper-3);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.nep-explore-table { max-height: 70vh; overflow-y: auto; }
+
+.nep-truncated {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+/* --- prose / methodology ------------------------------------------------ */
+
+.nep-prose { max-width: 900px; }
+.nep-prose p { font-size: 14px; line-height: 1.65; color: var(--ink-2); }
+.nep-prose code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.nep-kv th {
+  width: 220px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+.nep-map-table td:first-child,
+.nep-map-table td:nth-child(2) { white-space: nowrap; }
+.nep-map-table .nep-td-dim { max-width: none; white-space: normal; }
+
+.nep-numbered,
+.nep-bullets { padding-left: 20px; }
+.nep-numbered li,
+.nep-bullets li {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  margin-bottom: 14px;
+}
+
+.nep-provenance {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+.nep-provenance a { color: var(--accent); text-decoration: none; }
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .nep-class-grid { grid-template-columns: repeat(2, 1fr); }
+  .nep-two-up,
+  .nep-movers { grid-template-columns: 1fr; gap: 32px; }
+}
+
+@media (max-width: 720px) {
+  .nep-main { padding: 20px 16px 60px; }
+  .nep-class-grid { grid-template-columns: 1fr; }
+  .nep-th-bar,
+  .nep-td-bar { display: none; }
+  .nep-table th,
+  .nep-table td { padding: 7px 8px; font-size: 12px; }
+  .nep-th-name { min-width: 160px; }
+  .nep-controls { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .nep-table-toolbar { flex-direction: column; align-items: stretch; }
+  .nep-explore-actions { margin-left: 0; }
+  .nep-mover-list li { grid-template-columns: minmax(0, 1fr) 100px; }
+  .nep-mover-bar { display: none; }
+}
+
+/* --- hierarchy drill-down ----------------------------------------------- */
+
+.nep-hier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.nep-hier-title {
+  font-family: var(--font-hero);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 2px 0 0;
+}
+.nep-hier-meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.nep-hier-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-radius: 4px;
+}
+.nep-hier-bar > button:first-child {
+  flex: none;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.nep-hier-bar > button:first-child:disabled { opacity: 0.4; cursor: default; }
+.nep-hier-bar > button:first-child:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.nep-hier-bar .csv-btn { flex: none; margin-left: auto; }
+
+.nep-hier-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.nep-hier-crumbs button {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nep-hier-crumbs button:hover { text-decoration: underline; }
+.nep-hier-crumbs button.is-current {
+  color: var(--ink);
+  cursor: default;
+  text-decoration: none;
+}
+.nep-hier-sep { color: var(--ink-mute); padding: 0 6px; }
+
+.nep-hier-table tbody tr.is-drillable { cursor: pointer; }
+.nep-hier-table tbody tr.is-drillable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.nep-th-chev, .nep-td-chev { width: 24px; text-align: right; color: var(--ink-mute); }
+.nep-hier-table tbody tr.is-drillable:hover .nep-td-chev { color: var(--accent); }
+
+.nep-hier-table tfoot td {
+  border-top: 2px solid var(--rule);
+  border-bottom: none;
+  font-weight: 600;
+  background: var(--paper-2);
+}
+.nep-recon-ok {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--positive);
+  font-weight: 500;
+}
+.nep-recon-bad {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--negative);
+  font-weight: 600;
+}
+
+.nep-hier-note {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+}
+
+@media (max-width: 720px) {
+  .nep-hier-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .nep-hier-bar { flex-wrap: wrap; }
+  .nep-hier-bar .csv-btn { margin-left: 0; }
+  .nep-hier-crumbs button { max-width: 150px; }
+}
