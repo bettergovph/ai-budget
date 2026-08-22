@@ -659,3 +659,42 @@ a.nep-mover-name:hover { color: var(--accent); }
   .nep-hier-bar .csv-btn { margin-left: 0; }
   .nep-hier-crumbs button { max-width: 150px; }
 }
+
+/* --- search: active code-filter chips ------------------------------------ */
+
+.nep-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.nep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+  max-width: 100%;
+}
+.nep-chip em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
+.nep-chip button {
+  all: unset;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 4px;
+  color: var(--accent-deep);
+}
+.nep-chip button:hover { color: var(--negative); }

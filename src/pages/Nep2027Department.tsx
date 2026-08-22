@@ -188,10 +188,17 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
    * for, so they stay plain.
    */
   const isBucket = (r: NepRollupRow) => r.code === '__unassigned__' || r.code === '__other__';
-  const byQuery = (r: NepRollupRow) =>
-    isBucket(r) ? null : `/2027/search?dept=${deptId}&q=${encodeURIComponent(r.description)}`;
-  const byCodeQuery = (r: NepRollupRow) =>
-    isBucket(r) ? null : `/2027/search?dept=${deptId}&q=${encodeURIComponent(r.code)}`;
+  const byCode = (param: string) => (r: NepRollupRow) =>
+    isBucket(r)
+      ? null
+      : `/2027/search?dept=${deptId}&${param}=${encodeURIComponent(r.code)}` +
+        `&label=${encodeURIComponent(r.description)}`;
+  const byAgency = byCode('agency');
+  const byProgram = byCode('program');
+  const byFund = byCode('fund');
+  const byUnit = byCode('unit');
+  const byDivision = byCode('division');
+  const byObject = byCode('object');
   const byExpense = (r: NepRollupRow) =>
     isBucket(r) ? null : `/2027/search?dept=${deptId}&expense=${encodeURIComponent(r.code)}`;
   const byRegion = (r: NepRollupRow) =>
@@ -206,7 +213,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Programs, activities and projects"
             dek="Rolled up to the program (4-digit P/A/P prefix); the 200 largest are listed."
           />
-          <CompareTable rows={s.programs} label="Program" showCount initial={30} showCode={false} linkTo={byQuery} />
+          <CompareTable rows={s.programs} label="Program" showCount initial={30} showCode={false} linkTo={byProgram} />
         </>
       );
     case 'expense':
@@ -228,7 +235,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Where the money comes from"
             dek="Top 40 fund subcategories — general fund, loan proceeds, grants, special accounts."
           />
-          <CompareTable rows={s.fund_subcategories} label="Fund" showCount initial={20} linkTo={byQuery} />
+          <CompareTable rows={s.fund_subcategories} label="Fund" showCount initial={20} linkTo={byFund} />
         </>
       );
     case 'regions':
@@ -250,11 +257,11 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="Operating units"
             dek="Top 60 operating units by FY2027 amount. Schools divisions, where present, are listed separately below."
           />
-          <CompareTable rows={s.top_operating_units} label="Operating unit" showCount initial={20} linkTo={byQuery} />
+          <CompareTable rows={s.top_operating_units} label="Operating unit" showCount initial={20} linkTo={byUnit} />
           {s.top_divisions.length > 0 && (
             <>
               <SectionHead eyebrow="Sub-unit" headline="Divisions" size="sm" />
-              <CompareTable rows={s.top_divisions} label="Division" showCount initial={15} linkTo={byQuery} />
+              <CompareTable rows={s.top_divisions} label="Division" showCount initial={15} linkTo={byDivision} />
             </>
           )}
         </>
@@ -267,7 +274,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="What the money buys"
             dek="Top 60 object codes by FY2027 amount — salaries, allowances, supplies, infrastructure, transfers."
           />
-          <CompareTable rows={s.top_objects} label="Object" showCount initial={25} linkTo={byCodeQuery} />
+          <CompareTable rows={s.top_objects} label="Object" showCount initial={25} linkTo={byObject} />
         </>
       );
     case 'agencies':
@@ -279,7 +286,7 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
             headline="How the group splits internally"
             dek="Every agency under this group, FY2026 enacted vs FY2027 proposed."
           />
-          <CompareTable rows={s.agencies} label="Agency" showCount initial={30} linkTo={byQuery} />
+          <CompareTable rows={s.agencies} label="Agency" showCount initial={30} linkTo={byAgency} />
         </>
       );
   }

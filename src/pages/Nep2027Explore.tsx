@@ -44,6 +44,20 @@ const GROUPINGS = [
 
 const LIMITS = [100, 500, 2000, 10000];
 
+/**
+ * Exact-code filters, set only by links (department table rows), never by the
+ * form. `label` in the URL carries the human name for the chip; the code alone
+ * would be unreadable. NULL codes never arrive here — bucket rows don't link.
+ */
+const CODE_FILTERS: ReadonlyArray<{ param: string; column: string; noun: string }> = [
+  { param: 'agency', column: 'agency_code', noun: 'Agency' },
+  { param: 'program', column: 'program_code', noun: 'Program' },
+  { param: 'fund', column: 'fund_code', noun: 'Fund' },
+  { param: 'unit', column: 'operunit_code', noun: 'Operating unit' },
+  { param: 'division', column: 'div_code', noun: 'Division' },
+  { param: 'object', column: 'object_code', noun: 'Object' },
+];
+
 export default function Nep2027Explore() {
   const [params, setParams] = useSearchParams();
   const [idx, setIdx] = useState<NepNationalIndex | null>(null);
@@ -55,6 +69,14 @@ export default function Nep2027Explore() {
   const [region, setRegion] = useState(params.get('region') || '');
   const [grouping, setGrouping] = useState<string>(params.get('group') || 'none');
   const [limit, setLimit] = useState(Number(params.get('limit')) || 500);
+
+  const codeFilters = useMemo(
+    () => CODE_FILTERS
+      .map((f) => ({ ...f, value: params.get(f.param) || '' }))
+      .filter((f) => f.value),
+    [params],
+  );
+  const filterLabel = params.get('label') || '';
 
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState<{ n: number; amount: number } | null>(null);
@@ -83,6 +105,9 @@ export default function Nep2027Explore() {
     }
     if (expense) where.push(`expense_code = '${expense.replace(/'/g, "''")}'`);
     if (region) where.push(`region_code = '${region.replace(/'/g, "''")}'`);
+    for (const f of codeFilters) {
+      where.push(`${f.column} = '${f.value.replace(/'/g, "''")}'`);
+    }
     const clause = where.length ? `\nWHERE ${where.join('\n  AND ')}` : '';
 
     if (grouping !== 'none') {
@@ -99,7 +124,7 @@ LIMIT ${limit}`;
 FROM ${src}${clause}
 ORDER BY amount DESC
 LIMIT ${limit}`;
-  }, [dept, q, expense, region, grouping, limit]);
+  }, [dept, q, expense, region, grouping, limit, codeFilters]);
 
   const totalSql = useMemo(() => {
     if (!sql) return null;
@@ -248,6 +273,29 @@ LIMIT ${limit}`;
             Select a spending group to start searching. Large groups (DepEd, DPWH) take a few seconds
             on the first query while the data loads.
           </p>
+        )}
+
+        {dept && codeFilters.length > 0 && (
+          <div className="nep-chip-row">
+            {codeFilters.map((f) => (
+              <span className="nep-chip" key={f.param}>
+                <em>{f.noun}</em>
+                {filterLabel || f.value}
+                <button
+                  type="button"
+                  aria-label={`Clear ${f.noun.toLowerCase()} filter`}
+                  onClick={() => {
+                    const p = new URLSearchParams(params);
+                    p.delete(f.param);
+                    p.delete('label');
+                    setParams(p, { replace: true });
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
         )}
 
         {dept && (
