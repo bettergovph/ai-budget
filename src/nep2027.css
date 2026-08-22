@@ -524,18 +524,33 @@ a.nep-mover-name:hover { color: var(--accent); }
 }
 
 @media (max-width: 720px) {
-  .nep-main { padding: 20px 16px 60px; }
-  .nep-class-grid { grid-template-columns: 1fr; }
+  .nep-main { padding: 16px 14px 56px; }
+  .nep-main .page-title { font-size: 22px; }
+  .nep-main .page-dek { font-size: 12.5px; }
+  .nep-class-grid { grid-template-columns: 1fr; gap: 10px; }
+  .nep-class-amt { font-size: 24px; }
   .nep-th-bar,
   .nep-td-bar { display: none; }
   .nep-table th,
-  .nep-table td { padding: 7px 8px; font-size: 12px; }
-  .nep-th-name { min-width: 160px; }
+  .nep-table td { padding: 5px 6px; font-size: 11.5px; }
+  .nep-code { font-size: 9.5px; }
+  .nep-delta-abs { font-size: 11px; }
+  .nep-delta-pct { font-size: 10px; }
+  .nep-th-name { min-width: 140px; }
   .nep-controls { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .nep-table-toolbar { flex-direction: column; align-items: stretch; }
+  .nep-table-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  /* .nep-filter's desktop flex-basis (320px) becomes HEIGHT once the toolbar
+     goes column-direction -- the filter box rendered 320px tall. */
+  .nep-filter { flex: none; width: 100%; }
+  .nep-table-count { font-size: 10px; }
   .nep-explore-actions { margin-left: 0; }
-  .nep-mover-list li { grid-template-columns: minmax(0, 1fr) 100px; }
+  .nep-mover-list li { grid-template-columns: minmax(0, 1fr) 100px; padding: 8px 0; }
   .nep-mover-bar { display: none; }
+  .nep-dept-hero-inner { padding: 20px 14px 26px; }
+  .nep-dept-hero-title { font-size: 24px; }
+  .nep-dept-hero-dek { font-size: 12.5px; }
+  .nep-tabs button,
+  .nep-tabs .nep-tab-link { padding: 7px 9px; font-size: 12.5px; }
 }
 
 /* --- hierarchy drill-down ----------------------------------------------- */

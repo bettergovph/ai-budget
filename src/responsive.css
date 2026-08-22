@@ -654,12 +654,20 @@
     font-size: 24px !important;
   }
 
-  /* KPI: 1 column on tiny phones */
+  /* KPI: keep two columns on phones and drop the display size a step --
+     one 32px column ate ~480px of the first screen before any content. */
   .kpi-strip {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  .kpi-cell {
+    padding: 10px 12px !important;
   }
   .kpi-value {
-    font-size: 32px !important;
+    font-size: 20px !important;
+  }
+  .kpi-sub {
+    font-size: 10px !important;
   }
 
   /* Trend chart — let SVG scale and add horizontal scroll if needed */
