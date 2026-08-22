@@ -100,20 +100,22 @@ export default function Nep2027Story() {
 
   return (
     <>
-      <NepHeader crumb="Overview" compiledMeta={`${fmt.shortPhp(amount, 'T')} proposed`} />
+      <NepHeader crumb="Overview" compiledMeta={`${fmt.shortPhp(amount, 'T')} proposed`} hideSubNav />
       <div className="story-progress" aria-hidden="true"><div ref={progressRef} /></div>
 
       <main ref={rootRef} className="story">
         {/* ---- Hero: the navy band ---- */}
         <section className="story-band story-hero">
-          <p className="story-kicker">Republic of the Philippines · Fiscal Year {NEP_YEAR}</p>
-          <h1 className="story-hero-num">{fmt.shortPhp(amount, 'T')}</h1>
-          <p className="story-hero-title">The budget the Executive is proposing.</p>
-          <p className="story-hero-sub">
-            {items.toLocaleString()} line items · {idx.departments.length} spending groups ·
-            measured against the FY{BASE_YEAR} GAA
-          </p>
-          <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
+          <div className="story-hero-inner">
+            <p className="story-kicker">Republic of the Philippines · Fiscal Year {NEP_YEAR}</p>
+            <h1 className="story-hero-title">The National Expenditure Program</h1>
+            <p className="story-hero-aka">Also known as the President’s Budget.</p>
+            <p className="story-hero-sub">
+              {fmt.shortPhp(amount, 'T')} proposed · {items.toLocaleString()} line items ·{' '}
+              {idx.departments.length} spending groups · measured against the FY{BASE_YEAR} GAA
+            </p>
+            <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
+          </div>
         </section>
 
         {/* ---- 01 ---- */}

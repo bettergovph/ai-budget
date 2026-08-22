@@ -248,6 +248,10 @@
 
   .primary-nav { display: none; }
   .masthead-chrome { border-bottom: none; }
+  /* Pages without a subnav (the story deck) keep the rule on the chrome. */
+  .masthead:not(:has(.primary-subnav)) .masthead-chrome {
+    border-bottom: 1.5px solid var(--ink);
+  }
   .primary-subnav-inner { padding: 0; width: max-content; }
   .primary-subnav {
     display: block;

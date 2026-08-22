@@ -45,12 +45,19 @@
   text-align: center;
 }
 .story-hero {
-  min-height: calc(100vh - 220px);
+  /* Left-aligned editorial title, in the container's own gutters. The header
+     is shorter here because the story page carries no subnav. */
+  min-height: calc(100vh - 170px);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  text-align: left;
+  padding-top: 64px;
+  padding-bottom: 64px;
+}
+.story-hero-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
 }
 .story-kicker {
   font-family: var(--font-mono);
@@ -60,34 +67,37 @@
   opacity: 0.75;
   margin: 0 0 10px;
 }
-.story-hero-num {
-  font-family: var(--font-hero);
-  font-weight: 700;
-  font-size: clamp(88px, 16vw, 220px);
-  line-height: 0.95;
-  letter-spacing: -0.03em;
-  margin: 0;
-}
 .story-hero-title {
   font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(52px, 8.6vw, 148px);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  margin: 0;
+  max-width: 14ch;
+}
+.story-hero-aka {
+  font-family: var(--font-hero);
   font-weight: 600;
-  font-size: clamp(20px, 2.6vw, 32px);
-  margin: 8px 0 0;
+  font-size: clamp(20px, 2.4vw, 34px);
+  opacity: 0.85;
+  margin: 22px 0 0;
 }
 .story-hero-sub {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.06em;
   opacity: 0.7;
-  margin: 6px 0 0;
+  margin: 18px 0 0;
 }
 .story-scroll-cue {
+  display: inline-block;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   opacity: 0.55;
-  margin-top: 48px;
+  margin-top: 56px;
   animation: story-bob 2.4s ease-in-out infinite;
 }
 @keyframes story-bob {

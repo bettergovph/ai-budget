@@ -231,7 +231,16 @@ const NEP_NAV: Array<{ to: string; label: string }> = [
  * Browse, since a department page is a drill-down of the group table rather
  * than a section of its own.
  */
-export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiledMeta?: ReactNode }) {
+export function NepHeader({
+  crumb,
+  compiledMeta,
+  hideSubNav = false,
+}: {
+  crumb?: ReactNode;
+  compiledMeta?: ReactNode;
+  /** The story deck is a presentation, not a workspace — no tab strip. */
+  hideSubNav?: boolean;
+}) {
   const { pathname } = useLocation();
   const path = pathname.replace(/\/+$/, '') || '/2027';
 
@@ -258,9 +267,11 @@ export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiled
       crumb={crumb}
       compiledMeta={compiledMeta}
       subNav={
-        <nav className="view-tabs section-tabs" aria-label="FY2027 NEP sections">
-          {links('')}
-        </nav>
+        hideSubNav ? undefined : (
+          <nav className="view-tabs section-tabs" aria-label="FY2027 NEP sections">
+            {links('')}
+          </nav>
+        )
       }
       drawerExtras={
         <nav className="nep-drawer-nav" aria-label="FY2027 NEP sections">
