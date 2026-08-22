@@ -16,6 +16,7 @@ interface SiteHeaderProps {
 
 const PRIMARY_NAV: Array<{ to: string; label: string }> = [
   { to: '/', label: 'National' },
+  { to: '/2027', label: 'NEP 2027' },
   { to: '/methodology', label: 'Methodology' },
 ];
 
@@ -55,6 +56,12 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
     const target = e.target as HTMLElement;
     if (target.closest('a, button')) setMenuOpen(false);
   };
+
+  // The masthead coverage label follows the section you're in: the GAA portal
+  // covers FY2020-2026, the /2027 microsite covers the FY2027 NEP alone.
+  const coverage = location.pathname.startsWith('/2027')
+    ? 'FY 2027 NEP'
+    : 'FY 2020 \u2013 2026';
 
   const today = useMemo(
     () =>
@@ -105,11 +112,11 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
                 {crumb ? (
                   <>
                     {crumb}
-                    <span className="logo-tag-em">— FY 2020 – 2026</span>
+                    <span className="logo-tag-em">— {coverage}</span>
                   </>
                 ) : (
                   <>
-                    Reports <span className="logo-tag-em">— Philippines GAA, FY 2020 – 2026</span>
+                    Reports <span className="logo-tag-em">— Philippines GAA, {coverage}</span>
                   </>
                 )}
               </span>

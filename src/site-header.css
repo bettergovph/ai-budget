@@ -187,7 +187,8 @@
   padding: 10px 0 !important;
   min-height: 44px;
 }
-.primary-subnav .view-tabs.section-tabs button {
+.primary-subnav .view-tabs.section-tabs button,
+.primary-subnav .view-tabs.section-tabs a {
   display: inline-flex;
   align-items: center;
   padding: 8px 0 !important;
@@ -248,7 +249,8 @@
     padding: 0 12px !important;
     width: max-content;
   }
-  .primary-subnav .view-tabs.section-tabs button {
+  .primary-subnav .view-tabs.section-tabs button,
+  .primary-subnav .view-tabs.section-tabs a {
     min-height: 46px;
     padding: 0 12px !important;
     border-bottom-width: 3px !important;
