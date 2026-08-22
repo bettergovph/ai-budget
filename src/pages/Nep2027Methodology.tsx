@@ -178,7 +178,7 @@ export default function Nep2027Methodology() {
 
         <p className="nep-provenance">
           <Link to="/2027">Back to the FY{NEP_YEAR} overview</Link> · the FY2020–2026 GAA portal lives at{' '}
-          <Link to="/">the site root</Link>
+          <Link to="/gaa">/gaa</Link>
         </p>
       </main>
       <SiteFooter />

@@ -9,7 +9,7 @@ export default function Methodology() {
         <div className="masthead-inner">
           <div className="masthead-top">
             <span className="masthead-meta-l">
-              <Link to="/" style={{ textDecoration: 'none' }}>← PHILIPPINES GAA</Link>
+              <Link to="/gaa" style={{ textDecoration: 'none' }}>← PHILIPPINES GAA</Link>
               {' · '}METHODOLOGY
             </span>
           </div>
@@ -83,7 +83,7 @@ export default function Methodology() {
         </p>
 
         <p className="note-block" style={{ marginTop: 32 }}>
-          Return to the <Link to="/">national overview</Link>.
+          Return to the <Link to="/gaa">national overview</Link>.
         </p>
       </main>
 

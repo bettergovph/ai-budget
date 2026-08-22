@@ -55,9 +55,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
 
   // The masthead coverage label follows the section you're in: the GAA portal
   // covers FY2020-2026, the /2027 microsite covers the FY2027 NEP alone.
-  const coverage = location.pathname.startsWith('/2027')
-    ? 'FY 2027 NEP'
-    : 'FY 2020 \u2013 2026';
+  const coverage = location.pathname.startsWith('/gaa')
+    || location.pathname.startsWith('/d/')
+    || location.pathname.startsWith('/methodology')
+    || location.pathname.startsWith('/explore')
+    ? 'FY 2020 \u2013 2026'
+    : 'FY 2027 NEP';
 
   const today = useMemo(
     () =>
@@ -143,8 +146,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               National Expenditures 2027
             </Link>
             <Link
-              to="/"
-              className={`primary-nav-link ${isActivePath(location.pathname, '/') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
+              to="/gaa"
+              className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
               General Appropriations 2020–2026
             </Link>
@@ -193,7 +196,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
             NEP 2027 <span className="drawer-link-arrow">→</span>
           </Link>
-          <Link className="drawer-link" to="/" onClick={() => setMenuOpen(false)}>
+          <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2020–2026 <span className="drawer-link-arrow">→</span>
           </Link>
           <a

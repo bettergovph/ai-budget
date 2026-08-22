@@ -32,7 +32,8 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<PageFallback />}>
         <Routes>
-          <Route path="/" element={<National />} />
+          <Route path="/" element={<Navigate to="/2027/overview" replace />} />
+          <Route path="/gaa" element={<National />} />
           <Route path="/methodology" element={<Methodology />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />

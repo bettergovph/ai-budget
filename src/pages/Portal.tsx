@@ -2170,7 +2170,7 @@ export default function Portal() {
       >
         <p>Sorry — we couldn’t load this department right now. Please try again in a moment.</p>
         <p style={{ color: 'var(--ink-3)', fontSize: 12 }}>{loadError}</p>
-        <p><Link to="/">← Back to the national overview</Link></p>
+        <p><Link to="/gaa">← Back to the national overview</Link></p>
       </div>
     );
   }
