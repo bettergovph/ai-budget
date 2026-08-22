@@ -88,6 +88,15 @@ async function queryDept<T = WideRow>(
   return results ?? [];
 }
 
+async function queryBound<T = WideRow>(
+  env: Env,
+  sql: string,
+  ...bindings: unknown[]
+): Promise<T[]> {
+  const { results } = await env.DB.prepare(sql).bind(...bindings).all<T>();
+  return results ?? [];
+}
+
 const DEPT_ID_RE = /^\d{2}$/;
 
 async function handleCore(env: Env, deptId: string): Promise<Response> {
@@ -687,9 +696,296 @@ async function handleObjects(env: Env, deptId: string): Promise<Response> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// FY2027 NEP aggregation layer (`nep_*` tables)
+// ---------------------------------------------------------------------------
+//
+// Additive tables, independent of the FY2020-2026 GAA tables above: publishing
+// FY2027 cannot move an already-published GAA figure, and FY2027 keeps its
+// corrected SPF/AUTO department split without forcing that migration on the
+// legacy tables.
+//
+// Every dimension in `nep_rollups` is COMPLETE per department (untagged rows
+// are bucketed under `__unassigned__`, not dropped), so summing across
+// departments yields an exact national total. That is what makes the
+// cross-department queries below trustworthy.
+//
+// Amounts are exact INTEGER pesos.
+
+const NEP_DEPT_ID_RE = /^[A-Z0-9]{1,6}$/;
+
+const NEP_DIMENSIONS = new Set([
+  "agency", "program", "expense_class", "fund",
+  "region", "object", "operating_unit", "division",
+]);
+
+interface NepMetaRow {
+  fiscal_year: number;
+  baseline_year: number;
+  generated_at: string;
+  source_file: string;
+  line_items: number;
+  amount: number;
+  base_amount: number;
+}
+
+interface NepRollupRow {
+  code: string;
+  description: string | null;
+  extra: string | null;
+  count: number;
+  amount: number;
+  base_amount: number;
+}
+
+type WithDelta<T> = T & { delta: number; pct: number | null };
+
+/** Attach the delta/pct the UI would otherwise recompute on every row. */
+function withDelta<T extends { amount: number; base_amount: number }>(r: T): WithDelta<T> {
+  const delta = r.amount - r.base_amount;
+  return {
+    ...r,
+    delta,
+    pct: r.base_amount ? (delta / r.base_amount) * 100 : null,
+  };
+}
+
+/** Roll a dimension up across every department — the query D1 exists to serve. */
+async function nepNationalRollup(env: Env, dimension: string, limit?: number) {
+  const rows = await queryBound<NepRollupRow>(
+    env,
+    `SELECT code,
+            MAX(description) AS description,
+            MAX(extra)       AS extra,
+            SUM(count)       AS count,
+            SUM(amount)      AS amount,
+            SUM(base_amount) AS base_amount
+       FROM nep_rollups
+      WHERE dimension = ?
+      GROUP BY code
+      ORDER BY amount DESC
+      ${limit ? "LIMIT ?" : ""}`,
+    ...(limit ? [dimension, limit] : [dimension]),
+  );
+  return rows.map(withDelta);
+}
+
+async function handleNepNational(env: Env): Promise<Response> {
+  const [meta] = await queryBound<NepMetaRow>(env, `SELECT * FROM nep_meta LIMIT 1`);
+  if (!meta) {
+    return Response.json(
+      { error: "not_loaded", message: "nep_meta is empty — load data/2027/d1-import.sql" },
+      { status: 503 },
+    );
+  }
+
+  const departments = (
+    await queryBound<Record<string, never>>(env, `SELECT * FROM nep_departments ORDER BY amount DESC`)
+  ).map(withDelta as never) as Array<{ id: string; description: string; amount: number; base_amount: number; delta: number; section: string }>;
+
+  const [expense_classes, regions, fund_subcategories, top_programs] = await Promise.all([
+    nepNationalRollup(env, "expense_class"),
+    nepNationalRollup(env, "region"),
+    nepNationalRollup(env, "fund", 25),
+    queryBound<NepRollupRow & { department_id: string }>(
+      env,
+      `SELECT department_id, code, description, extra, count, amount, base_amount
+         FROM nep_rollups WHERE dimension = 'program'
+        ORDER BY amount DESC LIMIT 40`,
+    ).then((rs) => rs.map(withDelta)),
+  ]);
+
+  // `sections` is derived from the department rows rather than stored twice.
+  const sectionMap = new Map<string, { code: string; description: string; count: number; amount: number; base_amount: number }>();
+  for (const d of departments) {
+    const code = d.section ?? "1";
+    const e = sectionMap.get(code) ?? {
+      code,
+      description: code === "2" ? "Special purpose and automatic appropriations" : "Agency budgets",
+      count: 0,
+      amount: 0,
+      base_amount: 0,
+    };
+    e.count += 1;
+    e.amount += d.amount;
+    e.base_amount += d.base_amount;
+    sectionMap.set(code, e);
+  }
+
+  const byDelta = [...departments].sort((a, b) => b.delta - a.delta);
+
+  return Response.json({
+    generated_at: meta.generated_at,
+    fiscal_year: meta.fiscal_year,
+    baseline_year: meta.baseline_year,
+    scale: "pesos",
+    source: "d1",
+    source_file: meta.source_file,
+    national: {
+      line_items: meta.line_items,
+      amount: meta.amount,
+      base_amount: meta.base_amount,
+    },
+    departments,
+    expense_classes,
+    fund_subcategories,
+    regions,
+    sections: [...sectionMap.values()].map(withDelta),
+    top_programs,
+    top_movers_up: byDelta.slice(0, 10),
+    top_movers_down: byDelta.slice(-10).reverse(),
+  });
+}
+
+async function handleNepDept(env: Env, deptId: string): Promise<Response> {
+  const [department] = await queryBound<Record<string, never>>(
+    env, `SELECT * FROM nep_departments WHERE id = ?`, deptId,
+  );
+  if (!department) {
+    return Response.json({ error: "not_found", message: `No FY2027 data for ${deptId}` }, { status: 404 });
+  }
+
+  const rows = await queryBound<NepRollupRow & { dimension: string }>(
+    env,
+    `SELECT dimension, code, description, extra, count, amount, base_amount
+       FROM nep_rollups WHERE department_id = ? ORDER BY dimension, amount DESC`,
+    deptId,
+  );
+
+  const byDim = new Map<string, Array<WithDelta<NepRollupRow>>>();
+  for (const r of rows) {
+    const { dimension, ...rest } = r;
+    if (!byDim.has(dimension)) byDim.set(dimension, []);
+    byDim.get(dimension)!.push(withDelta(rest));
+  }
+  const dim = (k: string) => byDim.get(k) ?? [];
+
+  /**
+   * Long-tail dimensions are capped for payload size — DepEd alone has ~13k
+   * operating units, which serializes to 2 MB. The remainder is folded into a
+   * single explicit row rather than dropped, so the list still sums to the
+   * department total and the UI can never quietly understate it. Use
+   * /api/nep2027/rollup/:dimension for the untruncated set.
+   */
+  const CAP = 50;
+  const capped = (k: string) => {
+    const all = dim(k);
+    if (all.length <= CAP + 1) return all;
+    const head = all.slice(0, CAP);
+    const tail = all.slice(CAP);
+    const amount = tail.reduce((a, r) => a + r.amount, 0);
+    const base_amount = tail.reduce((a, r) => a + r.base_amount, 0);
+    const delta = amount - base_amount;
+    head.push({
+      code: "__other__",
+      description: `Other (${tail.length.toLocaleString()} more)`,
+      extra: null,
+      count: tail.reduce((a, r) => a + r.count, 0),
+      amount,
+      base_amount,
+      delta,
+      pct: base_amount ? (delta / base_amount) * 100 : null,
+    });
+    return head;
+  };
+
+  const programs = dim("program");
+  const movers = [...programs].sort((a, b) => b.delta - a.delta);
+
+  const dept = withDelta(department as unknown as { amount: number; base_amount: number });
+
+  return Response.json({
+    generated_at: null,
+    fiscal_year: 2027,
+    baseline_year: 2026,
+    scale: "pesos",
+    source: "d1",
+    department: dept,
+    counts: {
+      agencies: (department as Record<string, number>).agencies,
+      programs: (department as Record<string, number>).programs,
+      activities: (department as Record<string, number>).activities,
+      operating_units: (department as Record<string, number>).operating_units,
+      objects: (department as Record<string, number>).objects,
+      regions: (department as Record<string, number>).regions,
+    },
+    agencies: dim("agency"),
+    expense_classes: dim("expense_class"),
+    fund_subcategories: dim("fund"),
+    regions: dim("region"),
+    programs,
+    top_objects: capped("object"),
+    top_operating_units: capped("operating_unit"),
+    top_divisions: capped("division"),
+    top_movers_up: movers.slice(0, 10),
+    top_movers_down: movers.slice(-10).reverse(),
+  });
+}
+
+/** Cross-department slice of one dimension — not possible from per-dept parquet. */
+async function handleNepRollup(env: Env, dimension: string, url: URL): Promise<Response> {
+  if (!NEP_DIMENSIONS.has(dimension)) {
+    return badRequest(`dimension must be one of: ${[...NEP_DIMENSIONS].join(", ")}`);
+  }
+  const limitRaw = Number(url.searchParams.get("limit") ?? "200");
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(1, limitRaw), 2000) : 200;
+  const byDept = url.searchParams.get("by") === "department";
+
+  if (byDept) {
+    const code = url.searchParams.get("code");
+    if (!code) return badRequest("by=department requires a code parameter");
+    const rows = await queryBound<NepRollupRow & { department_id: string }>(
+      env,
+      `SELECT r.department_id, d.description AS department, r.code, r.description,
+              r.count, r.amount, r.base_amount
+         FROM nep_rollups r JOIN nep_departments d ON d.id = r.department_id
+        WHERE r.dimension = ? AND r.code = ?
+        ORDER BY r.amount DESC LIMIT ?`,
+      dimension, code, limit,
+    );
+    return Response.json({ dimension, code, scale: "pesos", data: rows.map(withDelta) });
+  }
+
+  return Response.json({
+    dimension,
+    scale: "pesos",
+    data: await nepNationalRollup(env, dimension, limit),
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // ---- FY2027 NEP aggregation layer ----
+    if (url.pathname === "/api/nep2027/national" || url.pathname === "/api/nep2027/national/") {
+      try {
+        return await handleNepNational(env);
+      } catch (e) {
+        return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 });
+      }
+    }
+
+    const nepDeptMatch = /^\/api\/nep2027\/dept\/([^/]+)\/?$/.exec(url.pathname);
+    if (nepDeptMatch) {
+      const [, deptId] = nepDeptMatch;
+      if (!NEP_DEPT_ID_RE.test(deptId)) return badRequest("invalid department id");
+      try {
+        return await handleNepDept(env, deptId);
+      } catch (e) {
+        return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 });
+      }
+    }
+
+    const nepRollupMatch = /^\/api\/nep2027\/rollup\/([a-z_]+)\/?$/.exec(url.pathname);
+    if (nepRollupMatch) {
+      try {
+        return await handleNepRollup(env, nepRollupMatch[1], url);
+      } catch (e) {
+        return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 });
+      }
+    }
+
 
     // /api/dept/:id/objects/page — server-paginated Objects view
     const pageMatch = /^\/api\/dept\/([^/]+)\/objects\/page\/?$/.exec(url.pathname);
