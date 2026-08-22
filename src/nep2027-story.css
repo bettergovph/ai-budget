@@ -3,21 +3,9 @@
    page: numbered chapters, one display statement per screen, navy bands top
    and bottom, paper in between. Figtree speaks, Inter works, mono labels. */
 
-/* Hero blend: on the story page the masthead runs straight into the navy
-   band. The subnav takes the hero's colour and the chrome rule goes -- the
-   band itself is the boundary. */
+/* Hero blend: the navy subnav is now the site default; on the story page the
+   chrome rule also goes, so the band runs straight into the navy hero. */
 .masthead-hero-blend .masthead-chrome { border-bottom: none; }
-.masthead-hero-blend .primary-subnav { background: var(--accent-deep); }
-.masthead-hero-blend .primary-subnav .view-tabs a {
-  color: rgba(255, 255, 255, 0.72) !important;
-}
-.masthead-hero-blend .primary-subnav .view-tabs a:hover {
-  color: #fff !important;
-}
-.masthead-hero-blend .primary-subnav .view-tabs a.active {
-  color: #fff !important;
-  border-bottom-color: var(--paper) !important;
-}
 
 .story {
   overflow-x: hidden;
