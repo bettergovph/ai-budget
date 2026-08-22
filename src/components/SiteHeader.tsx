@@ -4,6 +4,8 @@ import { Link, useLocation } from 'react-router-dom';
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
 interface SiteHeaderProps {
+  /** Extra class on the <header> for page-scoped variants (e.g. hero blend). */
+  headerClassName?: string;
   /** Page-specific sub-nav rendered as a strip below the primary nav. */
   subNav?: ReactNode;
   /** Extra content placed inside the mobile drawer (e.g., per-page section nav, download links). */
@@ -27,7 +29,7 @@ function isActivePath(pathname: string, href: string): boolean {
   return p === h || p.startsWith(h + '/');
 }
 
-export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }: SiteHeaderProps) {
+export default function SiteHeader({ headerClassName, subNav, drawerExtras, crumb, compiledMeta }: SiteHeaderProps) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -70,7 +72,7 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
 
   return (
     <>
-      <header className="masthead">
+      <header className={`masthead ${headerClassName ?? ''}`.trim()}>
         {/* Full-bleed wrapper: carries the masthead's single horizontal rule
             so it runs edge to edge, while the content inside stays within the
             centred container. */}

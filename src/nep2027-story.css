@@ -3,18 +3,20 @@
    page: numbered chapters, one display statement per screen, navy bands top
    and bottom, paper in between. Figtree speaks, Inter works, mono labels. */
 
-/* Reading progress under the sticky masthead. */
-.story-progress {
-  position: sticky;
-  top: 0;
-  z-index: 49;
-  height: 3px;
-  background: transparent;
+/* Hero blend: on the story page the masthead runs straight into the navy
+   band. The subnav takes the hero's colour and the chrome rule goes -- the
+   band itself is the boundary. */
+.masthead-hero-blend .masthead-chrome { border-bottom: none; }
+.masthead-hero-blend .primary-subnav { background: var(--accent-deep); }
+.masthead-hero-blend .primary-subnav .view-tabs a {
+  color: rgba(255, 255, 255, 0.72) !important;
 }
-.story-progress > div {
-  height: 100%;
-  width: 0%;
-  background: var(--accent);
+.masthead-hero-blend .primary-subnav .view-tabs a:hover {
+  color: #fff !important;
+}
+.masthead-hero-blend .primary-subnav .view-tabs a.active {
+  color: #fff !important;
+  border-bottom-color: var(--paper) !important;
 }
 
 .story {
@@ -45,9 +47,8 @@
   text-align: center;
 }
 .story-hero {
-  /* Left-aligned editorial title, in the container's own gutters. The header
-     is shorter here because the story page carries no subnav. */
-  min-height: calc(100vh - 170px);
+  /* Left-aligned editorial title, in the container's own gutters. */
+  min-height: calc(100vh - 225px);
   display: flex;
   align-items: center;
   text-align: left;
@@ -107,6 +108,22 @@
 @media (prefers-reduced-motion: reduce) {
   .story-scroll-cue { animation: none; }
 }
+
+/* Chapter CTA: the exit from story into the working tools. */
+.story-cta {
+  display: inline-block;
+  margin-top: 40px;
+  padding: 13px 24px;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.story-cta:hover { background: var(--ink); color: var(--paper); }
 
 /* --- chapters ------------------------------------------------------------ */
 

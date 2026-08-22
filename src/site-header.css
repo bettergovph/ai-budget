@@ -248,10 +248,12 @@
 
   .primary-nav { display: none; }
   .masthead-chrome { border-bottom: none; }
-  /* Pages without a subnav (the story deck) keep the rule on the chrome. */
+  /* Pages without a subnav keep the rule on the chrome. */
   .masthead:not(:has(.primary-subnav)) .masthead-chrome {
     border-bottom: 1.5px solid var(--ink);
   }
+  /* Hero blend: the navy band is the boundary; no rule at all. */
+  .masthead-hero-blend .primary-subnav { border-bottom: none; }
   .primary-subnav-inner { padding: 0; width: max-content; }
   .primary-subnav {
     display: block;

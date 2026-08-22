@@ -27,7 +27,6 @@ export default function Nep2027Story() {
   const [idx, setIdx] = useState<NepNationalIndex | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadNepIndex().then(setIdx).catch((e) => setErr(String(e?.message || e)));
@@ -52,28 +51,6 @@ export default function Nep2027Story() {
     );
     root.querySelectorAll('.story-reveal').forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [idx]);
-
-  // Thin reading-progress bar under the masthead. Style is driven directly on
-  // the ref so scrolling never re-renders the page.
-  useEffect(() => {
-    const el = progressRef.current;
-    if (!el) return;
-    let raf = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const doc = document.documentElement;
-        const max = doc.scrollHeight - doc.clientHeight;
-        el.style.width = max > 0 ? `${(doc.scrollTop / max) * 100}%` : '0%';
-      });
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      cancelAnimationFrame(raf);
-    };
   }, [idx]);
 
   if (err) return <NepError message={err} />;
@@ -106,15 +83,14 @@ export default function Nep2027Story() {
 
   return (
     <>
-      <NepHeader crumb="Overview" compiledMeta={`${fmt.shortPhp(amount, 'T')} proposed`} hideSubNav />
-      <div className="story-progress" aria-hidden="true"><div ref={progressRef} /></div>
+      <NepHeader crumb="Overview" compiledMeta={`${fmt.shortPhp(amount, 'T')} proposed`} heroBlend />
 
       <main ref={rootRef} className="story">
         {/* ---- Hero: the navy band ---- */}
         <section className="story-band story-hero">
           <div className="story-hero-inner">
             <p className="story-kicker">Republic of the Philippines · Fiscal Year {NEP_YEAR}</p>
-            <h1 className="story-hero-title">The National Expenditure Program</h1>
+            <h1 className="story-hero-title">The National Expenditure Program 2027</h1>
             <p className="story-hero-aka">Also known as the President’s Budget.</p>
             <p className="story-hero-sub">
               {fmt.shortPhp(amount, 'T')} proposed · {items.toLocaleString()} line items ·{' '}
@@ -138,6 +114,7 @@ export default function Nep2027Story() {
             <div><strong className={Number(growth) >= 0 ? 'up' : 'down'}>{formatPct(growth)}</strong><span>vs the FY{BASE_YEAR} GAA of {fmt.shortPhp(base, 'T')}</span></div>
             <div><strong>{items.toLocaleString()}</strong><span>line items across {idx.departments.length} groups</span></div>
           </div>
+          <Link className="story-cta" to="/2027/browse">Browse all {idx.departments.length} spending groups →</Link>
         </section>
 
         {/* ---- 02 ---- */}
@@ -161,6 +138,7 @@ export default function Nep2027Story() {
                 <em>Special purpose + automatic</em><strong>{fmt.shortPhp(autoSection.amount, 'T')}</strong>
               </div>
             </div>
+            <Link className="story-cta" to="/2027/d/AUTO">See what flows automatically →</Link>
             </div>
           </section>
         )}
@@ -184,6 +162,7 @@ export default function Nep2027Story() {
               </div>
             ))}
           </div>
+          <Link className="story-cta" to="/2027/browse">Browse the groups behind these numbers →</Link>
         </section>
 
         {/* ---- 04 ---- */}
@@ -219,6 +198,7 @@ export default function Nep2027Story() {
               </ol>
             </div>
           </div>
+          <Link className="story-cta" to="/2027/browse">Browse every group's change →</Link>
           </div>
         </section>
 
@@ -239,6 +219,7 @@ export default function Nep2027Story() {
               </li>
             ))}
           </ol>
+          <Link className="story-cta" to="/2027/search">Search the line items behind them →</Link>
         </section>
 
         {/* ---- 06 ---- */}
@@ -261,6 +242,7 @@ export default function Nep2027Story() {
               </li>
             ))}
           </ol>
+          <Link className="story-cta" to="/2027/browse">Browse group by group →</Link>
           </div>
         </section>
 

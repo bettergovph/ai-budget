@@ -234,12 +234,13 @@ const NEP_NAV: Array<{ to: string; label: string }> = [
 export function NepHeader({
   crumb,
   compiledMeta,
-  hideSubNav = false,
+  heroBlend = false,
 }: {
   crumb?: ReactNode;
   compiledMeta?: ReactNode;
-  /** The story deck is a presentation, not a workspace — no tab strip. */
-  hideSubNav?: boolean;
+  /** Story-deck variant: the subnav takes the hero's navy so the header runs
+      straight into the band with no rule and no seam. */
+  heroBlend?: boolean;
 }) {
   const { pathname } = useLocation();
   const path = pathname.replace(/\/+$/, '') || '/2027';
@@ -264,14 +265,13 @@ export function NepHeader({
 
   return (
     <SiteHeader
+      headerClassName={heroBlend ? 'masthead-hero-blend' : undefined}
       crumb={crumb}
       compiledMeta={compiledMeta}
       subNav={
-        hideSubNav ? undefined : (
-          <nav className="view-tabs section-tabs" aria-label="FY2027 NEP sections">
-            {links('')}
-          </nav>
-        )
+        <nav className="view-tabs section-tabs" aria-label="FY2027 NEP sections">
+          {links('')}
+        </nav>
       }
       drawerExtras={
         <nav className="nep-drawer-nav" aria-label="FY2027 NEP sections">
