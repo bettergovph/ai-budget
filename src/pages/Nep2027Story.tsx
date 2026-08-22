@@ -94,6 +94,12 @@ export default function Nep2027Story() {
     (a, b) => (pctChange(b.amount, b.base_amount) ?? -Infinity) - (pctChange(a.amount, a.base_amount) ?? -Infinity),
   )[0];
   const topFundShare = funds[0] ? (funds[0].amount / amount) * 100 : 0;
+  // NCR (13) + the central-office/nationwide bucket (00): money programmed
+  // from the center, whether or not it is ultimately spent there.
+  const centerShare =
+    (idx.regions
+      .filter((r) => r.code === '13' || r.code === '00')
+      .reduce((a, r) => a + r.amount, 0) / amount) * 100;
   const moversUp = idx.top_movers_up.slice(0, 5);
   const moversDown = idx.top_movers_down.slice(0, 5);
   const moverMax = Math.max(...[...moversUp, ...moversDown].map((m) => Math.abs(m.delta)));
@@ -137,10 +143,10 @@ export default function Nep2027Story() {
         {/* ---- 02 ---- */}
         {agencySection && autoSection && (
           <section className="story-chapter story-chapter-tint story-reveal">
+            <div className="story-chapter-inner">
             <p className="story-ch-num">02 · Two kinds of money</p>
-            <h2 className="story-h">
-              {((autoSection.amount / amount) * 100).toFixed(0)}% never gets debated line by line.
-            </h2>
+            <p className="story-big-num">{((autoSection.amount / amount) * 100).toFixed(0)}%</p>
+            <h2 className="story-h">never gets debated line by line.</h2>
             <p className="story-lede">
               {fmt.shortPhp(autoSection.amount, 'T')} is special-purpose funds and automatic
               appropriations — debt interest, the National Tax Allotment, pensions — money that flows
@@ -154,6 +160,7 @@ export default function Nep2027Story() {
               <div className="alt" style={{ flexGrow: autoSection.amount }}>
                 <em>Special purpose + automatic</em><strong>{fmt.shortPhp(autoSection.amount, 'T')}</strong>
               </div>
+            </div>
             </div>
           </section>
         )}
@@ -181,6 +188,7 @@ export default function Nep2027Story() {
 
         {/* ---- 04 ---- */}
         <section className="story-chapter story-chapter-tint story-reveal">
+          <div className="story-chapter-inner">
           <p className="story-ch-num">04 · What moved</p>
           <h2 className="story-h">
             {moversUp[0]?.description.replace(/\s*\(.*\)$/, '')} gains the most.
@@ -211,6 +219,7 @@ export default function Nep2027Story() {
               </ol>
             </div>
           </div>
+          </div>
         </section>
 
         {/* ---- 05 ---- */}
@@ -234,8 +243,10 @@ export default function Nep2027Story() {
 
         {/* ---- 06 ---- */}
         <section className="story-chapter story-chapter-tint story-reveal">
+          <div className="story-chapter-inner">
           <p className="story-ch-num">06 · Across the country</p>
-          <h2 className="story-h">Most of the money is spent from the centre.</h2>
+          <p className="story-big-num">{centerShare.toFixed(0)}%</p>
+          <h2 className="story-h">is programmed from the center.</h2>
           <p className="story-lede">
             Region tags follow the implementing office, so NCR and the nationwide bucket dominate —
             that is where central offices, debt service and the big transfer funds sit, not
@@ -250,6 +261,7 @@ export default function Nep2027Story() {
               </li>
             ))}
           </ol>
+          </div>
         </section>
 
         {/* ---- 07 ---- */}

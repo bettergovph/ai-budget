@@ -118,11 +118,13 @@
 .story-chapter-tint {
   max-width: none;
   background: var(--paper-2);
+  padding-left: 0;
+  padding-right: 0;
 }
-.story-chapter-tint > * {
-  max-width: 1016px;
-  margin-left: auto;
-  margin-right: auto;
+.story-chapter-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 32px;
 }
 .story-ch-num {
   font-family: var(--font-mono);
@@ -136,13 +138,25 @@
 .story-h {
   font-family: var(--font-hero);
   font-weight: 700;
-  font-size: clamp(34px, 4.6vw, 60px);
-  line-height: 1.04;
-  letter-spacing: -0.02em;
+  font-size: clamp(38px, 5.4vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
   color: var(--ink);
-  margin: 0 0 22px;
-  max-width: 860px;
+  margin: 0 0 24px;
+  max-width: 900px;
 }
+/* The chapter's one oversized figure — computed, never hand-written. */
+.story-big-num {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(96px, 15vw, 200px);
+  line-height: 0.9;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  margin: 0;
+}
+.story-big-num + .story-h { margin-top: 6px; }
 .story-h-paper { color: var(--paper); margin-left: auto; margin-right: auto; }
 .story-lede {
   font-family: var(--font-body);
@@ -447,6 +461,8 @@
 
 @media (max-width: 900px) {
   .story-chapter { padding: 72px 20px; }
+  .story-chapter-tint { padding-left: 0; padding-right: 0; }
+  .story-chapter-inner { padding: 0 20px; }
   .story-band { padding: 72px 20px; }
   .story-classes { grid-template-columns: 1fr; gap: 36px; }
   .story-movers { grid-template-columns: 1fr; gap: 40px; }
