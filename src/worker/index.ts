@@ -893,6 +893,233 @@ async function handleObjects(env: Env, deptId: string): Promise<Response> {
 }
 
 // ---------------------------------------------------------------------------
+// Interactive Stage B (`gaa_fpap_families` / `gaa_dept_expense_classes`)
+// ---------------------------------------------------------------------------
+//
+// The four largest departments cannot ship Stage B as one response (see
+// MID_ROW_LIMIT). Their views are served interactively instead: a small
+// summary (expense classes, program families where they fit, movers), a
+// paginated program-family list, and per-level drill children. All reads,
+// no bulk transfer; the summary tables are materialised by
+// scripts/build-gaa-summaries.ts with byte-identical semantics to the
+// client-side derivation they replace.
+
+/** Family lists up to this many rows ship inline in the summary; DPWH's
+    149,342 families go through /programs/page instead. */
+const FAMILY_INLINE_LIMIT = 12_000;
+
+const YEAR_SET = new Set<number>(YEARS as readonly number[]);
+
+function yearParam(url: URL): number {
+  const y = Number(url.searchParams.get("year") ?? "2026");
+  return YEAR_SET.has(y) ? y : 2026;
+}
+
+interface FamilyRow extends WideRow {
+  department_id: string;
+  agency_id: string;
+  fam_key: string;
+  name: string;
+  ids_count: number;
+}
+
+async function handleMidSummary(env: Env, deptId: string): Promise<Response> {
+  const ecRows = await queryBound<WideRow>(
+    env,
+    `SELECT * FROM gaa_dept_expense_classes WHERE department_id = ? ORDER BY agency_id, expense_code`,
+    deptId,
+  );
+
+  const [{ n: familiesTotal }] = await queryBound<{ n: number }>(
+    env,
+    `SELECT count(*) AS n FROM gaa_fpap_families WHERE department_id = ?`,
+    deptId,
+  );
+
+  const inline = familiesTotal <= FAMILY_INLINE_LIMIT;
+  const families = inline
+    ? await queryBound<FamilyRow>(
+        env,
+        `SELECT * FROM gaa_fpap_families WHERE department_id = ? ORDER BY amount_2026 DESC, fam_key`,
+        deptId,
+      )
+    : [];
+
+  // Movers for every consecutive year pair. For inline departments the client
+  // computes these from the families it already has; only the paginated ones
+  // need them served. Measured ~60ms per sort over 149k rows.
+  const movers: Record<string, { up: WideRow[]; down: WideRow[] }> = {};
+  if (!inline) {
+    const pairs = (YEARS as readonly number[]).slice(1).map((y) => [y, y - 1] as const);
+    await Promise.all(
+      pairs.map(async ([y, prev]) => {
+        const delta = `(coalesce(amount_${y},0) - coalesce(amount_${prev},0))`;
+        const [up, down] = await Promise.all([
+          queryBound<WideRow>(
+            env,
+            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? ORDER BY ${delta} DESC LIMIT 6`,
+            deptId,
+          ),
+          queryBound<WideRow>(
+            env,
+            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? ORDER BY ${delta} ASC LIMIT 6`,
+            deptId,
+          ),
+        ]);
+        movers[`${y}|${prev}`] = {
+          up: up.map(widenToNested),
+          down: down.map(widenToNested),
+        };
+      }),
+    );
+  }
+
+  return Response.json({
+    department_id: deptId,
+    expense_classes: ecRows.map(widenToNested),
+    families_total: familiesTotal,
+    families_inline: inline,
+    families: families.map(widenToNested),
+    movers,
+  });
+}
+
+/** Keyset cursor: base64("amount|tiebreak"). */
+function decodeCursor(raw: string | null): { amount: number; key: string } | null {
+  if (!raw) return null;
+  try {
+    const decoded = atob(raw);
+    // Split on the FIRST separator only — the key itself may contain '|'
+    // (family keys are agency_id + '|' + normalised name), and JS
+    // String.split(sep, 2) truncates instead of keeping the remainder.
+    const i = decoded.indexOf("|");
+    if (i < 0) return null;
+    const amount = Number(decoded.slice(0, i));
+    if (!Number.isFinite(amount)) return null;
+    return { amount, key: decoded.slice(i + 1) };
+  } catch {
+    return null;
+  }
+}
+
+function encodeCursor(amount: number, key: string): string {
+  return btoa(`${amount}|${key}`);
+}
+
+async function handleProgramsPage(env: Env, deptId: string, url: URL): Promise<Response> {
+  const year = yearParam(url);
+  const q = (url.searchParams.get("q") ?? "").trim();
+  const bureau = url.searchParams.get("bureau") ?? "";
+  const limitRaw = Number(url.searchParams.get("limit") ?? "100");
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(1, limitRaw), 500) : 100;
+  const cursor = decodeCursor(url.searchParams.get("cursor"));
+
+  const amt = `coalesce(amount_${year}, 0)`;
+  const conds: string[] = [`department_id = ?`];
+  const binds: unknown[] = [deptId];
+  if (bureau) { conds.push(`agency_id = ?`); binds.push(bureau); }
+  if (q) {
+    conds.push(`name LIKE ? ESCAPE '\\'`);
+    binds.push(`%${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
+  }
+
+  // Snapshot filter-only conditions for the whole-result summary BEFORE the
+  // cursor predicate narrows the page.
+  const sumConds = conds.join(" AND ");
+  const sumBinds = [...binds];
+  if (cursor) {
+    conds.push(`(${amt} < ? OR (${amt} = ? AND fam_key > ?))`);
+    binds.push(cursor.amount, cursor.amount, cursor.key);
+  }
+
+  const rows = await queryBound<FamilyRow>(
+    env,
+    `SELECT * FROM gaa_fpap_families WHERE ${conds.join(" AND ")}
+     ORDER BY ${amt} DESC, fam_key ASC LIMIT ${limit + 1}`,
+    ...binds,
+  );
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+
+  const [summary] = await queryBound<{ n: number; total: number }>(
+    env,
+    `SELECT count(*) AS n, coalesce(sum(${amt}), 0) AS total
+     FROM gaa_fpap_families WHERE ${sumConds}`,
+    ...sumBinds,
+  );
+
+  return Response.json({
+    metadata: { department_id: deptId, year, q: q || null, bureau: bureau || null, limit },
+    summary,
+    data: page.map(widenToNested),
+    cursor: hasMore && last ? encodeCursor(Number(last[`amount_${year}`] ?? 0), String(last.fam_key)) : null,
+  });
+}
+
+/** level → { table, parent FK column, whether zero-total rows are dropped }. */
+const CHILD_LEVELS: Record<string, { table: string; parentCol: string; requireTotal: boolean }> = {
+  fpaps: { table: "fpaps", parentCol: "agency_id", requireTotal: true },
+  operating_units: { table: "operating_units", parentCol: "fpap_id", requireTotal: false },
+  fund_subcategories: { table: "fund_subcategories", parentCol: "operating_unit_id", requireTotal: false },
+  expenses: { table: "expenses", parentCol: "fund_id", requireTotal: false },
+};
+
+async function handleMidChildren(env: Env, deptId: string, url: URL): Promise<Response> {
+  const level = url.searchParams.get("level") ?? "";
+  const spec = CHILD_LEVELS[level];
+  if (!spec) return badRequest(`level must be one of: ${Object.keys(CHILD_LEVELS).join(", ")}`);
+  const parent = url.searchParams.get("parent") ?? "";
+  if (!parent) return badRequest("parent is required");
+
+  const year = yearParam(url);
+  const limitRaw = Number(url.searchParams.get("limit") ?? "200");
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(1, limitRaw), 1000) : 200;
+  const cursor = decodeCursor(url.searchParams.get("cursor"));
+
+  const amt = `coalesce(amount_${year}, 0)`;
+  const conds = [
+    `department_id = ?`,
+    `${spec.parentCol} = ?`,
+    `lower(coalesce(description,'')) <> 'nan'`,
+    `coalesce(slug,'') <> 'nan'`,
+  ];
+  const binds: unknown[] = [deptId, parent];
+  if (spec.requireTotal) {
+    conds.push(`(${(YEARS as readonly number[]).map((y) => `coalesce(amount_${y},0)`).join(" + ")}) > 0`);
+  }
+  const sumConds = [...conds];
+  const sumBinds = [...binds];
+  if (cursor) {
+    conds.push(`(${amt} < ? OR (${amt} = ? AND id > ?))`);
+    binds.push(cursor.amount, cursor.amount, cursor.key);
+  }
+
+  const rows = await queryBound<WideRow & { id: string }>(
+    env,
+    `SELECT * FROM ${spec.table} WHERE ${conds.join(" AND ")}
+     ORDER BY ${amt} DESC, id ASC LIMIT ${limit + 1}`,
+    ...binds,
+  );
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+
+  const [summary] = await queryBound<{ n: number; total: number }>(
+    env,
+    `SELECT count(*) AS n, coalesce(sum(${amt}), 0) AS total FROM ${spec.table} WHERE ${sumConds.join(" AND ")}`,
+    ...sumBinds,
+  );
+
+  return Response.json({
+    metadata: { department_id: deptId, level, parent, year, limit },
+    summary,
+    data: page.map(widenToNested),
+    cursor: hasMore && last ? encodeCursor(Number(last[`amount_${year}`] ?? 0), String(last.id)) : null,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // FY2027 NEP aggregation layer (`nep_*` tables)
 // ---------------------------------------------------------------------------
 //
@@ -1152,6 +1379,29 @@ async function handleNepRollup(env: Env, dimension: string, url: URL): Promise<R
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // ---- interactive Stage B (heavy GAA departments) ----
+    const midSummaryMatch = /^\/api\/dept\/([^/]+)\/mid\/summary\/?$/.exec(url.pathname);
+    if (midSummaryMatch) {
+      const [, deptId] = midSummaryMatch;
+      if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
+      try { return await handleMidSummary(env, deptId); }
+      catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+    const midChildrenMatch = /^\/api\/dept\/([^/]+)\/mid\/children\/?$/.exec(url.pathname);
+    if (midChildrenMatch) {
+      const [, deptId] = midChildrenMatch;
+      if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
+      try { return await handleMidChildren(env, deptId, url); }
+      catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+    const programsPageMatch = /^\/api\/dept\/([^/]+)\/programs\/page\/?$/.exec(url.pathname);
+    if (programsPageMatch) {
+      const [, deptId] = programsPageMatch;
+      if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
+      try { return await handleProgramsPage(env, deptId, url); }
+      catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
 
     // ---- FY2027 NEP aggregation layer ----
     if (url.pathname === "/api/nep2027/national" || url.pathname === "/api/nep2027/national/") {
