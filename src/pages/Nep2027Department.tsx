@@ -75,7 +75,7 @@ export default function Nep2027Department() {
   return (
     <>
       <NepHeader
-        crumb={d.description.toUpperCase()}
+        crumb={d.description}
         compiledMeta={`${fmt.shortPhp(d.amount)} proposed`}
       />
 

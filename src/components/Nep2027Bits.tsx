@@ -6,7 +6,7 @@
  * take an `amount` / `base_amount` pair rather than a single value.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import * as fmt from '../lib/format';
 import {
@@ -222,24 +222,47 @@ const NEP_NAV: Array<{ to: string; label: string }> = [
   { to: '/2027/methodology', label: 'Methodology' },
 ];
 
-/** Masthead + the microsite's own sub-nav. */
+/**
+ * Masthead + the microsite's own sub-nav.
+ *
+ * The sub-nav is page navigation, so each entry behaves as a tab: the one
+ * matching the current route is marked active. `/2027/d/:id` counts as
+ * Overview, since a department page is a drill-down of the overview rather
+ * than a section of its own.
+ */
 export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiledMeta?: ReactNode }) {
+  const { pathname } = useLocation();
+  const path = pathname.replace(/\/+$/, '') || '/2027';
+
+  const isActive = (to: string) => {
+    if (to === '/2027') return path === '/2027' || path.startsWith('/2027/d/');
+    return path === to || path.startsWith(`${to}/`);
+  };
+
+  const links = (className: string) =>
+    NEP_NAV.map((n) => (
+      <Link
+        key={n.to}
+        to={n.to}
+        className={isActive(n.to) ? `${className} active`.trim() : className}
+        aria-current={isActive(n.to) ? 'page' : undefined}
+      >
+        {n.label}
+      </Link>
+    ));
+
   return (
     <SiteHeader
       crumb={crumb}
       compiledMeta={compiledMeta}
       subNav={
         <nav className="view-tabs section-tabs" aria-label="FY2027 NEP sections">
-          {NEP_NAV.map((n) => (
-            <Link key={n.to} to={n.to}>{n.label}</Link>
-          ))}
+          {links('')}
         </nav>
       }
       drawerExtras={
         <nav className="nep-drawer-nav" aria-label="FY2027 NEP sections">
-          {NEP_NAV.map((n) => (
-            <Link key={n.to} to={n.to}>{n.label}</Link>
-          ))}
+          {links('')}
         </nav>
       }
     />

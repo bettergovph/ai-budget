@@ -27,11 +27,13 @@
   align-items: center !important;
   gap: 24px !important;
   padding: 10px 0 !important;
-  border-bottom: 1px solid var(--rule-soft);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  /* Utility bar matches the national header: Figtree at 12px, regular, in
+     sentence case -- not mono uppercase, which fought the nav below it. */
+  font-family: var(--font-hero);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--ink-3);
 }
 .masthead-meta-l,
@@ -47,7 +49,7 @@
   font-weight: 400;
 }
 .masthead-date {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink-2);
 }
 .masthead-loc { color: var(--ink-3); }
@@ -118,10 +120,9 @@
 .logo-tag-em {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--ink-3);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin-left: 6px;
 }
 
@@ -135,19 +136,21 @@
   display: flex;
   align-items: stretch;
   flex-wrap: wrap;
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--ink);
+  /* The masthead's one horizontal rule. Everything above it is site chrome,
+     everything below it belongs to the page. */
+  border-bottom: 1.5px solid var(--ink);
 }
 .primary-nav-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 12px 18px;
+  /* Primary nav follows the national header: Figtree semibold at 16px, in
+     sentence case. Not uppercase, and not mono -- mono is labels only. */
   font-family: var(--font-hero);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: normal;
   color: var(--ink-2);
   text-decoration: none;
   border-right: 1px solid var(--rule-soft);
@@ -175,7 +178,6 @@
 
 /* ---- Page-specific sub-nav (rendered below primary nav by consumers) ---- */
 .primary-subnav {
-  border-bottom: 1px solid var(--rule-soft);
   padding: 0;
   background: var(--paper);
 }

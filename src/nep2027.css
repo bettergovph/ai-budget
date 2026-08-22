@@ -198,7 +198,7 @@
 .nep-more {
   margin-top: 10px;
   padding: 6px 14px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -330,10 +330,11 @@ a.nep-mover-name:hover { color: var(--accent); }
   all: unset;
   cursor: pointer;
   padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  /* Same treatment as the subnav above it: navigation, so interface face. */
+  font-family: var(--font-body);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  font-weight: 500;
   color: var(--ink-3);
   border-bottom: 2px solid transparent;
 }
@@ -551,7 +552,7 @@ a.nep-mover-name:hover { color: var(--accent); }
 .nep-hier-bar > button:first-child {
   flex: none;
   padding: 5px 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-body);
   font-size: 11px;
   background: var(--paper);
   border: 1px solid var(--rule);

@@ -374,22 +374,29 @@ html, body {
   border-top: 1px solid var(--rule-soft);
   padding-top: 14px;
 }
-.view-tabs button {
+/* Subnav is navigation, not metadata, so it takes the interface face (Inter)
+   rather than mono, and reads in sentence case -- consistent with the primary
+   nav above it and with the national header. */
+.view-tabs button,
+.view-tabs a {
   background: none;
   border: none;
+  text-decoration: none !important;
   padding: 6px 0;
-  font-family: var(--font-mono) !important;
-  font-size: 11px !important;
-  letter-spacing: 0.14em !important;
-  text-transform: uppercase !important;
-  font-weight: 600 !important;
+  font-family: var(--font-body) !important;
+  font-size: 14px !important;
+  letter-spacing: 0.01em !important;
+  text-transform: none !important;
+  font-weight: 500 !important;
   color: var(--ink-3) !important;
   border-bottom: 2px solid transparent !important;
   cursor: pointer;
   transition: color .12s, border-color .12s;
 }
-.view-tabs button:hover { color: var(--ink) !important; }
-.view-tabs button.active {
+.view-tabs button:hover,
+.view-tabs a:hover { color: var(--ink) !important; }
+.view-tabs button.active,
+.view-tabs a.active {
   color: var(--ink) !important;
   border-bottom-color: var(--accent) !important;
 }
@@ -825,7 +832,9 @@ html, body {
   gap: 6px;
   background: transparent;
   border: 1px solid transparent;
-  font-family: var(--font-mono);
+  /* A control, so the interface face -- mono is reserved for labels, codes and
+     figures. Uppercase with tracking matches the national header's buttons. */
+  font-family: var(--font-body);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

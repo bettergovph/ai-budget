@@ -86,7 +86,9 @@ button {
 
 /* ---------- Top masthead ---------- */
 .masthead {
-  border-bottom: 1.5px solid var(--ink);
+  /* No rule here. The masthead's single horizontal line sits under the primary
+     nav (.primary-nav), so the subnav below it reads as page tabs rather than
+     as another band of chrome. */
   background: var(--paper);
   position: sticky;
   top: 0;
@@ -179,11 +181,9 @@ button {
   padding: 0 2px;
 }
 .masthead-date {
-  font-family: var(--mono);
-  font-size: 11px;
+  /* Face, size and casing come from .masthead-top (Figtree 12px, sentence
+     case) so the whole utility bar reads as one row; only placement here. */
   color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   margin-left: auto;
 }
 
