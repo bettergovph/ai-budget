@@ -14,12 +14,6 @@ interface SiteHeaderProps {
   compiledMeta?: ReactNode;
 }
 
-const PRIMARY_NAV: Array<{ to: string; label: string }> = [
-  { to: '/', label: 'National' },
-  { to: '/2027', label: 'NEP 2027' },
-  { to: '/methodology', label: 'Methodology' },
-];
-
 const UTILITY_LINKS = [
   { href: 'https://bettergov.ph', label: 'BetterGov.ph' },
   { href: 'https://data.bettergov.ph', label: 'Open Data' },
@@ -141,14 +135,20 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
 
           <nav className="primary-nav" aria-label="Primary">
             <Link
-              to="/"
-              className={`primary-nav-link ${isActivePath(location.pathname, '/') ? 'active' : ''}`}
+              to="/2027"
+              className={`primary-nav-link ${location.pathname.startsWith('/2027') ? 'active' : ''}`}
             >
-              National
+              NEP 2027
+            </Link>
+            <Link
+              to="/"
+              className={`primary-nav-link ${isActivePath(location.pathname, '/') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
+            >
+              GAA
             </Link>
             <Link
               to="/#groups"
-              className={`primary-nav-link ${location.pathname.startsWith('/d/') ? 'active' : ''}`}
+              className="primary-nav-link"
               onClick={(e) => {
                 // When already on the National page, <Link> won't re-navigate
                 // and the browser ignores hash-only changes that match. Force
@@ -164,15 +164,6 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
             >
               All 40 Groups
             </Link>
-            {PRIMARY_NAV.filter((n) => n.to !== '/').map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={`primary-nav-link ${isActivePath(location.pathname, n.to) ? 'active' : ''}`}
-              >
-                {n.label}
-              </Link>
-            ))}
             <a
               href="https://2026-budget.bettergov.ph"
               target="_blank"
@@ -215,11 +206,11 @@ export default function SiteHeader({ subNav, drawerExtras, crumb, compiledMeta }
           </button>
         </div>
         <nav className="drawer-nav" aria-label="Site sections">
-          <Link className="drawer-link" to="/" onClick={() => setMenuOpen(false)}>
-            National <span className="drawer-link-arrow">→</span>
+          <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
+            NEP 2027 <span className="drawer-link-arrow">→</span>
           </Link>
-          <Link className="drawer-link" to="/methodology" onClick={() => setMenuOpen(false)}>
-            Methodology <span className="drawer-link-arrow">→</span>
+          <Link className="drawer-link" to="/" onClick={() => setMenuOpen(false)}>
+            GAA <span className="drawer-link-arrow">→</span>
           </Link>
           <a
             className="drawer-link"

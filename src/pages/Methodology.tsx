@@ -78,7 +78,7 @@ export default function Methodology() {
 
         <h3 style={hStyle}>AI-assisted compilation</h3>
         <p style={pStyle}>
-          Aggregation, schema parsing, and editorial commentary were produced with help from Claude (Anthropic),
+          Aggregation, schema parsing, and editorial commentary were produced with help from Claude (Anthropic) — Opus 4.7, Opus 5, and Fable 5 —
           under human review. Always verify against the official GAA before citing.
         </p>
 

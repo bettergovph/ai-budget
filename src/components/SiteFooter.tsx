@@ -1,8 +1,15 @@
+import { Link, useLocation } from 'react-router-dom';
+
 interface SiteFooterProps {
   source?: string;
 }
 
 export default function SiteFooter({ source }: SiteFooterProps = {}) {
+  // Methodology lives here rather than in the navbar. Each half of the site
+  // has its own methodology page; link the one for the section you are in.
+  const { pathname } = useLocation();
+  const methodologyTo = pathname.startsWith('/2027') ? '/2027/methodology' : '/methodology';
+
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
@@ -13,12 +20,16 @@ export default function SiteFooter({ source }: SiteFooterProps = {}) {
           <strong>AI-assisted analysis.</strong> The figures, breakdowns, and editorial commentary on
           this site were parsed, aggregated, and drafted by{' '}
           <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">
-            Claude Opus 4.7
+            Claude
           </a>{' '}
-          with human oversight. The dataset and its interpretations may contain errors, mis-classifications,
+          (Opus&nbsp;4.7, Opus&nbsp;5, and Fable&nbsp;5) with human oversight. The dataset and its interpretations may contain errors, mis-classifications,
           or stale figures — always verify against the official GAA before citing.
         </p>
         <ul className="sf-links">
+          <li>
+            <span className="sf-links-label">Methodology</span>
+            <Link to={methodologyTo}>Coverage, corrections, and data-quality notes</Link>
+          </li>
           <li>
             <span className="sf-links-label">Data source</span>
             <a
