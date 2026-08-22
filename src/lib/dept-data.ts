@@ -435,15 +435,9 @@ export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<D
   let fundsRaw: RawDataset<Fund>;
   let expensesRaw: RawDataset<Expense>;
 
-  if (useD1Source()) {
-    const r = await fetchD1<D1MidResponse>(`/api/dept/${deptId}/mid`);
-    fpapsRaw = r.fpaps;
-    opUnitsRaw = r.operating_units;
-    fundsRaw = r.fund_subcategories;
-    expensesRaw = skipExpenses ? { data: [] } : r.expenses;
-  } else {
+  const loadViaParquet = async () => {
     const manifest = await loadManifest(deptId);
-    [fpapsRaw, opUnitsRaw, fundsRaw, expensesRaw] = await Promise.all([
+    return Promise.all([
       loadParquetTable<FPAP>(deptId, 'fpaps', manifest),
       loadParquetTable<OperatingUnit>(deptId, 'operating_units', manifest),
       loadParquetTable<Fund>(deptId, 'fund_subcategories', manifest),
@@ -451,6 +445,30 @@ export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<D
         ? Promise.resolve<RawDataset<Expense>>({ data: [] })
         : loadParquetTable<Expense>(deptId, 'expenses', manifest),
     ]);
+  };
+
+  if (useD1Source()) {
+    try {
+      const r = await fetchD1<D1MidResponse>(`/api/dept/${deptId}/mid`);
+      fpapsRaw = r.fpaps;
+      opUnitsRaw = r.operating_units;
+      fundsRaw = r.fund_subcategories;
+      expensesRaw = skipExpenses ? { data: [] } : r.expenses;
+    } catch (e) {
+      // The largest departments (DPWH's Stage B is hundreds of thousands of
+      // rows) can push the Worker past its CPU/memory limits — Cloudflare
+      // error 1102 — before the response finishes. The browser has no such
+      // limit, and the same tables live as year-partitioned parquet on the
+      // data host, so fall through to the DuckDB path instead of surfacing
+      // an error the user cannot act on.
+      console.warn(
+        `[dept-data] D1 mid failed for dept ${deptId}; falling back to parquet`,
+        e,
+      );
+      [fpapsRaw, opUnitsRaw, fundsRaw, expensesRaw] = await loadViaParquet();
+    }
+  } else {
+    [fpapsRaw, opUnitsRaw, fundsRaw, expensesRaw] = await loadViaParquet();
   }
 
   const fpapArr: FPAP[] = fpapsRaw.data
