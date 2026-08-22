@@ -138,7 +138,7 @@ export default function Nep2027Department() {
               {t.label}
             </button>
           ))}
-          <Link className="nep-tab-link" to={`/2027/explore?dept=${deptId}`}>Line items →</Link>
+          <Link className="nep-tab-link" to={`/2027/search?dept=${deptId}`}>Line items →</Link>
         </div>
 
         <section className="nep-section">

@@ -218,7 +218,8 @@ export function CompareTable({
 
 const NEP_NAV: Array<{ to: string; label: string }> = [
   { to: '/2027', label: 'Overview' },
-  { to: '/2027/explore', label: 'Line items' },
+  { to: '/2027/browse', label: 'Browse' },
+  { to: '/2027/search', label: 'Search' },
   { to: '/2027/methodology', label: 'Methodology' },
 ];
 
@@ -227,7 +228,7 @@ const NEP_NAV: Array<{ to: string; label: string }> = [
  *
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active. `/2027/d/:id` counts as
- * Overview, since a department page is a drill-down of the overview rather
+ * Browse, since a department page is a drill-down of the group table rather
  * than a section of its own.
  */
 export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiledMeta?: ReactNode }) {
@@ -235,7 +236,8 @@ export function NepHeader({ crumb, compiledMeta }: { crumb?: ReactNode; compiled
   const path = pathname.replace(/\/+$/, '') || '/2027';
 
   const isActive = (to: string) => {
-    if (to === '/2027') return path === '/2027' || path.startsWith('/2027/d/');
+    if (to === '/2027') return path === '/2027';
+    if (to === '/2027/browse') return path === '/2027/browse' || path.startsWith('/2027/d/');
     return path === to || path.startsWith(`${to}/`);
   };
 

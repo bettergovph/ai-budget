@@ -7,6 +7,7 @@ const Methodology = lazy(() => import('./pages/Methodology'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Nep2027National = lazy(() => import('./pages/Nep2027National'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
+const Nep2027Browse = lazy(() => import('./pages/Nep2027Browse'));
 const Nep2027Explore = lazy(() => import('./pages/Nep2027Explore'));
 const Nep2027Methodology = lazy(() => import('./pages/Nep2027Methodology'));
 
@@ -44,7 +45,10 @@ export default function App() {
           <Route path="/d/:deptId/methodology" element={<Portal />} />
           {/* FY2027 National Expenditure Program microsite */}
           <Route path="/2027" element={<Nep2027National />} />
-          <Route path="/2027/explore" element={<Nep2027Explore />} />
+          <Route path="/2027/browse" element={<Nep2027Browse />} />
+          <Route path="/2027/search" element={<Nep2027Explore />} />
+          {/* Former name of the search page; keep links working. */}
+          <Route path="/2027/explore" element={<Navigate to="/2027/search" replace />} />
           <Route path="/2027/methodology" element={<Nep2027Methodology />} />
           <Route path="/2027/d/:deptId" element={<Nep2027Department />} />
           <Route path="*" element={<Navigate to="/" replace />} />

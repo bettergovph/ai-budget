@@ -12,41 +12,30 @@ import { SectionHead } from '../components/shared';
 import { Bar, CompareTable, Delta, KpiStrip, NepError, NepHeader, NepLoading } from '../components/Nep2027Bits';
 import * as fmt from '../lib/format';
 import {
-  BASE_YEAR, NEP_YEAR, formatPct, isSynthetic, loadNepIndex, pctChange,
+  BASE_YEAR, NEP_YEAR, formatPct, loadNepIndex, pctChange,
   type NepDeptRow, type NepNationalIndex,
 } from '../lib/nep2027';
 import '../nep2027.css';
 
-type DeptSort = 'amount' | 'delta' | 'pct' | 'description';
-
 export default function Nep2027National() {
   const [idx, setIdx] = useState<NepNationalIndex | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [sort, setSort] = useState<DeptSort>('amount');
-  const [hideSynthetic, setHideSynthetic] = useState(false);
 
   useEffect(() => {
     loadNepIndex().then(setIdx).catch((e) => setErr(String(e?.message || e)));
   }, []);
 
-  const depts = useMemo(() => {
-    if (!idx) return [];
-    const rows = hideSynthetic ? idx.departments.filter((d) => !isSynthetic(d.id)) : idx.departments;
-    const cmp: Record<DeptSort, (a: NepDeptRow, b: NepDeptRow) => number> = {
-      amount: (a, b) => b.amount - a.amount,
-      delta: (a, b) => b.delta - a.delta,
-      pct: (a, b) => (pctChange(b.amount, b.base_amount) ?? -Infinity) - (pctChange(a.amount, a.base_amount) ?? -Infinity),
-      description: (a, b) => a.description.localeCompare(b.description),
-    };
-    return [...rows].sort(cmp[sort]);
-  }, [idx, sort, hideSynthetic]);
+  // Overview shows only the largest few; /2027/browse owns the full table.
+  const depts = useMemo(
+    () => (idx ? [...idx.departments].sort((a, b) => b.amount - a.amount) : []),
+    [idx],
+  );
 
   if (err) return <NepError message={err} />;
   if (!idx) return <NepLoading what="the FY2027 NEP overview" />;
 
   const { amount, base_amount: base, line_items: items } = idx.national;
   const growth = pctChange(amount, base);
-  const maxDept = Math.max(0, ...depts.map((d) => Math.max(d.amount, d.base_amount)));
 
   return (
     <>
@@ -141,61 +130,21 @@ export default function Nep2027National() {
           <SectionHead
             eyebrow={`Ranking · FY${NEP_YEAR}`}
             headline="Every spending group"
-            dek="Click a group to open its FY2027 detail — agencies, programs, funds, regions and line items."
-            right={
-              <div className="nep-controls">
-                <label className="nep-toggle">
-                  <input
-                    type="checkbox"
-                    checked={hideSynthetic}
-                    onChange={(e) => setHideSynthetic(e.target.checked)}
-                  />
-                  Departments only
-                </label>
-                <select
-                  className="select-input"
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as DeptSort)}
-                  aria-label="Sort groups"
-                >
-                  <option value="amount">Sort: FY2027 amount</option>
-                  <option value="delta">Sort: peso change</option>
-                  <option value="pct">Sort: percent change</option>
-                  <option value="description">Sort: name</option>
-                </select>
-              </div>
-            }
+            dek={`All ${idx.departments.length} groups, sorted and filterable, with FY${BASE_YEAR} alongside.`}
+            right={<Link className="nep-cta" to="/2027/browse">Browse all groups →</Link>}
           />
-          <div className="nep-table-wrap">
-            <table className="nep-table nep-dept-table">
-              <thead>
-                <tr>
-                  <th className="nep-th-name">Group</th>
-                  <th className="num">Line items</th>
-                  <th className="num">FY{BASE_YEAR} GAA</th>
-                  <th className="num">FY{NEP_YEAR} NEP</th>
-                  <th className="nep-th-bar" />
-                  <th className="num">Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                {depts.map((d) => (
-                  <tr key={d.id}>
-                    <td className="nep-td-name">
-                      <Link to={`/2027/d/${d.id}`}>{d.description}</Link>
-                      <span className="nep-code">{d.id}</span>
-                      {isSynthetic(d.id) && <span className="pill nep-pill">derived</span>}
-                    </td>
-                    <td className="num">{d.line_items.toLocaleString()}</td>
-                    <td className="num nep-td-base">{fmt.shortPhp(d.base_amount)}</td>
-                    <td className="num nep-td-amt">{fmt.shortPhp(d.amount)}</td>
-                    <td className="nep-td-bar"><Bar value={d.amount} max={maxDept} base={d.base_amount} /></td>
-                    <td className="num"><Delta amount={d.amount} base={d.base_amount} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="nep-group-peek">
+            {depts.slice(0, 6).map((d) => (
+              <Link key={d.id} to={`/2027/d/${d.id}`} className="nep-group-peek-item">
+                <span className="nep-group-peek-name">{d.description}</span>
+                <span className="nep-group-peek-amt">{fmt.shortPhp(d.amount)}</span>
+                <Delta amount={d.amount} base={d.base_amount} />
+              </Link>
+            ))}
           </div>
+          <p className="nep-hier-note">
+            Showing the six largest. <Link to="/2027/browse">See all {idx.departments.length} groups →</Link>
+          </p>
         </section>
 
         <section className="nep-section">

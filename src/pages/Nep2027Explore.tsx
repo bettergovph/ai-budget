@@ -1,5 +1,5 @@
 /**
- * `/2027/explore` — line-item explorer over the FY2027 NEP.
+ * `/2027/search` — search the FY2027 NEP down to the line item.
  *
  * Each department's 2027 line items are a single ZSTD parquet file. DuckDB-Wasm
  * range-reads it in the browser, so filtering 327k DepEd rows costs one fetch of
@@ -160,14 +160,15 @@ LIMIT ${limit}`;
 
   return (
     <>
-      <NepHeader crumb="Line items" compiledMeta="DuckDB in-browser" />
+      <NepHeader crumb="Search" compiledMeta="DuckDB in-browser" />
       <main className="nep-main">
         <div className="page-headline">
-          <p className="page-eyebrow">Line-item explorer</p>
-          <h1 className="page-title">Query the FY{NEP_YEAR} NEP directly</h1>
+          <p className="page-eyebrow">Search · Fiscal Year {NEP_YEAR}</p>
+          <h1 className="page-title">Search the FY{NEP_YEAR} NEP</h1>
           <p className="page-dek">
-            Pick a spending group and DuckDB loads its line items into your browser. Nothing is sent to a
-            server; the SQL below is exactly what runs, and the result is downloadable as CSV.
+            Pick a spending group and search its line items by name, object code, expense class or
+            region. The query runs in your browser over the department's own data — nothing is sent to
+            a server, the SQL below is exactly what runs, and results download as CSV.
           </p>
         </div>
 
@@ -243,8 +244,8 @@ LIMIT ${limit}`;
 
         {!dept && (
           <p className="nep-empty nep-explore-empty">
-            Select a spending group to start. Large groups (DepEd, DPWH) take a few seconds on first query
-            while DuckDB downloads the parquet footer.
+            Select a spending group to start searching. Large groups (DepEd, DPWH) take a few seconds
+            on the first query while the data loads.
           </p>
         )}
 
