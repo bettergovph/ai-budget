@@ -208,7 +208,9 @@ export default function Nep2027Story() {
           <h2 className="story-h">Eight programs carry {((programs.reduce((a, p) => a + p.amount, 0) / amount) * 100).toFixed(0)}% of the whole proposal.</h2>
           <ol className="story-ranked">
             {programs.map((p, i) => (
-              <li key={p.code}>
+              // PREXC program codes are positional and repeat across
+              // departments, so the key must include the department.
+              <li key={`${p.department_id}-${p.code}`}>
                 <span className="story-rank">{String(i + 1).padStart(2, '0')}</span>
                 <span className="story-ranked-name">
                   {p.description}
