@@ -61,8 +61,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   };
 
   // The masthead coverage label follows the section you're in: the GAA portal
-  // covers FY2020-2026, the /2027 microsite covers the FY2027 NEP alone.
-  const coverage = location.pathname.startsWith('/gaa')
+  // covers FY2020-2026 (a single year on the /gaa/:year browser), the /2027
+  // microsite covers the FY2027 NEP alone.
+  const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
+  const coverage = gaaYear
+    ? `FY ${gaaYear}`
+    : location.pathname.startsWith('/gaa')
     || location.pathname.startsWith('/d/')
     || location.pathname.startsWith('/methodology')
     || location.pathname.startsWith('/explore')

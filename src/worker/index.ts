@@ -1126,6 +1126,32 @@ async function handleMidChildren(env: Env, deptId: string, url: URL): Promise<Re
   });
 }
 
+/**
+ * Single-entity lookup by primary key. The per-year browser (/gaa/:year/…)
+ * keeps the drill path in the URL as entity ids; on a cold deep link it
+ * resolves each mid-level ancestor's label through this route instead of
+ * paging through /mid/children hoping the id lands in the first page.
+ */
+async function handleEntity(env: Env, deptId: string, url: URL): Promise<Response> {
+  const level = url.searchParams.get("level") ?? "";
+  const spec = CHILD_LEVELS[level];
+  if (!spec) return badRequest(`level must be one of: ${Object.keys(CHILD_LEVELS).join(", ")}`);
+  const id = url.searchParams.get("id") ?? "";
+  if (!id) return badRequest("id is required");
+
+  const rows = await queryBound<WideRow>(
+    env,
+    `SELECT * FROM ${spec.table} WHERE department_id = ? AND id = ? LIMIT 1`,
+    deptId,
+    id,
+  );
+  if (!rows.length) return Response.json({ error: "not_found" }, { status: 404 });
+  return Response.json(
+    { data: widenToNested(rows[0]) },
+    { headers: { "Cache-Control": "public, max-age=300, s-maxage=3600" } },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // FY2027 NEP aggregation layer (`nep_*` tables)
 // ---------------------------------------------------------------------------
@@ -1418,6 +1444,13 @@ export default {
       const [, deptId] = midChildrenMatch;
       if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
       try { return await handleMidChildren(env, deptId, url); }
+      catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+    const entityMatch = /^\/api\/dept\/([^/]+)\/entity\/?$/.exec(url.pathname);
+    if (entityMatch) {
+      const [, deptId] = entityMatch;
+      if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
+      try { return await handleEntity(env, deptId, url); }
       catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
     }
     const programsPageMatch = /^\/api\/dept\/([^/]+)\/programs\/page\/?$/.exec(url.pathname);

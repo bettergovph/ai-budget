@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Eyebrow, SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
+import YearLinkStrip from '../components/YearLinkStrip';
 import type { NationalIndex } from '../lib/types';
 import * as fmt from '../lib/format';
 import { dataUrl } from '../lib/data-url';
@@ -131,6 +132,17 @@ export default function National() {
           <Eyebrow>National appropriation, FY {idx.years[0]} – {latestYear}</Eyebrow>
         </div>
         <NationalTrend yearly={idx.national_yearly} />
+
+        <div style={{ marginTop: 40 }}>
+          <SectionHead
+            eyebrow="Browse by year"
+            headline="One fiscal year at a time"
+            dek="Open a single year's budget and drill the full hierarchy — group, bureau, program, operating unit, fund, expense class — scoped to that year alone."
+          />
+          <div style={{ marginTop: 16 }}>
+            <YearLinkStrip yearly={idx.national_yearly} />
+          </div>
+        </div>
 
         <div ref={groupsRef} id="groups" className="national-groups-head" style={{ marginTop: 40, scrollMarginTop: 220 }}>
           <SectionHead

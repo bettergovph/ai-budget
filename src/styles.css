@@ -367,6 +367,13 @@ button {
 }
 .year-cell.active .year-cell-bar { background: rgba(255,255,255,0.2); }
 .year-cell.active .year-cell-bar > span { background: var(--paper); }
+/* Link-flavoured cells: /gaa and /gaa/:year navigate rather than set state. */
+a.year-cell {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+a.csv-btn { text-decoration: none; }
 
 /* ---------- Funnel (stage-by-stage) ---------- */
 .funnel {

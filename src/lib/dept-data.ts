@@ -496,6 +496,24 @@ export async function fetchMidChildren(
   };
 }
 
+/**
+ * One entity by primary key, for resolving deep-linked drill segments
+ * (/gaa/:year/…) into breadcrumb labels. Pesos. Null when the id doesn't
+ * exist under this department.
+ */
+export async function fetchEntity(
+  deptId: string,
+  level: 'fpaps' | 'operating_units' | 'fund_subcategories' | 'expenses',
+  id: string,
+): Promise<BaseEntity | null> {
+  const p = new URLSearchParams({ level, id });
+  const r = await fetch(`/api/dept/${deptId}/entity?${p}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`D1 API entity returned ${r.status}`);
+  const j = (await r.json()) as { data: WireRow };
+  return { ...(j.data as Record<string, unknown>), years: wireYears(j.data) } as unknown as BaseEntity;
+}
+
 export interface ProgramsPageResult {
   families: FPAPFamily[];
   total: number;

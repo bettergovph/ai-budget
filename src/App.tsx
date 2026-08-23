@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 const National = lazy(() => import('./pages/National'));
+const GaaYear = lazy(() => import('./pages/GaaYear'));
 const Portal = lazy(() => import('./pages/Portal'));
 const Methodology = lazy(() => import('./pages/Methodology'));
 const Explore = lazy(() => import('./pages/Explore'));
@@ -26,6 +27,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/2027/overview" replace />} />
           <Route path="/gaa" element={<National />} />
+          {/* Per-year exclusive browser: same hierarchy, one fiscal year.
+              The splat carries the drill path as entity ids, so every level
+              is a shareable URL: /gaa/:year/:group/:bureau/:program/… */}
+          <Route path="/gaa/:year/*" element={<GaaYear />} />
           <Route path="/methodology" element={<Methodology />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />
