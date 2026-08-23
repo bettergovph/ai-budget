@@ -472,6 +472,25 @@
   .story-split { flex-direction: column; }
   .story-split > div { min-height: 84px; }
 }
+@media (max-width: 720px) {
+  /* Movers: names were nowrap-ellipsised in a ~176px column, leaving only
+     "Department of ...". Take the Browse-table scale instead -- smaller
+     type, full wrapping, bar dropped -- so the whole label reads. */
+  .story-movers li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 9px 0;
+  }
+  .story-mover-bar { display: none; }
+  .story-movers li a {
+    white-space: normal;
+    overflow: visible;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .story-movers strong { font-size: 11.5px; }
+}
+
 @media (max-width: 560px) {
   .story-ranked li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .story-ranked-bar { display: none; }
