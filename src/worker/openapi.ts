@@ -38,6 +38,14 @@ const deptIdParam = (desc: string) => ({
 const GAA_DEPT_ID = "Two-digit GAA department id, e.g. `07` (DepEd) or `18` (DPWH). List them via /api/v1/gaa/departments.";
 const NEP_DEPT_ID = "NEP department id: two digits (e.g. `07`), or the synthetic `SPF` (special purpose funds) / `AUTO` (automatic appropriations).";
 
+const yearPathParam = {
+  name: "year",
+  in: "path",
+  required: true,
+  schema: { type: "integer", enum: [2020, 2021, 2022, 2023, 2024, 2025, 2026] },
+  description: "Fiscal year, 2020–2026.",
+} as const;
+
 const yearQuery = {
   name: "year",
   in: "query",
@@ -276,6 +284,82 @@ export const OPENAPI_SPEC = {
         responses: { "200": jsonList("#/components/schemas/GaaProgram"), "400": errorResponse, "500": errorResponse },
       },
     },
+    "/api/v1/gaa/years/{year}": {
+      get: {
+        tags: ["gaa"],
+        operationId: "getGaaYearSnapshot",
+        summary: "Single-year national snapshot",
+        description:
+          "One fiscal year in isolation: the national total plus every department's appropriation, line-item count, " +
+          "and share of the year's budget, largest first. The per-year-exclusive counterpart of /api/v1/gaa/departments " +
+          "(which returns all seven years per row).",
+        parameters: [yearPathParam],
+        responses: {
+          "200": {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    meta: { $ref: "#/components/schemas/Meta" },
+                    data: {
+                      type: "object",
+                      properties: {
+                        total: { $ref: "#/components/schemas/GaaYearEntity" },
+                        departments: {
+                          type: "array",
+                          items: { $ref: "#/components/schemas/GaaYearEntity" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "400": errorResponse,
+          "500": errorResponse,
+        },
+      },
+    },
+    "/api/v1/gaa/years/{year}/departments/{id}/children": {
+      get: {
+        tags: ["gaa"],
+        operationId: "listGaaYearChildren",
+        summary: "Hierarchy drill for one year (paginated)",
+        description:
+          "Walk one department's GAA hierarchy a level at a time, scoped to a single fiscal year: `agencies` " +
+          "(bureaus — the default, no parent needed), then `fpaps` of an agency (`parent=<agency id>`), " +
+          "`operating_units` of a program, `fund_subcategories` of an operating unit, and `expenses` of a fund " +
+          "(the leaf). Rows carry that year's figures only, ranked largest first, and include the parent-id " +
+          "columns to drill with. Rows with a zero amount in that year are hidden unless `include_zero=1`.",
+        parameters: [
+          yearPathParam,
+          deptIdParam(GAA_DEPT_ID),
+          {
+            name: "level",
+            in: "query",
+            schema: {
+              type: "string",
+              enum: ["agencies", "fpaps", "operating_units", "fund_subcategories", "expenses"],
+              default: "agencies",
+            },
+            description: "Which hierarchy level to list.",
+          },
+          {
+            name: "parent",
+            in: "query",
+            schema: { type: "string" },
+            description: "Parent entity id — required for every level below `agencies`.",
+          },
+          { name: "include_zero", in: "query", schema: { type: "string", enum: ["1", "true"] } },
+          limitQuery(100, 500),
+          cursorQuery,
+        ],
+        responses: { "200": paginated("#/components/schemas/GaaYearEntity"), "400": errorResponse, "500": errorResponse },
+      },
+    },
     "/api/v1/nep/2027": {
       get: {
         tags: ["nep-2027"],
@@ -408,6 +492,23 @@ export const OPENAPI_SPEC = {
           slug: { type: "string" },
           description: { type: "string", description: "Display name." },
           years: yearsMap,
+        },
+        additionalProperties: true,
+      },
+      GaaYearEntity: {
+        type: "object",
+        description:
+          "A GAA node (national total, department, agency, program, operating unit, fund, or expense class) with " +
+          "figures for a single fiscal year — the per-year-exclusive shape. Hierarchy rows keep their parent-id " +
+          "columns (agency_id, fpap_id, …) so consumers can drill further.",
+        properties: {
+          id: { type: "string" },
+          slug: { type: "string" },
+          description: { type: "string", description: "Display name." },
+          year: { type: "integer" },
+          line_items: { type: "integer" },
+          amount: { type: "integer", description: "Pesos, for `year` only." },
+          share: { type: ["number", "null"], description: "Fraction of the year's national total (snapshot departments only)." },
         },
         additionalProperties: true,
       },

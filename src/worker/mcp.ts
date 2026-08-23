@@ -29,6 +29,9 @@ import {
   gaaDeptPrograms,
   gaaNational,
   gaaSearchPrograms,
+  gaaYearChildren,
+  gaaYearSnapshot,
+  GAA_HIERARCHY_LEVELS,
   nepDepartment,
   nepDepartments,
   nepDeptRollup,
@@ -206,6 +209,64 @@ const TOOLS: Tool[] = [
         limit: num(a, "limit"),
         cursor: str(a, "cursor") ?? null,
       }),
+  },
+  {
+    name: "get_gaa_year_snapshot",
+    title: "GAA single-year snapshot",
+    description:
+      "One fiscal year in isolation: the national GAA total plus every department's appropriation, line-item " +
+      "count, and share of that year's budget, largest first. Use this when the question is about a specific " +
+      "year ('the 2022 budget') rather than trends across years.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        year: { type: "number", description: `Fiscal year, one of ${YEARS.join(", ")}`, enum: [...YEARS] },
+      },
+      required: ["year"],
+    },
+    handler: (env, a) => {
+      const year = num(a, "year");
+      if (year == null) throw new ApiError(400, "bad_request", "year is required");
+      return gaaYearSnapshot(env, year);
+    },
+  },
+  {
+    name: "browse_gaa_hierarchy",
+    title: "Browse GAA hierarchy for one year",
+    description:
+      "Walk one department's GAA hierarchy a level at a time, scoped to a single fiscal year: 'agencies' " +
+      "(bureaus — the default, no parent needed), then 'fpaps' of an agency (parent=<agency id>), " +
+      "'operating_units' of a program, 'fund_subcategories' of an operating unit, and 'expenses' of a fund " +
+      "(the leaf). Rows carry that year's figures only, ranked largest first, with the parent-id columns " +
+      "needed to drill deeper; keyset paginated. Zero-amount rows are hidden unless include_zero is true.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        department_id: { type: "string", description: "Two-digit GAA department id, e.g. '07' for DepEd" },
+        year: { type: "number", description: `Fiscal year, one of ${YEARS.join(", ")}`, enum: [...YEARS] },
+        level: {
+          type: "string",
+          description: "Hierarchy level to list (default 'agencies')",
+          enum: [...GAA_HIERARCHY_LEVELS],
+        },
+        parent: { type: "string", description: "Parent entity id — required for every level below 'agencies'" },
+        include_zero: { type: "boolean", description: "Include rows with a zero amount in the chosen year" },
+        limit: { type: "number", description: "Page size, 1–500 (default 100)" },
+        cursor: { type: "string", description: "Opaque cursor from a previous call's next_cursor" },
+      },
+      required: ["department_id", "year"],
+    },
+    handler: (env, a) => {
+      const year = num(a, "year");
+      if (year == null) throw new ApiError(400, "bad_request", "year is required");
+      return gaaYearChildren(env, year, requireStr(a, "department_id"), {
+        level: str(a, "level"),
+        parent: str(a, "parent"),
+        include_zero: a.include_zero === true,
+        limit: num(a, "limit"),
+        cursor: str(a, "cursor") ?? null,
+      });
+    },
   },
   {
     name: "get_nep_2027_overview",

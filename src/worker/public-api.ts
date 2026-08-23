@@ -103,6 +103,21 @@ function widenPesos(row: WideRow): WideRow & { years: YearMap } {
   return { ...out, years };
 }
 
+/**
+ * Strip the wide per-year columns and emit ONE year's figures in pesos — the
+ * per-year-exclusive counterpart of widenPesos. Non-year columns (ids, slug,
+ * description, parent FKs) pass through, so drill consumers keep the ids they
+ * need for the next level.
+ */
+function singleYearPesos(row: WideRow, year: number): WideRow & { year: number; line_items: number; amount: number } {
+  const out: WideRow = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (/^(amount|count)_\d{4}$/.test(k)) continue;
+    out[k] = v;
+  }
+  return { ...out, year, line_items: Number(row[`count_${year}`] ?? 0), amount: pesos(row[`amount_${year}`]) };
+}
+
 function intParam(raw: string | null, fallback: number, min: number, max: number): number {
   const n = Number(raw ?? fallback);
   if (!Number.isFinite(n)) return fallback;
@@ -177,6 +192,137 @@ export async function gaaDepartments(env: Env) {
   return {
     meta: { ...GAA_META, total_items: rows.length },
     data: rows.map(widenPesos),
+  };
+}
+
+function assertYear(year: number): void {
+  if (!(YEARS as readonly number[]).includes(year)) {
+    throw new ApiError(400, "bad_request", `year must be one of ${YEARS.join(", ")}`);
+  }
+}
+
+/** Per-year national snapshot: every department's figure for one fiscal year,
+    largest first — the API face of the /gaa/:year browser's top level. */
+export async function gaaYearSnapshot(env: Env, year: number) {
+  assertYear(year);
+  const rows = await q<{ id: string; slug: string; description: string; count: number; amount: number }>(
+    env,
+    `SELECT d.id, d.slug, d.description, y.count, y.amount
+       FROM yearly_totals y JOIN departments d ON d.id = y.department_id
+      WHERE y.year = ? ORDER BY y.amount DESC, d.id`,
+    year,
+  );
+  const totalRaw = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const lineItems = rows.reduce((s, r) => s + Number(r.count ?? 0), 0);
+  return {
+    meta: { ...GAA_META, year, departments: rows.length },
+    data: {
+      total: { year, line_items: lineItems, amount: pesos(totalRaw) },
+      departments: rows.map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        description: r.description,
+        year,
+        line_items: Number(r.count ?? 0),
+        amount: pesos(r.amount),
+        share: totalRaw ? Number((Number(r.amount ?? 0) / totalRaw).toFixed(6)) : null,
+      })),
+    },
+  };
+}
+
+export const GAA_HIERARCHY_LEVELS = [
+  "agencies", "fpaps", "operating_units", "fund_subcategories", "expenses",
+] as const;
+
+/** level → backing table, parent FK, and a human hint for the 400 message. */
+const GAA_CHILD_SPECS: Record<string, { table: string; parentCol: string | null; parentHint: string }> = {
+  agencies: { table: "agencies", parentCol: null, parentHint: "" },
+  fpaps: { table: "fpaps", parentCol: "agency_id", parentHint: "an agency id (from level=agencies)" },
+  operating_units: { table: "operating_units", parentCol: "fpap_id", parentHint: "a program id (from level=fpaps)" },
+  fund_subcategories: { table: "fund_subcategories", parentCol: "operating_unit_id", parentHint: "an operating-unit id (from level=operating_units)" },
+  expenses: { table: "expenses", parentCol: "fund_id", parentHint: "a fund id (from level=fund_subcategories)" },
+};
+
+export interface GaaYearChildrenOpts {
+  level?: string;
+  parent?: string;
+  limit?: number;
+  cursor?: string | null;
+  include_zero?: boolean;
+}
+
+/**
+ * One drill level's children for a single fiscal year — the API face of the
+ * /gaa/:year browser's hierarchy (department → agency → program (FPAP) →
+ * operating unit → fund → expense class). Rows carry that year's figures
+ * only, plus the parent-id columns needed to drill further. Zero-amount rows
+ * (lines that exist only in other budget years) are hidden by default.
+ */
+export async function gaaYearChildren(env: Env, year: number, deptId: string, opts: GaaYearChildrenOpts = {}) {
+  assertYear(year);
+  assertGaaDept(deptId);
+  const level = opts.level ?? "agencies";
+  const spec = GAA_CHILD_SPECS[level];
+  if (!spec) {
+    throw new ApiError(400, "bad_request", `level must be one of ${GAA_HIERARCHY_LEVELS.join(", ")}`);
+  }
+  if (spec.parentCol && !opts.parent) {
+    throw new ApiError(400, "bad_request", `level=${level} requires parent=${spec.parentHint}`);
+  }
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+  const cursor = decodeCursor(opts.cursor ?? null);
+  const amt = `COALESCE(amount_${year}, 0)`;
+
+  const conds = [
+    `department_id = ?`,
+    `LOWER(COALESCE(description,'')) <> 'nan'`,
+    `COALESCE(slug,'') <> 'nan'`,
+  ];
+  const binds: unknown[] = [deptId];
+  if (spec.parentCol) {
+    conds.push(`${spec.parentCol} = ?`);
+    binds.push(opts.parent);
+  }
+  if (!opts.include_zero) conds.push(`${amt} > 0`);
+  const sumConds = [...conds];
+  const sumBinds = [...binds];
+  if (cursor) {
+    conds.push(`(${amt} < ? OR (${amt} = ? AND id > ?))`);
+    binds.push(cursor.v, cursor.v, cursor.k);
+  }
+
+  const rows = await q<WideRow & { id: string }>(
+    env,
+    `SELECT * FROM ${spec.table} WHERE ${conds.join(" AND ")}
+      ORDER BY ${amt} DESC, id ASC LIMIT ${limit + 1}`,
+    ...binds,
+  );
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const last = page[page.length - 1];
+
+  const [summary] = await q<{ n: number; total: number }>(
+    env,
+    `SELECT COUNT(*) AS n, COALESCE(SUM(${amt}), 0) AS total FROM ${spec.table} WHERE ${sumConds.join(" AND ")}`,
+    ...sumBinds,
+  );
+
+  return {
+    meta: {
+      ...GAA_META,
+      year,
+      department_id: deptId,
+      level,
+      parent: opts.parent ?? null,
+      limit,
+      matched: Number(summary.n),
+      matched_amount: pesos(summary.total),
+    },
+    data: page.map((row) => singleYearPesos(row, year)),
+    next_cursor: hasMore && last
+      ? encodeCursor(Number(last[`amount_${year}`] ?? 0), String(last.id))
+      : null,
   };
 }
 
@@ -847,6 +993,8 @@ function apiIndex(origin: string) {
         "GET /api/v1/gaa/departments/{id}/programs",
         "GET /api/v1/gaa/departments/{id}/objects",
         "GET /api/v1/gaa/search",
+        "GET /api/v1/gaa/years/{year}",
+        "GET /api/v1/gaa/years/{year}/departments/{id}/children",
       ],
       nep_2027: [
         "GET /api/v1/nep/2027",
@@ -917,6 +1065,20 @@ export async function handlePublicApi(request: Request, env: Env, url: URL): Pro
         expense_class: sp.get("expense_class") ?? undefined,
         sort: (sp.get("sort") ?? undefined) as GaaObjectsOpts["sort"],
         dir: (sp.get("dir") ?? undefined) as GaaObjectsOpts["dir"],
+        limit: intParam(sp.get("limit"), 100, 1, 500),
+        cursor: sp.get("cursor"),
+        include_zero: sp.get("include_zero") === "1" || sp.get("include_zero") === "true",
+      }));
+    }
+
+    // Per-year exclusive views (the API face of the /gaa/:year browser).
+    m = /^\/api\/v1\/gaa\/years\/(\d+)$/.exec(path);
+    if (m) return ok(await gaaYearSnapshot(env, Number(m[1])));
+    m = /^\/api\/v1\/gaa\/years\/(\d+)\/departments\/([^/]+)\/children$/.exec(path);
+    if (m) {
+      return ok(await gaaYearChildren(env, Number(m[1]), m[2], {
+        level: sp.get("level") ?? undefined,
+        parent: sp.get("parent") ?? undefined,
         limit: intParam(sp.get("limit"), 100, 1, 500),
         cursor: sp.get("cursor"),
         include_zero: sp.get("include_zero") === "1" || sp.get("include_zero") === "true",

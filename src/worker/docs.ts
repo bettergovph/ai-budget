@@ -303,6 +303,47 @@ programs with <a href="#gaa-search"><code>/gaa/search</code></a> instead.</p>
 </table>
 <pre><code>curl "${O}/api/v1/gaa/search?q=flood%20control&amp;year=2026&amp;limit=10"</code></pre>
 
+<div class="ep" id="gaa-year"><span class="method">GET</span><code>/api/v1/gaa/years/{year}</code></div>
+<p>One fiscal year in isolation: the national total plus every department's appropriation,
+line-item count, and share of that year's budget, largest first. The per-year counterpart of
+<a href="#gaa-departments"><code>/gaa/departments</code></a>, which returns all seven years per row.
+This is the API face of the <a href="https://budget.bettergov.ph/gaa/2022">per-year budget
+browser</a>.</p>
+<pre><code>curl ${O}/api/v1/gaa/years/2022</code></pre>
+<pre><code>{
+  "meta": { "dataset": "gaa", "year": 2022, "departments": 37, ... },
+  "data": {
+    "total": { "year": 2022, "line_items": 628666, "amount": 5023600000000 },
+    "departments": [
+      { "id": "07", "slug": "department-of-education-deped", "description": "Department of Education (DepEd)",
+        "year": 2022, "line_items": 308586, "amount": 633323678000, "share": 0.12607 },
+      ...
+    ]
+  }
+}</code></pre>
+
+<div class="ep" id="gaa-year-children"><span class="method">GET</span><code>/api/v1/gaa/years/{year}/departments/{id}/children</code></div>
+<p>Walk one department's hierarchy a level at a time, scoped to a single fiscal year — the same
+drill the per-year browser does: department → agency (bureau) → program (FPAP) → operating unit
+→ fund → expense class. Rows carry that year's figures only, ranked largest first, and keep
+their parent-id columns so each row's <code>id</code> feeds the next level's <code>parent</code>.
+Rows with a zero amount in that year are hidden unless <code>include_zero=1</code>.</p>
+<table>
+  <tr><th>Param</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>level</code></td><td>agencies | fpaps | operating_units | fund_subcategories | expenses</td><td>Level to list (default <code>agencies</code>)</td></tr>
+  <tr><td><code>parent</code></td><td>string</td><td>Parent entity id — required below <code>agencies</code></td></tr>
+  <tr><td><code>include_zero</code></td><td>1</td><td>Keep rows the year doesn't fund</td></tr>
+  <tr><td><code>limit</code>, <code>cursor</code></td><td></td><td>Page size 1–500 (default 100); keyset cursor</td></tr>
+</table>
+<pre><code># DepEd's bureaus in FY2022
+curl "${O}/api/v1/gaa/years/2022/departments/07/children"
+
+# then programs of one bureau...
+curl "${O}/api/v1/gaa/years/2022/departments/07/children?level=fpaps&amp;parent=07-001"
+
+# ...down to the expense classes of one fund
+curl "${O}/api/v1/gaa/years/2022/departments/07/children?level=expenses&amp;parent=07-001-310400100002000-0807002-01101101"</code></pre>
+
 <h2>NEP FY2027 — National Expenditure Program</h2>
 <p>The Executive's ₱7.20&nbsp;T proposal for FY2027, measured line by line against the FY2026 GAA.
 Every row carries <code>amount</code>, <code>base_amount</code>, <code>delta</code>, and <code>pct</code> (null when the FY2026
