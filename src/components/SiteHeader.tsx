@@ -22,6 +22,13 @@ const UTILITY_LINKS = [
   { href: 'https://about.bettergov.ph', label: 'About' },
 ];
 
+// Worker-served (non-SPA) pages: the public API reference and the MCP
+// section of the same document. Plain anchors, not <Link>s.
+const DEV_LINKS = [
+  { href: '/docs', label: 'API' },
+  { href: '/docs#mcp', label: 'MCP' },
+];
+
 function isActivePath(pathname: string, href: string): boolean {
   const p = pathname.replace(/\/$/, '');
   const h = href.replace(/\/$/, '');
@@ -94,6 +101,14 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
                   <span className="masthead-meta-sep masthead-util-sep">·</span>
                 </>
               )}
+              {DEV_LINKS.map((l) => (
+                <span key={l.label} className="masthead-util-item">
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="masthead-util-link">
+                    {l.label} <span className="util-arrow">↗</span>
+                  </a>
+                  <span className="masthead-meta-sep">·</span>
+                </span>
+              ))}
               {UTILITY_LINKS.map((l, i) => (
                 <span key={l.label} className="masthead-util-item">
                   <a href={l.href} target="_blank" rel="noopener noreferrer" className="masthead-util-link">
@@ -211,6 +226,28 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
         </nav>
 
         {drawerExtras && <div className="drawer-extras">{drawerExtras}</div>}
+
+        <div className="drawer-section">
+          <span className="drawer-eyebrow">For developers</span>
+          <a
+            className="drawer-link drawer-link-cross"
+            href="/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            Public API docs <span className="drawer-link-arrow">↗</span>
+          </a>
+          <a
+            className="drawer-link drawer-link-cross"
+            href="/docs#mcp"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            MCP server for AI agents <span className="drawer-link-arrow">↗</span>
+          </a>
+        </div>
 
         <div className="drawer-section">
           <span className="drawer-eyebrow">Elsewhere on BetterGov</span>
