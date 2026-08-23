@@ -29,11 +29,24 @@ export function docsHtml(origin: string): string {
     }
   }
   * { box-sizing: border-box; }
+  :root { --topbar-h: 52px; }
   body { margin: 0; font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .topbar { position: sticky; top: 0; z-index: 10; height: var(--topbar-h); background: var(--bg); border-bottom: 1px solid var(--line); }
+  .topbar-inner { max-width: 1180px; margin: 0 auto; height: 100%; display: flex; align-items: center; gap: 18px; padding: 0 20px; }
+  .topbar .brand-link { display: flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .topbar .brand-link:hover { text-decoration: none; color: var(--accent); }
+  .topbar .brand-link img { height: 22px; display: block; }
+  .topbar .brand-sep { color: var(--line); }
+  .topbar .brand-sub { color: var(--muted); font-weight: 400; font-size: 14px; }
+  .topbar .spacer { flex: 1; }
+  .topbar .tlink { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .topbar .tlink:hover { color: var(--accent); text-decoration: none; }
+  .topbar .tlink.active { color: var(--fg); font-weight: 600; }
   .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
-  nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 24px 16px; border-right: 1px solid var(--line); background: var(--side-bg); font-size: 14px; }
+  nav { position: sticky; top: var(--topbar-h); align-self: start; height: calc(100vh - var(--topbar-h)); overflow-y: auto; padding: 24px 16px; border-right: 1px solid var(--line); background: var(--side-bg); font-size: 14px; }
+  html { scroll-padding-top: calc(var(--topbar-h) + 8px); }
   nav .brand { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   nav .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
   nav h4 { margin: 16px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
@@ -60,14 +73,36 @@ export function docsHtml(origin: string): string {
   .note { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 12px 16px; max-width: 828px; margin: 16px 0; }
   .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 8px; }
   .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    .topbar .brand-link img { filter: brightness(0) invert(1); }
+  }
   @media (max-width: 860px) {
     .layout { grid-template-columns: 1fr; }
     nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
     main { padding: 24px 20px 80px; }
   }
+  @media (max-width: 700px) {
+    .topbar .brand-sub, .topbar .brand-sep, .topbar .thide { display: none; }
+    .topbar-inner { gap: 14px; padding: 0 16px; }
+  }
 </style>
 </head>
 <body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand-link" href="/">
+      <img src="https://assets.bettergov.ph/logos/png/horizontal-primary.png" alt="BetterGov.ph">
+      <span class="brand-sep">|</span>
+      <span class="brand-sub">Budget Data API</span>
+    </a>
+    <span class="spacer"></span>
+    <a class="tlink" href="/2027">NEP 2027</a>
+    <a class="tlink" href="/gaa">GAA 2020–2026</a>
+    <a class="tlink active" href="/docs">API docs</a>
+    <a class="tlink thide" href="/api/v1/openapi.json">OpenAPI</a>
+    <a class="tlink thide" href="#mcp">MCP</a>
+  </div>
+</header>
 <div class="layout">
 <nav>
   <div class="brand">PH Budget Data API</div>

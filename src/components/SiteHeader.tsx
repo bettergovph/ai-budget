@@ -103,8 +103,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               )}
               {DEV_LINKS.map((l) => (
                 <span key={l.label} className="masthead-util-item">
-                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="masthead-util-link">
-                    {l.label} <span className="util-arrow">↗</span>
+                  <a href={l.href} className="masthead-util-link">
+                    {l.label}
                   </a>
                   <span className="masthead-meta-sep">·</span>
                 </span>
@@ -232,20 +232,16 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           <a
             className="drawer-link drawer-link-cross"
             href="/docs"
-            target="_blank"
-            rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}
           >
-            Public API docs <span className="drawer-link-arrow">↗</span>
+            Public API docs <span className="drawer-link-arrow">→</span>
           </a>
           <a
             className="drawer-link drawer-link-cross"
             href="/docs#mcp"
-            target="_blank"
-            rel="noopener noreferrer"
             onClick={() => setMenuOpen(false)}
           >
-            MCP server for AI agents <span className="drawer-link-arrow">↗</span>
+            MCP server for AI agents <span className="drawer-link-arrow">→</span>
           </a>
         </div>
 
