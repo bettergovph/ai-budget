@@ -715,3 +715,16 @@ a.nep-mover-name:hover { color: var(--accent); }
   color: var(--accent-deep);
 }
 .nep-chip button:hover { color: var(--negative); }
+
+/* Screen-reader-only text (used by the silent loading shell). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

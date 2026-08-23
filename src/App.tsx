@@ -11,20 +11,12 @@ const Nep2027Browse = lazy(() => import('./pages/Nep2027Browse'));
 const Nep2027Explore = lazy(() => import('./pages/Nep2027Explore'));
 const Nep2027Methodology = lazy(() => import('./pages/Nep2027Methodology'));
 
+/**
+ * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
+ * painted "Loading…" only flickers between routes; blank is calmer.
+ */
 function PageFallback() {
-  return (
-    <div
-      style={{
-        padding: 80,
-        textAlign: 'center',
-        fontFamily: 'var(--font-mono)',
-        color: 'var(--ink-3)',
-        fontSize: 13,
-      }}
-    >
-      Loading…
-    </div>
-  );
+  return null;
 }
 
 export default function App() {

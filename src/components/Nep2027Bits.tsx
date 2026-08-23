@@ -282,8 +282,21 @@ export function NepHeader({
   );
 }
 
-export function NepLoading({ what }: { what: string }) {
-  return <main className="nep-status">Loading {what}…</main>;
+/**
+ * Pre-data shell. D1 answers in tens of milliseconds, so a visible "Loading"
+ * screen only flickers; instead the static chrome renders immediately and the
+ * content pops in when the data lands. `what` feeds an aria-live region so
+ * the state is still announced to assistive tech, just not painted.
+ */
+export function NepLoading({ what, heroBlend }: { what: string; heroBlend?: boolean }) {
+  return (
+    <>
+      <NepHeader heroBlend={heroBlend} />
+      <main className="nep-main" aria-busy="true">
+        <span className="visually-hidden" role="status">Loading {what}…</span>
+      </main>
+    </>
+  );
 }
 
 export function NepError({ message }: { message: string }) {

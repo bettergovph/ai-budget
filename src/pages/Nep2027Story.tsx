@@ -54,7 +54,7 @@ export default function Nep2027Story() {
   }, [idx]);
 
   if (err) return <NepError message={err} />;
-  if (!idx) return <NepLoading what="the FY2027 NEP overview" />;
+  if (!idx) return <NepLoading what="the FY2027 NEP overview" heroBlend />;
 
   const { amount, base_amount: base, line_items: items } = idx.national;
   const growth = pctChange(amount, base);

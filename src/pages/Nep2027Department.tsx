@@ -61,7 +61,7 @@ export default function Nep2027Department() {
   const err = current?.err ?? null;
 
   if (err) return <NepError message={err} />;
-  if (!summary) return <NepLoading what={`department ${deptId}`} />;
+  if (!summary) return <NepLoading what={`department ${deptId}`} heroBlend />;
 
   const d = summary.department;
   if (!d) return <NepError message={`No FY${NEP_YEAR} data for department ${deptId}.`} />;
