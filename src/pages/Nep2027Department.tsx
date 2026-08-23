@@ -13,6 +13,7 @@ import { SectionHead } from '../components/shared';
 import { CompareTable, KpiStrip, NepError, NepHeader, NepLoading } from '../components/Nep2027Bits';
 import Nep2027Hierarchy from '../components/Nep2027Hierarchy';
 import * as fmt from '../lib/format';
+import { deptTitle } from '../lib/seo';
 import {
   BASE_YEAR, NEP_YEAR, SYNTHETIC_DEPTS, formatPct, loadNepDept, loadNepIndex, pctChange,
   type NepDeptSummary, type NepNationalIndex, type NepRollupRow,
@@ -59,6 +60,11 @@ export default function Nep2027Department() {
   const current = loaded?.dept === deptId ? loaded : null;
   const summary = current?.summary ?? null;
   const err = current?.err ?? null;
+
+  const deptName = summary?.department?.description;
+  useEffect(() => {
+    if (deptName) document.title = deptTitle(deptName, 'nep');
+  }, [deptName]);
 
   if (err) return <NepError message={err} />;
   if (!summary) return <NepLoading what={`department ${deptId}`} heroBlend />;
@@ -157,11 +163,11 @@ export default function Nep2027Department() {
           <div className="nep-movers">
             <div>
               <SectionHead eyebrow="Within this group" headline="Programs growing most" size="sm" />
-              <ProgramMovers rows={summary.top_movers_up} />
+              <ProgramMovers rows={summary.top_movers_up} emptyLabel="No programs grew — every program in this group shrank or held." />
             </div>
             <div>
               <SectionHead eyebrow="Within this group" headline="Programs cut most" size="sm" />
-              <ProgramMovers rows={summary.top_movers_down} />
+              <ProgramMovers rows={summary.top_movers_down} emptyLabel="No programs were cut — every program in this group grew or held." />
             </div>
           </div>
         </section>
@@ -292,9 +298,11 @@ function renderTab(tab: TabKey, s: NepDeptSummary) {
   }
 }
 
-function ProgramMovers({ rows }: { rows: NepRollupRow[] }) {
+function ProgramMovers({ rows, emptyLabel }: { rows: NepRollupRow[]; emptyLabel?: string }) {
   const shown = rows.filter((r) => r.delta !== 0);
-  if (!shown.length) return <p className="nep-empty">No program-level change to report.</p>;
+  if (!shown.length) {
+    return <p className="nep-empty">{emptyLabel ?? 'No program-level change to report.'}</p>;
+  }
   const max = Math.max(1, ...shown.map((r) => Math.abs(r.delta)));
   return (
     <ol className="nep-mover-list">

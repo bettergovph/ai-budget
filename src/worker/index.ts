@@ -37,6 +37,7 @@
 import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
 import { docsHtml } from "./docs";
+import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -964,12 +965,12 @@ async function handleMidSummary(env: Env, deptId: string): Promise<Response> {
         const [up, down] = await Promise.all([
           queryBound<WideRow>(
             env,
-            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? ORDER BY ${delta} DESC LIMIT 6`,
+            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? AND ${delta} > 0 ORDER BY ${delta} DESC LIMIT 6`,
             deptId,
           ),
           queryBound<WideRow>(
             env,
-            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? ORDER BY ${delta} ASC LIMIT 6`,
+            `SELECT *, ${delta} AS delta FROM gaa_fpap_families WHERE department_id = ? AND ${delta} < 0 ORDER BY ${delta} ASC LIMIT 6`,
             deptId,
           ),
         ]);
@@ -1269,6 +1270,8 @@ async function handleNepNational(env: Env): Promise<Response> {
   }
 
   const byDelta = [...departments].sort((a, b) => b.delta - a.delta);
+  const natUp = byDelta.filter((d) => d.delta > 0);
+  const natDown = byDelta.filter((d) => d.delta < 0).reverse();
 
   return Response.json({
     generated_at: meta.generated_at,
@@ -1288,8 +1291,8 @@ async function handleNepNational(env: Env): Promise<Response> {
     regions,
     sections: [...sectionMap.values()].map(withDelta),
     top_programs,
-    top_movers_up: byDelta.slice(0, 10),
-    top_movers_down: byDelta.slice(-10).reverse(),
+    top_movers_up: natUp.slice(0, 10),
+    top_movers_down: natDown.slice(0, 10),
   });
 }
 
@@ -1346,7 +1349,13 @@ async function handleNepDept(env: Env, deptId: string): Promise<Response> {
   };
 
   const programs = dim("program");
-  const movers = [...programs].sort((a, b) => b.delta - a.delta);
+  // Movers are sign-filtered: a "cut most" list must contain only programs
+  // that actually shrank. Slicing the tail of a descending sort put the
+  // SMALLEST INCREASES under the "cut" heading whenever a growing department
+  // had fewer than ten genuine reductions (COMELEC showed +133.9M as a cut).
+  const sorted = [...programs].sort((a, b) => b.delta - a.delta);
+  const moversUp = sorted.filter((m) => m.delta > 0);
+  const moversDown = sorted.filter((m) => m.delta < 0).reverse();
 
   const dept = withDelta(department as unknown as { amount: number; base_amount: number });
 
@@ -1373,8 +1382,8 @@ async function handleNepDept(env: Env, deptId: string): Promise<Response> {
     top_objects: capped("object"),
     top_operating_units: capped("operating_unit"),
     top_divisions: capped("division"),
-    top_movers_up: movers.slice(0, 10),
-    top_movers_down: movers.slice(-10).reverse(),
+    top_movers_up: moversUp.slice(0, 10),
+    top_movers_down: moversDown.slice(0, 10),
   });
 }
 
@@ -1551,7 +1560,12 @@ export default {
       }
     }
 
+    // ---- SEO artifacts ----
+    if (url.pathname === "/robots.txt") return robotsTxt();
+    if (url.pathname === "/sitemap.xml") return sitemapXml(env);
+
     // Everything else — SPA assets, the data/*.json / *.parquet tree, etc.
-    return env.ASSETS.fetch(request);
+    // HTML responses (the SPA shell) get per-route metadata streamed in.
+    return serveSpaHtml(request, env, url);
   },
 } satisfies ExportedHandler<Env>;

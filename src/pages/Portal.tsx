@@ -18,6 +18,7 @@ import BudgetCycleView from '../components/BudgetCycleView';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
 import { buildColumns, buildRow, downloadCsv, filterObjects, objectsToCsv } from '../lib/csv';
+import { deptTitle } from '../lib/seo';
 import type { ColumnDef, ObjectFilter, RawCell } from '../lib/csv';
 import type { DeptData, FPAP, ObjectItem, BaseEntity, MoverEntry } from '../lib/types';
 
@@ -1211,6 +1212,13 @@ function ByYearView({
           </div>
           <table className="hier-table">
             <tbody>
+              {data.topMovers('up', year, year - 1, 6).length === 0 && (
+                <tr className="disabled">
+                  <td className="name" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>
+                    No programs grew — every program shrank or held this year.
+                  </td>
+                </tr>
+              )}
               {data.topMovers('up', year, year - 1, 6).map(({ fam, delta }: MoverEntry) => (
                 <tr key={fam.key} className="disabled">
                   <td className="name">{fam.name}</td>
@@ -1238,6 +1246,13 @@ function ByYearView({
           </div>
           <table className="hier-table">
             <tbody>
+              {data.topMovers('down', year, year - 1, 6).length === 0 && (
+                <tr className="disabled">
+                  <td className="name" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>
+                    No programs were cut — every program grew or held this year.
+                  </td>
+                </tr>
+              )}
               {data.topMovers('down', year, year - 1, 6).map(({ fam, delta }: MoverEntry) => (
                 <tr key={fam.key} className="disabled">
                   <td className="name">{fam.name}</td>
@@ -2286,6 +2301,12 @@ export default function Portal() {
   const [hierarchyDepth, setHierarchyDepth] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const didMountViewScroll = useRef(false);
+
+  // Re-assert the department-specific title on view changes too — RouteMeta
+  // resets document.title to the generic portal title on every navigation.
+  useEffect(() => {
+    if (data) document.title = deptTitle(data.department.description, 'gaa');
+  }, [data, view]);
 
   useEffect(() => {
     if (!deptId) return;

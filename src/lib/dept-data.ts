@@ -584,10 +584,12 @@ async function loadDeptMidInteractive(data: DeptData, deptId: string): Promise<D
     n = 6,
   ): MoverEntry[] => {
     if (r.families_inline) {
-      const moves: MoverEntry[] = fpapFamiliesArr.map((fam) => ({
-        fam,
-        delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0),
-      }));
+      const moves: MoverEntry[] = fpapFamiliesArr
+        .map((fam) => ({
+          fam,
+          delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0),
+        }))
+        .filter((m) => (direction === 'up' ? m.delta > 0 : m.delta < 0));
       moves.sort((a, b) => (direction === 'up' ? b.delta - a.delta : a.delta - b.delta));
       return moves.slice(0, n);
     }
@@ -748,10 +750,14 @@ export async function loadDeptMidInto(data: DeptData, deptId: string): Promise<D
     prev = 2025,
     n = 6,
   ): MoverEntry[] {
-    const moves: MoverEntry[] = fpapFamiliesArr.map((fam) => ({
-      fam,
-      delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0),
-    }));
+    const moves: MoverEntry[] = fpapFamiliesArr
+      .map((fam) => ({
+        fam,
+        delta: (fam.years[year]?.amount || 0) - (fam.years[prev]?.amount || 0),
+      }))
+      // "Biggest cuts" must contain only actual cuts; without the sign filter
+      // the smallest increases surfaced there in growing departments.
+      .filter((m) => (direction === 'up' ? m.delta > 0 : m.delta < 0));
     moves.sort((a, b) => (direction === 'up' ? b.delta - a.delta : a.delta - b.delta));
     return moves.slice(0, n);
   }

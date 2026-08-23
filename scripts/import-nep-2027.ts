@@ -609,6 +609,8 @@ async function buildSummary(
 
   const movers = [...programs].filter((p) => Number(p.base_amount) > 0 || Number(p.amount) > 0);
   const byDelta = [...movers].sort((a, b) => Number(b.delta) - Number(a.delta));
+  const moversUp = byDelta.filter((p) => Number(p.delta) > 0);
+  const moversDown = byDelta.filter((p) => Number(p.delta) < 0).reverse();
 
   return {
     generated_at: generatedAt,
@@ -625,8 +627,8 @@ async function buildSummary(
     top_objects: objects,
     top_operating_units: units,
     top_divisions: divisions,
-    top_movers_up: byDelta.slice(0, 10),
-    top_movers_down: byDelta.slice(-10).reverse(),
+    top_movers_up: moversUp.slice(0, 10),
+    top_movers_down: moversDown.slice(0, 10),
   };
 }
 
@@ -1007,6 +1009,8 @@ async function main() {
       pct: Number(d.base_amount) ? ((Number(d.amount) - Number(d.base_amount)) / Number(d.base_amount)) * 100 : null,
     }));
     const byDelta = [...withDelta].sort((a, b) => b.delta - a.delta);
+    const natUp = byDelta.filter((d) => d.delta > 0);
+    const natDown = byDelta.filter((d) => d.delta < 0).reverse();
 
     const index = {
       generated_at: generatedAt,
@@ -1021,8 +1025,8 @@ async function main() {
       regions,
       sections,
       top_programs: topPrograms,
-      top_movers_up: byDelta.slice(0, 10),
-      top_movers_down: byDelta.slice(-10).reverse(),
+      top_movers_up: natUp.slice(0, 10),
+      top_movers_down: natDown.slice(0, 10),
     };
     const idxPath = resolve(args.out, "national", "index.json");
     await mkdir(dirname(idxPath), { recursive: true });
