@@ -88,7 +88,28 @@ The main routes are:
 - `/d/:deptId/*` — department overview, trends, programs, objects, data, reports, and budget-cycle views
 - `/2027` — FY2027 National Expenditure Program microsite (overview, `/2027/d/:deptId`,
   `/2027/explore`, `/2027/methodology`)
-- `/api/dept/:deptId/*` — Worker endpoints backed by D1
+- `/api/dept/:deptId/*` — internal Worker endpoints backed by D1 (used by the SPA)
+- `/api/v1/*` — public REST API (see below)
+- `/docs` — public API documentation
+- `/mcp` — MCP server for AI agents
+
+## Public API and MCP server
+
+A versioned, CORS-open, read-only public API serves all three datasets (GAA FY2020–2026,
+NEP FY2027, budget cycle) with every amount rescaled to exact pesos:
+
+- `GET /api/v1` — endpoint index
+- `GET /api/v1/gaa/...` — national totals, departments, agencies, expense classes,
+  programs, object-level line items, cross-department program search
+- `GET /api/v1/nep/2027/...` — national overview, departments, and rollups by
+  agency/program/expense class/fund/region/object/operating unit/division
+- `GET /api/v1/budget-cycle/...` — NEP → GAA → execution facts for covered departments
+- `GET /api/v1/openapi.json` — OpenAPI 3.1 specification
+
+Human-readable documentation is served at `/docs`. The same data is exposed to AI agents
+through a stateless Streamable-HTTP MCP server at `/mcp`
+(`claude mcp add --transport http ph-budget https://<host>/mcp`). The REST handlers and MCP
+tools share one data layer (`src/worker/public-api.ts`), so the two surfaces cannot drift.
 
 Small core datasets are loaded through the Worker or as JSON. Larger hierarchy and object tables are stored as year-partitioned Parquet and queried with DuckDB-Wasm. Production asset URLs are resolved through `VITE_DATA_BASE_URL`; the Worker serves the SPA and handles `/api/*` requests first.
 

@@ -25,11 +25,18 @@
  * are folded back into the nested `years: { YYYY: { count, amount } }`
  * shape on the way out, so the React side keeps consuming the same wire format.
  *
+ * The public, versioned surface lives in sibling modules and is dispatched
+ * first: /api/v1/* (public-api.ts), /mcp (mcp.ts), /docs (docs.ts).
+ *
  * Non-API paths fall through to the static asset binding (the React SPA).
  */
 
 // `Env` (DB: D1Database, ASSETS: Fetcher, …) is declared globally in
 // worker-configuration.d.ts — rerun `wrangler types` if bindings change.
+
+import { handlePublicApi } from "./public-api";
+import { handleMcp } from "./mcp";
+import { docsHtml } from "./docs";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -1379,6 +1386,24 @@ async function handleNepRollup(env: Env, dimension: string, url: URL): Promise<R
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // ---- public surface: versioned API, MCP server, documentation ----
+    // These must run before the asset fallback: the SPA's catch-all route
+    // would otherwise swallow /docs and /mcp and bounce them to /.
+    if (url.pathname === "/api/v1" || url.pathname.startsWith("/api/v1/")) {
+      return handlePublicApi(request, env, url);
+    }
+    if (url.pathname === "/mcp" || url.pathname === "/mcp/") {
+      return handleMcp(request, env);
+    }
+    if (url.pathname === "/docs" || url.pathname === "/docs/") {
+      return new Response(docsHtml(url.origin), {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "public, max-age=300, s-maxage=3600",
+        },
+      });
+    }
 
     // ---- interactive Stage B (heavy GAA departments) ----
     const midSummaryMatch = /^\/api\/dept\/([^/]+)\/mid\/summary\/?$/.exec(url.pathname);
