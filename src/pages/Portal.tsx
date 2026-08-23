@@ -12,6 +12,7 @@ import {
 } from '../lib/dept-data';
 import * as fmt from '../lib/format';
 import { Eyebrow, SectionHead, Spark } from '../components/shared';
+import { SkeletonRows } from '../components/Nep2027Bits';
 import ReportView from '../components/ReportView';
 import BudgetCycleView from '../components/BudgetCycleView';
 import SiteFooter from '../components/SiteFooter';
@@ -614,13 +615,7 @@ function HierarchyView({
               </tr>
             </thead>
             <tbody>
-              {childrenLoading && (
-                <tr className="disabled">
-                  <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                    Loading {levelTitle.toLowerCase()}…
-                  </td>
-                </tr>
-              )}
+              {childrenLoading && <SkeletonRows cols={6} />}
               {records.length === 0 && !childrenLoading && (
                 <tr className="disabled">
                   <td
@@ -971,13 +966,7 @@ function ProgramsView({
           </tr>
         </thead>
         <tbody>
-          {serverLoading && (
-            <tr className="disabled">
-              <td colSpan={5} style={{ padding: 24, textAlign: 'center', color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                Loading programs…
-              </td>
-            </tr>
-          )}
+          {serverLoading && <SkeletonRows cols={5} />}
           {(paginated ? shownRows : shownRows.slice(0, 60)).map((r) => (
             <tr key={r.f.key} className="disabled">
               <td className="name">
@@ -1730,7 +1719,9 @@ function ObjectsView({
             )}
             {loading && pageRows.length === 0 && (
               <tr>
-                <td colSpan={4} className="no-results">Loading line items…</td>
+                <td colSpan={4} className="no-results">
+                  <span className="busy-sweep" aria-hidden="true" />Loading line items…
+                </td>
               </tr>
             )}
           </tbody>

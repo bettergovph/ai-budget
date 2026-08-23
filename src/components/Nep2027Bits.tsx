@@ -283,6 +283,26 @@ export function NepHeader({
 }
 
 /**
+ * Shimmering placeholder rows for tables whose data is genuinely in flight.
+ * Widths vary per row so the block reads as "rows coming", not a solid slab.
+ */
+const SK_WIDTHS = [72, 55, 64, 48, 60, 52];
+export function SkeletonRows({ cols, rows = 6 }: { cols: number; rows?: number }) {
+  return (
+    <>
+      {SK_WIDTHS.slice(0, rows).map((w, i) => (
+        <tr className="sk-row" key={i} aria-hidden="true">
+          <td colSpan={cols}>
+            <span className="sk-bar" style={{ width: `${w}%` }} />
+            <span className="sk-bar sk-num" style={{ width: '9%' }} />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+/**
  * Pre-data shell. D1 answers in tens of milliseconds, so a visible "Loading"
  * screen only flickers; instead the static chrome renders immediately and the
  * content pops in when the data lands. `what` feeds an aria-live region so

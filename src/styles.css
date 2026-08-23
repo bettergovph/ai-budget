@@ -830,3 +830,66 @@ table.editorial tr.clickable { cursor: pointer; }
 .national-main {
   max-width: 1504px !important;
 }
+
+/* ---------- Skeleton loading rows ----------
+   The loading language for real waits (drill fetches, server-paged programs,
+   search runs): shimmering placeholder bars where the rows will land, so the
+   table's shape is visible before its numbers. Motion is a soft left-to-right
+   sheen, staggered per row; reduced-motion users get calm static bars. */
+.sk-row td { padding: 11px 12px !important; }
+.sk-bar {
+  display: inline-block;
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(
+    100deg,
+    var(--paper-3) 30%,
+    var(--accent-soft) 50%,
+    var(--paper-3) 70%
+  );
+  background-size: 220% 100%;
+  animation: sk-sheen 1.3s ease-in-out infinite;
+}
+.sk-bar + .sk-bar { margin-left: 14px; }
+.sk-bar.sk-num { float: right; }
+.sk-row:nth-child(2) .sk-bar { animation-delay: 0.12s; }
+.sk-row:nth-child(3) .sk-bar { animation-delay: 0.24s; }
+.sk-row:nth-child(4) .sk-bar { animation-delay: 0.36s; }
+.sk-row:nth-child(5) .sk-bar { animation-delay: 0.48s; }
+.sk-row:nth-child(6) .sk-bar { animation-delay: 0.6s; }
+@keyframes sk-sheen {
+  0% { background-position: 110% 0; }
+  100% { background-position: -110% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar { animation: none; background: var(--paper-3); }
+}
+
+/* Small inline activity sweep (search runs, hierarchy meta). */
+.busy-sweep {
+  display: inline-block;
+  vertical-align: middle;
+  width: 64px;
+  height: 3px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--paper-3);
+  overflow: hidden;
+  position: relative;
+}
+.busy-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: busy-slide 0.9s ease-in-out infinite alternate;
+}
+@keyframes busy-slide {
+  0% { transform: translateX(-30%); }
+  100% { transform: translateX(180%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-sweep::after { animation: none; width: 100%; opacity: 0.5; }
+}

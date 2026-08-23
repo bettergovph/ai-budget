@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
-import { NepError, NepHeader, NepLoading } from '../components/Nep2027Bits';
+import { NepError, NepHeader, NepLoading, SkeletonRows } from '../components/Nep2027Bits';
 import { runQuery } from '../lib/duckdb';
 import { downloadCsv } from '../lib/csv';
 import * as fmt from '../lib/format';
@@ -301,7 +301,9 @@ LIMIT ${limit}`;
         {dept && (
           <>
             <div className="nep-explore-summary">
-              {busy && <span className="nep-busy">Running…</span>}
+              {busy && (
+                <span className="nep-busy"><span className="busy-sweep" aria-hidden="true" />Running…</span>
+              )}
               {!busy && total && (
                 <>
                   <strong>{total.n.toLocaleString()}</strong> matching line items ·{' '}
@@ -368,6 +370,7 @@ LIMIT ${limit}`;
                       <td className="num nep-td-amt">{fmt.shortPhp(Number(r.amount))}</td>
                     </tr>
                   ))}
+                  {busy && !rows.length && <SkeletonRows cols={grouped ? 3 : 6} />}
                   {!rows.length && !busy && (
                     <tr><td colSpan={grouped ? 3 : 6} className="nep-empty">No rows match these filters.</td></tr>
                   )}

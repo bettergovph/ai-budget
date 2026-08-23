@@ -39,7 +39,7 @@ import { runQuery } from '../lib/duckdb';
 import { downloadCsv } from '../lib/csv';
 import * as fmt from '../lib/format';
 import { BASE_YEAR, NEP_YEAR, lineItemsUrl, type NepRollupRow } from '../lib/nep2027';
-import { Bar, Delta } from './Nep2027Bits';
+import { Bar, Delta, SkeletonRows } from './Nep2027Bits';
 
 const UNASSIGNED = '__unassigned__';
 
@@ -218,7 +218,9 @@ export default function Nep2027Hierarchy({
           <h3 className="nep-hier-title">{level.title}</h3>
         </div>
         <div className="nep-hier-meta">
-          {loading ? <span className="nep-busy">Loading line items…</span> : (
+          {loading ? (
+            <span className="nep-busy"><span className="busy-sweep" aria-hidden="true" />Loading line items…</span>
+          ) : (
             <>
               <strong>{shown.length.toLocaleString()}</strong> {shown.length === 1 ? level.noun : level.plural}
               <span className="nep-ms">
@@ -279,6 +281,7 @@ export default function Nep2027Hierarchy({
             </tr>
           </thead>
           <tbody>
+            {loading && <SkeletonRows cols={isLeaf ? 6 : 7} />}
             {shown.map((r) => (
               <tr
                 key={r.code}
