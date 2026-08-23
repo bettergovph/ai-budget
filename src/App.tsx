@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { pageMeta } from './lib/seo';
 
 const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
@@ -20,9 +21,24 @@ function PageFallback() {
   return null;
 }
 
+/**
+ * Keeps document.title in sync during SPA navigation. Cold loads get their
+ * title from the Worker's edge rewrite (src/worker/seo.ts); data-rich pages
+ * (Portal, GaaYear, Nep2027Department) refine it further once their data
+ * lands — their effects run after this one, so the specific title wins.
+ */
+function RouteMeta() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    document.title = pageMeta(pathname).title;
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <RouteMeta />
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Navigate to="/2027/overview" replace />} />

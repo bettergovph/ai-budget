@@ -7,6 +7,7 @@ import SiteHeader from '../components/SiteHeader';
 import YearLinkStrip from '../components/YearLinkStrip';
 import { fetchEntity, fetchMidChildren, loadDeptData, YEARS } from '../lib/dept-data';
 import type { MidChildrenPage } from '../lib/dept-data';
+import { deptTitle, pageMeta } from '../lib/seo';
 import * as fmt from '../lib/format';
 import { dataUrl } from '../lib/data-url';
 import type { BaseEntity, NationalIndex, NationalDeptRow } from '../lib/types';
@@ -173,6 +174,13 @@ function GaaYearBrowser({ year, segIds }: { year: number; segIds: string[] }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segKey, deptId]);
+
+  // Name the drilled group in the title; re-assert on every drill navigation
+  // since RouteMeta resets document.title to the generic per-year title.
+  const titleDeptName = deptId ? idx?.departments.find((d) => d.id === deptId)?.description : undefined;
+  useEffect(() => {
+    document.title = titleDeptName ? deptTitle(titleDeptName, { year }) : pageMeta(`/gaa/${year}`).title;
+  }, [titleDeptName, year, segKey]);
 
   // On mobile, drilling replaces the table wholesale — scroll the context bar
   // into view so the user sees where they landed (same behaviour as Portal).
