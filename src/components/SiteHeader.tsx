@@ -170,6 +170,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             >
               General Appropriations 2020–2026
             </Link>
+            <Link
+              to="/learn"
+              className={`primary-nav-link ${isActivePath(location.pathname, '/learn') ? 'active' : ''}`}
+            >
+              Learn
+            </Link>
             <a
               href="https://2026-budget.bettergov.ph"
               target="_blank"
@@ -217,6 +223,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2020–2026 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to="/learn" onClick={() => setMenuOpen(false)}>
+            Learn <span className="drawer-link-arrow">→</span>
           </Link>
           <a
             className="drawer-link"

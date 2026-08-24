@@ -6,6 +6,7 @@ const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
 const Portal = lazy(() => import('./pages/Portal'));
 const Methodology = lazy(() => import('./pages/Methodology'));
+const Learn = lazy(() => import('./pages/Learn'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Nep2027Story = lazy(() => import('./pages/Nep2027Story'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
@@ -48,6 +49,7 @@ export default function App() {
               is a shareable URL: /gaa/:year/:group/:bureau/:program/… */}
           <Route path="/gaa/:year/*" element={<GaaYear />} />
           <Route path="/methodology" element={<Methodology />} />
+          <Route path="/learn" element={<Learn />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />
           <Route path="/d/:deptId/overview" element={<Portal />} />

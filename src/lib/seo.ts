@@ -50,6 +50,15 @@ export function pageMeta(pathname: string): PageMeta {
         "FY 2026 GAA: every department, program, region, and expense class, with the biggest movers.",
     };
   }
+  if (p === "/learn") {
+    return {
+      title: `How to Read the Philippine National Budget — Cycle, Terms, Glossary · ${SITE}`,
+      description:
+        "A citizen's guide to the Philippine budget: the four-phase budget cycle, how appropriations " +
+        "become spending, and plain-language definitions of MOOE, automatic appropriations, SARO, NCA, " +
+        "and every other term the budget assumes you know.",
+    };
+  }
   if (p === "/2027/browse") {
     return {
       title: `Browse the FY 2027 NEP — Departments, Programs, Regions · ${SITE}`,
