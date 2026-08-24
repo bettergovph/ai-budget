@@ -52,11 +52,20 @@ export function pageMeta(pathname: string): PageMeta {
   }
   if (p === "/learn") {
     return {
-      title: `How to Read the Philippine National Budget — Cycle, Terms, Glossary · ${SITE}`,
+      title: `How to Read the Philippine National Budget — A Citizen's Guide · ${SITE}`,
       description:
         "A citizen's guide to the Philippine budget: the four-phase budget cycle, how appropriations " +
-        "become spending, and plain-language definitions of MOOE, automatic appropriations, SARO, NCA, " +
-        "and every other term the budget assumes you know.",
+        "become spending, where the fine print lives in the NEP and GAA volumes, and how citizens " +
+        "can scrutinize the budget at every phase.",
+    };
+  }
+  if (p === "/glossary") {
+    return {
+      title: `Philippine Budget Glossary — Every Term in Plain Language · ${SITE}`,
+      description:
+        "The complete DBM BESF Glossary of Terms rewritten in plain language: MOOE, automatic " +
+        "appropriations, SARO, NCA, and 200+ other terms across documents, appropriations, taxes, " +
+        "debt, and performance — searchable and filterable.",
     };
   }
   if (p === "/2027/browse") {

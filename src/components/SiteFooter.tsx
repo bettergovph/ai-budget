@@ -28,7 +28,8 @@ export default function SiteFooter({ source }: SiteFooterProps = {}) {
         <ul className="sf-links">
           <li>
             <span className="sf-links-label">Learn</span>
-            <Link to="/learn">How to read the national budget — cycle, terms, and tips</Link>
+            <Link to="/learn">How to read the national budget — cycle, fine print, and tips</Link>
+            <Link to="/glossary">Glossary — every budget term in plain language</Link>
           </li>
           <li>
             <span className="sf-links-label">Methodology</span>
