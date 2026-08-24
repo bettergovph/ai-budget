@@ -1287,7 +1287,7 @@ const PHASES = [
     name: 'Accountability',
     who: 'COA, DBM, Congress, citizens',
     what:
-      'Agencies report what they spent and delivered; the Commission on Audit examines whether funds were used legally and well; performance reviews feed the next Budget Call. Audit findings are public documents.',
+      'Not a final step but a year-round one: agencies file accountability reports monthly and quarterly while the money is being spent, and the Commission on Audit examines whether funds were used legally and well after the year closes. Performance reviews feed the next Budget Call, and audit findings are public documents.',
     out: 'Output: audit reports, performance reviews',
   },
 ];
@@ -1319,20 +1319,26 @@ const PHASE_NAME = {
 function CycleTimeline() {
   const W = 960;
   const LANE_H = 44;
+  const STRIP_H = 8;
   const GAP = 14;
   const LEFT = 118;
   const TOP = 34;
   const monthW = (W - LEFT - 8) / 24;
   const x = (m: number) => LEFT + m * monthW; // m = months since Jan 2026
 
-  interface Seg { lane: number; from: number; to: number; phase: keyof typeof PHASE_COLOR }
+  interface Seg { lane: number; from: number; to: number; phase: keyof typeof PHASE_COLOR; strip?: boolean }
   const lanes = ['FY 2026 budget', 'FY 2027 budget', 'FY 2028 budget'];
+  /* Accountability is not a sequel to execution: in-year reports run monthly
+     and quarterly WHILE the money is being spent (thin strip), and the COA
+     audit follows after the year closes (full bar). */
   const segs: Seg[] = [
     { lane: 0, from: 0, to: 12, phase: 'exec' },
+    { lane: 0, from: 0, to: 12, phase: 'acct', strip: true },
     { lane: 0, from: 12, to: 21, phase: 'acct' },
     { lane: 1, from: 0, to: 7, phase: 'prep' },
     { lane: 1, from: 7, to: 12, phase: 'legis' },
     { lane: 1, from: 12, to: 24, phase: 'exec' },
+    { lane: 1, from: 12, to: 24, phase: 'acct', strip: true },
     { lane: 2, from: 12, to: 19, phase: 'prep' },
     { lane: 2, from: 19, to: 24, phase: 'legis' },
   ];
@@ -1344,7 +1350,7 @@ function CycleTimeline() {
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label="Timeline of 24 months showing three fiscal-year budgets in different phases at once: while the FY 2026 budget is being executed and audited, the FY 2027 budget moves from preparation to legislation to execution, and the FY 2028 budget begins preparation."
+        aria-label="Timeline of 24 months showing three fiscal-year budgets in different phases at once: the FY 2026 budget is executed through 2026 with accountability reporting running concurrently all year and the audit continuing into 2027; the FY 2027 budget moves from preparation to legislation to execution; and the FY 2028 budget begins preparation. Accountability is not a final step — in-year reports are filed monthly and quarterly while the money is being spent."
       >
         {/* year gridlines + labels */}
         {[0, 12, 24].map((m) => (
@@ -1360,28 +1366,31 @@ function CycleTimeline() {
           </text>
         ))}
 
-        {/* segments: 2px surface gaps via x+1/width-2, 4px rounded ends */}
+        {/* segments: 2px surface gaps via x+1/width-2, 4px rounded ends.
+            Main bars use the top band; concurrent-accountability strips the
+            thin bottom band, 2px below. */}
         {segs.map((sg, i) => {
           const y = TOP + sg.lane * (LANE_H + GAP);
           const w = x(sg.to) - x(sg.from);
-          const label = PHASE_NAME[sg.phase];
-          const showLabel = w > 86;
+          const label = sg.strip ? 'Accountability — in-year reports, monthly & quarterly' : PHASE_NAME[sg.phase];
+          const barH = LANE_H - STRIP_H - 2;
+          const showLabel = !sg.strip && w > 86;
           return (
             <g key={i}>
               <rect
                 x={x(sg.from) + 1}
-                y={y}
+                y={sg.strip ? y + barH + 2 : y}
                 width={w - 2}
-                height={LANE_H}
-                rx={4}
+                height={sg.strip ? STRIP_H : barH}
+                rx={sg.strip ? 2 : 4}
                 fill={PHASE_COLOR[sg.phase]}
                 opacity={0.92}
               >
                 <title>{`${lanes[sg.lane]} — ${label}`}</title>
               </rect>
               {showLabel && (
-                <text x={x(sg.from) + w / 2} y={y + LANE_H / 2 + 4} className="lv-seg" textAnchor="middle">
-                  {label}
+                <text x={x(sg.from) + w / 2} y={y + barH / 2 + 4} className="lv-seg" textAnchor="middle">
+                  {PHASE_NAME[sg.phase]}
                 </text>
               )}
             </g>
@@ -1398,6 +1407,10 @@ function CycleTimeline() {
             <i style={{ background: PHASE_COLOR[k] }} /> {PHASE_NAME[k]}
           </span>
         ))}
+        <span className="lv-legend-note">
+          The thin purple strip: accountability runs <em>during</em> execution — agencies report
+          monthly and quarterly while spending — and the COA audit continues after the year closes.
+        </span>
       </figcaption>
     </figure>
   );

@@ -435,3 +435,6 @@
   .learn-viz { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .learn-viz svg { min-width: 720px; }
 }
+
+.lv-legend-note { flex-basis: 100%; color: var(--ink-3); }
+.lv-legend-note em { font-style: italic; }
