@@ -64,7 +64,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   // covers FY2020-2026 (a single year on the /gaa/:year browser), the /2027
   // microsite covers the FY2027 NEP alone.
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
-  const coverage = gaaYear
+  const coverage = location.pathname.startsWith('/learn')
+    ? null // the guide spans both documents; a fiscal-year tag would mislead
+    : gaaYear
     ? `FY ${gaaYear}`
     : location.pathname.startsWith('/gaa')
     || location.pathname.startsWith('/d/')
@@ -134,11 +136,11 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
                 {crumb ? (
                   <>
                     {crumb}
-                    <span className="logo-tag-em">— {coverage}</span>
+                    {coverage && <span className="logo-tag-em">— {coverage}</span>}
                   </>
                 ) : (
                   <>
-                    Reports <span className="logo-tag-em">— Philippines GAA, {coverage}</span>
+                    Reports {coverage && <span className="logo-tag-em">— Philippines GAA, {coverage}</span>}
                   </>
                 )}
               </span>
