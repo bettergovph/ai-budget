@@ -170,6 +170,12 @@ export default function Nep2027Methodology() {
               outcomes.
             </li>
             <li>
+              The structured line items are not the whole document. The NEP volumes also carry
+              special provisions (conditions attached to specific appropriations) and general
+              provisions in prose — none of which appear in this dataset. Read the number here,
+              then the fine print in the PDF. <Link to="/learn">The Learn page explains how</Link>.
+            </li>
+            <li>
               Aggregation here is machine-generated. Verify any figure against the DBM source document
               before publication.
             </li>

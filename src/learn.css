@@ -284,3 +284,154 @@
   .learn-h { font-size: 22px; }
   .learn-lede { font-size: 13.5px; }
 }
+
+/* --- visual flows --------------------------------------------------------- */
+
+.learn-viz {
+  margin: 26px 0 30px;
+}
+.learn-viz svg { width: 100%; height: auto; display: block; }
+.lv-grid { stroke: var(--rule-soft); stroke-width: 1; }
+.lv-axis, .lv-lane, .lv-today-label, .lv-pin text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-3);
+}
+.lv-lane { font-size: 12px; fill: var(--ink-2); }
+.lv-seg {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  fill: #fff;
+}
+.lv-today { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.lv-today-label { fill: var(--ink); font-weight: 500; }
+
+.lv-node { fill: var(--paper-2); stroke: var(--rule); }
+.lv-node-doc { fill: var(--accent-deep); stroke: var(--accent-deep); }
+.lv-node-title {
+  font-family: var(--font-hero);
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.lv-node-sub { font-family: var(--font-body); font-size: 10.5px; fill: var(--ink-3); }
+.lv-on-accent { fill: #fff; }
+.lv-node-sub.lv-on-accent { fill: rgba(255, 255, 255, 0.8); }
+.lv-flow-arrow { stroke: var(--ink-3); stroke-width: 1.5; }
+.lv-pin line { stroke: var(--accent); stroke-width: 1.5; }
+.lv-pin text { fill: var(--accent-deep); font-weight: 500; }
+.lv-pin-doc line { stroke: var(--neutral); }
+.lv-pin-doc text { fill: var(--neutral); }
+
+.learn-viz-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 10px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.learn-viz-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
+/* --- pdf cards + participation ------------------------------------------- */
+
+.learn-pdf-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.learn-pdf-cards a {
+  display: block;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 16px 18px;
+  text-decoration: none;
+  background: var(--paper);
+}
+.learn-pdf-cards a:hover { border-color: var(--accent); }
+.learn-pdf-cards em {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+.learn-pdf-cards strong {
+  display: block;
+  font-family: var(--font-hero);
+  font-size: 15.5px;
+  color: var(--accent-deep);
+  margin-bottom: 6px;
+}
+.learn-pdf-cards span {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.learn-participate {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 32px;
+}
+.learn-participate em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.learn-participate p {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 6px 0 0;
+}
+.learn-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+@media (max-width: 900px) {
+  .learn-pdf-cards { grid-template-columns: 1fr; }
+  .learn-participate { grid-template-columns: 1fr; }
+  .lv-pin text { font-size: 13px; }
+}
+
+/* CTA buttons (story-cta lives in nep2027-story.css, not loaded here) */
+.learn-cta-row a {
+  display: inline-block;
+  padding: 10px 18px;
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent-deep);
+  text-decoration: none;
+  background: var(--paper);
+}
+.learn-cta-row a:hover { background: var(--accent); color: #fff; }
+
+/* keep the flow SVGs legible on small screens: scroll, don't shrink */
+@media (max-width: 720px) {
+  .learn-viz { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .learn-viz svg { min-width: 720px; }
+}
