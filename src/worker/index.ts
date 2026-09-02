@@ -37,7 +37,7 @@
 import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
 import { docsHtml } from "./docs";
-import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
+import { llmsTxt, robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -1562,6 +1562,7 @@ export default {
 
     // ---- SEO artifacts ----
     if (url.pathname === "/robots.txt") return robotsTxt();
+    if (url.pathname === "/llms.txt") return llmsTxt();
     if (url.pathname === "/sitemap.xml") return sitemapXml(env);
 
     // Everything else — SPA assets, the data/*.json / *.parquet tree, etc.
