@@ -177,3 +177,62 @@ export function deptTitle(deptName: string, context: "gaa" | "nep" | { year: str
   if (context === "nep") return `${deptName} — FY 2027 NEP vs FY 2026 GAA · ${SITE}`;
   return `${deptName} — FY ${context.year} Budget · ${SITE}`;
 }
+
+/**
+ * Metadata for a path that matches no route. Kept here beside pageMeta so the
+ * Worker and the client agree on the wording.
+ */
+export const NOT_FOUND_META: PageMeta = {
+  title: `Page not found · ${SITE}`,
+  description:
+    "No page matches this address. Browse the FY 2027 NEP proposal or the enacted GAA for FY 2020–2026 " +
+    "from the site's home page.",
+};
+
+/** Portal sub-view segments, as a set, for route matching. */
+const PORTAL_VIEW_SEGMENTS = new Set(Object.keys(PORTAL_VIEWS));
+
+/** Routes with no parameters, mirroring the <Route> table in App.tsx. */
+const STATIC_ROUTES = new Set([
+  "/",
+  "/gaa",
+  "/methodology",
+  "/learn",
+  "/glossary",
+  "/explore",
+  "/2027",
+  "/2027/overview",
+  "/2027/browse",
+  "/2027/search",
+  "/2027/explore",
+  "/2027/methodology",
+]);
+
+/**
+ * Does this path match a route the SPA actually renders?
+ *
+ * The Worker uses this to answer 404 for unmatched paths instead of serving
+ * the SPA shell with a 200, which would let crawlers index every typo as a
+ * copy of the home page.
+ *
+ * This must stay in step with the <Route> table in App.tsx. It is deliberately
+ * structural only — whether department `99` exists is a data question, and
+ * answering it here would mean a D1 lookup on every request.
+ */
+export function isKnownRoute(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, "") || "/";
+
+  if (STATIC_ROUTES.has(p)) return true;
+
+  // /gaa/:year and /gaa/:year/* — the splat carries the drill path.
+  if (/^\/gaa\/20\d{2}(\/.*)?$/.test(p)) return true;
+
+  // /d/:deptId and /d/:deptId/:view — deptId is a two-digit GAA group id.
+  const gaaDept = /^\/d\/(\d{2})(?:\/([a-z-]+))?$/.exec(p);
+  if (gaaDept) return gaaDept[2] === undefined || PORTAL_VIEW_SEGMENTS.has(gaaDept[2]);
+
+  // /2027/d/:deptId — NEP ids add the synthetic SPF and AUTO groups.
+  if (/^\/2027\/d\/[A-Z0-9]{1,6}$/.test(p)) return true;
+
+  return false;
+}
