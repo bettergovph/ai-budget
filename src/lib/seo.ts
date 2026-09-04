@@ -59,6 +59,23 @@ export function pageMeta(pathname: string): PageMeta {
         "can scrutinize the budget at every phase.",
     };
   }
+  if (p === "/hearings") {
+    return {
+      title: `Budget Briefing/Hearings — House Committee on Appropriations · ${SITE}`,
+      description:
+        "Every FY 2027 budget briefing and hearing streamed by the Philippine House of " +
+        "Representatives' Committee on Appropriations, with full transcripts, summaries, " +
+        "and highlights, cued to the video.",
+    };
+  }
+  if (p.startsWith("/hearings/")) {
+    return {
+      title: `Budget Hearing Transcript · ${SITE}`,
+      description:
+        "Full transcript, summary, and highlights of a House Committee on Appropriations " +
+        "budget hearing, with an interactive transcript cued to the video.",
+    };
+  }
   if (p === "/glossary") {
     return {
       title: `Philippine Budget Glossary — Every Term in Plain Language · ${SITE}`,

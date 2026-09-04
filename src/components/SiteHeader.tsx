@@ -167,6 +167,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               National Expenditures 2027
             </Link>
             <Link
+              to="/hearings"
+              className={`primary-nav-link ${location.pathname.startsWith('/hearings') ? 'active' : ''}`}
+            >
+              Budget Hearings
+            </Link>
+            <Link
               to="/gaa"
               className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
@@ -222,6 +228,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
         <nav className="drawer-nav" aria-label="Site sections">
           <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
             NEP 2027 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to="/hearings" onClick={() => setMenuOpen(false)}>
+            Budget Hearings <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2020–2026 <span className="drawer-link-arrow">→</span>

@@ -14,6 +14,8 @@ const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
 const Nep2027Browse = lazy(() => import('./pages/Nep2027Browse'));
 const Nep2027Explore = lazy(() => import('./pages/Nep2027Explore'));
 const Nep2027Methodology = lazy(() => import('./pages/Nep2027Methodology'));
+const Hearings = lazy(() => import('./pages/Hearings'));
+const HearingDetail = lazy(() => import('./pages/HearingDetail'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -71,6 +73,9 @@ export default function App() {
           <Route path="/2027/explore" element={<Navigate to="/2027/search" replace />} />
           <Route path="/2027/methodology" element={<Nep2027Methodology />} />
           <Route path="/2027/d/:deptId" element={<Nep2027Department />} />
+          {/* Budget Briefing/Hearings (Committee on Appropriations) */}
+          <Route path="/hearings" element={<Hearings />} />
+          <Route path="/hearings/:videoId" element={<HearingDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

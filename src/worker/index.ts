@@ -36,6 +36,7 @@
 
 import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
+import { handleHearings } from "./hearings";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
 
@@ -1468,6 +1469,15 @@ export default {
       if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
       try { return await handleProgramsPage(env, deptId, url); }
       catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+
+    // ---- Budget Briefing/Hearings index ----
+    if (url.pathname === "/api/hearings" || url.pathname.startsWith("/api/hearings/")) {
+      try {
+        return await handleHearings(request, env, url);
+      } catch (e) {
+        return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 });
+      }
     }
 
     // ---- FY2027 NEP aggregation layer ----
