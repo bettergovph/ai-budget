@@ -1,119 +1,96 @@
-/* Budget Briefing/Hearings — grid + detail pages. */
+/* Budget Briefing/Hearings — index grid + detail page.
+
+   Same design system as the FY2027 NEP microsite (nep2027.css): the portal's
+   tokens (--paper/--ink/--rule/--accent/--positive/--negative) and the
+   national type rules from section 04 — Figtree (--font-hero) for titles and
+   figures, Inter (--font-body) for anything that reads as a sentence,
+   JetBrains Mono (--font-mono) strictly for labels, timestamps and codes.
+
+   Flat 1px rules, 3px radii, no drop shadows: a hearing card is a table row
+   with a thumbnail, not a material surface. */
 
 .hearings-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg, #faf9f7);
-  color: var(--ink, #17150f);
+  background: var(--paper);
+  color: var(--ink);
 }
 
-.hearings-main {
-  max-width: 1504px;
-  margin: 0 auto;
-  flex: 1;
-  padding: 32px 32px 80px;
-}
+/* .nep-main carries the 1504px measure and page padding; this only has to
+   push the footer down. */
+.hearings-main { flex: 1; }
 
-/* ---- intro + controls ---- */
-
-.hearings-intro .hearings-eyebrow {
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #8a8474;
-  margin: 0 0 0.5rem;
-}
-
-.hearings-intro h1 {
-  font-size: clamp(1.7rem, 3.4vw, 2.6rem);
-  line-height: 1.1;
-  margin: 0 0 0.7rem;
-}
-
-.hearings-sub {
-  max-width: 62ch;
-  color: #54503f;
-  margin: 0 0 1.6rem;
-  line-height: 1.55;
-}
+/* ---- index controls ---------------------------------------------------- */
 
 .hearings-controls {
   display: flex;
-  gap: 0.7rem;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 1.6rem;
+  margin-bottom: 20px;
 }
 
-.hearings-search {
-  flex: 1 1 260px;
-  max-width: 380px;
-  padding: 0.55rem 0.85rem;
-  border: 1px solid #d8d3c4;
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-}
+.hearings-search { flex: 0 1 320px; }
 
-.hearings-agency-select {
-  padding: 0.55rem 0.7rem;
-  border: 1px solid #d8d3c4;
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-}
-
-.hearings-loading,
-.hearings-error {
-  color: #54503f;
-  padding: 2rem 0;
+.hearings-count {
+  font-family: var(--font-body);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
 }
 
 .hearings-error {
-  color: #a33;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--negative);
+  padding: 18px 0;
 }
 
-/* ---- grid ---- */
+/* ---- index grid -------------------------------------------------------- */
 
 .hearings-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.4rem;
+  gap: 20px;
 }
 
 @media (min-width: 900px) {
-  .hearings-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  .hearings-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (min-width: 1300px) {
-  .hearings-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
+  .hearings-grid { grid-template-columns: repeat(4, 1fr); }
 }
 
 .hearing-card {
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border: 1px solid #e4dfd1;
-  border-radius: 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
   overflow: hidden;
   text-decoration: none;
   color: inherit;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: border-color .12s, background .12s;
 }
 
 .hearing-card:hover {
-  box-shadow: 0 6px 22px rgb(30 25 10 / 0.1);
-  transform: translateY(-2px);
+  border-color: var(--accent);
+  background: var(--paper-2);
+}
+
+.hearing-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .hearing-thumb {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: #efece2;
+  background: var(--paper-3);
+  border-bottom: 1px solid var(--rule-soft);
 }
 
 .hearing-thumb img {
@@ -123,67 +100,86 @@
   display: block;
 }
 
+/* Both badges sit on a photograph, so they carry their own solid ground
+   rather than a token tint that would disappear over the frame. */
 .hearing-duration {
   position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  background: rgb(0 0 0 / 0.78);
+  right: 6px;
+  bottom: 6px;
+  background: rgb(0 0 0 / 0.8);
   color: #fff;
-  font-size: 0.74rem;
-  font-weight: 600;
-  padding: 0.12rem 0.42rem;
-  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  padding: 2px 5px;
+  border-radius: 2px;
 }
 
 .hearing-pending {
   position: absolute;
-  left: 0.5rem;
-  top: 0.5rem;
-  background: rgb(250 204 21 / 0.94);
-  color: #4a3b00;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  left: 6px;
+  top: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.16rem 0.5rem;
-  border-radius: 6px;
+  padding: 3px 7px;
 }
 
 .hearing-card-body {
-  padding: 0.85rem 1rem 1rem;
+  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 8px;
+  flex: 1;
 }
 
 .hearing-card-meta {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 8px;
   flex-wrap: wrap;
-  font-size: 0.8rem;
 }
 
+/* Agency chip — the shared .pill treatment, scoped so hearings markup does
+   not have to carry two class names. */
 .hearing-agency {
-  background: #eef3e7;
-  color: #3c6212;
-  font-weight: 700;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  white-space: nowrap;
 }
 
 .hearing-agency-generic {
-  background: #ece9df;
-  color: #6a6450;
+  border-color: var(--rule);
+  color: var(--ink-3);
+  background: var(--paper-2);
 }
 
 .hearing-date {
-  color: #8a8474;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
 }
 
 .hearing-title {
-  font-size: 0.98rem;
-  line-height: 1.35;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ink);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -191,80 +187,97 @@
   overflow: hidden;
 }
 
+.hearing-card:hover .hearing-title { color: var(--accent); }
+
 .hearing-has-summary {
-  font-size: 0.84rem;
+  margin-top: auto;
+  font-family: var(--font-body);
+  font-size: 11px;
   font-weight: 600;
-  color: #3c6212;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
 }
 
-.hearing-has-summary.hearing-muted {
-  color: #a09a87;
-}
+.hearing-has-summary.hearing-muted { color: var(--ink-mute); }
 
-/* ---- detail ---- */
+/* ---- detail: heading --------------------------------------------------- */
 
 .hearing-back {
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+  font-family: var(--font-body);
+  font-size: 12px;
+  margin-bottom: 12px;
 }
 
 .hearing-back a {
-  color: #54503f;
+  color: var(--ink-3);
   text-decoration: none;
 }
 
-.hearing-back a:hover {
-  text-decoration: underline;
+.hearing-back a:hover { color: var(--accent); }
+
+.hearing-head {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 18px;
+  margin-bottom: 4px;
 }
 
 .hearing-heading {
-  font-size: clamp(1.3rem, 2.6vw, 1.9rem);
-  line-height: 1.2;
-  margin: 0.4rem 0 0.5rem;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(24px, 2.6vw, 34px);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  margin: 10px 0 8px;
+  max-width: 1000px;
 }
 
 .hearing-yt-link {
-  font-size: 0.88rem;
-  color: #3c6212;
-  text-decoration: none;
+  font-family: var(--font-body);
+  font-size: 11px;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  text-decoration: none;
 }
 
+.hearing-yt-link:hover { color: var(--accent-deep); }
+
 .hearing-pending-inline {
-  color: #8a6d00;
-  font-size: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--negative);
 }
+
+/* ---- detail: two-column layout ----------------------------------------- */
 
 .hearing-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.8rem;
+  gap: 32px;
   align-items: start;
-  margin-top: 1.2rem;
+  margin-top: 24px;
 }
 
-@media (max-width: 900px) {
-  .hearing-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
+/* The sticky left column is capped at the viewport so the panel (or the
+   stand-alone brief) scrolls internally, like the transcript column. */
 .hearing-player-col {
   position: sticky;
-  top: 1rem;
-}
-
-@media (max-width: 900px) {
-  .hearing-player-col {
-    position: static;
-  }
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
 }
 
 .hearing-player-frame {
+  flex: 0 0 auto;
   position: relative;
   aspect-ratio: 16 / 9;
   background: #000;
-  border-radius: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -276,232 +289,536 @@
   border: 0;
 }
 
-.hearing-highlights {
-  margin-top: 1.2rem;
-  background: #f3f6ec;
-  border: 1px solid #dfe7cd;
-  border-radius: 12px;
-  padding: 0.9rem 1.1rem;
+.hearing-player-col > .hearing-brief,
+.hearing-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.hearing-highlights summary {
+/* Small screens: the column flows in the page, the stand-alone brief keeps
+   flowing as before, and the panel becomes a 70vh scroll box (a 9-hour
+   timeline would otherwise push the transcript tens of thousands of px down). */
+@media (max-width: 900px) {
+  .hearing-layout { grid-template-columns: 1fr; gap: 28px; }
+  .hearing-player-col { position: static; max-height: none; }
+  .hearing-player-col > .hearing-brief { overflow: visible; }
+  .hearing-panel { max-height: 70vh; }
+}
+
+.hearing-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- shared headings --------------------------------------------------- */
+
+.hearing-transcript-head h2 {
+  font-family: var(--font-hero);
   font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* ---- detail: hearing record panel -------------------------------------- */
+
+.hearing-panel {
+  margin-top: 20px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.hearing-panel-head { padding: 16px 18px 4px; }
+
+.hearing-overview {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+
+.hearing-panel-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--ink-mute);
+  margin: 0 0 6px;
+}
+
+/* Underline tabs, matching .nep-tabs; sticks to the top of the scrolling
+   panel. Navigation, so the interface face rather than mono. */
+.hearing-tabs-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  padding: 10px 18px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.hearing-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: -1px;
+}
+
+.hearing-tab {
+  border: 0;
+  background: none;
+  padding: 7px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hearing-tab:hover { color: var(--ink); }
+
+.hearing-tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.hearing-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.hearing-panel-body { padding: 14px 18px 18px; }
+
+/* the brief keeps its markup; inside the panel it drops its own card chrome */
+.hearing-panel .hearing-brief {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* ---- pills (topic status / section kind / action kind / issue category) -- */
+
+.hearing-pill,
+.hearing-issue-cat {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-3);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Outcome tone comes from the portal's semantic trio; everything procedural
+   stays neutral so colour only ever means something. */
+.status-resolved,
+.act-commitment,
+.kind-motion { color: var(--positive); border-color: var(--positive); background: transparent; }
+
+.status-committed,
+.kind-presentation,
+.act-motion,
+.act-ruling { color: var(--accent); border-color: var(--accent); background: transparent; }
+
+.status-unresolved,
+.cat-budget_cut { color: var(--negative); border-color: var(--negative); background: transparent; }
+
+.status-parked,
+.kind-suspension,
+.cat-underutilization,
+.cat-unpaid_obligations,
+.act-document_request { color: var(--neutral); border-color: var(--neutral); background: transparent; }
+
+.status-informational,
+.kind-interpellation,
+.kind-procedural,
+.kind-other,
+.act-manifestation,
+.cat-procurement_political,
+.cat-access_equity { color: var(--ink-3); border-color: var(--rule); background: var(--paper-2); }
+
+/* ---- timestamp cues ---------------------------------------------------- */
+
+.hearing-cue,
+.hearing-secref {
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  padding: 1px 5px;
   cursor: pointer;
 }
 
-.hearing-summary h2,
-.hearing-transcript-head h2 {
-  font-size: 1.05rem;
-  margin: 0 0 0.6rem;
+.hearing-cue:hover,
+.hearing-secref:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.hearing-summary {
-  margin-top: 1.2rem;
+.hearing-cue:focus-visible,
+.hearing-secref:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-.hearing-markdown {
-  font-size: 0.92rem;
-  line-height: 1.55;
-  color: #3c3a30;
-}
-
-.hearing-markdown h1 {
-  font-size: 1.15rem;
-}
-
-.hearing-markdown h2 {
-  font-size: 1rem;
-}
-
-.hearing-markdown ul,
-.hearing-markdown ol {
-  padding-left: 1.2rem;
-}
-
-.hearing-markdown li {
-  margin: 0.25rem 0;
-}
-
-.hearing-markdown code {
-  background: #fff;
-  border: 1px solid #e4dfd1;
-  border-radius: 4px;
-  padding: 0.02rem 0.3rem;
-  font-size: 0.84em;
-}
-
-/* ---- analyst brief ---- */
+/* ---- detail: analyst brief --------------------------------------------- */
 
 .hearing-brief {
-  margin-top: 1.2rem;
-  background: #fff;
-  border: 1px solid #e4dfd1;
-  border-radius: 12px;
-  padding: 1rem 1.2rem 1.2rem;
+  margin-top: 20px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 16px 18px 18px;
 }
 
 .hearing-brief h2 {
-  font-size: 1.02rem;
-  margin: 0 0 0.5rem;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 8px;
 }
 
 .hearing-brief h3 {
-  font-size: 0.92rem;
-  margin: 1rem 0 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin: 18px 0 6px;
 }
 
 .hearing-brief-headline {
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: #3c3a30;
-  margin: 0 0 0.8rem;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 14px;
 }
 
+/* Topline reads as the portal's KPI strip: hairline top and bottom, figures
+   in the display face, mono labels. */
 .hearing-topline {
   display: flex;
-  gap: 1.6rem;
+  gap: 28px;
   flex-wrap: wrap;
-  background: #f6f4ec;
-  border-radius: 8px;
-  padding: 0.7rem 0.9rem;
-  margin-bottom: 0.9rem;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding: 12px 0;
+  margin-bottom: 16px;
 }
 
 .hearing-topline > div {
   display: flex;
   flex-direction: column;
+  gap: 5px;
 }
 
 .hearing-topline-label {
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #8a8474;
+  color: var(--ink-3);
 }
 
 .hearing-topline-amount {
-  font-size: 1.15rem;
+  font-family: var(--font-hero);
   font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
 }
 
-.hearing-topline-amount.hearing-down {
-  color: #a02c2c;
-}
+.hearing-topline-amount.hearing-down { color: var(--negative); }
+.hearing-topline-amount.hearing-up { color: var(--positive); }
 
-.hearing-topline-amount.hearing-up {
-  color: #3c6212;
-}
+/* ---- detail: figures table (the .nep-table treatment) ------------------- */
 
 .hearing-table-scroll {
   overflow-x: auto;
+  border-top: 1px solid var(--rule);
 }
 
 .hearing-figures {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.84rem;
+  font-family: var(--font-body);
+  font-size: 12.5px;
 }
 
 .hearing-figures th {
   text-align: left;
-  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #8a8474;
-  border-bottom: 1px solid #e4dfd1;
-  padding: 0.3rem 0.5rem 0.3rem 0;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 10px 7px 0;
+  white-space: nowrap;
 }
 
 .hearing-figures td {
-  padding: 0.42rem 0.5rem 0.42rem 0;
-  border-bottom: 1px solid #f0ede2;
+  padding: 8px 10px 8px 0;
+  border-bottom: 1px solid var(--rule-soft);
   vertical-align: top;
-  line-height: 1.4;
+  line-height: 1.45;
 }
+
+.hearing-figures tr:hover { background: var(--paper-2); }
 
 .hearing-figures .num {
   text-align: right;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.fig-entity {
-  font-weight: 700;
-}
+.fig-entity { color: var(--ink); font-weight: 600; }
+.fig-metric { color: var(--ink-2); }
+.fig-context { color: var(--ink-mute); }
 
-.fig-metric {
-  color: #54503f;
-}
-
-.fig-context {
-  color: #8a8474;
-  font-size: 0.94em;
-}
-
-.hearing-cue {
-  background: #f0f4e6;
-  color: #3c6212;
-  border: 0;
-  border-radius: 5px;
-  font: inherit;
-  font-size: 0.78rem;
-  font-variant-numeric: tabular-nums;
-  padding: 0.08rem 0.4rem;
-  cursor: pointer;
-}
-
-.hearing-cue:hover {
-  background: #e2ecd2;
-}
+/* ---- detail: issues + committee actions -------------------------------- */
 
 .hearing-issue-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  border-top: 1px solid var(--rule);
 }
 
 .hearing-issue-list li {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #f0ede2;
-  font-size: 0.87rem;
-  line-height: 1.5;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
   display: flex;
   align-items: baseline;
-  gap: 0.45rem;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
-.hearing-issue-list li:last-child {
-  border-bottom: 0;
+.hearing-issue-list li:last-child { border-bottom: 0; }
+
+/* ---- detail: by topic --------------------------------------------------- */
+
+.hearing-topic-list,
+.hearing-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.hearing-issue-cat {
-  font-size: 0.68rem;
-  font-weight: 700;
+.hearing-topic {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.hearing-topic:last-child,
+.hearing-section:last-child { border-bottom: 0; }
+
+.hearing-topic-head,
+.hearing-section-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.hearing-topic-title,
+.hearing-section-title {
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0;
+}
+
+.hearing-topic-title { flex: 1 1 200px; }
+
+.hearing-topic-summary,
+.hearing-section-summary {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 6px 0 0;
+}
+
+.hearing-positions {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.hearing-positions li + li { margin-top: 4px; }
+
+.hearing-positions strong { color: var(--ink); font-weight: 600; }
+
+.hearing-secrefs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+}
+
+.hearing-secrefs-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin-right: 2px;
+}
+
+/* ---- detail: timeline --------------------------------------------------- */
+
+.hearing-section {
+  position: relative;
+  padding: 12px 10px 12px 7px;
+  margin: 0 -10px;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--rule-soft);
+  /* keep it clear of the sticky tab bar when scrolled to via "§n" */
+  scroll-margin-top: 54px;
+  transition: background-color .2s ease;
+}
+
+.hearing-section.active {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.hearing-section.flash { background: var(--paper-3); }
+
+.hearing-section.active.flash { background: var(--accent-soft); }
+
+.hearing-section-no {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+.hearing-section.active .hearing-section-no { color: var(--accent); }
+
+.hearing-section-title { margin-top: 6px; }
+
+.hearing-section-detail { margin-top: 8px; }
+
+.hearing-section-detail summary {
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.08rem 0.4rem;
-  border-radius: 999px;
-  background: #ece9df;
-  color: #6a6450;
-  white-space: nowrap;
+  color: var(--accent);
+  user-select: none;
 }
 
-.cat-budget_cut { background: #fbeaea; color: #a02c2c; }
-.cat-underutilization { background: #fdf3d7; color: #8a6d00; }
-.cat-unpaid_obligations { background: #fbeee0; color: #9c5313; }
-.cat-procurement_political { background: #f3e8fb; color: #6d3a9c; }
-.cat-access_equity { background: #e8f0fb; color: #2c5aa0; }
+.hearing-section-detail summary:hover { color: var(--accent-deep); }
 
-/* ---- interactive transcript ---- */
+.hearing-section-detail h4 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin: 12px 0 4px;
+}
+
+.hearing-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hearing-detail-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.hearing-detail-list li:first-child { border-top: 0; }
+
+.hearing-detail-body { min-width: 0; }
+
+.hearing-detail-body p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.hearing-detail-body strong { color: var(--ink); font-weight: 600; }
+
+.hearing-detail-body p + p { margin-top: 3px; }
+
+.hearing-outcome { color: var(--ink-mute) !important; font-style: italic; }
+
+.hearing-figure-amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- detail: interactive transcript ------------------------------------ */
 
 .hearing-transcript {
-  background: #fff;
-  border: 1px solid #e4dfd1;
-  border-radius: 12px;
-  padding: 1rem 0;
-  max-height: calc(100vh - 2rem);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 14px 0;
+  max-height: calc(100vh - 32px);
   overflow-y: auto;
 }
 
@@ -509,67 +826,124 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 0 1.1rem;
+  gap: 12px;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--rule-soft);
 }
 
 .hearing-follow {
-  font-size: 0.82rem;
-  color: #54503f;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
 }
 
 .hearing-transcript-note {
-  color: #8a8474;
-  padding: 0.6rem 1.1rem;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-mute);
+  padding: 12px 16px;
+  margin: 0;
 }
 
 .hearing-blocks {
   list-style: none;
-  margin: 0.4rem 0 0;
+  margin: 0;
   padding: 0;
 }
 
 .hearing-block {
   display: grid;
-  grid-template-columns: 4.6rem 1fr;
-  gap: 0.7rem;
+  grid-template-columns: 62px 1fr;
+  gap: 12px;
   width: 100%;
   text-align: left;
   background: none;
   border: 0;
   border-left: 3px solid transparent;
-  padding: 0.42rem 1.1rem 0.42rem calc(1.1rem - 3px);
+  border-bottom: 1px solid var(--rule-soft);
+  padding: 8px 16px 8px 13px;
   font: inherit;
   cursor: pointer;
 }
 
-.hearing-block:hover {
-  background: #f6f3ea;
+.hearing-block:hover { background: var(--paper-2); }
+
+.hearing-block:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .hearing-block.active {
-  border-left-color: #3c6212;
-  background: #f0f4e6;
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .hearing-block-ts {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 0.8rem;
-  color: #8a8474;
-  padding-top: 0.1rem;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-mute);
+  padding-top: 2px;
 }
 
-.hearing-block.active .hearing-block-ts {
-  color: #3c6212;
-  font-weight: 700;
-}
+.hearing-block.active .hearing-block-ts { color: var(--accent); }
 
 .hearing-block-text {
-  font-size: 0.88rem;
-  line-height: 1.5;
-  color: #3c3a30;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.hearing-block-speaker {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* Anonymous diarisation labels (S1, S2…) are metadata, not a name. */
+.hearing-block-speaker.is-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+
+/* ---- provenance -------------------------------------------------------- */
+
+.hearing-provenance a { color: var(--accent); text-decoration: none; }
+
+/* ---- responsive -------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .hearings-grid { grid-template-columns: 1fr; gap: 14px; }
+  .hearings-controls { gap: 8px; }
+  .hearings-search { flex: 1 1 100%; max-width: none; }
+  .hearing-card-body { padding: 10px 12px 12px; }
+  .hearing-title { font-size: 14px; }
+  .hearing-heading { font-size: 22px; }
+  .hearing-panel-head,
+  .hearing-panel-body { padding-left: 14px; padding-right: 14px; }
+  .hearing-tabs-wrap { padding-left: 14px; padding-right: 14px; }
+  .hearing-tab { padding: 7px 9px; font-size: 12.5px; }
+  .hearing-topline { gap: 20px; }
+  .hearing-topline-amount { font-size: 19px; }
+  .hearing-transcript { max-height: none; }
+  .hearing-block { grid-template-columns: 52px 1fr; gap: 9px; padding: 7px 12px 7px 9px; }
+  .hearing-block-text { font-size: 12.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hearing-section,
+  .hearing-card { transition: none; }
 }
