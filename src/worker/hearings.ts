@@ -2,8 +2,9 @@
  * Budget Briefing/Hearings API.
  *
  * The `hearings` table is the index; heavy content (transcript.json,
- * summary.md, highlights.md) lives in R2 under the row's `r2_prefix` and is
- * fetched by the browser straight from the public data host
+ * summary.md, highlights.md, brief.json, sections.json) lives in R2 under
+ * the row's `r2_prefix` and is fetched by the browser straight from the
+ * public data host
  * (budget-assets.bettergov.ph) — same split as the GAA/NEP data.
  *
  *   GET /api/hearings                 list, newest first
@@ -32,6 +33,8 @@ interface HearingRow {
   has_summary: number;
   has_highlights: number;
   has_brief: number;
+  has_sections: number;
+  transcript_source: string | null;
   summary_method: string | null;
   status: string;
   updated_at: string;
@@ -40,7 +43,7 @@ interface HearingRow {
 const LIST_COLUMNS = `video_id, slug, title, agency, fiscal_year, published_at,
   duration_seconds, length_text, view_count, url, r2_prefix, segment_count,
   text_chars, has_transcript, has_summary, has_highlights, has_brief,
-  summary_method, status, updated_at`;
+  has_sections, transcript_source, summary_method, status, updated_at`;
 
 export async function handleHearings(
   _request: Request,
