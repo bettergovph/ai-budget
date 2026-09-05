@@ -102,7 +102,16 @@ function findSection(list: HearingSection[], t: number): number {
       hi = mid - 1;
     }
   }
+  if (idx === -1) return -1;
   if (idx === list.length - 1 && t > list[idx].end_seconds) return -1;
+  // A short suspension or ruling can sit nested inside a longer section, so
+  // the last-started section is not always the one actually running. If it has
+  // already ended, fall back to an enclosing section that is still open.
+  if (t > list[idx].end_seconds) {
+    for (let i = idx - 1; i >= 0 && idx - i <= 4; i -= 1) {
+      if (t <= list[i].end_seconds) return i;
+    }
+  }
   return idx;
 }
 
@@ -326,6 +335,11 @@ export default function HearingDetail() {
   const [notFound, setNotFound] = useState(false);
   const [brief, setBrief] = useState<HearingBrief | null>(null);
   const [sections, setSections] = useState<HearingSections | null>(null);
+  // sections.json runs to a few hundred KB on the long hearings, so the panel
+  // can be several seconds behind the rest of the page. Without this the panel
+  // renders nothing while it downloads, which reads as "this hearing has no
+  // topics" rather than "still loading".
+  const [recordPending, setRecordPending] = useState(true);
   const [blocks, setBlocks] = useState<TranscriptBlock[]>([]);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
@@ -346,9 +360,14 @@ export default function HearingDetail() {
   const [highlight, setHighlight] = useState<{ index: number; nonce: number } | null>(null);
 
   useEffect(() => {
+    // Router pushes keep the window's scroll offset, so opening a hearing from
+    // a grid the reader has scrolled a long way down lands them mid-page — on
+    // mobile, well past the player. Start every hearing at the top.
+    window.scrollTo(0, 0);
     setHearing(null);
     setBrief(null);
     setSections(null);
+    setRecordPending(true);
     setBlocks([]);
     setNotFound(false);
     setTranscriptError(null);
@@ -361,6 +380,7 @@ export default function HearingDetail() {
       .then((h) => {
         if (!h) {
           setNotFound(true);
+          setRecordPending(false);
           return;
         }
         setHearing(h);
@@ -370,8 +390,9 @@ export default function HearingDetail() {
           ([b, s]) => {
             setBrief(b);
             setSections(s);
+            setRecordPending(false);
           },
-        );
+        ).catch(() => setRecordPending(false));
         if (!h.has_transcript) return;
         fetchTranscript(videoId)
           .then((doc) => {
@@ -767,6 +788,17 @@ export default function HearingDetail() {
                 <div className="hearing-player-frame">
                   <div ref={playerMountRef} />
                 </div>
+
+                {recordPending && !sections && !brief && (
+                  <section
+                    className="hearing-panel hearing-panel-pending"
+                    aria-label="Hearing record"
+                  >
+                    <p className="hearing-transcript-note" role="status">
+                      Loading the topics and timeline for this hearing…
+                    </p>
+                  </section>
+                )}
 
                 {showTabbedPanel && sections && tab ? (
                   <section className="hearing-panel" aria-label="Hearing record">
