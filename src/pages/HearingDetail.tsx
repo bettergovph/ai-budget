@@ -137,6 +137,55 @@ interface TopicsTabProps {
   goToSection: (index: number) => void;
 }
 
+const SIDE_LABEL: Record<string, string> = {
+  committee: 'committee',
+  agency: 'agency',
+  executive: 'executive',
+  other: '',
+};
+
+/** The deliberation thread of one topic: what was said, in order, each line
+ *  a cue into the video. Collapsed by default past the first few moments so a
+ *  20-topic record stays scannable. */
+function TopicThread({ topic, seek }: { topic: HearingTopic; seek: (ms: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const thread = topic.thread ?? [];
+  if (!thread.length) return null;
+  const PREVIEW = 4;
+  const shown = open ? thread : thread.slice(0, PREVIEW);
+  return (
+    <div className="hearing-thread">
+      <p className="hearing-thread-label">What was said</p>
+      <ol className="hearing-moments">
+        {shown.map((m, j) => (
+          <li key={j} className={`hearing-moment kind-${m.kind} side-${m.side}`}>
+            <button
+              type="button"
+              className="hearing-cue hearing-moment-cue"
+              onClick={() => seek(m.seconds * 1000)}
+              title="Play the video from here"
+            >
+              {m.timestamp}
+            </button>
+            <span className="hearing-moment-who">
+              {m.speaker ?? SIDE_LABEL[m.side] ?? 'speaker'}
+              {m.speaker && SIDE_LABEL[m.side] && (
+                <em className="hearing-moment-side"> · {SIDE_LABEL[m.side]}</em>
+              )}
+            </span>
+            <span className="hearing-moment-said">{m.said}</span>
+          </li>
+        ))}
+      </ol>
+      {thread.length > PREVIEW && (
+        <button type="button" className="hearing-thread-toggle" onClick={() => setOpen(!open)}>
+          {open ? 'Show fewer' : `Show all ${thread.length} moments`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function TopicsTab({ topics, seek, goToSection }: TopicsTabProps) {
   return (
     <ol className="hearing-topic-list">
@@ -158,7 +207,14 @@ function TopicsTab({ topics, seek, goToSection }: TopicsTabProps) {
               </button>
             )}
           </div>
+          {t.question && <p className="hearing-topic-question">{t.question}</p>}
           <p className="hearing-topic-summary">{t.summary}</p>
+          <TopicThread topic={t} seek={seek} />
+          {t.agency_position && (
+            <p className="hearing-topic-stance">
+              <strong>Agency position:</strong> {t.agency_position}
+            </p>
+          )}
           {t.positions.length > 0 && (
             <ul className="hearing-positions">
               {t.positions.map((p, j) => (
@@ -167,6 +223,40 @@ function TopicsTab({ topics, seek, goToSection }: TopicsTabProps) {
                 </li>
               ))}
             </ul>
+          )}
+          {(t.figures?.length ?? 0) > 0 && (
+            <p className="hearing-topic-figures">
+              <span className="hearing-secrefs-label">Figures</span>
+              {t.figures!.map((f, j) => (
+                <button
+                  key={j}
+                  type="button"
+                  className="hearing-figure-chip"
+                  onClick={() => seek(f.seconds * 1000)}
+                  title={`${f.what} — ${f.timestamp}`}
+                >
+                  <strong>{f.amount_text}</strong> {f.what}
+                </button>
+              ))}
+            </p>
+          )}
+          {(t.actions?.length ?? 0) > 0 && (
+            <ul className="hearing-topic-actions">
+              {t.actions!.map((a, j) => (
+                <li key={j}>
+                  <button type="button" className="hearing-cue" onClick={() => seek(a.seconds * 1000)}>
+                    {a.timestamp}
+                  </button>
+                  <em>{a.kind.replace('_', ' ')}</em> {a.action}
+                  {a.who && <span className="hearing-action-who"> — {a.who}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {t.outcome && (
+            <p className="hearing-topic-outcome">
+              <strong>Outcome:</strong> {t.outcome}
+            </p>
           )}
           {t.sections.length > 0 && (
             <p className="hearing-secrefs">
@@ -414,6 +504,11 @@ export default function HearingDetail() {
   const playerReady = !!hearing;
   useEffect(() => {
     if (!playerReady || !videoId) return;
+    // Read at mount time: the URL still carries whatever `?t=` the visitor
+    // arrived with. Later cue clicks only replaceState, so they never re-run
+    // this effect and never rebuild the player.
+    const tParam = Number(new URLSearchParams(window.location.search).get('t'));
+    const startAt = Number.isFinite(tParam) && tParam > 0 ? Math.floor(tParam) : 0;
     let cancelled = false;
     let player: YTPlayer | null = null;
     loadYouTubeApi().then((YT) => {
@@ -427,6 +522,10 @@ export default function HearingDetail() {
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
+          // Arriving on a shared link: open the video at that moment. `start`
+          // positions the player without autoplaying, which browsers block
+          // without a user gesture anyway.
+          ...(startAt > 0 ? { start: startAt } : {}),
           // required for the widget's postMessage channel (seek/highlight)
           origin: window.location.origin,
         },
@@ -530,10 +629,21 @@ export default function HearingDetail() {
   }, [highlight]);
 
   const seek = useCallback((startMs: number) => {
+    const seconds = Math.max(0, Math.round(startMs / 1000));
+    // Put the moment in the URL so it can be copied and shared. replaceState,
+    // not push: cueing around a hearing should not fill the back stack with an
+    // entry per click.
+    const params = new URLSearchParams(window.location.search);
+    params.set('t', String(seconds));
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}?${params.toString()}`,
+    );
     const player = playerRef.current;
     if (!player) return;
     try {
-      player.seekTo(startMs / 1000, true);
+      player.seekTo(seconds, true);
       player.playVideo();
     } catch {
       // player mid-reload — the click can be retried
@@ -806,7 +916,15 @@ export default function HearingDetail() {
                     {(sections.overview || metaNote) && (
                       <div className="hearing-panel-head">
                         {sections.overview && (
-                          <p className="hearing-overview">{sections.overview}</p>
+                          <div className="hearing-overview">
+                            {sections.overview
+                              .split(/\n\s*\n/)
+                              .map((para) => para.trim())
+                              .filter(Boolean)
+                              .map((para, i) => (
+                                <p key={i}>{para}</p>
+                              ))}
+                          </div>
                         )}
                         {metaNote && (
                           <p className="hearing-panel-meta">{metaNote}</p>
@@ -878,10 +996,43 @@ export default function HearingDetail() {
                     Follow playback
                   </label>
                 </div>
+                {blocks.length > 0 && (
+                  <aside className="hearing-disclaimer" role="note">
+                    <p className="hearing-disclaimer-title">
+                      Machine-generated transcript — expect errors
+                    </p>
+                    <ul className="hearing-disclaimer-list">
+                      <li>
+                        <strong>Names are often wrong.</strong> Speakers are
+                        inferred from context, not recognised by voice, so
+                        members and officials are sometimes misnamed, and a
+                        remark can be attributed to the wrong person.
+                      </li>
+                      <li>
+                        <strong>Filipino and Taglish are poorly captured.</strong>{' '}
+                        The speech-to-text is English-first. Passages spoken in
+                        Filipino may be garbled or missing altogether, so parts
+                        of the proceedings are under-represented here.
+                      </li>
+                      <li>
+                        <strong>Check any figure you rely on.</strong> Amounts
+                        can be misheard. Currency symbols are removed rather
+                        than guessed, so a bare number is not a claim about
+                        pesos or dollars. Use the timestamps to check it against
+                        the video.
+                      </li>
+                    </ul>
+                    <p className="hearing-disclaimer-foot">
+                      Produced automatically as a best-effort aid for finding
+                      things in the video. It is not an official record of the
+                      proceedings.
+                    </p>
+                  </aside>
+                )}
                 {hearing?.status === 'no_captions' && (
                   <p className="hearing-transcript-note">
-                    YouTube hasn&apos;t published captions for this stream yet —
-                    the transcript will appear here after the next daily sync.
+                    No usable audio or captions exist for this stream, so there
+                    is no transcript to show.
                   </p>
                 )}
                 {transcriptError && (

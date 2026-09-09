@@ -23,6 +23,15 @@
  */
 
 import { OPENAPI_SPEC } from "./openapi";
+import {
+  hearingGet,
+  hearingTimeline,
+  hearingTopic,
+  hearingTopics,
+  hearingTranscript,
+  hearingsList,
+  hearingsSearch,
+} from "./hearings-api";
 
 export const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -978,7 +987,8 @@ function apiIndex(origin: string) {
     version: "1.0.0",
     description:
       "Public read-only API over the Philippine General Appropriations Act (FY2020–2026), " +
-      "the FY2027 National Expenditure Program, and NEP→GAA→execution budget-cycle data. " +
+      "the FY2027 National Expenditure Program, NEP→GAA→execution budget-cycle data, and the " +
+      "House budget hearings (per-topic deliberation records, timelines, transcripts). " +
       "All amounts are exact Philippine pesos.",
     documentation: `${origin}/docs`,
     openapi: `${origin}/api/v1/openapi.json`,
@@ -1006,6 +1016,15 @@ function apiIndex(origin: string) {
       budget_cycle: [
         "GET /api/v1/budget-cycle",
         "GET /api/v1/budget-cycle/departments/{id}",
+      ],
+      hearings: [
+        "GET /api/v1/hearings",
+        "GET /api/v1/hearings/search",
+        "GET /api/v1/hearings/{video_id}",
+        "GET /api/v1/hearings/{video_id}/topics",
+        "GET /api/v1/hearings/{video_id}/topics/{index}",
+        "GET /api/v1/hearings/{video_id}/timeline",
+        "GET /api/v1/hearings/{video_id}/transcript",
       ],
     },
   };
@@ -1110,6 +1129,43 @@ export async function handlePublicApi(request: Request, env: Env, url: URL): Pro
     if (path === "/api/v1/budget-cycle") return ok(await budgetCycleOverview(env));
     m = /^\/api\/v1\/budget-cycle\/departments\/([^/]+)$/.exec(path);
     if (m) return ok(await budgetCycleDepartment(env, m[1]));
+
+    // ---- Budget hearings ----
+    if (path === "/api/v1/hearings") {
+      return ok(await hearingsList(env, {
+        fiscal_year: sp.get("fiscal_year") ?? sp.get("fy") ?? undefined,
+        agency: sp.get("agency") ?? undefined,
+        status: sp.get("status") ?? undefined,
+        query: sp.get("q") ?? undefined,
+        limit: intParam(sp.get("limit"), 100, 1, 500),
+        offset: intParam(sp.get("offset"), 0, 0, 100000),
+      }), 300);
+    }
+    if (path === "/api/v1/hearings/search") {
+      return ok(await hearingsSearch(env, {
+        query: sp.get("q") ?? "",
+        fiscal_year: sp.get("fiscal_year") ?? sp.get("fy") ?? undefined,
+        agency: sp.get("agency") ?? undefined,
+        status: sp.get("status") ?? undefined,
+        limit: intParam(sp.get("limit"), 20, 1, 100),
+      }), 300);
+    }
+    m = /^\/api\/v1\/hearings\/([^/]+)$/.exec(path);
+    if (m) return ok(await hearingGet(env, m[1]), 300);
+    m = /^\/api\/v1\/hearings\/([^/]+)\/topics$/.exec(path);
+    if (m) return ok(await hearingTopics(env, m[1], { thread: sp.get("thread") !== "0" }), 300);
+    m = /^\/api\/v1\/hearings\/([^/]+)\/topics\/(\d+)$/.exec(path);
+    if (m) return ok(await hearingTopic(env, m[1], Number(m[2])), 300);
+    m = /^\/api\/v1\/hearings\/([^/]+)\/timeline$/.exec(path);
+    if (m) return ok(await hearingTimeline(env, m[1]), 300);
+    m = /^\/api\/v1\/hearings\/([^/]+)\/transcript$/.exec(path);
+    if (m) {
+      return ok(await hearingTranscript(env, m[1], {
+        from: intParam(sp.get("from"), 0, 0, 200000),
+        to: sp.get("to") ? intParam(sp.get("to"), 0, 0, 200000) : undefined,
+        limit: intParam(sp.get("limit"), 300, 1, 1000),
+      }), 300);
+    }
 
     throw new ApiError(404, "not_found", `No such endpoint: ${path} — see /api/v1 for the endpoint index`);
   } catch (e) {

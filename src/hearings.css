@@ -355,10 +355,22 @@
 
 .hearing-overview {
   font-family: var(--font-body);
-  font-size: 13px;
-  line-height: 1.6;
+  /* The panel is wide enough to run ~95 characters a line at 13px, well past
+     the comfortable range, so the overview reads as a slab. Cap the measure
+     and let paragraphs breathe. */
+  font-size: 13.5px;
+  line-height: 1.65;
   color: var(--ink-2);
   margin: 0 0 8px;
+  max-width: 68ch;
+}
+
+.hearing-overview p {
+  margin: 0 0 10px;
+}
+
+.hearing-overview p:last-child {
+  margin-bottom: 0;
 }
 
 .hearing-panel-meta {
@@ -971,3 +983,164 @@
   .hearing-section,
   .hearing-card { transition: none; }
 }
+
+/* --- machine-transcript disclaimer -------------------------------------- */
+/* Deliberately prominent: the transcript is useful for navigation but wrong
+   often enough that a reader must not take a name or a figure on trust. */
+.hearing-disclaimer {
+  margin: 0;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--rule);
+  border-left: 3px solid var(--negative);
+  background: var(--paper-2);
+  font-family: var(--font-body);
+}
+
+.hearing-disclaimer-title {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--negative);
+  text-transform: uppercase;
+}
+
+.hearing-disclaimer-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.hearing-disclaimer-list strong { color: var(--ink); }
+
+.hearing-disclaimer-foot {
+  margin: 9px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-mute);
+}
+
+@media (max-width: 900px) {
+  .hearing-disclaimer { padding: 12px; }
+}
+
+/* --- topic deliberation thread (record v2) ------------------------------- */
+
+.hearing-topic-question {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+.hearing-thread { margin: 10px 0 12px; }
+.hearing-thread-label,
+.hearing-secrefs-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 0 0 6px;
+}
+.hearing-moments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid var(--rule);
+}
+.hearing-moment {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  padding: 5px 0 5px 10px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hearing-moment + .hearing-moment { border-top: 1px solid var(--rule-soft); }
+.hearing-moment-cue { align-self: start; margin-top: 2px; }
+.hearing-moment-who {
+  font-weight: 600;
+  color: var(--ink);
+}
+.hearing-moment-side {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+.hearing-moment-said { grid-column: 2; }
+.hearing-moment.kind-question .hearing-moment-who::before { content: "Q · "; color: var(--accent); font-weight: 700; }
+.hearing-moment.kind-answer .hearing-moment-who::before { content: "A · "; color: var(--positive, #2f8a4c); font-weight: 700; }
+.hearing-moment.kind-commitment .hearing-moment-said,
+.hearing-moment.kind-ruling .hearing-moment-said,
+.hearing-moment.kind-motion .hearing-moment-said { font-weight: 500; color: var(--ink); }
+.hearing-thread-toggle {
+  all: unset;
+  cursor: pointer;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.hearing-thread-toggle:hover { text-decoration: underline; }
+.hearing-topic-stance,
+.hearing-topic-outcome {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: 8px 0;
+}
+.hearing-topic-outcome {
+  padding: 8px 12px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--accent);
+}
+.hearing-topic-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+}
+.hearing-figure-chip {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper);
+}
+.hearing-figure-chip strong { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+.hearing-figure-chip:hover { border-color: var(--accent); }
+.hearing-topic-actions {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hearing-topic-actions li { padding: 3px 0; }
+.hearing-topic-actions em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin: 0 6px;
+}
+.hearing-action-who { color: var(--ink-mute); }

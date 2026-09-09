@@ -180,7 +180,29 @@ export interface HearingSection {
   actions: SectionAction[];
 }
 
-/** What transpired on one topic across the whole hearing. */
+export type MomentKind =
+  | "question"
+  | "answer"
+  | "statement"
+  | "figure"
+  | "commitment"
+  | "motion"
+  | "ruling"
+  | "procedural";
+
+/** One timestamped moment in a topic's deliberation thread (record v2). */
+export interface TopicMoment {
+  seconds: number;
+  timestamp: string;
+  speaker: string | null;
+  side: "committee" | "agency" | "executive" | "other";
+  kind: MomentKind;
+  said: string;
+}
+
+/** What transpired on one topic across the whole hearing. The v2 record
+ *  (record.py) adds the deliberation thread built from the transcript;
+ *  the older summariser leaves those fields absent. */
 export interface HearingTopic {
   topic: string;
   summary: string;
@@ -190,6 +212,16 @@ export interface HearingTopic {
   status: TopicStatus;
   seconds: number | null;
   timestamp: string | null;
+  /** v2: what the committee was trying to establish */
+  question?: string;
+  /** v2: chronological moments — who said what, when */
+  thread?: TopicMoment[];
+  agency_position?: string;
+  outcome?: string;
+  figures?: SectionFigure[];
+  actions?: SectionAction[];
+  aliases?: string[];
+  truncated?: boolean;
 }
 
 export interface HearingSections {
@@ -248,6 +280,9 @@ export function fetchSections(
           (i) => Number.isInteger(i) && i >= 0 && i < sections.length,
         ),
         positions: asArray<HearingTopic["positions"][number]>(t.positions),
+        thread: t.thread ? asArray<TopicMoment>(t.thread) : undefined,
+        figures: t.figures ? asArray<SectionFigure>(t.figures) : undefined,
+        actions: t.actions ? asArray<SectionAction>(t.actions) : undefined,
       }));
       return {
         ...doc,
