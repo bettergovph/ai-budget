@@ -24,6 +24,7 @@ import {
   type HearingSection,
   type HearingSections,
   type HearingTopic,
+  type SectionFigure,
   type TranscriptBlock,
 } from '../lib/hearings';
 import '../nep2027.css';
@@ -186,6 +187,35 @@ function TopicThread({ topic, seek }: { topic: HearingTopic; seek: (ms: number) 
   );
 }
 
+/** Figures spoken on the topic as cue chips; long lists fold past the first
+ *  eight so a presentation-heavy topic doesn't bury its thread. */
+function TopicFigures({ figures, seek }: { figures: SectionFigure[]; seek: (ms: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const PREVIEW = 8;
+  const shown = open ? figures : figures.slice(0, PREVIEW);
+  return (
+    <p className="hearing-topic-figures">
+      <span className="hearing-secrefs-label">Figures</span>
+      {shown.map((f, j) => (
+        <button
+          key={j}
+          type="button"
+          className="hearing-figure-chip"
+          onClick={() => seek(f.seconds * 1000)}
+          title={`${f.what} — ${f.timestamp}`}
+        >
+          <strong>{f.amount_text}</strong> {f.what}
+        </button>
+      ))}
+      {figures.length > PREVIEW && (
+        <button type="button" className="hearing-thread-toggle" onClick={() => setOpen(!open)}>
+          {open ? 'Fewer' : `+${figures.length - PREVIEW} more`}
+        </button>
+      )}
+    </p>
+  );
+}
+
 function TopicsTab({ topics, seek, goToSection }: TopicsTabProps) {
   return (
     <ol className="hearing-topic-list">
@@ -224,22 +254,7 @@ function TopicsTab({ topics, seek, goToSection }: TopicsTabProps) {
               ))}
             </ul>
           )}
-          {(t.figures?.length ?? 0) > 0 && (
-            <p className="hearing-topic-figures">
-              <span className="hearing-secrefs-label">Figures</span>
-              {t.figures!.map((f, j) => (
-                <button
-                  key={j}
-                  type="button"
-                  className="hearing-figure-chip"
-                  onClick={() => seek(f.seconds * 1000)}
-                  title={`${f.what} — ${f.timestamp}`}
-                >
-                  <strong>{f.amount_text}</strong> {f.what}
-                </button>
-              ))}
-            </p>
-          )}
+          {(t.figures?.length ?? 0) > 0 && <TopicFigures figures={t.figures!} seek={seek} />}
           {(t.actions?.length ?? 0) > 0 && (
             <ul className="hearing-topic-actions">
               {t.actions!.map((a, j) => (
