@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Type-check and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` requires package-lock.json to agree with package.json. That
+      # disagreeing is itself worth catching, so this is not softened to
+      # `npm install`.
+      - run: npm ci
+
+      # `tsc -b && vite build` — type errors fail the job.
+      # No secrets, no Wrangler auth, no D1 or R2 access is involved.
+      - run: npm run build
+
+  lint:
+    name: ESLint (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # ESLint currently reports 16 pre-existing errors on main, so this job
+      # cannot block merges yet without failing every pull request on arrival.
+      # It runs so the output is visible and so new problems are attributable
+      # to the change that introduced them.
+      #
+      # Once the existing errors are cleared, drop `continue-on-error` and this
+      # becomes a required check like the build.
+      - run: npm run lint
+        continue-on-error: true

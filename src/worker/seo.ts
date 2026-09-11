@@ -11,7 +11,7 @@
  * the same D1 tables.
  */
 
-import { deptTitle, pageMeta, type PageMeta } from "../lib/seo";
+import { deptTitle, NOT_FOUND_META, isKnownRoute, pageMeta, type PageMeta } from "../lib/seo";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -74,10 +74,17 @@ export async function serveSpaHtml(request: Request, env: Env, url: URL): Promis
   const contentType = res.headers.get("Content-Type") ?? "";
   if (!contentType.includes("text/html")) return res;
 
-  const meta = await enhanceWithDeptName(env, url.pathname, pageMeta(url.pathname));
+  // A path that matches no route still gets the SPA shell as its body — the
+  // client router redirects it home — but it must not answer 200, or crawlers
+  // index every typo as a duplicate of the home page.
+  const known = isKnownRoute(url.pathname);
+
+  const meta = known
+    ? await enhanceWithDeptName(env, url.pathname, pageMeta(url.pathname))
+    : NOT_FOUND_META;
   const canonical = canonicalFor(url.pathname);
 
-  return new HTMLRewriter()
+  const rewritten = new HTMLRewriter()
     .on("title", {
       element(el) {
         el.setInnerContent(meta.title);
@@ -89,11 +96,71 @@ export async function serveSpaHtml(request: Request, env: Env, url: URL): Promis
     .on('meta[property="og:description"]', setAttr("content", meta.description))
     .on('meta[property="og:url"]', setAttr("content", canonical))
     .transform(res);
+
+  if (known) return rewritten;
+
+  return new Response(rewritten.body, {
+    status: 404,
+    headers: rewritten.headers,
+  });
 }
 
 // ---------------------------------------------------------------------------
-// robots.txt + sitemap.xml
+// robots.txt + llms.txt + sitemap.xml
 // ---------------------------------------------------------------------------
+
+/**
+ * llms.txt — an orientation page for AI agents and the people wiring them up.
+ *
+ * The site already ships a machine-readable OpenAPI document and an MCP server;
+ * this is the human-readable index that points at them, plus the four caveats
+ * an agent has to know before it quotes a figure at anyone.
+ */
+export function llmsTxt(): Response {
+  const body = `# BetterGov Budget
+
+> Philippine national budget data: the enacted General Appropriations Act (GAA)
+> for FY2020-2026, and the FY2027 National Expenditure Program (NEP) - the
+> Executive's PHP 7.20T proposal, every figure paired with its FY2026 GAA
+> baseline. Read-only, no authentication, CORS open.
+
+## Machine interfaces
+
+- [OpenAPI 3.1 specification](${CANONICAL_HOST}/api/v1/openapi.json): the full contract. Start here.
+- [REST API index](${CANONICAL_HOST}/api/v1): names every endpoint.
+- [API documentation](${CANONICAL_HOST}/docs): the same endpoints, annotated.
+- MCP server at ${CANONICAL_HOST}/mcp: stateless streamable HTTP, POST only, protocol 2025-06-18. Nine tools over the same data layer as the REST API, so the two cannot disagree.
+
+## Source data
+
+- [bettergovph/gaa on Hugging Face](https://huggingface.co/datasets/bettergovph/gaa): 4.5M rows, CC0-1.0.
+- [Methodology and data quality](${CANONICAL_HOST}/methodology): field mapping, corrections, coverage caveats.
+- [Glossary](${CANONICAL_HOST}/glossary): 200+ Philippine budget terms in plain language.
+
+## Before you quote a figure
+
+- **Appropriations are not spending.** A GAA figure is legal authority to spend. It is not an obligation, and not a disbursement. Saying an agency "spent" its appropriation is wrong.
+- **The FY2027 NEP is a proposal, not law.** Congress moves these numbers before enacting them as the GAA. Compare NEP to NEP, or GAA to GAA - not across the two.
+- **Amounts are exact pesos.** Every response carries \`currency\` and \`scale\` in its \`meta\`. The upstream source publishes thousands of pesos; the conversion is already applied.
+- **UACS object codes were recoded between 2025 and 2026.** Object-level year-over-year comparisons spanning that boundary are unsafe without checking the methodology page first.
+
+## Identifiers
+
+GAA department ids are two digits (\`07\` is DepEd, \`18\` is DPWH). The FY2027 NEP adds two synthetic groups: \`SPF\` (special purpose funds) and \`AUTO\` (automatic appropriations). \`AUTO\` is not department \`04\`. List them from /api/v1/gaa/departments rather than hardcoding.
+
+List endpoints paginate with opaque keyset cursors: pass \`next_cursor\` back as \`cursor\`. Cursors are bound to the query's filters, so changing a filter invalidates them.
+
+## Attribution
+
+A community project of [BetterGov.PH](https://bettergov.ph). AI-assisted aggregation and editorial material should be verified against the official DBM source documents before citation.
+`;
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    },
+  });
+}
 
 export function robotsTxt(): Response {
   return new Response(
