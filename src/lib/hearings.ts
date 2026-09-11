@@ -7,6 +7,19 @@
  */
 
 import { dataUrl } from "./data-url";
+import { numbersInText } from "./format";
+
+/** Format every prose field in a fetched hearing record without mutating it. */
+function formatRecordText<T>(value: T): T {
+  if (typeof value === "string") return numbersInText(value) as T;
+  if (Array.isArray(value)) return value.map(formatRecordText) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, formatRecordText(item)]),
+    ) as T;
+  }
+  return value;
+}
 
 export interface Hearing {
   video_id: string;
@@ -94,7 +107,7 @@ export function fetchBrief(videoId: string): Promise<HearingBrief | null> {
     (text) => {
       if (!text) return null;
       try {
-        return JSON.parse(text) as HearingBrief;
+        return formatRecordText(JSON.parse(text)) as HearingBrief;
       } catch {
         return null;
       }
@@ -262,7 +275,7 @@ export function fetchSections(
   return fetchMarkdown(hearingAsset(videoId, "sections.json")).then((text) => {
     if (!text) return null;
     try {
-      const doc = JSON.parse(text) as Partial<HearingSections>;
+      const doc = formatRecordText(JSON.parse(text)) as Partial<HearingSections>;
       if (!Array.isArray(doc.sections) || !Array.isArray(doc.topics)) {
         return null;
       }
@@ -337,14 +350,14 @@ export async function fetchHearings(): Promise<Hearing[]> {
   const r = await fetch("/api/hearings?limit=500");
   if (!r.ok) throw new Error(`hearings API ${r.status}`);
   const body = (await r.json()) as { hearings: { data: Hearing[] } };
-  return body.hearings.data;
+  return formatRecordText(body.hearings.data);
 }
 
 export async function fetchHearing(videoId: string): Promise<Hearing | null> {
   const r = await fetch(`/api/hearings/${encodeURIComponent(videoId)}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`hearings API ${r.status}`);
-  return (await r.json()) as Hearing;
+  return formatRecordText(await r.json()) as Hearing;
 }
 
 /** R2 asset URL for a hearing file, e.g. hearingAsset(id, "summary.md"). */
@@ -416,7 +429,9 @@ export function groupBlocks(segments: RawSegment[]): TranscriptBlock[] {
       index: blocks.length,
       startMs: Number(buf[0].startMs),
       endMs: Number(buf[buf.length - 1].endMs),
-      text: buf.map((s) => s.text.trim()).join(" ").replace(/\s+/g, " ").trim(),
+      text: numbersInText(
+        buf.map((s) => s.text.trim()).join(" ").replace(/\s+/g, " ").trim(),
+      ),
       ...(speaker ? { speaker } : {}),
     });
     buf = [];
