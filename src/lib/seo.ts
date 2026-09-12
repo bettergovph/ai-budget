@@ -16,6 +16,78 @@
 export interface PageMeta {
   title: string;
   description: string;
+  /** Social preview image; falls back to the site card in index.html. */
+  image?: string;
+  imageAlt?: string;
+  imageWidth?: string;
+  imageHeight?: string;
+}
+
+/** Fields the hearings SEO needs, mirroring the D1 `hearings` row. */
+export interface HearingSeoRow {
+  video_id: string;
+  title: string | null;
+  agency: string | null;
+  fiscal_year: string | null;
+  published_at: string | null;
+  length_text: string | null;
+  has_sections: number | null;
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "2026-09-02" → "2 September 2026"; anything unparseable returns "". */
+export function longDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+  if (!m) return "";
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${Number(m[3])} ${month} ${m[1]}` : "";
+}
+
+/**
+ * Metadata for one hearing page.
+ *
+ * The YouTube titles are shouted and repetitive ("COMMITTEE ON APPROPRIATIONS -
+ * BUDGET BRIEFING/HEARINGS OF THE FY 2027 PROPOSED BUDGET (DOH)"), which reads
+ * badly in a search result and buries the part people actually search for. Build
+ * the title from the fields instead, and use the video's own thumbnail as the
+ * social card so a shared link looks like the hearing it points to.
+ */
+export function hearingMeta(row: HearingSeoRow): PageMeta {
+  const date = longDate(row.published_at);
+  const fy = row.fiscal_year ? `FY ${row.fiscal_year}` : "";
+  const who = row.agency
+    ? `${row.agency} budget hearing`
+    : "Committee on Appropriations hearing";
+  const title = [
+    [who, date].filter(Boolean).join(", "),
+    [fy, "House Committee on Appropriations"].filter(Boolean).join(" · "),
+  ]
+    .filter(Boolean)
+    .join(" — ") + ` · ${SITE}`;
+
+  const subject = row.agency
+    ? `the ${row.agency}'s ${fy || "proposed"} budget`
+    : `the ${fy || "proposed"} national budget`;
+  const record = row.has_sections
+    ? "Read what was said topic by topic, with every question, answer and peso figure timestamped to the video"
+    : "Watch alongside the full transcript, timestamped to the video";
+  const description =
+    `${record}. House Committee on Appropriations deliberations on ${subject}` +
+    (date ? `, streamed ${date}` : "") +
+    (row.length_text ? ` (${row.length_text})` : "") + ".";
+
+  return {
+    title,
+    description,
+    image: `https://i.ytimg.com/vi/${row.video_id}/maxresdefault.jpg`,
+    imageAlt: `${who}${date ? `, ${date}` : ""} — House Committee on Appropriations`,
+    imageWidth: "1280",
+    imageHeight: "720",
+  };
 }
 
 const SITE = "BetterGov Budget";
@@ -61,11 +133,11 @@ export function pageMeta(pathname: string): PageMeta {
   }
   if (p === "/hearings") {
     return {
-      title: `Budget Briefing/Hearings — House Committee on Appropriations · ${SITE}`,
+      title: `Budget Hearings — House Committee on Appropriations FY 2027 · ${SITE}`,
       description:
-        "Every FY 2027 budget briefing and hearing streamed by the Philippine House of " +
-        "Representatives' Committee on Appropriations, with full transcripts, summaries, " +
-        "and highlights, cued to the video.",
+        "Every FY 2027 budget briefing and hearing of the Philippine House Committee on " +
+        "Appropriations: searchable transcripts, a topic-by-topic record of what each " +
+        "agency was asked and answered, and every peso figure timestamped to the video.",
     };
   }
   if (p.startsWith("/hearings/")) {
@@ -163,7 +235,6 @@ export function pageMeta(pathname: string): PageMeta {
       description: DEFAULT_META.description,
     };
   }
-
   return DEFAULT_META;
 }
 
