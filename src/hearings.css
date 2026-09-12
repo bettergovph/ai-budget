@@ -296,6 +296,15 @@
   overflow-y: auto;
 }
 
+/* Give the record enough room to scan topics and their summaries on desktop.
+   The video and record may together exceed one viewport on shorter displays;
+   the page can scroll while the record keeps its own internal scroll area. */
+@media (min-width: 901px) {
+  .hearing-panel:not(.hearing-panel-pending) {
+    min-height: clamp(460px, 68vh, 760px);
+  }
+}
+
 /* Small screens: the column flows in the page and the two long boxes — the
    record panel and the transcript — each become their own scroll box. Without
    a cap a 9-hour timeline pushes the transcript tens of thousands of px down
