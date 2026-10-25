@@ -27,8 +27,10 @@ import {
   type SectionFigure,
   type TranscriptBlock,
 } from '../lib/hearings';
+import { datasetPath, type DatasetKey } from '../lib/hgab';
 import '../nep2027.css';
 import '../hearings.css';
+import '../hgab-links.css';
 
 /* --- minimal YouTube IFrame Player API bridge --------------------------- */
 
@@ -432,6 +434,27 @@ function TimelineTab({ sections, activeSection, highlighted, seek }: TimelineTab
   );
 }
 
+/* --- the House bill ------------------------------------------------------ */
+
+/**
+ * Hearings whose agency has project-level rows in the FY2027 House bill
+ * section. The D1 `agency` field is a short tag ("DPWH", "DOH", "DA and NIA",
+ * "DOE & ERC"), so the match is case-insensitive on whole words — a plain
+ * substring test would send the DAR hearing to the DA dataset. One hearing can
+ * map to two datasets (DA and NIA are heard together).
+ */
+const HGAB_AGENCY_LINKS: ReadonlyArray<{ test: RegExp; key: DatasetKey; label: string }> = [
+  { test: /\bdpwh\b|public works/i, key: 'dpwh', label: 'DPWH' },
+  { test: /\bda\b|agriculture/i, key: 'fmr', label: 'DA (farm-to-market roads)' },
+  { test: /\bdoh\b|department of health/i, key: 'hfep', label: 'DOH (Health Facilities Enhancement Program)' },
+  { test: /\bnia\b|irrigation/i, key: 'nia', label: 'NIA (irrigation)' },
+];
+
+function hgabLinksFor(agency: string | null | undefined) {
+  if (!agency) return [];
+  return HGAB_AGENCY_LINKS.filter((l) => l.test.test(agency));
+}
+
 /* --- page ---------------------------------------------------------------- */
 
 export default function HearingDetail() {
@@ -712,6 +735,8 @@ export default function HearingDetail() {
     return note ? `${line} — ${note}` : line;
   }, [sections, hearing?.transcript_source]);
 
+  const hgabLinks = hgabLinksFor(hearing?.agency);
+
   if (notFound) {
     return (
       <div className="hearings-page">
@@ -907,6 +932,24 @@ export default function HearingDetail() {
                 </a>
               )}
             </header>
+
+            {hgabLinks.length > 0 && (
+              <aside
+                className="hgab-crosslink hgab-crosslink-compact"
+                aria-label="Related: the FY2027 House bill"
+              >
+                <p className="hgab-crosslink-eyebrow">Related · FY2027 House bill</p>
+                <ul>
+                  {hgabLinks.map((l) => (
+                    <li key={l.key}>
+                      <Link to={datasetPath(l.key)}>
+                        Compare the House bill against the NEP for {l.label} →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            )}
 
             <div className="hearing-layout">
               <section className="hearing-player-col" aria-label="Video">

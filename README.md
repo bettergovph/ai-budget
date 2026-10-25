@@ -4,6 +4,8 @@ A read-only explorer for the Philippine General Appropriations Act (GAA), coveri
 
 A companion microsite at `/2027` covers the FY2027 National Expenditure Program — the Executive's ₱7.20 T proposal — measured line by line against the FY2026 GAA.
 
+A second companion section at `/hgab` covers the FY2027 House General Appropriations Bill — House Bill 10858 as printed for second and third reading — compared row by row against the NEP for the four programs where the bill prints project-level detail: DPWH, DA farm-to-market roads, the DOH Health Facilities Enhancement Program and NIA irrigation. Every status, pairing and amount is carried from the BetterGov [DPWH-NEP-HB-2027-ANALYSIS](https://github.com/csiiiv/DPWH-NEP-HB-2027-ANALYSIS) workbench at a pinned commit and reconciled against `data/2027` before it is published. Unmatched rows are candidates, not findings.
+
 The application is built with React, TypeScript, and Vite. It runs on Cloudflare Workers, uses D1 for queryable department and budget-cycle data, and reads larger JSON and Parquet assets from Cloudflare R2. DuckDB-Wasm powers in-browser analysis of columnar data.
 
 ## Requirements
@@ -38,6 +40,9 @@ To serve data from `public/data` instead, leave `VITE_DATA_BASE_URL` unset. In t
 | `npm run import:nep2027` | Build the FY2027 NEP tree in `data/2027` from the DBM extract |
 | `npm run verify:nep2027` | Reconcile `data/2027` against the raw FY2027 CSV |
 | `npm run upload:nep2027` | Publish the FY2027 assets to R2 under `2027/` |
+| `npm run import:hgab` | Build the FY2027 HGAB tree in `data/hgab/2027` from the pinned workbench commit — overview, per-dataset summaries, project parquet, source PDFs |
+| `npm run verify:hgab` | Reconciliation gate: the HGAB tree's NEP side against `data/2027`, the bridge identity per dataset, hashes and required files; exits non-zero on failure |
+| `npm run upload:hgab` | Publish the FY2027 HGAB assets to R2 under `hgab/2027/` (refuses to run on a failed verify) |
 | `npm run build:parquet -- --all` | Convert heavy department JSON tables to partitioned Parquet |
 | `npm run build:sqlite -- --all --reset` | Rebuild the SQLite database used to prepare D1 data |
 | `npm run dump:sql` | Export the SQLite database as D1-compatible SQL |
@@ -89,6 +94,10 @@ The main routes are:
 - `/d/:deptId/*` — department overview, trends, programs, objects, data, reports, and budget-cycle views
 - `/2027` — FY2027 National Expenditure Program microsite (overview, `/2027/d/:deptId`,
   `/2027/explore`, `/2027/methodology`)
+- `/hgab` — FY2027 House General Appropriations Bill section; redirects to `/hgab/2027`
+  (overview), with `/hgab/2027/:dataset?view=…` for one program's hub (`dpwh`, `fmr`,
+  `hfep`, `nia`), `/hgab/2027/:dataset/p/:id` for one comparison record, and
+  `/hgab/2027/sources` and `/hgab/2027/methodology`
 - `/api/dept/:deptId/*` — internal Worker endpoints backed by D1 (used by the SPA)
 - `/api/v1/*` — public REST API (see below)
 - `/docs` — public API documentation
@@ -150,6 +159,26 @@ VITE_DATA_BASE_URL=
 ```
 
 That serves every dataset from the `public/data` symlink instead. Delete it once `npm run upload:nep2027` has run.
+
+The FY2027 House bill section has the same shape — the pinned workbench in, `data/hgab/2027` out, nothing in D1:
+
+```bash
+npm run import:hgab
+npm run verify:hgab
+npm run upload:hgab -- --dry-run
+npm run upload:hgab
+```
+
+```text
+data/hgab/2027/
+  manifest.json                 what ran, when, from which pipeline commit
+  overview.json                 datasets, bridges, documents, reconciliation
+  <dataset>/summary.json        controls, dimensions, top lists, readings
+  <dataset>/projects.parquet    one row per comparison record (DuckDB-Wasm)
+  pdf/<doc_key>.pdf             the source documents the evidence links open
+```
+
+`<dataset>` is `dpwh`, `fmr`, `hfep` or `nia`. Amounts are integer pesos; null means "this stage has no record", never zero. The importer does not re-derive matching — every status, pairing and amount comes from the workbench's own builders — and the verifier refuses to let a build upload unless its NEP side reconciles to `data/2027` and the bridge identity (House-only − NEP-only + increased − decreased + segment-scope review = House − NEP) holds for every dataset. The browser reads the tree from `VITE_DATA_BASE_URL` under `hgab/2027/`, exactly as `2027/` is served. See [FY2027 HGAB data pipeline](docs/hgab-data.md) and [the plan and implementation notes](docs/hgab-plan.md).
 
 The optional NEP → GAA → execution dataset has a separate import, verification, and D1 loading workflow. See [Budget-cycle import and normalization](docs/budget-cycle-import.md) for the source workbook requirements, crosswalk rules, quality checks, and release procedure.
 

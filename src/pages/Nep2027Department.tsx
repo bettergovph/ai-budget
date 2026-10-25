@@ -15,10 +15,15 @@ import Nep2027Hierarchy from '../components/Nep2027Hierarchy';
 import * as fmt from '../lib/format';
 import { deptTitle } from '../lib/seo';
 import {
+  STAGE_LABELS, datasetPath, formatPct as formatHgabPct, loadHgabOverview, pctChange as hgabPctChange,
+  type DatasetKey, type HgabDatasetMeta,
+} from '../lib/hgab';
+import {
   BASE_YEAR, NEP_YEAR, SYNTHETIC_DEPTS, formatPct, loadNepDept, loadNepIndex, pctChange,
   type NepDeptSummary, type NepNationalIndex, type NepRollupRow,
 } from '../lib/nep2027';
 import '../nep2027.css';
+import '../hgab-links.css';
 
 const TABS = [
   { key: 'hierarchy', label: 'Hierarchy' },
@@ -128,6 +133,8 @@ export default function Nep2027Department() {
             },
           ]}
         />
+
+        <HgabCallout deptId={deptId} />
 
         <div className="nep-tabs" role="tablist">
           {TABS.map((t) => (
@@ -323,5 +330,86 @@ function ProgramMovers({ rows, emptyLabel }: { rows: NepRollupRow[]; emptyLabel?
         </li>
       ))}
     </ol>
+  );
+}
+
+/* --- the House bill ------------------------------------------------------- */
+
+/**
+ * Which `/hgab/2027` dataset carries this group's House-bill detail. HB 10858
+ * prints project-level rows for four programs only, so every other group has
+ * no call-out. Keyed by our department id; matches HgabDatasetMeta.dept_id.
+ */
+const HGAB_DATASET_BY_DEPT: Readonly<Record<string, DatasetKey>> = {
+  '18': 'dpwh', // DPWH national infrastructure
+  '05': 'fmr',  // DA farm-to-market roads
+  '13': 'hfep', // DOH Health Facilities Enhancement Program
+  '35': 'nia',  // BSGC → NIA irrigation
+};
+
+/**
+ * A quiet card under the KPI strip: the compared population's NEP total
+ * against the latest House reading, the dataset's grain and scope, and links
+ * into the hub. The overview is optional context — when it is not published
+ * yet (or fails to parse) the card renders nothing rather than an error.
+ */
+function HgabCallout({ deptId }: { deptId: string }) {
+  const key = HGAB_DATASET_BY_DEPT[deptId];
+  // Keyed by dataset so a card for the previous group never paints over the
+  // current one while its fetch is in flight.
+  const [loaded, setLoaded] = useState<{ key: DatasetKey; meta: HgabDatasetMeta | null } | null>(null);
+
+  useEffect(() => {
+    if (!key) return;
+    let live = true;
+    loadHgabOverview()
+      .then((o) => {
+        if (live) setLoaded({ key, meta: o.datasets.find((d) => d.key === key) ?? null });
+      })
+      .catch(() => { /* optional context: no HGAB data, no card */ });
+    return () => { live = false; };
+  }, [key]);
+
+  const meta = loaded?.key === key ? loaded.meta : null;
+  if (!key || !meta) return null;
+
+  const nep = meta.totals.nep_php;
+  const stage: 'hgab2' | 'hgab3' = meta.totals.hgab3_php != null ? 'hgab3' : 'hgab2';
+  const house = stage === 'hgab3' ? meta.totals.hgab3_php : meta.totals.hgab2_php;
+  if (house == null) return null;
+  const delta = house - nep;
+  const houseRows = meta.counts[stage];
+
+  return (
+    <aside className="hgab-crosslink" aria-label="The House bill for this group">
+      <p className="hgab-crosslink-eyebrow">The House bill for this group · {meta.label}</p>
+      <p className="hgab-crosslink-figures">
+        <span>
+          <em>{STAGE_LABELS.nep.short}</em>
+          <strong>{fmt.shortPhp(nep)}</strong>
+        </span>
+        <span>
+          <em>{STAGE_LABELS[stage].short}</em>
+          <strong>{fmt.shortPhp(house)}</strong>
+        </span>
+        <span className={delta >= 0 ? 'is-up' : 'is-down'}>
+          <em>Δ</em>
+          <strong>{delta >= 0 ? '+' : '−'}{fmt.shortPhp(Math.abs(delta))}</strong>
+          <span className="hgab-crosslink-pct">{formatHgabPct(hgabPctChange(house, nep))}</span>
+        </span>
+        <span className="pill nep-pill">
+          {meta.counts.nep.toLocaleString()} NEP rows
+          {houseRows != null && ` · ${houseRows.toLocaleString()} House rows`}
+        </span>
+      </p>
+      <p className="hgab-crosslink-scope">
+        <span className="hgab-crosslink-grain">{meta.grain}.</span> {meta.scope}
+      </p>
+      <p className="hgab-crosslink-links">
+        <Link to={datasetPath(key)}>Open in HGAB →</Link>
+        <Link to={datasetPath(key, 'projects')}>Projects</Link>
+        <Link to={datasetPath(key, 'changes')}>Changes</Link>
+      </p>
+    </aside>
   );
 }
