@@ -203,14 +203,26 @@ export function pageMeta(pathname: string): PageMeta {
   }
 
   // --- FY2027 House General Appropriations Bill (HB 10858) ---------------
-  if (p === "/hgab" || p === "/hgab/2027") {
+  // `/hgab` and `/hgab/2027` redirect to the introduction, so they share its
+  // metadata; the Worker folds their canonical onto `/hgab/2027/intro` too.
+  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") {
     return {
-      title: `House Appropriations Bill 2027 — What the House Changed, Project by Project · ${SITE}`,
+      title: `House Bill 10858 against the 2027 NEP — Four Programs, Project by Project · ${SITE}`,
       description:
-        "House Bill 10858, the FY 2027 General Appropriations Bill at second and third reading, " +
-        "compared project by project against the President's NEP for DPWH infrastructure, " +
-        "farm-to-market roads, health facilities and irrigation: insertions, deletions, increases " +
-        "and cuts, each traceable to a PDF page.",
+        "House Bill 10858, the FY 2027 General Appropriations Bill at third reading, compared " +
+        "project by project with the President's NEP for DPWH infrastructure, farm-to-market " +
+        "roads, health facilities and irrigation: program and region totals, the five-group " +
+        "bridge, foreign-assisted projects and the reading-to-reading difference, in short " +
+        "illustrated chapters.",
+    };
+  }
+  if (p === "/hgab/2027/overview") {
+    return {
+      title: `House Bill 10858 vs NEP 2027 — Dashboard View · ${SITE}`,
+      description:
+        "Dashboard view of House Bill 10858 against the FY 2027 NEP: stage totals, record counts and " +
+        "the five-group bridge for DPWH infrastructure, farm-to-market roads, health facilities and " +
+        "irrigation, the reconciliation against this portal's NEP data, and the printed source documents.",
     };
   }
   if (p === "/hgab/2027/sources") {

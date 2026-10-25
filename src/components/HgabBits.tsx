@@ -23,7 +23,11 @@ import { DATASET_SHORT } from '../lib/hgab-ui';
 import '../hgab.css';
 
 const SECTION_NAV: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
-  { to: HGAB_ROOT, label: 'Overview', match: (p) => p === HGAB_ROOT || p === '/hgab' },
+  {
+    to: `${HGAB_ROOT}/intro`,
+    label: 'Intro',
+    match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/intro`,
+  },
   { to: `${HGAB_ROOT}/dpwh`, label: 'DPWH' },
   { to: `${HGAB_ROOT}/fmr`, label: 'Farm-to-Market Roads' },
   { to: `${HGAB_ROOT}/hfep`, label: 'Health Facilities' },

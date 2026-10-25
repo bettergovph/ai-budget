@@ -37,7 +37,7 @@ export default function HgabOverview() {
   const [districts, setDistricts] = useState<HgabDistrictIndex | null>(null);
 
   useEffect(() => {
-    document.title = pageMeta(HGAB_ROOT).title;
+    document.title = pageMeta(`${HGAB_ROOT}/overview`).title;
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
     loadHgabDistricts().then(setDistricts).catch(() => { /* call-out renders without the figure */ });
   }, []);
@@ -81,6 +81,10 @@ export default function HgabOverview() {
       />
 
       <main className="nep-main">
+        <p className="hgab-recon-note" style={{ marginBottom: 24 }}>
+          Dashboard view. The narrative introduction is at{' '}
+          <Link to={`${HGAB_ROOT}/intro`}>/hgab/2027/intro</Link>.
+        </p>
         <HgabStageStrip />
 
         {/* ---- one card per dataset ---- */}

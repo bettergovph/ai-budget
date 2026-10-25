@@ -1,0 +1,703 @@
+/* FY2027 HGAB introduction (/hgab/2027/intro).
+   A sibling of the NEP story deck (nep2027-story.css): the same bands,
+   chapter rhythm and reveal; the charts here are CSS bars and dots, scoped to
+   .hgi-* so nothing leaks into the hubs. Two tones carry every stage
+   comparison — one House accent, one neutral NEP grey — and the bridge
+   groups use the section's own --hgab-* colours (hgab.css). */
+
+.hgab-intro {
+  --hgi-house: var(--accent);
+  --hgi-nep: var(--ink-3);
+}
+
+/* The bill's title is long; take the deck's display scale down a step so it
+   holds on four lines at most, and let the chapter headings carry numbers. */
+.hgab-intro .story-hero-title {
+  font-size: clamp(38px, 7vw, 108px);
+  max-width: 19ch;
+}
+.hgab-intro .story-h {
+  font-size: clamp(32px, 4.6vw, 64px);
+  max-width: 980px;
+  text-wrap: balance;
+}
+.hgi-hero-dek {
+  font-family: var(--font-body);
+  font-size: clamp(16px, 1.6vw, 21px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.86);
+  max-width: 760px;
+  margin: 26px 0 0;
+}
+
+/* --- shared bits --------------------------------------------------------- */
+
+.hgi-signed { font-variant-numeric: tabular-nums; }
+.hgi-signed.is-up { color: var(--positive); }
+.hgi-signed.is-down { color: var(--negative); }
+.hgi-muted { color: var(--ink-3); font-weight: 400; }
+
+/* The one data line under a heading: stage, figure, stage, figure. */
+.hgi-figline {
+  font-family: var(--font-body);
+  font-size: clamp(15px, 1.4vw, 18px);
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 32px;
+  max-width: 820px;
+}
+.hgi-figline strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.hgi-note {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 680px;
+  margin: 28px 0 0;
+}
+.hgi-small {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  margin: 10px 0 0;
+}
+.hgi-sub-h {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 40px 0 10px;
+}
+.hgab-intro .story-cta { margin-top: 32px; }
+/* Containing block for the screen-reader tables, so nothing absolutely
+   positioned can escape the deck's overflow clipping. */
+.hgi-chapter { position: relative; }
+
+/* --- 01 · paired bars ---------------------------------------------------- */
+
+.hgi-pairs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 36px 48px;
+  margin-top: 8px;
+}
+.hgi-pair {
+  border-top: 2px solid var(--ink);
+  padding-top: 14px;
+  min-width: 0;
+}
+.hgi-pair-agency {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+}
+.hgi-pair h3,
+.hgi-annex h3 {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0 0 14px;
+}
+.hgi-pair h3 a,
+.hgi-annex h3 a { color: var(--ink); text-decoration: none; }
+.hgi-pair h3 a:hover,
+.hgi-annex h3 a:hover { color: var(--accent); }
+
+.hgi-bars { display: grid; gap: 8px; }
+.hgi-bar-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.hgi-bar-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgi-bar-track {
+  display: block;
+  height: 16px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hgi-bar { display: block; height: 100%; }
+.hgi-bar.is-nep { background: var(--hgi-nep); }
+.hgi-bar.is-house { background: var(--hgi-house); }
+.hgi-bar-val {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+  min-width: 68px;
+  text-align: right;
+}
+.hgi-pair-delta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 14px 0 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.hgi-pair-delta strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(24px, 2.6vw, 34px);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.hgi-pair-counts {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 10px 0 0;
+}
+.hgi-pair-grain {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+  margin: 6px 0 0;
+}
+.hgi-pair-grain span { color: var(--ink-3); font-weight: 600; }
+
+/* --- diverging bars (02, 07) --------------------------------------------- */
+
+.hgi-div { display: grid; gap: 10px; }
+.hgi-div-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 300px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+.hgi-div-label {
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.3;
+  color: var(--ink);
+  min-width: 0;
+}
+.hgi-div-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hgi-div-track {
+  position: relative;
+  display: block;
+  height: 18px;
+  background: var(--paper-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hgi-div-axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--ink-3);
+}
+.hgi-div-bar { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+.hgi-div-bar.is-up { background: var(--hgab-increased); }
+.hgi-div-bar.is-down { background: var(--hgab-decreased); }
+.hgi-div-val {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  min-width: 84px;
+  text-align: right;
+  color: var(--ink-3);
+}
+.hgi-div.is-compact { gap: 6px; }
+.hgi-div.is-compact .hgi-div-row { grid-template-columns: minmax(96px, 1.1fr) minmax(0, 1fr) auto; gap: 10px; }
+.hgi-div.is-compact .hgi-div-label {
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hgi-div.is-compact .hgi-div-track { height: 10px; }
+.hgi-div.is-compact .hgi-div-val { font-size: 12px; min-width: 64px; }
+
+/* --- 03 · big figure and ranked lists ------------------------------------ */
+
+.hgab-intro .story-big-num.hgi-big {
+  font-size: clamp(64px, 11vw, 160px);
+  color: var(--ink);
+  margin: 8px 0 12px;
+}
+.hgi-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+.hgi-rank li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(90px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgi-rank-tight li { grid-template-columns: minmax(0, 1.6fr) auto auto; }
+.hgi-rank-name { min-width: 0; }
+.hgi-rank-name a {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hgi-rank-name a:hover { color: var(--accent); text-decoration: underline; }
+.hgi-rank-meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hgi-rank-bars { display: grid; gap: 3px; }
+.hgi-rank-bars span { display: block; height: 7px; border-radius: 1px; min-width: 2px; }
+.hgi-rank-bars .is-nep { background: var(--hgi-nep); }
+.hgi-rank-bars .is-house { background: var(--hgi-house); }
+.hgi-rank-amts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.hgi-rank-arrow { color: var(--ink-mute); }
+.hgi-rank li > strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 78px;
+  text-align: right;
+  color: var(--ink);
+}
+
+/* --- 04 · composition bar and legends ------------------------------------ */
+
+/* The group colour comes from `.is-<group>` (hgab.css) on the segment or
+   legend item; the fallback sits on the container so it inherits without
+   out-ranking those rules. */
+.hgi-comp {
+  --hgab-group: var(--ink-3);
+  display: flex;
+  height: 48px;
+  gap: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hgi-comp-seg {
+  display: block;
+  min-width: 3px;
+  background: var(--hgab-group);
+}
+.hgi-legend {
+  --hgab-group: var(--ink-3);
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 24px;
+}
+.hgi-legend li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  grid-template-areas: 'sw label val' 'sw label rows';
+  align-items: baseline;
+  column-gap: 10px;
+  min-width: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgi-swatch {
+  grid-area: sw;
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--hgab-group);
+  align-self: start;
+  margin-top: 3px;
+}
+.hgi-legend-label {
+  grid-area: label;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+}
+.hgi-legend-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-top: 1px;
+}
+.hgi-legend-val {
+  grid-area: val;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hgab-group);
+  white-space: nowrap;
+  text-align: right;
+}
+.hgi-legend-rows {
+  grid-area: rows;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* --- 05 · dumbbell ------------------------------------------------------- */
+
+.hgi-dumb { display: grid; gap: 6px; }
+.hgi-dumb-key {
+  display: flex;
+  gap: 18px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+.hgi-dumb-key span { display: inline-flex; align-items: center; gap: 6px; }
+.hgi-dumb-key .hgi-dot { position: static; transform: none; }
+.hgi-dumb-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 150px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgi-dumb-label {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink);
+}
+.hgi-dumb-track {
+  position: relative;
+  display: block;
+  height: 24px;
+}
+.hgi-dumb-track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--rule);
+}
+.hgi-dumb-line {
+  position: absolute;
+  top: calc(50% - 2px);
+  height: 4px;
+  background: var(--rule);
+  border-radius: 2px;
+}
+.hgi-dot {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-block;
+}
+.hgi-dot.is-nep { background: var(--hgi-nep); }
+.hgi-dot.is-house { background: var(--hgi-house); }
+.hgi-dumb-vals {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.hgi-dumb-delta {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  min-width: 78px;
+  text-align: right;
+  color: var(--ink-3);
+}
+.hgi-dumb-other {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  margin: 14px 0 0;
+}
+.hgi-dumb-other span { font-variant-numeric: tabular-nums; }
+
+/* --- 06 · readings ------------------------------------------------------- */
+
+.hgi-readings {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 24px 56px;
+}
+.hgi-readings .hgi-sub-h { margin-top: 8px; }
+.hgi-readings .hgi-rank li { padding: 9px 0; }
+/* Left list: title, one House bar, amount. Right list: control, 2R → 3R, delta. */
+.hgi-readings .hgi-rank-new li { grid-template-columns: minmax(0, 1.6fr) minmax(90px, 1fr) auto; }
+.hgi-readings .hgi-rank-tight li { grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; }
+.hgi-readings .hgi-rank li > .hgi-rank-amts + strong { min-width: 70px; }
+
+/* --- 07 · annex panels --------------------------------------------------- */
+
+.hgi-annexes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  margin-top: 8px;
+}
+.hgi-annex {
+  border-top: 2px solid var(--ink);
+  padding-top: 14px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.hgi-annex h3 { font-size: 19px; margin-bottom: 8px; }
+.hgi-annex-delta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.hgi-annex-delta strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(28px, 3vw, 40px);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.hgi-annex .hgi-small { margin: 8px 0 16px; }
+.hgi-annex-link {
+  display: inline-block;
+  margin-top: 18px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.hgi-annex-link:hover { text-decoration: underline; }
+
+/* --- 08 · stacked office bars -------------------------------------------- */
+
+.hgi-stacks { display: grid; gap: 18px; }
+.hgi-stack-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.hgi-stack-label {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+}
+.hgi-stack-total {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.hgi-stack {
+  display: flex;
+  height: 44px;
+  gap: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.hgi-stack-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow: hidden;
+}
+.hgi-stack-pct { white-space: nowrap; }
+.is-deo { --hgab-group: var(--hgi-house); }
+.is-co { --hgab-group: var(--ink-2); }
+.is-ro { --hgab-group: var(--ink-mute); }
+.is-un { --hgab-group: var(--stage-2); }
+.hgi-stack-seg { background: var(--hgab-group); }
+.hgi-stack-seg.is-un { color: var(--ink); }
+.hgi-legend-offices { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hgi-legend-offices li { grid-template-areas: 'sw label'; grid-template-columns: 12px minmax(0, 1fr); }
+
+/* --- finale -------------------------------------------------------------- */
+
+.hgi-rules {
+  list-style: none;
+  margin: 28px auto 0;
+  padding: 0;
+  max-width: 760px;
+  text-align: left;
+}
+.hgi-rules li {
+  position: relative;
+  padding: 10px 0 10px 26px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+}
+.hgi-rules li:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.18); }
+.hgi-rules li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  opacity: 0.6;
+}
+.hgi-finale .story-ctas a { min-width: 200px; flex: 1 1 200px; max-width: 260px; }
+.hgi-quiet {
+  margin: -20px 0 36px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+}
+.hgi-quiet a {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+}
+.hgi-quiet a:hover { color: #fff; border-bottom-color: #fff; }
+.hgi-after {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 32px 36px;
+}
+.hgi-after .hgab-disclaimer { max-width: none; }
+
+/* --- motion -------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .hgi-annex-link,
+  .hgi-rank-name a { transition: none; }
+}
+
+/* --- responsive ---------------------------------------------------------- */
+
+@media (max-width: 1000px) {
+  .hgi-annexes { grid-template-columns: 1fr; gap: 40px; }
+  .hgi-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgi-legend-offices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgi-readings { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+  .hgi-pairs { grid-template-columns: 1fr; gap: 40px; }
+  .hgi-div-row { grid-template-columns: minmax(110px, 200px) minmax(0, 1fr) auto; gap: 10px; }
+  .hgi-rank li { grid-template-columns: minmax(0, 1fr) auto; }
+  .hgi-rank-bars { display: none; }
+  .hgi-rank li .hgi-rank-amts { grid-column: 1; }
+  .hgi-rank li > strong { grid-column: 2; grid-row: 1 / span 2; }
+  .hgi-rank-tight li { grid-template-columns: minmax(0, 1fr) auto; }
+  .hgi-readings .hgi-rank-tight li,
+  .hgi-readings .hgi-rank-new li { grid-template-columns: minmax(0, 1fr) auto; }
+  .hgi-rank-name a { white-space: normal; font-size: 13px; }
+  .hgi-dumb-row { grid-template-columns: minmax(84px, 120px) minmax(0, 1fr) auto; }
+  .hgi-dumb-vals { display: none; }
+  .hgi-after { padding: 0 20px 28px; }
+}
+
+@media (max-width: 560px) {
+  .hgi-figline { font-size: 15px; }
+  .hgi-bar-row { grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; }
+  .hgi-bar-val { font-size: 14px; min-width: 60px; }
+  .hgi-div-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'label val' 'track track';
+    row-gap: 4px;
+  }
+  .hgi-div-label { grid-area: label; }
+  .hgi-div-track { grid-area: track; }
+  .hgi-div-val { grid-area: val; }
+  .hgi-div.is-compact .hgi-div-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .hgi-div.is-compact .hgi-div-label { white-space: normal; }
+  .hgi-legend { grid-template-columns: 1fr; }
+  .hgi-legend-offices { grid-template-columns: 1fr 1fr; }
+  .hgi-comp { height: 36px; }
+  .hgi-dumb-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'label delta' 'track track';
+    row-gap: 2px;
+  }
+  .hgi-dumb-label { grid-area: label; }
+  .hgi-dumb-track { grid-area: track; height: 20px; }
+  .hgi-dumb-delta { grid-area: delta; }
+  .hgi-stack-row { grid-template-columns: 1fr; gap: 6px; }
+  .hgi-stack { height: 36px; }
+  .hgi-stack-pct { font-size: 10px; }
+  .hgi-finale .story-ctas a { max-width: none; }
+  .hgi-quiet { margin-top: -8px; }
+}

@@ -252,6 +252,19 @@ label itself records. The dev server no longer sends the cross-origin
 isolation headers production never had, which is what was blocking the
 portraits and the masthead logo locally.
 
+**Intro (same day, after review).** The section now lands on
+`/hgab/2027/intro`, a story deck of nine short chapters with one chart each:
+the four programs as paired NEP-against-House bars, DPWH by program as a
+diverging chart, the ₱73B foreign-assisted reduction with its five largest
+paired cuts, the composition of the House bill by bridge group, regions as a
+dumbbell chart, the second-to-third-reading change with the per-reading
+printed controls carried from the source, the three annexes side by side, the
+Central Office residual from the district index, and a finale with three
+reading rules and the hub links. Headings are factual statements with the
+number in them; prose is capped at two sentences a chapter; every figure is
+computed at render time. The dense dashboard is kept at `/hgab/2027/overview`
+and linked from the finale as "Dashboard view".
+
 **Deferred.**
 
 - The map — FMR coordinates, the GPS inventory. `has_map` is carried in the
