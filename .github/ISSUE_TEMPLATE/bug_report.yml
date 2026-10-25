@@ -1,0 +1,50 @@
+name: Bug report
+description: Something on the site, the API, or the MCP server is wrong or broken.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the existing issues first to avoid duplicates.
+
+        **If a published figure looks wrong, report it even if you are not
+        certain.** That is the most valuable bug report this project can get.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did you see it?
+      options:
+        - Website (budget.bettergov.ph)
+        - REST API (/api/v1)
+        - MCP server (/mcp)
+        - Data pipeline / scripts
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: locator
+    attributes:
+      label: Exact route or API call
+      description: The URL, endpoint, or MCP tool call — not a description of it.
+      placeholder: https://budget.bettergov.ph/2027/d/07
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: For a wrong figure, give the number you expected and where it comes from.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: Screenshots, the raw JSON response, or error logs all help.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser and OS for site bugs; Node version for local ones. Skip for API bugs.
