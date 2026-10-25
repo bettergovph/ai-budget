@@ -5,12 +5,16 @@
  * Every row on the dataset pages links to a PDF page; this page is where the
  * PDFs themselves are listed with their checksums, so a quoted figure can be
  * tied to an exact byte-identical copy of the source.
+ *
+ * Copy: every section opens with two plain sentences; the technical tables
+ * (checksums, file formats, the pinned commit) follow, and the query example
+ * and file-format notes sit in "Details for analysts".
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
-import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { pageMeta } from '../lib/seo';
 import { dataUrl } from '../lib/data-url';
 import {
@@ -51,8 +55,8 @@ export default function HgabSources() {
       <HgabHeader crumb="Sources" heroBlend />
       <HgabHero
         crumb="Sources"
-        title="Documents, downloads and provenance"
-        dek="The printed volumes every figure was read from, with checksums so a copy can be verified byte for byte; the files this section is built from, in the shapes a spreadsheet or DuckDB can open; and the fields a citation needs."
+        title="Documents, downloads and where the figures come from"
+        dek="These are the printed documents every figure was read from, and the files you can download. Each document has a fingerprint, so anyone can check they hold the same copy. The last section shows how to quote a figure."
       />
 
       <main className="nep-main">
@@ -60,20 +64,20 @@ export default function HgabSources() {
         <section className="nep-section" aria-labelledby="hgab-src-docs">
           <SectionHead
             eyebrow="Source documents"
-            headline={<span id="hgab-src-docs">The printed volumes</span>}
-            dek="Pages are one-based PDF file pages, not the printed page labels; they are not interchangeable across readings or volumes. The checksum is SHA-256 of the file as retained."
+            headline={<span id="hgab-src-docs">The {docs.length.toLocaleString()} printed documents</span>}
+            dek="The President’s proposal (NEP) and the House bill (HB 10858) are printed in several volumes. Each link opens the PDF we read; the fingerprint proves which exact copy it was."
           />
           <div className="nep-table-wrap">
             <table className="nep-table hgab-src-table">
               <thead>
                 <tr>
                   <th className="nep-th-name">Document</th>
-                  <th>Stage</th>
+                  <th>Version</th>
                   <th>Reading</th>
                   <th>Volume</th>
-                  <th className="num">Pages</th>
+                  <th className="num" title="PDF file pages this section uses">Pages used</th>
                   <th className="num">Size</th>
-                  <th>SHA-256</th>
+                  <th title="SHA-256 checksum of the file as retained">Fingerprint</th>
                   <th />
                 </tr>
               </thead>
@@ -109,19 +113,26 @@ export default function HgabSources() {
               </tbody>
             </table>
           </div>
+          <HgabDetails>
+            <p>
+              Pages are one-based PDF file pages, not the printed page labels; they are not
+              interchangeable across readings or volumes. The fingerprint is the SHA-256 of the file as
+              retained. The small code under each title is the document key used in the data files.
+            </p>
+          </HgabDetails>
         </section>
 
         {/* ---- downloads ---- */}
         <section className="nep-section" aria-labelledby="hgab-src-dl">
           <SectionHead
             eyebrow="Downloads"
-            headline={<span id="hgab-src-dl">The files this section reads</span>}
-            dek="Amounts are integer pesos; null means the stage has no record, never zero. The project tables are parquet — open them with DuckDB, pandas or polars, or query them in place from the URL."
+            headline={<span id="hgab-src-dl">The {(2 + DATASET_ORDER.length * 2).toLocaleString()} files this section reads</span>}
+            dek="Every figure on these pages comes from these files, so you can check or reuse them. Amounts are in whole pesos; an empty value means that document has no such line, not zero."
           />
           <div className="hgab-downloads">
             <div className="hgab-dl-group">
               <h3>Whole section</h3>
-              <p className="hgab-dl-sub">datasets · bridges · documents · reconciliation</p>
+              <p className="hgab-dl-sub">programs · how the versions differ · documents · checks</p>
               <ul>
                 <li><a href={dataUrl(`${HGAB_BASE}/overview.json`)}>overview.json</a><span className="hgab-dl-kind">JSON</span></li>
                 <li><a href={dataUrl(`${HGAB_BASE}/manifest.json`)}>manifest.json</a><span className="hgab-dl-kind">JSON</span></li>
@@ -133,24 +144,33 @@ export default function HgabSources() {
                 <div className="hgab-dl-group" key={k}>
                   <h3>{d?.label ?? DATASET_SHORT[k]}</h3>
                   <p className="hgab-dl-sub">
-                    {d ? `${d.counts.nep.toLocaleString()} NEP · ${(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} House records` : k}
+                    {d ? `${d.counts.nep.toLocaleString()} lines in the proposal · ${(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill` : k}
                   </p>
                   <ul>
-                    <li><a href={dataUrl(`${HGAB_BASE}/${k}/summary.json`)}>{k}/summary.json</a><span className="hgab-dl-kind">JSON</span></li>
-                    <li><a href={dataUrl(`${HGAB_BASE}/${k}/projects.parquet`)}>{k}/projects.parquet</a><span className="hgab-dl-kind">Parquet</span></li>
+                    <li><a href={dataUrl(`${HGAB_BASE}/${k}/summary.json`)}>{k}/summary.json</a><span className="hgab-dl-kind">Summary</span></li>
+                    <li><a href={dataUrl(`${HGAB_BASE}/${k}/projects.parquet`)}>{`${k}/projects.parquet`}</a><span className="hgab-dl-kind">Every line</span></li>
                   </ul>
                 </div>
               );
             })}
           </div>
-          <div className="hgab-cite" style={{ marginTop: 24 }}>
-            <p><strong>Query a project table without downloading it.</strong> DuckDB reads parquet over HTTP with range requests; this is the same file the dataset pages query in the browser.</p>
+          <p className="hgab-recon-note" style={{ marginTop: 14 }}>
+            Not sure how to open them? Each program’s Projects tab shows the same lines, and its
+            “Download CSV” button saves the rows you filtered as a spreadsheet.
+          </p>
+          <HgabDetails>
+            <p>
+              Summaries are JSON. The project tables are Parquet: open them with DuckDB, pandas or polars,
+              or query them in place from the URL. Amounts are integer pesos; null means the version has
+              no record, never zero.
+            </p>
+            <p><strong>Query a project table without downloading it.</strong> DuckDB reads Parquet over HTTP with range requests; this is the same file the program pages query in the browser.</p>
             <pre>{`SELECT title, region, trace, nep_php, hgab3_php, delta_php, hgab3_doc, hgab3_page
 FROM read_parquet('${projectsParquetUrl('dpwh')}')
 WHERE trace = 'candidate_increase'
 ORDER BY delta_php DESC
 LIMIT 25;`}</pre>
-          </div>
+          </HgabDetails>
         </section>
 
         {/* ---- provenance ---- */}
@@ -158,6 +178,7 @@ LIMIT 25;`}</pre>
           <SectionHead
             eyebrow="Provenance"
             headline={<span id="hgab-src-prov">Where the figures come from</span>}
+            dek="The figures come from an independent analysis of the printed documents, published as open source. This portal copies them unchanged and does not redo the matching."
           />
           <table className="nep-table nep-kv">
             <tbody>
@@ -190,7 +211,7 @@ LIMIT 25;`}</pre>
               </tr>
               <tr>
                 <th>Units</th>
-                <td>Integer pesos throughout. Stages are compared, never added; parent controls and child rows are never summed together.</td>
+                <td>Integer pesos throughout. Versions are compared, never added; a printed total and the lines under it are never added together.</td>
               </tr>
             </tbody>
           </table>
@@ -201,7 +222,7 @@ LIMIT 25;`}</pre>
           <SectionHead
             eyebrow="How to cite"
             headline={<span id="hgab-src-cite">Five things a quoted figure needs</span>}
-            dek="Screenshots and links alone lose this context. Results can change after source corrections or revisions to the matching rules; the commit pins the version you quoted."
+            dek="Quote a figure with these five details so anyone can find it again. A screenshot or a link alone loses them, and the figures can change when errors are fixed."
           />
           <div className="hgab-cite">
             <ol>

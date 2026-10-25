@@ -27,7 +27,8 @@ import {
   type SectionFigure,
   type TranscriptBlock,
 } from '../lib/hearings';
-import { datasetPath, type DatasetKey } from '../lib/hgab';
+import { datasetPath, loadHgabOverview, type DatasetKey, type HgabDatasetMeta } from '../lib/hgab';
+import { datasetSummary } from '../lib/hgab-ui';
 import '../nep2027.css';
 import '../hearings.css';
 import '../hgab-links.css';
@@ -453,6 +454,47 @@ const HGAB_AGENCY_LINKS: ReadonlyArray<{ test: RegExp; key: DatasetKey; label: s
 function hgabLinksFor(agency: string | null | undefined) {
   if (!agency) return [];
   return HGAB_AGENCY_LINKS.filter((l) => l.test.test(agency));
+}
+
+/**
+ * The related-link block: one line per matching program, each with the
+ * program's plain `summary` once the House-bill overview has loaded. The
+ * overview is optional context — if it fails, the links still render.
+ */
+function HgabRelated({ links }: { links: ReadonlyArray<{ key: DatasetKey; label: string }> }) {
+  const [metas, setMetas] = useState<HgabDatasetMeta[] | null>(null);
+  const wanted = links.length > 0;
+  useEffect(() => {
+    if (!wanted) return;
+    let live = true;
+    loadHgabOverview()
+      .then((o) => { if (live) setMetas(o.datasets); })
+      .catch(() => { /* links render without the summary */ });
+    return () => { live = false; };
+  }, [wanted]);
+  if (!links.length) return null;
+  return (
+    <aside className="hgab-crosslink hgab-crosslink-compact" aria-label="Related: the FY2027 House bill">
+      <p className="hgab-crosslink-eyebrow">Related · the 2027 House bill (HB 10858)</p>
+      <ul>
+        {links.map((l) => {
+          const meta = metas?.find((d) => d.key === l.key) ?? null;
+          return (
+            <li key={l.key}>
+              <Link to={datasetPath(l.key)}>
+                Compare the House bill with the President’s proposal for {l.label} →
+              </Link>
+              {meta && (
+                <span className="hgab-crosslink-scope" style={{ display: 'block', fontWeight: 400, marginTop: 2 }}>
+                  {datasetSummary(meta)}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </aside>
+  );
 }
 
 /* --- page ---------------------------------------------------------------- */
@@ -933,23 +975,7 @@ export default function HearingDetail() {
               )}
             </header>
 
-            {hgabLinks.length > 0 && (
-              <aside
-                className="hgab-crosslink hgab-crosslink-compact"
-                aria-label="Related: the FY2027 House bill"
-              >
-                <p className="hgab-crosslink-eyebrow">Related · FY2027 House bill</p>
-                <ul>
-                  {hgabLinks.map((l) => (
-                    <li key={l.key}>
-                      <Link to={datasetPath(l.key)}>
-                        Compare the House bill against the NEP for {l.label} →
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            )}
+            <HgabRelated links={hgabLinks} />
 
             <div className="hearing-layout">
               <section className="hearing-player-col" aria-label="Video">

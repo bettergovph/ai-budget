@@ -4,8 +4,13 @@
  *
  * All filter, sort and paging state lives in the URL, so a filtered view is a
  * shareable finding — the same discipline as the workbench this data comes
- * from. The generated SQL is shown verbatim, and the CSV export runs the same
- * WHERE without the LIMIT so what you download is what you filtered.
+ * from. The generated SQL is shown verbatim (inside "Details for analysts"),
+ * and the CSV export runs the same WHERE without the LIMIT so what you
+ * download is what you filtered.
+ *
+ * Copy: plain first. Filter labels, chips and notes use the section's plain
+ * words ("What happened to the line", "unconfirmed matches", "two versions of
+ * one budget — compare, don't add"); SQL and timing sit in the Details box.
  *
  * Rules the table enforces: stage amounts are compared, never summed across
  * stages (the summary line gives one sum per stage over the same rows); null
@@ -25,10 +30,10 @@ import {
 import {
   PAGE_SIZES, SORT_LABELS, coerceFacets, coerceRow, coerceSummary, defaultSort, exportSql, facetsSql,
   filtersFromParams, flagLabel, hasActiveFilters, matchLabel, papLabel, paramsFromFilters, pickHouseDoc,
-  projectsCsv, projectsSql, summarySql, zoneLabel,
+  projectsCsv, projectsSql, regionFilterName, splitFlags, summarySql, zoneLabel,
   type FacetRow, type FilterSummary, type ProjectFilters, type SortKey,
 } from '../lib/hgab-query';
-import { StatusChip } from './HgabBits';
+import { HgabDetails, StatusChip } from './HgabBits';
 import { SkeletonRows } from './Nep2027Bits';
 import '../hgab-districts.css';
 
@@ -37,8 +42,18 @@ import '../hgab-districts.css';
 // ---------------------------------------------------------------------------
 
 /** A stage amount: short form, exact pesos on hover, "—" for null. */
-export function Amt({ v, strong = false }: { v: number | null | undefined; strong?: boolean }) {
-  if (v == null) return <span className="hgab-ds-null" title="No record on this stage">—</span>;
+export function Amt({ v, strong = false, blank = false }: { v: number | null | undefined; strong?: boolean; blank?: boolean }) {
+  // Health facilities: the facility is in both lists but this budget column
+  // (building works, equipment or vehicles) is left empty in this one. The
+  // source counts the empty column as zero when it measures the change.
+  if (v == null && blank) {
+    return (
+      <span className="hgab-ds-null" title="This facility is in this list, but this budget column is left empty. The change is counted from zero.">
+        empty
+      </span>
+    );
+  }
+  if (v == null) return <span className="hgab-ds-null" title="This document has no such line">—</span>;
   return (
     <span className={strong ? 'nep-td-amt' : undefined} title={fmt.php(v, { unit: 'full' })}>
       {v === 0 ? '0' : fmt.shortPhp(v)}
@@ -48,7 +63,7 @@ export function Amt({ v, strong = false }: { v: number | null | undefined; stron
 
 /** Signed difference with optional percent of `base`; "—" when either side is missing. */
 export function DeltaCell({ delta, base }: { delta: number | null | undefined; base?: number | null }) {
-  if (delta == null) return <span className="hgab-ds-null" title="One side has no record, so there is no difference to show">—</span>;
+  if (delta == null) return <span className="hgab-ds-null" title="One document has no such line, so there is no difference to show">—</span>;
   const p = base ? (delta / base) * 100 : null;
   const color = delta > 0 ? 'var(--positive)' : delta < 0 ? 'var(--negative)' : 'var(--ink-mute)';
   const sign = delta > 0 ? '+' : delta < 0 ? '−' : '';
@@ -80,7 +95,7 @@ export function PageLinks({
   if (row.hgab3_page) {
     items.push({ label: '3R', page: row.hgab3_page, doc: row.hgab3_doc ?? pickHouseDoc(docs, dataset, 3, 'projects') });
   }
-  if (!items.length) return <span className="hgab-ds-null" title="No page reference on this row">—</span>;
+  if (!items.length) return <span className="hgab-ds-null" title="No page is recorded for this line">—</span>;
   const title = (key: string | null) => docs?.find((d) => d.key === key)?.title ?? key ?? '';
   return (
     <span className="hgab-ds-pages">
@@ -107,12 +122,15 @@ export function PageLinks({
 export function ParquetError({ message, dataset }: { message: string; dataset: HgabDatasetMeta }) {
   return (
     <div className="hgab-ds-parquet-err" role="alert">
-      <p>
-        Could not read <code>hgab/2027/{dataset.key}/projects.parquet</code>. If the file has not been
-        built, run <code>npm run import:hgab</code> (or publish it with <code>npm run upload:hgab</code>);
-        if it exists, the query below failed.
-      </p>
-      <pre>{message}</pre>
+      <p>The project list could not be loaded. Try reloading the page.</p>
+      <HgabDetails>
+        <p>
+          Could not read <code>hgab/2027/{dataset.key}/projects.parquet</code>. If the file has not been
+          built, run <code>npm run import:hgab</code> (or publish it with <code>npm run upload:hgab</code>);
+          if it exists, the query below failed.
+        </p>
+        <pre>{message}</pre>
+      </HgabDetails>
     </div>
   );
 }
@@ -330,8 +348,8 @@ export default function HgabProjects({
 
   return (
     <div className="hgab-ds-projects">
-      <div className="hgab-ds-groups" role="group" aria-label="Bridge group">
-        <span className="hgab-ds-groups-label">Group</span>
+      <div className="hgab-ds-groups" role="group" aria-label="What happened to the line">
+        <span className="hgab-ds-groups-label">What happened to the line</span>
         {BRIDGE_ORDER.map((g) => (
           <button
             key={g}
@@ -346,16 +364,16 @@ export default function HgabProjects({
           </button>
         ))}
         <label className="hgab-ds-held">
-          Held rows
+          Unconfirmed matches
           <select
             className="select-input"
             value={filters.held}
             onChange={(e) => update({ held: e.target.value as ProjectFilters['held'] })}
-            title="Fuzzy and ambiguous rows are held out of the headline counts"
+            title="House lines with a similar-looking line in the proposal, or several, that could not be confirmed. They are left out of the headline counts."
           >
             <option value="all">Show all</option>
-            <option value="hide">Hide held</option>
-            <option value="only">Held only</option>
+            <option value="hide">Hide unconfirmed</option>
+            <option value="only">Unconfirmed only</option>
           </select>
         </label>
       </div>
@@ -374,8 +392,8 @@ export default function HgabProjects({
               ×
             </button>
           </span>
-          <Link className="hgab-ds-chip-link" to={districtPath()} title="The district engineering office lens">
-            Districts lens →
+          <Link className="hgab-ds-chip-link" to={districtPath()} title="District engineering offices and the districts they serve">
+            All districts →
           </Link>
         </div>
       )}
@@ -386,19 +404,19 @@ export default function HgabProjects({
           <input
             className="text-input"
             type="search"
-            placeholder="title, program, PAP, region, office…"
+            placeholder="project name, program line, region, office…"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') update({ q: draft }); }}
           />
         </label>
-        {select('Region', 'region', filters.region, (v) => update({ region: v }))}
+        {select('Region', 'region', filters.region, (v) => update({ region: v }), regionFilterName)}
         {select('Program', 'program', filters.program, (v) => update({ program: v }))}
         {pap && select(pap, 'pap', filters.pap, (v) => update({ pap: v }))}
-        {select('Office kind', 'office_kind', filters.officeKind, (v) => update({ officeKind: v }))}
-        {select('Funding zone', 'zone', filters.zone, (v) => update({ zone: v }), (v) => zoneLabel(v) ?? v)}
-        {twoReadings && select('Reading change', 'reading_status', filters.reading, (v) => update({ reading: v }), (v) => READING_LABELS[v] ?? v)}
-        {select('Review flag', 'flag', filters.flag, (v) => update({ flag: v }), flagLabel)}
+        {select('Type of office', 'office_kind', filters.officeKind, (v) => update({ officeKind: v }))}
+        {select('Funding', 'zone', filters.zone, (v) => update({ zone: v }), (v) => zoneLabel(v) ?? v)}
+        {twoReadings && select('Between the House votes', 'reading_status', filters.reading, (v) => update({ reading: v }), (v) => READING_LABELS[v] ?? v)}
+        {select('Marked for checking', 'flag', filters.flag, (v) => update({ flag: v }), flagLabel)}
         <label>
           <span>Sort</span>
           <select
@@ -423,28 +441,27 @@ export default function HgabProjects({
         {loading && (
           <span className="nep-busy">
             <span className="busy-sweep" aria-hidden="true" />
-            {result ? 'Running…' : 'Loading projects.parquet… the first query fetches the file'}
+            {result ? 'Updating…' : 'Loading the project list… the first view downloads it'}
           </span>
         )}
         {!loading && sum && (
           <>
-            <span><strong>{sum.n.toLocaleString()}</strong> {sum.n === 1 ? 'row' : 'rows'} matched</span>
-            <ul className="hgab-ds-stage-sums" aria-label="Per-stage sums of the matched rows">
-              <li title={`${sum.nep_rows.toLocaleString()} rows carry an NEP amount`}>
+            <span><strong>{sum.n.toLocaleString()}</strong> {sum.n === 1 ? 'row' : 'rows'} shown</span>
+            <ul className="hgab-ds-stage-sums" aria-label="Total of these rows in each version">
+              <li title={`${sum.nep_rows.toLocaleString()} rows have an amount in the President’s proposal`}>
                 <em>{STAGE_LABELS.nep.short}</em><strong><Amt v={sum.nep_php} /></strong>
               </li>
               {twoReadings && (
-                <li title={`${sum.hgab2_rows.toLocaleString()} rows carry a 2nd-reading amount`}>
+                <li title={`${sum.hgab2_rows.toLocaleString()} rows have an amount at second reading`}>
                   <em>{STAGE_LABELS.hgab2.short}</em><strong><Amt v={sum.hgab2_php} /></strong>
                 </li>
               )}
-              <li title={`${(houseKey === 'hgab3' ? sum.hgab3_rows : sum.hgab2_rows).toLocaleString()} rows carry a House amount`}>
+              <li title={`${(houseKey === 'hgab3' ? sum.hgab3_rows : sum.hgab2_rows).toLocaleString()} rows have an amount in the House bill`}>
                 <em>{twoReadings ? STAGE_LABELS[houseKey].short : 'House'}</em>
                 <strong><Amt v={houseKey === 'hgab3' ? sum.hgab3_php : sum.hgab2_php} /></strong>
               </li>
             </ul>
-            <span className="hgab-ds-notadditive">stages are not additive</span>
-            {fresh && <span className="nep-ms">· {fresh.ms} ms</span>}
+            <span className="hgab-ds-notadditive">two versions of one budget — compare, don’t add</span>
           </>
         )}
         <span className="nep-explore-actions hgab-ds-actions">
@@ -456,7 +473,7 @@ export default function HgabProjects({
           <button type="button" className={copied ? 'hgab-ds-copied' : undefined} onClick={copyLink}>
             {copied ? 'Link copied' : 'Copy link'}
           </button>
-          <button type="button" disabled={exporting || !total} onClick={exportCsv} title="Every filtered row, exact pesos, one column per stage">
+          <button type="button" disabled={exporting || !total} onClick={exportCsv} title="Every row shown, in exact pesos, one column per version">
             {exporting ? 'Exporting…' : `Download CSV${total ? ` (${total.toLocaleString()})` : ''}`}
           </button>
         </span>
@@ -464,11 +481,6 @@ export default function HgabProjects({
 
       {failed && <ParquetError message={failed.message} dataset={dataset} />}
 
-      <details className="nep-sql">
-        <summary>SQL</summary>
-        <pre>{sql}</pre>
-        <pre>{sumSql}</pre>
-      </details>
 
       <div className="nep-table-wrap">
         <table className="nep-table hgab-ds-table">
@@ -478,12 +490,12 @@ export default function HgabProjects({
               <th className="hgab-ds-col-region">Region</th>
               <th className="hgab-ds-col-office">Office</th>
               {pap && <th className="hgab-ds-col-pap">{pap}</th>}
-              <th>Status</th>
+              <th title="Which of the six groups this line falls in">What happened</th>
               {head('nep', STAGE_LABELS.nep.short, 'num', STAGE_LABELS.nep.label)}
               {twoReadings && head('hgab2', STAGE_LABELS.hgab2.short, 'num', STAGE_LABELS.hgab2.label)}
               {head(houseKey, twoReadings ? STAGE_LABELS[houseKey].short : 'House', 'num',
-                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the 2nd and 3rd reading print the same annex text')}
-              {head('delta', 'Δ vs NEP', 'num', 'Latest House reading minus NEP, when both exist')}
+                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading print the same list')}
+              {head('delta', `Change vs ${STAGE_LABELS.nep.short}`, 'num', 'Latest House amount minus the President’s proposal, when both exist')}
               <th>Pages</th>
             </tr>
           </thead>
@@ -517,9 +529,9 @@ export default function HgabProjects({
                       <span className="hgab-ds-sub">{reading}</span>
                     )}
                   </td>
-                  <td className="num"><Amt v={r.nep_php} /></td>
+                  <td className="num"><Amt v={r.nep_php} blank={splitFlags(r.flags).includes('column_dropped')} /></td>
                   {twoReadings && <td className="num"><Amt v={r.hgab2_php} /></td>}
-                  <td className="num"><Amt v={houseKey === 'hgab3' ? r.hgab3_php : r.hgab2_php} strong /></td>
+                  <td className="num"><Amt v={houseKey === 'hgab3' ? r.hgab3_php : r.hgab2_php} strong blank={splitFlags(r.flags).includes('column_added')} /></td>
                   <td className="num"><DeltaCell delta={r.delta_php} base={r.nep_php} /></td>
                   <td><PageLinks row={r} dataset={dataset} docs={docs} /></td>
                 </tr>
@@ -571,13 +583,24 @@ export default function HgabProjects({
       </div>
 
       <p className="nep-hier-note">
-        Counts are comparison rows, not unique projects: a House row and its unlinked NEP counterpart can
-        both appear. Amounts are printed allocations in pesos; a dash means the stage has no record, not
-        a zero. Region, office and PAP are the row's recorded labels — a paired row can carry different
-        labels on each side; the record page shows both. {dataset.has_readings
-          ? 'Δ is the third reading minus the NEP when both exist.'
-          : 'Δ is the House bill minus the NEP when both exist.'}
+        Rows are lines in the documents, not unique projects. A House line and an unmatched proposal
+        line for the same project can both appear. Amounts are the pesos printed in each document, not
+        money spent. A dash means that document has no such line; it is not zero. Region, office and
+        {pap ? ` ${pap.toLowerCase()}` : ' program'} are as each document prints them; a project’s own page shows both sides.{' '}
+        {dataset.has_readings
+          ? '“Change” is the third reading minus the proposal, when both exist.'
+          : '“Change” is the House bill minus the proposal, when both exist.'}
       </p>
+
+      <HgabDetails>
+        <p>
+          Queried in the browser with DuckDB-Wasm over <code>hgab/2027/{key}/projects.parquet</code>
+          {fresh ? <> in {fresh.ms.toLocaleString()} ms</> : null}. The CSV runs the same filter without the
+          page limit. Unconfirmed matches are the <code>fuzzy_candidate</code> and <code>ambiguous</code> statuses.
+        </p>
+        <pre>{sql}</pre>
+        <pre>{sumSql}</pre>
+      </HgabDetails>
     </div>
   );
 }

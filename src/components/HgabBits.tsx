@@ -5,33 +5,35 @@
  * (HgabHeader, BridgeStrip, StatusChip, StageAmounts, DisclaimerNotice,
  * HgabLoading, HgabError, DatasetSwitch). Do not change those signatures
  * without updating every caller. Additions — HgabHero, HgabStageStrip,
- * SignedPhp — are conveniences so every page in the section renders the same
- * hero, the same timeline and the same signs. Non-component helpers (labels,
- * status classes, formatters) live in `lib/hgab-ui.ts`.
+ * SignedPhp, HgabDetails, Caveats, WhatThisMeans — are conveniences so every
+ * page in the section renders the same hero, the same timeline, the same signs
+ * and the same "plain first, details on demand" furniture. Non-component
+ * helpers (labels, status classes, formatters) live in `lib/hgab-ui.ts`.
+ *
+ * Copy rule for everything here: the reader is a citizen or reporter who has
+ * never opened a budget document. Anything technical goes inside
+ * `HgabDetails` ("Details for analysts"), never on the surface.
  *
  * Styles live in `src/hgab.css`, built on the /2027 microsite's tokens.
  */
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import * as fmt from '../lib/format';
 import {
   BRIDGE_LABELS, BRIDGE_ORDER, DATASET_ORDER, DATA_BASE_OVERRIDE, HGAB_ROOT, STAGE_LABELS,
-  traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
+  datasetPath, traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
 } from '../lib/hgab';
-import { DATASET_SHORT } from '../lib/hgab-ui';
+import { DATASET_SHORT, PLAIN, PROGRAM_NAV, hubViews } from '../lib/hgab-ui';
 import '../hgab.css';
 
-const SECTION_NAV: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
+/** Section entries that are plain links (programs are dropdowns, see PROGRAM_NAV). */
+const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
   {
     to: `${HGAB_ROOT}/intro`,
     label: 'Intro',
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/intro`,
   },
-  { to: `${HGAB_ROOT}/dpwh`, label: 'DPWH' },
-  { to: `${HGAB_ROOT}/fmr`, label: 'Farm-to-Market Roads' },
-  { to: `${HGAB_ROOT}/hfep`, label: 'Health Facilities' },
-  { to: `${HGAB_ROOT}/nia`, label: 'Irrigation' },
   { to: `${HGAB_ROOT}/districts`, label: 'Districts' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
@@ -56,33 +58,170 @@ export function HgabHeader({
   compiledMeta?: ReactNode;
   heroBlend?: boolean;
 }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const path = pathname.replace(/\/+$/, '') || HGAB_ROOT;
-  const isActive = (n: (typeof SECTION_NAV)[number]) =>
+  const view = new URLSearchParams(search).get('view') ?? 'overview';
+  const linkActive = (n: (typeof SECTION_LINKS)[number]) =>
     n.match ? n.match(path) : path === n.to || path.startsWith(`${n.to}/`);
-  const links = SECTION_NAV.map((n) => (
-    <Link
-      key={n.to}
-      to={n.to}
-      className={isActive(n) ? 'active' : ''}
-      aria-current={isActive(n) ? 'page' : undefined}
-    >
+  const programActive = (key: DatasetKey) => path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`);
+  const link = (n: (typeof SECTION_LINKS)[number]) => (
+    <Link key={n.to} to={n.to} className={linkActive(n) ? 'active' : ''} aria-current={linkActive(n) ? 'page' : undefined}>
       {n.label}
     </Link>
-  ));
+  );
+  const [intro, ...rest] = SECTION_LINKS;
   return (
     <SiteHeader
       headerClassName={heroBlend ? 'masthead-hero-blend' : undefined}
       crumb={crumb}
-      compiledMeta={compiledMeta ?? 'HB 10858 · 2nd & 3rd reading'}
-      subNav={<nav className="view-tabs section-tabs" aria-label="FY2027 HGAB sections">{links}</nav>}
+      compiledMeta={compiledMeta ?? 'House Bill 10858 · 2nd and 3rd reading'}
+      subNav={
+        <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 House bill sections">
+          {link(intro)}
+          {PROGRAM_NAV.map((p) => (
+            <ProgramMenu
+              key={p.key}
+              program={p}
+              active={programActive(p.key)}
+              currentView={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
+            />
+          ))}
+          {rest.map(link)}
+        </nav>
+      }
       drawerExtras={
-        <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 HGAB sections">
-          <p className="hgab-drawer-eyebrow">House Appropriations Bill 2027</p>
-          {links}
+        <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 House bill sections">
+          <p className="hgab-drawer-eyebrow">The House bill for 2027</p>
+          {link(intro)}
+          {PROGRAM_NAV.map((p) => (
+            <div className="hgab-drawer-group" key={p.key}>
+              <Link
+                to={datasetPath(p.key)}
+                className={programActive(p.key) ? 'active' : ''}
+                aria-current={programActive(p.key) && view === 'overview' ? 'page' : undefined}
+              >
+                {p.label}
+              </Link>
+              <div className="hgab-drawer-sub">
+                {hubViews(p.hasReadings).filter((v) => v.key !== 'overview').map((v) => {
+                  const on = programActive(p.key) && view === v.key;
+                  return (
+                    <Link key={v.key} to={datasetPath(p.key, v.key)} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
+                      {v.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {rest.map(link)}
         </nav>
       }
     />
+  );
+}
+
+/**
+ * One program in the sub-nav: a button that opens a menu of its views.
+ *
+ * The sub-nav scrolls sideways on phones, which would clip an absolutely
+ * positioned menu, so the panel is fixed to the viewport at the button's
+ * position and closes on scroll, resize, Escape, an outside press, or any
+ * navigation (it is keyed to the location, so a route change closes it
+ * without an effect). Pointers that can hover open it on hover as well.
+ */
+function ProgramMenu({
+  program,
+  active,
+  currentView,
+}: {
+  program: (typeof PROGRAM_NAV)[number];
+  active: boolean;
+  /** The hub view being shown when this program's hub is open, else null. */
+  currentView: string | null;
+}) {
+  const location = useLocation();
+  const [openAt, setOpenAt] = useState<string | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const hoverTimer = useRef<number | null>(null);
+  const menuId = useId();
+  const open = openAt === location.key;
+
+  const place = useCallback(() => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = 232;
+    setPos({ top: Math.round(r.bottom + 6), left: Math.round(Math.max(8, Math.min(r.left - 12, window.innerWidth - width - 8))) });
+  }, []);
+  const show = useCallback(() => { place(); setOpenAt(location.key); }, [place, location.key]);
+  const hide = useCallback(() => setOpenAt(null), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { hide(); btnRef.current?.focus(); }
+    };
+    const onDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) hide();
+    };
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onDown);
+    return () => {
+      window.removeEventListener('scroll', hide, true);
+      window.removeEventListener('resize', hide);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onDown);
+    };
+  }, [open, hide]);
+
+  useEffect(() => () => { if (hoverTimer.current) window.clearTimeout(hoverTimer.current); }, []);
+
+  const canHover = () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  const onEnter = () => {
+    if (!canHover()) return;
+    if (hoverTimer.current) { window.clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+    if (!open) show();
+  };
+  const onLeave = () => {
+    if (!canHover()) return;
+    hoverTimer.current = window.setTimeout(hide, 180);
+  };
+
+  const views = hubViews(program.hasReadings);
+  return (
+    <span className={`hgab-subnav-item ${open ? 'is-open' : ''}`.trim()} ref={wrapRef} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={active ? 'active' : ''}
+        aria-expanded={open}
+        aria-controls={menuId}
+        aria-current={active ? 'true' : undefined}
+        onClick={() => (open ? hide() : show())}
+      >
+        {program.label}
+        <span className="hgab-subnav-caret" aria-hidden="true">▾</span>
+      </button>
+      <span
+        id={menuId}
+        className="hgab-subnav-menu"
+        hidden={!open}
+        style={pos ? { top: pos.top, left: pos.left } : undefined}
+      >
+        {views.map((v) => {
+          const on = currentView === v.key;
+          return (
+            <Link key={v.key} to={datasetPath(program.key, v.key)} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
+              {v.label}
+            </Link>
+          );
+        })}
+      </span>
+    </span>
   );
 }
 
@@ -142,6 +281,48 @@ export function SignedPhp({ value, className = '' }: { value: number | null | un
 }
 
 /**
+ * Collapsed-by-default box for everything a reader does not need but an
+ * analyst will ask for: page ranges, codes, extraction method, matching
+ * keys, SQL. Quiet by design (hgab.css `.hgab-details`); the surface above it
+ * must already make sense without opening it.
+ */
+export function HgabDetails({
+  title = 'Details for analysts',
+  children,
+  className = '',
+}: {
+  title?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <details className={`hgab-details ${className}`.trim()}>
+      <summary>{title}</summary>
+      <div className="hgab-details-body">{children}</div>
+    </details>
+  );
+}
+
+/** Short bulleted note of things to know before comparing the numbers; renders nothing when empty. */
+export function Caveats({ items, className = '' }: { items: readonly string[]; className?: string }) {
+  if (!items.length) return null;
+  return (
+    <ul className={`hgab-caveats ${className}`.trim()} aria-label="Before you compare">
+      {items.map((c) => <li key={c}>{c}</li>)}
+    </ul>
+  );
+}
+
+/** One line of plain explanation under a chart or strip: "What this means: …". */
+export function WhatThisMeans({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <p className={`hgab-whatmeans ${className}`.trim()}>
+      <strong>What this means:</strong> {children}
+    </p>
+  );
+}
+
+/**
  * The sign each bridge group contributes to House − NEP. The importer stores
  * `php` as a money basis (House side, NEP side, or the signed delta) so the
  * tile prints |php| with the group's sign rather than trusting the stored
@@ -157,21 +338,38 @@ const GROUP_SIGN: Record<BridgeGroup, '+' | '−' | '' | '±'> = {
 };
 
 /**
- * The five-group bridge as a row of tiles, with the identity it satisfies as a
- * footer: house_only − nep_only + increased − decreased + scope_review =
- * House − NEP. Unchanged is shown for scale but contributes zero.
+ * How the two versions differ, as a row of six tiles (the five-group bridge),
+ * with the identity it satisfies as a footer: house_only − nep_only +
+ * increased − decreased + scope_review = House − NEP. Unchanged is shown for
+ * scale but contributes zero. Every tile carries the group's plain label, its
+ * `sub` and its help as a tooltip. Pass `explain` on the first strip of a page
+ * to print the one-line "What this means" under it.
  */
-export function BridgeStrip({ bridge, dataset }: { bridge: Bridge; dataset?: DatasetKey }) {
-  const houseShort = STAGE_LABELS[bridge.house_stage]?.short ?? 'House';
+/** What one tile row counts, per program, so tiles say "projects" rather than "rows". */
+const BRIDGE_ROW_NOUN: Record<DatasetKey, [string, string]> = {
+  dpwh: ['project', 'projects'],
+  fmr: ['road', 'roads'],
+  hfep: ['facility line', 'facility lines'],
+  nia: ['project', 'projects'],
+};
+
+export function BridgeStrip({ bridge, dataset, explain = false }: { bridge: Bridge; dataset?: DatasetKey; explain?: boolean }) {
+  // Only DPWH prints two House readings that differ; the other three programs
+  // print one House list, identical at second and third reading.
+  const houseShort = dataset && dataset !== 'dpwh'
+    ? 'House bill'
+    : bridge.house_stage === 'hgab3' ? 'House bill (3rd reading)' : 'House bill (2nd reading)';
+  const nepShort = 'the proposal';
+  const [oneRow, manyRows] = dataset ? BRIDGE_ROW_NOUN[dataset] : ['line', 'lines'];
   return (
     <div className="hgab-bridge-block" data-dataset={dataset}>
-      <div className="hgab-bridge" role="list" aria-label="Five-group bridge from NEP to House">
+      <div className="hgab-bridge" role="list" aria-label="How the House bill differs from the President's proposal, in six groups">
         {BRIDGE_ORDER.map((g) => {
           const cell = bridge[g];
           const meta = BRIDGE_LABELS[g];
           let sign: string = GROUP_SIGN[g];
           if (g === 'scope_review') sign = cell.php > 0 ? '+' : cell.php < 0 ? '−' : '±';
-          const bothSides = cell.nep_php != null && cell.house_php != null && g !== 'unchanged';
+          const bothSides = cell.rows > 0 && cell.nep_php != null && cell.house_php != null && g !== 'unchanged';
           return (
             <div className={`hgab-bridge-cell is-${g}`} role="listitem" key={g} title={meta.help}>
               <span className="hgab-bridge-label">{meta.label}</span>
@@ -180,11 +378,11 @@ export function BridgeStrip({ bridge, dataset }: { bridge: Bridge; dataset?: Dat
                 {cell.rows === 0 && cell.php === 0 ? '—' : `${sign}${fmt.shortPhp(Math.abs(cell.php))}`}
               </span>
               <span className="hgab-bridge-rows">
-                {cell.rows.toLocaleString()} {cell.rows === 1 ? 'row' : 'rows'}
+                {cell.rows.toLocaleString()} {cell.rows === 1 ? oneRow : manyRows}
               </span>
               {bothSides && (
                 <span className="hgab-bridge-sides">
-                  NEP {fmt.shortPhp(cell.nep_php!)} → House {fmt.shortPhp(cell.house_php!)}
+                  Proposal {fmt.shortPhp(cell.nep_php!)} → House {fmt.shortPhp(cell.house_php!)}
                 </span>
               )}
             </div>
@@ -193,15 +391,18 @@ export function BridgeStrip({ bridge, dataset }: { bridge: Bridge; dataset?: Dat
       </div>
       <p className="hgab-bridge-net">
         <span>
-          Net, {houseShort} − NEP: <SignedPhp value={bridge.net_php} />
+          {houseShort} minus {nepShort}: <SignedPhp value={bridge.net_php} />
         </span>
-        <span>Insertions − deletions + increases − decreases ± scope review = net</span>
+        <span title="The six groups add up to the difference between the two versions">
+          House only − proposal only + raised − reduced ± different stretches = this difference
+        </span>
       </p>
+      {explain && <WhatThisMeans>{PLAIN.bridgeMeans}</WhatThisMeans>}
     </div>
   );
 }
 
-/** Coloured chip for a row's lifecycle status. */
+/** Coloured chip saying what happened to a line, with the plain meaning as a tooltip. */
 export function StatusChip({ trace }: { trace: string | null | undefined }) {
   const info = traceInfo(trace);
   return (
@@ -215,7 +416,7 @@ export function StatusChip({ trace }: { trace: string | null | undefined }) {
   );
 }
 
-/** Compact NEP / HGAB2 / HGAB3 / Transparency amounts for one row. */
+/** Compact amounts for one row in each version: NEP, House 2R, House 3R and, for DPWH, the transparency site. */
 export function StageAmounts({ row }: { row: ProjectRow }) {
   const cells: Array<[string, string, number | null]> = [
     [STAGE_LABELS.nep.short, STAGE_LABELS.nep.label, row.nep_php],
@@ -235,18 +436,18 @@ export function StageAmounts({ row }: { row: ProjectRow }) {
   );
 }
 
-/** The one-paragraph disclaimer every HGAB page carries, with a link to the full text. */
+/** The one-paragraph notice every page in the section carries, in plain words, with a link to the full text. */
 export function DisclaimerNotice({ compact = false }: { compact?: boolean }) {
   return (
     <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''}`.trim()} aria-label="Disclaimer">
       <p className="hgab-disclaimer-eyebrow">Independent and unofficial</p>
       <p>
-        This comparison is independent analysis of the printed documents, not an official record of
-        DBM, the agencies or the House. Pairings between the NEP and the House bill are candidates
-        produced by documented rules, not certified findings; unmatched rows alone do not establish
-        that a project was inserted, removed or reduced, and no classification here alleges
-        irregularity by any office or official. Figures are printed allocations, not obligations or
-        spending.{' '}
+        This comparison is our own reading of the printed documents. It is not an official record of
+        the budget department, the agencies or the House. Matches between the President’s proposal and
+        the House bill are candidates found by written rules, not confirmed findings. A line found in
+        only one document does not prove a project was added, dropped or cut. Nothing here says any
+        office or official did anything wrong. Figures are the amounts printed in the documents, not
+        money spent.{' '}
         <Link to={`${HGAB_ROOT}/methodology#disclaimer`}>Read the full notice</Link>.
       </p>
     </aside>
@@ -291,10 +492,10 @@ export function HgabError({ message }: { message: string }) {
   );
 }
 
-/** Dataset switcher used inside hubs so a reader can jump between the four programs. */
+/** Program switcher used inside hubs so a reader can jump between the four programs. */
 export function DatasetSwitch({ current }: { current: DatasetKey }) {
   return (
-    <nav className="hgab-dataset-switch" aria-label="Datasets">
+    <nav className="hgab-dataset-switch" aria-label="Programs">
       {DATASET_ORDER.map((k) => (
         <Link
           key={k}
@@ -310,21 +511,21 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
 }
 
 /**
- * Where the House bill sits in the budget cycle: NEP → hearings → HGAB →
- * Senate → bicameral → GAA. A plain list, no library; the current stage is
- * marked, the ones still to come are dimmed.
+ * Where the House bill sits in the budget cycle: NEP → hearings → House bill →
+ * Senate → bicameral → GAA. A plain list, no library; the current step is
+ * marked, the ones still to come are dimmed. Every acronym is expanded.
  */
 export function HgabStageStrip() {
   const stages: Array<{ name: string; meta: string; to?: string; state?: 'done' | 'current' | 'future' }> = [
-    { name: 'NEP', meta: 'President’s proposal, August 2026', to: '/2027', state: 'done' },
-    { name: 'House hearings', meta: 'Committee on Appropriations briefings', to: '/hearings', state: 'done' },
-    { name: 'House bill', meta: 'HB 10858 · 2nd & 3rd reading', state: 'current' },
-    { name: 'Senate', meta: 'Committee on Finance, then plenary', state: 'future' },
-    { name: 'Bicameral', meta: 'Conference committee reconciles both versions', state: 'future' },
-    { name: 'GAA', meta: 'Enacted appropriations · FY2020–2026 so far', to: '/gaa', state: 'future' },
+    { name: 'President’s proposal (NEP)', meta: 'Sent to Congress in August 2026', to: '/2027', state: 'done' },
+    { name: 'House hearings', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
+    { name: 'House bill', meta: 'HB 10858 · voted on twice (2nd and 3rd reading)', state: 'current' },
+    { name: 'Senate', meta: 'Its own committee, then a floor vote', state: 'future' },
+    { name: 'Bicameral', meta: 'Both chambers settle on one text', state: 'future' },
+    { name: 'Enacted budget (GAA)', meta: 'Signed into law · FY2020–2026 so far', to: '/gaa', state: 'future' },
   ];
   return (
-    <ol className="hgab-stage-strip" aria-label="Budget stages">
+    <ol className="hgab-stage-strip" aria-label="Steps of the budget process">
       {stages.map((s) => (
         <li key={s.name} className={s.state === 'current' ? 'is-current' : s.state === 'future' ? 'is-future' : ''}>
           {s.to ? (

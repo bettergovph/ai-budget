@@ -33,7 +33,7 @@ export default function HgabEvidence({
   const name = docTitle ?? docKey;
   const where = page ? `${name}, page ${page}` : name;
   return (
-    <div className="hgab-rec-evidence" role="region" aria-label={`Source evidence: ${where}`}>
+    <div className="hgab-rec-evidence" role="region" aria-label={`Source page: ${where}`}>
       <div className="hgab-rec-evidence-bar">
         <span>
           <strong>{name}</strong>
@@ -44,8 +44,8 @@ export default function HgabEvidence({
       </div>
       <iframe src={src} title={`Source document: ${where}`} loading="lazy" />
       <p className="hgab-rec-evidence-note">
-        Page numbers are PDF file pages, not the printed folio. If the viewer stays blank the
-        browser declined to embed the file; use “Open in new tab”.
+        Page numbers count the pages of the PDF file, not the number printed on the page. If the
+        viewer stays blank, your browser would not show the file here; use “Open in new tab”.
       </p>
     </div>
   );

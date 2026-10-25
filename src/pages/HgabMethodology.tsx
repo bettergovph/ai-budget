@@ -6,6 +6,10 @@
  * The vocabulary tables render straight from the labels in lib/hgab.ts so
  * the words here are the words on every chip. The reconciliation table reads
  * overview.json; the rest of the page is static and renders before it lands.
+ *
+ * Copy: this page is where the technical detail lives, so the tables and the
+ * prose keep the workbench's terms. Every section opens with two plain
+ * sentences (`.hgab-plain-intro`) a reader can stop at.
  */
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -43,30 +47,39 @@ export default function HgabMethodology() {
 
   const commit = ov?.source_commit?.slice(0, 7);
   const repo = ov?.source_repo || HGAB_SOURCE_REPO;
+  // The House bill's printed DPWH total against the NEP's, from the data rather than restated by hand.
+  const dpwhPrinted = ov?.datasets.find((d) => d.key === 'dpwh')?.printed ?? null;
+  const dpwhPrintedGap = dpwhPrinted?.nep_new_appropriations_php != null && dpwhPrinted.house_new_appropriations_php != null
+    ? dpwhPrinted.house_new_appropriations_php - dpwhPrinted.nep_new_appropriations_php
+    : null;
 
   return (
     <>
       <HgabHeader crumb="Methodology" heroBlend />
       <HgabHero
         crumb="Methodology"
-        title="How the House bill was matched to the NEP"
-        dek="Two printed documents, read by two different methods, paired by documented rules into five groups that add back up to the difference between them. This page says exactly what each word means and where the comparison stops."
+        title="How the House bill was matched to the President’s proposal"
+        dek="We compare two printed documents line by line. This page explains how each line was read and matched, what every label means, and where the comparison stops."
       />
 
       <main className="nep-main nep-prose hgab-prose">
         <nav className="hgab-dataset-switch" aria-label="On this page" style={{ marginBottom: 8 }}>
           <a href="#documents">Documents</a>
-          <a href="#extraction">Extraction</a>
+          <a href="#extraction">Reading the pages</a>
           <a href="#matching">Matching</a>
-          <a href="#bridge">The bridge</a>
-          <a href="#reconciliation">Reconciliation</a>
+          <a href="#bridge">Six groups</a>
+          <a href="#reconciliation">Checks</a>
           <a href="#limits">Limits</a>
           <a href="#disclaimer">Disclaimer</a>
         </nav>
 
         {/* ---- documents and stages ---- */}
         <section className="nep-section" id="documents">
-          <SectionHead eyebrow="Documents and stages" headline="What is being compared" />
+          <SectionHead eyebrow="Documents and versions" headline="What is being compared" />
+          <p className="hgab-plain-intro">
+            Two versions of the 2027 budget: the President’s proposed budget (NEP) and the House bill
+            (HB 10858). Only four programs list named projects in both, so only those four are compared.
+          </p>
           <p>
             The <strong>NEP</strong> is the President’s proposal, submitted to Congress in August 2026 and
             printed by DBM in volumes. For DPWH the project detail is in Volume II-B; for farm-to-market
@@ -90,7 +103,11 @@ export default function HgabMethodology() {
 
         {/* ---- extraction ---- */}
         <section className="nep-section" id="extraction">
-          <SectionHead eyebrow="Extraction" headline="How rows were read off the page" />
+          <SectionHead eyebrow="Reading the pages" headline="How lines were read off the page" />
+          <p className="hgab-plain-intro">
+            The House bill’s PDFs contain their own text, so it was read directly. The President’s DPWH
+            volume is a scan, so its text was read by software and every amount was checked a second time.
+          </p>
           <ul className="nep-bullets">
             <li>
               <strong>House volumes: native text layer.</strong> HB 10858 is a digitally typeset PDF, so
@@ -129,9 +146,13 @@ export default function HgabMethodology() {
         <section className="nep-section" id="matching">
           <SectionHead
             eyebrow="Matching and vocabulary"
-            headline="How a House row is paired with an NEP row"
-            dek="Identity between the two documents is never asserted. A pairing is a candidate produced by a rule, kept with the rule’s name, so a reader can decide how much to trust it."
+            headline="How a House line is matched to a line in the proposal"
+            dek="A House line is matched to a line in the proposal only when a written rule finds exactly one fit. Every match is a lead to check, and the rule that made it is kept with it."
           />
+          <p>
+            Identity between the two documents is never asserted. A pairing is a candidate produced by a
+            rule, kept with the rule’s name, so a reader can decide how much to trust it.
+          </p>
           <p>
             Rules run in order and each one only claims pairs that are <em>unique</em> in both documents:
             exact normalised title + region + PAP first; then the stage-qualifier bridge
@@ -142,11 +163,11 @@ export default function HgabMethodology() {
             Duplicate keys are left ambiguous on purpose.
           </p>
 
-          <h3 className="headline sm" style={{ marginTop: 24 }}>Status on every row (<code>trace</code>)</h3>
+          <h3 className="headline sm" style={{ marginTop: 24 }}>What happened to each line (<code>trace</code>)</h3>
           <div className="nep-table-wrap">
             <table className="nep-table hgab-vocab-table hgab-trace-table">
               <thead>
-                <tr><th>Code</th><th>Chip</th><th>Bridge group</th><th>Meaning</th></tr>
+                <tr><th>Code</th><th>Label on the pages</th><th>Group</th><th>Meaning</th></tr>
               </thead>
               <tbody>
                 {Object.entries(TRACE_LABELS).map(([code, t]) => (
@@ -155,7 +176,7 @@ export default function HgabMethodology() {
                     <td><StatusChip trace={code} /></td>
                     <td>
                       {BRIDGE_LABELS[t.group].label}
-                      {t.held && <span className="pill nep-pill">held out</span>}
+                      {t.held && <span className="pill nep-pill" title="Held out of the headline counts">unconfirmed</span>}
                     </td>
                     <td className="nep-td-dim">{t.help}</td>
                   </tr>
@@ -200,10 +221,15 @@ export default function HgabMethodology() {
         {/* ---- bridge ---- */}
         <section className="nep-section" id="bridge">
           <SectionHead
-            eyebrow="The five-group bridge"
-            headline="From the NEP figure to the House figure"
-            dek="Every compared row lands in exactly one group. The groups are chosen so that their signed sums reproduce the difference between the two documents — which is what makes the bucketing checkable."
+            eyebrow="Six groups (the bridge)"
+            headline="From the proposal’s total to the House total"
+            dek="Every line falls into one of six groups, such as “Higher in the House bill”. Add and subtract the groups and you get exactly the difference between the two versions."
           />
+          <p>
+            Every compared row lands in exactly one group. The groups are chosen so that their signed
+            sums reproduce the difference between the two documents — which is what makes the bucketing
+            checkable.
+          </p>
           <div className="nep-table-wrap">
             <table className="nep-table hgab-vocab-table">
               <thead><tr><th>Group</th><th>Label</th><th>Money basis</th><th>Meaning</th></tr></thead>
@@ -224,8 +250,8 @@ export default function HgabMethodology() {
           </div>
           <p className="hgab-identity" aria-label="Bridge identity">
             <span className="is-house_only">insertion candidates</span> − <span className="is-nep_only">deletion candidates</span>
-            {' '}+ <span className="is-increased">increases</span> − <span className="is-decreased">decreases</span>
-            {' '}± <span className="is-scope_review">segment-scope review</span> = House total − NEP total
+            {' '}+ <span className="is-increased">increases</span> − <span className="is-decreased">reductions</span>
+            {' '}± <span className="is-scope_review">different stretch of the same road</span> = House total − NEP total
           </p>
           <p>
             Unchanged rows contribute zero by definition and are shown for scale. Increases and
@@ -240,10 +266,15 @@ export default function HgabMethodology() {
         {/* ---- reconciliation ---- */}
         <section className="nep-section hgab-breakout" id="reconciliation">
           <SectionHead
-            eyebrow="Reconciled against this portal’s NEP data"
-            headline="Two readings of the same proposal"
-            dek="The workbench’s NEP comes from the printed PDFs; this portal’s comes from DBM’s NEP-FY2027.csv. Each check compares a control total both can compute. “Explained” differences have a scope note; a “mismatch” would mean one side misread the document."
+            eyebrow="Checked against this portal’s NEP data"
+            headline={ov ? `${ov.reconciliation.length.toLocaleString()} checks on two readings of the same proposal` : 'Two readings of the same proposal'}
+            dek="The analysis read the proposal from the printed PDFs; this portal reads it from the budget department’s spreadsheet. Where both can add up the same total, we check that they agree."
           />
+          <p>
+            The workbench’s NEP comes from the printed PDFs; this portal’s comes from DBM’s
+            NEP-FY2027.csv. Each check compares a control total both can compute. “Explained” differences
+            have a scope note; a “mismatch” would mean one side misread the document.
+          </p>
           {err && <p className="nep-empty">The reconciliation table could not be loaded: {err}</p>}
           {!ov && !err && <p className="nep-empty" aria-busy="true">Loading the reconciliation checks…</p>}
           {ov && (
@@ -254,7 +285,7 @@ export default function HgabMethodology() {
                     <th>Program</th>
                     <th className="nep-th-name">Check</th>
                     <th className="num">This portal (CSV)</th>
-                    <th className="num">Workbench (PDF)</th>
+                    <th className="num">Analysis (PDF)</th>
                     <th className="num">Difference</th>
                     <th>Status</th>
                     <th>Note</th>
@@ -289,10 +320,14 @@ export default function HgabMethodology() {
         {/* ---- limits ---- */}
         <section className="nep-section" id="limits">
           <SectionHead eyebrow="Limits" headline="Where the comparison stops" />
+          <p className="hgab-plain-intro">
+            The comparison is a starting point for questions, not a verdict. These are the places where
+            it can mislead if read too quickly.
+          </p>
           <ul className="nep-bullets">
             <li><strong>Candidates, not findings.</strong> No pairing in this build has been manually certified. A row in <em>Insertion candidates</em> means no NEP record was attached by the rules — not that the House inserted it. A re-titled or re-scoped counterpart may exist.</li>
             <li><strong>Amounts do not prove identity.</strong> Equal amounts with similar titles are still candidates; different amounts on a paired row do not break the pairing. Same road, same building family or same municipality do not establish that two rows are one project.</li>
-            <li><strong>Scope differences are real.</strong> The NEP volume includes general administration and support that the House project extract does not; the House bill’s printed DPWH total is ₱11.49 B above the NEP’s. Compare within one program, PAP or zone — the pages separate them for this reason.</li>
+            <li><strong>Scope differences are real.</strong> The NEP volume includes general administration and support that the House project extract does not{dpwhPrintedGap != null && <>; the House bill’s printed DPWH total is <span title={fmt.php(Math.abs(dpwhPrintedGap), { unit: 'full' })}>{fmt.php(Math.abs(dpwhPrintedGap))}</span> {dpwhPrintedGap >= 0 ? 'above' : 'below'} the NEP’s</>}. Compare within one program, PAP or zone — the pages separate them for this reason.</li>
             <li><strong>Region and office are per source.</strong> A paired row can carry a different region on each side. Filters use the House-side assignment; a difference is flagged, not resolved.</li>
             <li><strong>Chainage lengths are parsed.</strong> Peso-per-kilometre figures divide a printed allocation by a parsed station span. OCR-damaged spans are flagged; a repair is not a survey.</li>
             <li><strong>Transparency gaps are listing observations.</strong> “Not in Transparency” means the NEP row is absent from the published listing. It is not evidence of concealment; foreign-assisted projects are outside that listing’s scope by design.</li>
@@ -308,6 +343,10 @@ export default function HgabMethodology() {
             headline="Read before quoting any figure from this section"
             dek="Adapted from the extraction workbench’s notice of 23 October 2026. The substance is unchanged; the wording is this site’s."
           />
+          <p className="hgab-plain-intro">
+            This is our own reading of the documents, not an official record. A possible change is a lead
+            to check; it does not say anyone did anything wrong.
+          </p>
           <h3>Independent and unofficial</h3>
           <p>
             This section is independent analysis of retained copies of the FY2027 National Expenditure

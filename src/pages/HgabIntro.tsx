@@ -9,20 +9,25 @@
  * is restated by hand. Counts and pesos are never summed across programs or
  * across stages: the four programs have different record grains, and NEP,
  * HGAB 2R and HGAB 3R are separate printings to be compared, not added.
+ *
+ * Copy: plain first. Captions, notes and the finale use the section's plain
+ * words (lib/hgab-ui `PLAIN`, `COMPARE_NOT_ADD`; lib/hgab `PLAIN_TERMS`), each
+ * acronym is expanded the first time it appears, and the technical detail
+ * lives on Methodology rather than in a chapter.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
-import { DisclaimerNotice, HgabError, HgabHeader, HgabLoading } from '../components/HgabBits';
+import { DisclaimerNotice, HgabError, HgabHeader, HgabLoading, WhatThisMeans } from '../components/HgabBits';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import {
-  BRIDGE_LABELS, DATASET_ORDER, HGAB_ROOT, STAGE_LABELS, datasetPath, districtPath, formatPct,
+  BRIDGE_LABELS, DATASET_ORDER, HGAB_ROOT, PLAIN_TERMS, STAGE_LABELS, datasetPath, districtPath, formatPct,
   loadHgabDataset, loadHgabDistricts, loadHgabOverview, pctChange, recordPath,
   type BridgeGroup, type ControlRow, type DatasetKey, type HgabDatasetMeta, type HgabDatasetSummary,
   type HgabDistrictIndex, type HgabOverview, type ResidualYear,
 } from '../lib/hgab';
-import { DATASET_SHORT } from '../lib/hgab-ui';
+import { COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetOneRow, plainControlsLabel } from '../lib/hgab-ui';
 import '../nep2027.css';
 import '../nep2027-story.css';
 import '../hgab-intro.css';
@@ -152,10 +157,12 @@ export default function HgabIntro() {
         <section className="story-band story-hero hgi-hero">
           <div className="story-hero-inner">
             <p className="story-kicker">Fiscal Year 2027 · House Bill 10858</p>
-            <h1 className="story-hero-title">House Bill 10858 against the 2027 National Expenditure Program</h1>
+            <h1 className="story-hero-title">What the House changed in the President’s 2027 budget</h1>
             <p className="hgi-hero-dek">
-              HB 10858 at third reading, compared project by project with the FY2027 NEP for four
-              programs: DPWH infrastructure, farm-to-market roads, health facilities and irrigation.
+              Every year the President proposes a budget, the National Expenditure Program (NEP). The
+              House then passes its own version, the House bill (HB 10858). Here the two are compared
+              project by project for four programs: public works, farm-to-market roads, health
+              facilities and irrigation.
             </p>
             <p className="story-hero-sub">
               Four of the bill’s programs, not the whole bill · {ov.documents.length} printed source documents
@@ -169,12 +176,16 @@ export default function HgabIntro() {
           <div className="hgi-pairs">
             {datasets.map((d) => <PairedBars key={d.key} d={d} />)}
           </div>
+          <p className="hgi-note">
+            “{H3}” is the House bill as passed on third reading. Each pair of bars has its own scale.
+          </p>
           {dpwhMeta && (
             <p className="hgi-note">
-              DPWH figures are the operations population compared in the bill, not the agency total;
-              printed new appropriations are {NEP} {peso(dpwhMeta.printed?.nep_new_appropriations_php)} and
-              House {peso(dpwhMeta.printed?.house_new_appropriations_php)}. Each pair is scaled to its own
-              larger figure.
+              The DPWH figures cover the project lists compared here, not the whole department. The department’s printed totals are{' '}
+              <span title={exact(dpwhMeta.printed?.nep_new_appropriations_php)}>{peso(dpwhMeta.printed?.nep_new_appropriations_php)}</span> in
+              the proposal and{' '}
+              <span title={exact(dpwhMeta.printed?.house_new_appropriations_php)}>{peso(dpwhMeta.printed?.house_new_appropriations_php)}</span> in
+              the House bill.
             </p>
           )}
         </Chapter>
@@ -205,8 +216,8 @@ export default function HgabIntro() {
               }))}
             />
             <p className="hgi-note">
-              {H3} minus {NEP} by DPWH program; programs are as printed, with foreign-assisted projects
-              listed separately.
+              Each bar is the House bill minus the proposal for one DPWH program, as printed.
+              Foreign-assisted projects are listed on their own.
             </p>
             <Link className="story-cta" to={datasetPath('dpwh')}>Open DPWH →</Link>
           </Chapter>
@@ -224,11 +235,11 @@ export default function HgabIntro() {
             <p className="hgi-figline">
               {NEP} <strong title={exact(fap.nep_php)}>{peso(fap.nep_php)}</strong> →{' '}
               {H3} <strong title={exact(fap.hgab3_php)}>{peso(fap.hgab3_php)}</strong>
-              {' '}<span className="hgi-muted">{formatPct(pctChange(fap.hgab3_php, fap.nep_php))} · DPWH control row “{fap.label}”</span>
+              {' '}<span className="hgi-muted">{formatPct(pctChange(fap.hgab3_php, fap.nep_php))} · the DPWH program line “{fap.label}”</span>
             </p>
             {fapCuts.length > 0 && (
               <>
-                <h3 className="hgi-sub-h">Five largest paired reductions, {NEP} → {H3}</h3>
+                <h3 className="hgi-sub-h">The {fapCuts.length === 5 ? 'five' : fapCuts.length} largest cuts to matched projects, {NEP} → {H3}</h3>
                 <ol className="hgi-rank">
                   {fapCuts.map((r) => {
                     const max = Math.max(1, ...fapCuts.map((x) => x.nep_php ?? 0));
@@ -254,7 +265,10 @@ export default function HgabIntro() {
                 </ol>
               </>
             )}
-            <p className="hgi-note">These are the same projects at lower House amounts, as printed.</p>
+            <p className="hgi-note">
+              A foreign-assisted project is paid for partly with a loan or grant from abroad. These are
+              the same projects at lower House amounts, as printed.
+            </p>
             <Link className="story-cta" to={datasetPath('dpwh', 'changes')}>All DPWH changes →</Link>
           </Chapter>
         )}
@@ -263,20 +277,21 @@ export default function HgabIntro() {
         {bridge && (
           <Chapter
             n={next()}
-            kicker="The bridge"
+            kicker="How the two versions differ"
             id="hgi-ch-bridge"
             tint
-            title={`${peso(bridge.house_only.php)} of ${H3} rows have no NEP counterpart.`}
+            title={`${peso(bridge.house_only.php)} in House lines has no match in the proposal.`}
           >
             <p className="hgi-figline">
-              <strong>{bridge.house_only.rows.toLocaleString()}</strong> DPWH rows · {BRIDGE_LABELS.house_only.label.toLowerCase()} ·{' '}
-              <strong>{bridge.nep_only.rows.toLocaleString()}</strong> NEP rows have no House counterpart,{' '}
-              <strong title={exact(bridge.nep_only.php)}>{peso(bridge.nep_only.php)}</strong> · {BRIDGE_LABELS.nep_only.label.toLowerCase()}
+              <strong>{bridge.house_only.rows.toLocaleString()}</strong> DPWH lines are in the House bill only.{' '}
+              <strong>{bridge.nep_only.rows.toLocaleString()}</strong> lines,{' '}
+              <strong title={exact(bridge.nep_only.php)}>{peso(bridge.nep_only.php)}</strong>, are in the President’s proposal only.
             </p>
             <Composition bridge={bridge} />
+            <WhatThisMeans>{PLAIN.bridgeMeans}</WhatThisMeans>
             {topIncreased.length > 0 && (
               <>
-                <h3 className="hgi-sub-h">Largest increased PAP controls, {H3} − {NEP}</h3>
+                <h3 className="hgi-sub-h">Program lines with the largest increases, House minus proposal</h3>
                 <ol className="hgi-rank hgi-rank-tight">
                   {topIncreased.map((c) => (
                     <li key={c.id}>
@@ -296,10 +311,11 @@ export default function HgabIntro() {
               </>
             )}
             <p className="hgi-note">
-              House-only rows are insertion candidates: no NEP record was attached, which does not
-              confirm an insertion. Widths are each group’s money basis, not a total.
+              House-only lines are insertion candidates: leads to check, not confirmed additions. A
+              renamed project can look new. Each segment’s width is that group’s amount, not a share
+              of a total.
             </p>
-            <Link className="story-cta" to={`${HGAB_ROOT}/methodology#bridge`}>How the bridge is built →</Link>
+            <Link className="story-cta" to={`${HGAB_ROOT}/methodology#bridge`}>How the groups are worked out →</Link>
           </Chapter>
         )}
 
@@ -321,7 +337,7 @@ export default function HgabIntro() {
               caption={`${NEP} and ${H3} DPWH totals by region`}
               other={otherRegions.length ? { count: otherRegions.length, nep: otherNep, house: otherHouse } : null}
             />
-            <p className="hgi-note">Each side is tallied under the region each document prints.</p>
+            <p className="hgi-note">Each document’s amounts are counted under the region that document prints.</p>
             <Link className="story-cta" to={datasetPath('dpwh', 'projects')}>DPWH projects by region →</Link>
           </Chapter>
         )}
@@ -335,14 +351,15 @@ export default function HgabIntro() {
             tint
             title={`Second to third reading: ${signed(rd.delta_php)}.`}
           >
+            <p className="hgi-note">{PLAIN_TERMS.reading.meaning}</p>
             <p className="hgi-figline">
               {H2} <strong title={exact(rd.second_php)}>{peso(rd.second_php)}</strong> →{' '}
               {H3} <strong title={exact(rd.third_php)}>{peso(rd.third_php)}</strong>
-              {' '}<span className="hgi-muted">· DPWH · {rd.third_only.length.toLocaleString()} rows new at third reading</span>
+              {' '}<span className="hgi-muted">· DPWH · {rd.third_only.length.toLocaleString()} lines new at third reading</span>
             </p>
             <div className="hgi-readings">
               <div>
-                <h3 className="hgi-sub-h">Rows new at third reading ({rd.third_only.length})</h3>
+                <h3 className="hgi-sub-h">Lines new at third reading ({rd.third_only.length})</h3>
                 <ol className="hgi-rank hgi-rank-new">
                   {rd.third_only.map((r) => {
                     const max = Math.max(1, ...rd.third_only.map((x) => x.hgab3_php ?? 0));
@@ -350,9 +367,9 @@ export default function HgabIntro() {
                       <li key={r.id}>
                         <span className="hgi-rank-name">
                           <Link to={recordPath('dpwh', r.id)} title={r.title}>{r.title}</Link>
-                          <span className="hgi-rank-meta">{r.region ?? '—'} · {H2} —</span>
+                          <span className="hgi-rank-meta">{r.region ?? '—'} · not in the second-reading text</span>
                         </span>
-                        <span className="hgi-rank-bars" role="img" aria-label={`${H3} ${peso(r.hgab3_php)}, no ${H2} record`}>
+                        <span className="hgi-rank-bars" role="img" aria-label={`${H3} ${peso(r.hgab3_php)}, not in the second-reading text`}>
                           <span className="is-house" style={{ width: `${((r.hgab3_php ?? 0) / max) * 100}%` }} />
                         </span>
                         <strong title={exact(r.hgab3_php)}>{peso(r.hgab3_php)}</strong>
@@ -362,7 +379,7 @@ export default function HgabIntro() {
                 </ol>
               </div>
               <div>
-                <h3 className="hgi-sub-h">PAP controls that moved ({rd.changed_controls.length})</h3>
+                <h3 className="hgi-sub-h">Program lines whose total moved ({rd.changed_controls.length})</h3>
                 <ol className="hgi-rank hgi-rank-tight">
                   {rd.changed_controls.map((c) => (
                     <li key={c.id}>
@@ -387,30 +404,32 @@ export default function HgabIntro() {
                   if (!na) return null;
                   return (
                     <p className="hgi-small">
-                      Printed DPWH new appropriations:{' '}
-                      <span title={exact(na.second_php)}>{peso(na.second_php)}</span> at {H2} and{' '}
-                      <span title={exact(na.third_php)}>{peso(na.third_php)}</span> at {H3}
-                      {na.delta_php === 0 ? ' — unchanged' : ` — ${signed(na.delta_php)}`}
-                      {same > 0 && `; ${same} other printed controls unchanged`}
+                      DPWH’s printed total for the year:{' '}
+                      <span title={exact(na.second_php)}>{peso(na.second_php)}</span> at second reading and{' '}
+                      <span title={exact(na.third_php)}>{peso(na.third_php)}</span> at third
+                      {na.delta_php === 0 ? ', unchanged.' : `, ${signed(na.delta_php)}.`}
+                      {same > 0 && ` ${same} other printed totals did not move.`}
                       {moved.length > 0 && (
                         <>
-                          {'; moved: '}
+                          {' These moved: '}
                           {moved.map((c, i) => (
                             <span key={c.id}>
                               {i > 0 && ', '}
                               {c.label} <span title={exact(c.delta_php)}>{signed(c.delta_php)}</span>
                             </span>
                           ))}
+                          .
                         </>
                       )}
-                      .
                     </p>
                   );
                 })()}
               </div>
             </div>
             <p className="hgi-note">
-              Five DPWH rows appear only in the third-reading printing; two PAP controls carry the difference.
+              {rd.third_only.length.toLocaleString()} DPWH {rd.third_only.length === 1 ? 'line appears' : 'lines appear'} only
+              in the third-reading text. {rd.changed_controls.length.toLocaleString()}{' '}
+              {rd.changed_controls.length === 1 ? 'program line carries' : 'program lines carry'} the difference.
             </p>
             <Link className="story-cta" to={datasetPath('dpwh', 'readings')}>Second vs third reading →</Link>
           </Chapter>
@@ -420,16 +439,16 @@ export default function HgabIntro() {
         {annexes.length > 0 && (
           <Chapter
             n={next()}
-            kicker="The annexes"
+            kicker="The other three programs"
             id="hgi-ch-annexes"
-            title={`The three annexes: ${annexes.map((a) => `${a.meta.short} ${signed(delta(a.meta))}`).join(', ')}.`}
+            title={`The other ${annexes.length === 3 ? 'three' : annexes.length} programs: ${annexes.map((a) => `${DATASET_SHORT[a.key]} ${signed(delta(a.meta))}`).join(', ')}.`}
           >
             <div className="hgi-annexes">
               {annexes.map((a) => <AnnexPanel key={a.key} meta={a.meta} s={a.s} />)}
             </div>
             <p className="hgi-note">
-              Each annex is one House printing, identical at second and third reading; HFEP lists its
-              printed categories, not its funding columns.
+              Each of these House lists is the same at second and third reading. Health facilities are
+              shown by type of facility, not split into building, equipment and vehicle budgets.
             </p>
           </Chapter>
         )}
@@ -449,10 +468,10 @@ export default function HgabIntro() {
               {' '}<span className="hgi-muted">({fmt.pct(coShare, 1)})</span> ·{' '}
               <strong title={exact(resid27.deo_php)}>{peso(resid27.deo_php)}</strong> under district engineering offices
             </p>
-            <Stacks rows={[{ label: `FY2027 ${H3}`, y: resid27 }, ...(resid26 ? [{ label: 'FY2026 GAA', y: resid26 }] : [])]} />
+            <Stacks rows={[{ label: `FY2027 ${H3}`, y: resid27 }, ...(resid26 ? [{ label: 'FY2026 enacted (GAA)', y: resid26 }] : [])]} />
             <p className="hgi-note">
-              FY2026 GAA covers the whole department, all funds; FY2027 {H3} covers the compared operations
-              population. Read each bar on its own.
+              The 2026 bar is the enacted budget (GAA) for the whole department, all funds. The 2027 bar
+              covers only the project lists compared here. Read each bar on its own.
             </p>
             <Link className="story-cta" to={districtPath()}>Open districts →</Link>
           </Chapter>
@@ -463,30 +482,38 @@ export default function HgabIntro() {
           <p className="story-kicker">Before the tables</p>
           <h2 className="story-h story-h-paper" id="hgi-finale-h">How to read these figures</h2>
           <ul className="hgi-rules">
-            <li>Pairings between NEP and House rows are candidates produced by documented rules, not confirmed findings.</li>
-            <li>Stages are compared, never added: {NEP}, {H2} and {H3} are separate printings.</li>
-            <li>Amounts are printed allocations, not obligations or spending.</li>
+            <li>Matches between the proposal and the House bill come from written rules. They are leads to check, not confirmed findings.</li>
+            <li>The proposal and the House bill are {COMPARE_NOT_ADD}.</li>
+            <li>Amounts are what the documents set aside, not money spent.</li>
+            <li>Nothing here says any office or official did anything wrong.</li>
           </ul>
           <div className="story-ctas">
             {datasets.map((d) => (
               <Link key={d.key} to={datasetPath(d.key)}>
                 <strong>{DATASET_SHORT[d.key]}</strong>
                 <span>
-                  {d.counts.nep.toLocaleString()} {NEP} · {(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} {H3} rows
+                  {d.counts.nep.toLocaleString()} lines in the proposal · {(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill
                 </span>
               </Link>
             ))}
             <Link to={districtPath()}><strong>Districts</strong><span>DPWH offices and the districts they serve</span></Link>
-            <Link to={`${HGAB_ROOT}/sources`}><strong>Sources</strong><span>documents, checksums, downloads</span></Link>
-            <Link to={`${HGAB_ROOT}/methodology`}><strong>Methodology</strong><span>matching rules, the bridge, limits</span></Link>
+            <Link to={`${HGAB_ROOT}/sources`}><strong>Sources</strong><span>the documents, their fingerprints and downloads</span></Link>
+            <Link to={`${HGAB_ROOT}/methodology`}><strong>Methodology</strong><span>how lines were matched, and the limits</span></Link>
           </div>
           <p className="hgi-quiet">
-            <Link to={`${HGAB_ROOT}/overview`}>Dashboard view →</Link>
+            Maps:{' '}
+            {datasets.map((d, i) => (
+              <span key={d.key}>
+                {i > 0 && ' · '}
+                <Link to={datasetPath(d.key, 'map')}>{DATASET_SHORT[d.key]}</Link>
+              </span>
+            ))}
+            {' '}· <Link to={`${HGAB_ROOT}/overview`}>Dashboard view →</Link>
           </p>
           <p className="story-provenance">
             {built && `Built ${built.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · `}
-            figures carried verbatim from{' '}
-            <a href={ov.source_repo} target="_blank" rel="noopener noreferrer">the extraction workbench</a>
+            figures copied unchanged from{' '}
+            <a href={ov.source_repo} target="_blank" rel="noopener noreferrer">the analysis repository</a>
             {commit && <> at commit <code>{commit}</code></>}
           </p>
         </section>
@@ -639,10 +666,10 @@ function PairedBars({ d }: { d: HgabDatasetMeta }) {
         <span className="hgi-muted">{pct == null ? '' : `${formatPct(pct)} vs ${NEP}`}</span>
       </p>
       <p className="hgi-pair-counts">
-        {d.counts.nep.toLocaleString()} {NEP} records · {houseRows == null ? '—' : houseRows.toLocaleString()} {H3} records
-        {!d.has_readings && ' · one House figure, identical at 2R and 3R'}
+        {d.counts.nep.toLocaleString()} lines in the proposal · {houseRows == null ? '—' : houseRows.toLocaleString()} in the House bill
+        {!d.has_readings && ' · the House list is the same at both readings'}
       </p>
-      <p className="hgi-pair-grain"><span>One row:</span> {d.grain}</p>
+      <p className="hgi-pair-grain"><span>What one row is:</span> {datasetOneRow(d)}</p>
     </article>
   );
 }
@@ -708,7 +735,7 @@ function Composition({ bridge }: { bridge: HgabDatasetMeta['bridge'] }) {
   const series = cells.map((c) => `${BRIDGE_LABELS[c.g].label} ${peso(c.php)} (${c.cell.rows.toLocaleString()} rows)`).join(', ');
   return (
     <>
-      <div className="hgi-comp" role="img" aria-label={`DPWH bridge by money basis, ${H3} against ${NEP}: ${series}`}>
+      <div className="hgi-comp" role="img" aria-label={`DPWH lines in six groups, by amount, ${H3} against ${NEP}: ${series}`}>
         {cells.map((c) => (
           <span
             key={c.g}
@@ -727,13 +754,13 @@ function Composition({ bridge }: { bridge: HgabDatasetMeta['bridge'] }) {
               <span className="hgi-legend-sub">{BRIDGE_LABELS[c.g].sub}</span>
             </span>
             <span className="hgi-legend-val" title={exact(c.php)}>{peso(c.php)}</span>
-            <span className="hgi-legend-rows">{c.cell.rows.toLocaleString()} rows</span>
+            <span className="hgi-legend-rows">{c.cell.rows.toLocaleString()} lines</span>
           </li>
         ))}
       </ul>
       <SrTable
-        caption={`DPWH bridge by money basis, ${H3} against ${NEP}`}
-        head={['Group', 'Money basis', 'Rows']}
+        caption={`DPWH lines in six groups, by amount, ${H3} against ${NEP}`}
+        head={['Group', 'Amount', 'Lines']}
         rows={cells.map((c) => [BRIDGE_LABELS[c.g].label, peso(c.php), c.cell.rows.toLocaleString()])}
       />
     </>
@@ -815,6 +842,8 @@ function AnnexPanel({ meta, s }: { meta: HgabDatasetMeta; s: HgabDatasetSummary 
   const controls = s.controls
     .filter((c) => !c.id.startsWith('column:'))
     .sort((a, b) => (b.delta_php ?? -Infinity) - (a.delta_php ?? -Infinity));
+  // "Regions" → "region", "Sub-programs" → "sub-program", "Categories" → "category".
+  const byLabel = plainControlsLabel(meta.controls_label).toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
   return (
     <article className="hgi-annex" aria-labelledby={`hgi-annex-${meta.key}`}>
       <p className="hgi-pair-agency">{meta.agency}</p>
@@ -825,12 +854,12 @@ function AnnexPanel({ meta, s }: { meta: HgabDatasetMeta; s: HgabDatasetSummary 
       </p>
       <p className="hgi-small">
         {NEP} <span title={exact(meta.totals.nep_php)}>{peso(meta.totals.nep_php)}</span> → {H3}{' '}
-        <span title={exact(house)}>{peso(house)}</span> · {meta.controls_label.toLowerCase()} below
+        <span title={exact(house)}>{peso(house)}</span> · by {byLabel} below
       </p>
       <Diverging
         compact
-        label={`${H3} minus ${NEP} by ${meta.controls_label.toLowerCase()}, ${meta.short}, ${controls.length} bars: ${controls.map((c) => `${c.label} ${signed(c.delta_php)}`).join(', ')}`}
-        caption={`${meta.short}: ${H3} minus ${NEP} by ${meta.controls_label.toLowerCase()}`}
+        label={`${H3} minus ${NEP} by ${byLabel}, ${DATASET_SHORT[meta.key]}, ${controls.length} bars: ${controls.map((c) => `${c.label} ${signed(c.delta_php)}`).join(', ')}`}
+        caption={`${DATASET_SHORT[meta.key]}: ${H3} minus ${NEP} by ${byLabel}`}
         rows={controls.map((c) => ({ key: c.id, label: shortLabel(c.label), title: c.label, delta: c.delta_php }))}
       />
       <Link className="hgi-annex-link" to={datasetPath(meta.key)}>Open {DATASET_SHORT[meta.key]} →</Link>
@@ -846,7 +875,7 @@ const OFFICE_SEGMENTS: ReadonlyArray<{ key: keyof ResidualYear; cls: string; lab
   { key: 'deo_php', cls: 'is-deo', label: 'District engineering offices' },
   { key: 'central_office_php', cls: 'is-co', label: 'Central Office' },
   { key: 'regional_offices_php', cls: 'is-ro', label: 'Regional offices' },
-  { key: 'unmatched_php', cls: 'is-un', label: 'Unmatched units' },
+  { key: 'unmatched_php', cls: 'is-un', label: 'Offices we could not match' },
 ];
 
 function Stacks({ rows }: { rows: Array<{ label: string; y: ResidualYear }> }) {
@@ -888,8 +917,8 @@ function Stacks({ rows }: { rows: Array<{ label: string; y: ResidualYear }> }) {
         ))}
       </ul>
       <SrTable
-        caption="DPWH by implementing office, per year and stage"
-        head={['Year and stage', ...OFFICE_SEGMENTS.map((s) => s.label), 'Total']}
+        caption="DPWH by implementing office, per year and version"
+        head={['Year and version', ...OFFICE_SEGMENTS.map((s) => s.label), 'Total']}
         rows={rows.map(({ label, y }) => [label, ...OFFICE_SEGMENTS.map((s) => peso(amount(y, s.key))), peso(y.total_php)])}
       />
     </>
