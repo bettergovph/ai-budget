@@ -82,7 +82,7 @@ export default function HgabDataset() {
     return <HgabError message={`There is no House-bill program called “${key}”. The four programs are dpwh, fmr, hfep and nia.`} />;
   }
   if (current?.err) return <HgabError message={current.err} />;
-  if (!summary || !overview || !d) return <HgabLoading what={`the ${key.toUpperCase()} program`} heroBlend />;
+  if (!summary || !overview || !d) return <HgabLoading what={`the ${key.toUpperCase()} program`} />;
 
   const tabs = hubViews(d.has_readings);
   const view = params.get('view');
@@ -105,10 +105,10 @@ export default function HgabDataset() {
       <HgabHeader
         crumb={DATASET_SHORT[d.key]}
         compiledMeta={houseTotal != null ? `${fmt.shortPhp(houseTotal)} · ${houseLabel}` : undefined}
-        heroBlend
       />
 
       <HgabHero
+        compact
         crumb={d.agency}
         title={d.label}
         dek={plainSummary}
@@ -224,7 +224,8 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
         {identityHolds
           ? <>The six groups add up to the difference exactly, to the peso. </>
           : <>The groups add up to <code>{fmt.php(check, { unit: 'full' })}</code> against a difference of <code>{fmt.php(net, { unit: 'full' })}</code>; see Methodology. </>}
-        “Same amount in both” adds nothing to the difference. Unconfirmed matches are left out of these counts;{' '}
+        “Same amount in both” adds nothing to the difference. “In the House bill only” includes lines with a possible
+        but unconfirmed match in the proposal;{' '}
         <Link to={`${datasetPath(d.key, 'projects')}&held=only`}>see them under Projects</Link>.
       </p>
 
@@ -682,7 +683,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
     <>
       <SectionHead
         eyebrow="Second vs third reading"
-        headline="What the House changed between its own two votes"
+        headline="Changes between the House’s second and third reading"
         dek={`${PLAIN_TERMS.reading.meaning} This compares the text printed for each vote.`}
       />
       <HgabDetails>

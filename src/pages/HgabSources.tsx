@@ -36,7 +36,7 @@ export default function HgabSources() {
   }, []);
 
   if (err) return <HgabError message={err} />;
-  if (!ov) return <HgabLoading what="the FY2027 House bill sources" heroBlend />;
+  if (!ov) return <HgabLoading what="the FY2027 House bill sources" />;
 
   const docs = [...ov.documents].sort(
     (a, b) =>
@@ -52,8 +52,9 @@ export default function HgabSources() {
 
   return (
     <>
-      <HgabHeader crumb="Sources" heroBlend />
+      <HgabHeader crumb="Sources" />
       <HgabHero
+        compact
         crumb="Sources"
         title="Documents, downloads and where the figures come from"
         dek="These are the printed documents every figure was read from, and the files you can download. Each document has a fingerprint, so anyone can check they hold the same copy. The last section shows how to quote a figure."

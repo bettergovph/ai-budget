@@ -978,3 +978,38 @@ a.hgab-stage-name:hover { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .hgab-subnav-caret { transition: none; }
 }
+
+/* --- compact page heading (subpages) --------------------------------------
+ * Breadcrumb, title and one short line on the page, no navy band. Lines up
+ * with .nep-main (1504 px, 32 px gutters) and reuses the site's page-title
+ * type so subpages read like the rest of the portal. */
+.hgab-pagehead-inner {
+  max-width: 1504px;
+  margin: 0 auto;
+  padding: 28px 32px 0;
+}
+.hgab-pagehead .page-title { max-width: 1100px; }
+.hgab-pagehead .page-dek { max-width: 820px; line-height: 1.5; }
+.hgab-pagehead-note {
+  margin: 8px 0 0;
+  max-width: 820px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.hgab-pagehead .hgab-crumb a {
+  color: var(--accent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.hgab-pagehead .hgab-crumb a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.hgab-pagehead .hgab-crumb-here { color: var(--ink-3); }
+.hgab-pagehead + .nep-main { padding-top: 20px; }
+@media (max-width: 720px) {
+  .hgab-pagehead-inner { padding: 16px 14px 0; }
+  .hgab-pagehead + .nep-main { padding-top: 12px; }
+}
+
+/* responsive.css shrinks every .view-tabs button to 10.5px on phones (meant
+   for in-page tab rows). The program dropdowns are buttons, so without this
+   they would render smaller than the plain links beside them. */
+.primary-subnav .view-tabs.section-tabs .hgab-subnav-item > button { font-size: 14px !important; }
