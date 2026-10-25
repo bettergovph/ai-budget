@@ -79,6 +79,8 @@ function walk(dir: string): string[] {
   const out: string[] = [];
   for (const name of readdirSync(dir).sort()) {
     if (name.startsWith(".")) continue;
+    // The D1 export (npm run build:hgab-d1) is loaded with wrangler, never served from R2.
+    if (/^d1-import(-\d+)?\.sql$/.test(name)) continue;
     const p = resolve(dir, name);
     if (statSync(p).isDirectory()) out.push(...walk(p));
     else out.push(p);
