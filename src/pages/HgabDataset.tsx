@@ -12,7 +12,7 @@
  * counts and say so.
  *
  * Copy: plain first. The hero and KPIs read the dataset's reader-facing
- * `summary`, `one_row` and `caveats`; the technical `grain` and `scope` sit in
+ * `summary` and `caveats`; the technical `grain` and `scope` sit in
  * a "Details for analysts" block under the KPIs. Table headers and notes avoid
  * the workbench's vocabulary ("bridge", "ledger", "controls", "stages").
  */
@@ -35,7 +35,7 @@ import {
 } from '../lib/hgab';
 import { controlHouseDoc, papLabel } from '../lib/hgab-query';
 import {
-  COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetCaveats, datasetOneRow, datasetSummary, hubViews, plainControlsLabel,
+  COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetCaveats, datasetSummary, hubViews, plainControlsLabel,
   sentenceCase, type HubView,
 } from '../lib/hgab-ui';
 import '../hgab-dataset.css';
@@ -101,7 +101,6 @@ export default function HgabDataset() {
   const pct = pctChange(houseTotal, d.totals.nep_php);
   const houseLabel = d.has_readings ? STAGE_LABELS[houseKey].short : 'House bill';
   const plainSummary = datasetSummary(d);
-  const oneRow = datasetOneRow(d);
   const caveats = datasetCaveats(d);
   const totalsLabel = plainControlsLabel(d.controls_label).toLowerCase();
 
@@ -118,7 +117,6 @@ export default function HgabDataset() {
         crumb={isOverview ? d.agency : <>{d.agency}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{tabLabel}</span></>}
         title={d.label}
         dek={plainSummary}
-        note={<><strong>What one row is:</strong> {oneRow}</>}
       />
 
       <main className="nep-main">
@@ -129,7 +127,7 @@ export default function HgabDataset() {
                 {
                   label: STAGE_LABELS.nep.short,
                   value: fmt.shortPhp(d.totals.nep_php),
-                  sub: `${d.counts.nep.toLocaleString()} rows · ${STAGE_LABELS.nep.label}`,
+                  sub: `${d.counts.nep.toLocaleString()} rows in the ${STAGE_LABELS.nep.short}`,
                 },
                 {
                   label: houseLabel,
@@ -149,7 +147,7 @@ export default function HgabDataset() {
                 {
                   label: 'What is compared',
                   value: <span className="hgab-ds-kpi-text" title={plainSummary}>The project lists, not the agency’s whole budget</span>,
-                  sub: `${summary.controls.length.toLocaleString()} printed totals, by ${singular(totalsLabel)}`,
+                  sub: `${summary.controls.length.toLocaleString()} published totals, by ${singular(totalsLabel)}`,
                 },
               ]}
             />
@@ -158,12 +156,12 @@ export default function HgabDataset() {
 
             <HgabDetails>
               <dl>
-                <dt>One row</dt>
+                <dt>Each row</dt>
                 <dd>{d.grain}</dd>
                 <dt>Scope</dt>
                 <dd>{d.scope}</dd>
                 <dt>Totals table</dt>
-                <dd>{summary.controls.length.toLocaleString()} {d.controls_label.toLowerCase()} as printed in the documents</dd>
+                <dd>{summary.controls.length.toLocaleString()} {d.controls_label.toLowerCase()} as published in the documents</dd>
               </dl>
             </HgabDetails>
           </>
@@ -235,15 +233,15 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
           ? <>The six groups add up to the difference exactly, to the peso. </>
           : <>The groups add up to <code>{fmt.php(check, { unit: 'full' })}</code> against a difference of <code>{fmt.php(net, { unit: 'full' })}</code>; see Methodology. </>}
         “Same amount in both” adds nothing to the difference. “In the House bill only” includes lines with a possible
-        but unconfirmed match in the proposal;{' '}
+        but unconfirmed match in the NEP;{' '}
         <Link to={`${datasetPath(d.key, 'projects')}&held=only`}>see them under Projects</Link>.
       </p>
 
       <div className="nep-section">
         <SectionHead
           eyebrow={sentenceCase(plainControlsLabel(d.controls_label))}
-          headline={`${s.controls.length.toLocaleString()} totals printed in each document`}
-          dek={`The subtotals each document prints for these projects, side by side. The columns are ${COMPARE_NOT_ADD}. Page buttons open the source PDF at the cited page.`}
+          headline={`${s.controls.length.toLocaleString()} totals published in each document`}
+          dek={`The subtotals each document publishes for these projects, side by side. The columns are ${COMPARE_NOT_ADD}. Page buttons open the source PDF at the cited page.`}
         />
         <ControlsTable s={s} docs={docs} />
       </div>
@@ -252,8 +250,8 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
         <div className="nep-section">
           <SectionHead
             eyebrow="By label"
-            headline="House bill vs proposal, by region, office or program"
-            dek="Each side is tallied under the label its own document prints. A project filed under one region in the proposal and another in the House bill counts once on each side. Nothing is merged or guessed."
+            headline="House bill vs the NEP, by region, office or program"
+            dek="Each side is tallied under the label its own document shows. A project filed under one region in the NEP and another in the House bill counts once on each side. Nothing is merged or guessed."
           />
           <DimTable s={s} />
         </div>
@@ -370,7 +368,7 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
     );
   }
 
-  if (!rows.length) return <p className="nep-empty">The documents print no subtotals for this program.</p>;
+  if (!rows.length) return <p className="nep-empty">The documents publish no subtotals for this program.</p>;
 
   const cols = 4 + (has2 ? 1 : 0) + (twoReadings ? 1 : 0) + 1;
 
@@ -397,8 +395,8 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
               {head('nep', STAGE_LABELS.nep.short, 'num', STAGE_LABELS.nep.label)}
               {has2 && head('hgab2', STAGE_LABELS.hgab2.short, 'num', STAGE_LABELS.hgab2.label)}
               {head('hgab3', twoReadings ? STAGE_LABELS[houseKey].short : 'House bill', 'num',
-                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading print the same list')}
-              {head('delta', `Change vs ${STAGE_LABELS.nep.short}`, 'num', 'Latest House reading minus the President’s proposal')}
+                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading publish the same list')}
+              {head('delta', `Change from the ${STAGE_LABELS.nep.short}`, 'num', 'Latest House reading minus the NEP')}
               {twoReadings && head('reading', '3R − 2R', 'num', 'Third reading minus second reading')}
               <th>Pages</th>
             </tr>
@@ -442,7 +440,7 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
                   {(partitions.length > 1 || sums.excluded > 0) && (
                     <span className="nep-code">
                       {(part.length - sums.excluded).toLocaleString()} rows added up
-                      {sums.excluded > 0 && ' · the printed Total row is shown above but not added again'}
+                      {sums.excluded > 0 && ' · the published Total row is shown above but not added again'}
                       {partitions.length > 1 && ' · one way of splitting the same money'}
                     </span>
                   )}
@@ -460,7 +458,7 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
       </div>
       <p className="nep-hier-note">
         Each column is checked against that document’s total for this program. The columns are {COMPARE_NOT_ADD}.
-        {partitions.length > 1 && ' This program prints two ways of splitting the same money. Each is checked on its own; do not add them together.'}
+        {partitions.length > 1 && ' The documents publish two ways of splitting this program’s money. Each is checked on its own; do not add them together.'}
       </p>
     </div>
   );
@@ -541,7 +539,7 @@ function DimTable({ s }: { s: HgabDatasetSummary }) {
               {head('nep', STAGE_LABELS.nep.short, 'num', STAGE_LABELS.nep.label)}
               {head('house', 'House', 'num', 'The House bill, latest reading')}
               <th className="nep-th-bar" />
-              {head('delta', `Change vs ${STAGE_LABELS.nep.short}`, 'num', 'House bill minus the President’s proposal')}
+              {head('delta', `Change from the ${STAGE_LABELS.nep.short}`, 'num', 'House bill minus the NEP')}
             </tr>
           </thead>
           <tbody>
@@ -578,7 +576,7 @@ function DimTable({ s }: { s: HgabDatasetSummary }) {
         </table>
       </div>
       <p className="nep-hier-note">
-        Grey bar: the President’s proposal. Blue bar: the House bill. Both on one shared scale. Click a
+        Grey bar: the NEP. Blue bar: the House bill. Both on one shared scale. Click a
         label to open those projects. A paired row carries the House label where both exist, so the
         filtered count can differ from the tally here.
       </p>
@@ -598,8 +596,8 @@ function ChangesTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }
     <>
       <SectionHead
         eyebrow="Largest changes"
-        headline="What moved between the President’s proposal and the House bill"
-        dek={`The largest lines in each group, by the amount that group counts. Unconfirmed matches are left out of these figures; see them under Projects with “Unconfirmed only”.`}
+        headline="What moved between the NEP and the House bill"
+        dek={`The largest lines in each group, by the amount that group counts. Unconfirmed matches are left out of these lists; see them under Projects with “Unconfirmed only”.`}
       />
       <WhatThisMeans>{PLAIN.candidateMeans}</WhatThisMeans>
       {CHANGE_GROUPS.map((g) => {
@@ -650,7 +648,7 @@ function TopTable({
             <th>Region</th>
             {pap && <th title={dataset.key === 'dpwh' ? PLAIN_TERMS.pap.meaning : undefined}>{pap}</th>}
             <th title={COMPARE_NOT_ADD}>Amount in each version</th>
-            <th className="num" title="Latest House reading minus the President’s proposal">Change vs {STAGE_LABELS.nep.short}</th>
+            <th className="num" title="Latest House reading minus the NEP">Change from the {STAGE_LABELS.nep.short}</th>
             <th>What happened to this line</th>
             <th>Pages</th>
           </tr>
@@ -684,7 +682,7 @@ function TopTable({
 function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }) {
   const d = s.dataset;
   const r = s.readings;
-  if (!r) return <p className="nep-empty">The House printed this program once; there is no second version to compare.</p>;
+  if (!r) return <p className="nep-empty">The House published this program once; there is no second version to compare.</p>;
   const pct = pctChange(r.third_php, r.second_php);
   const statuses = Object.entries(r.status_counts).sort((a, b) => b[1] - a[1]);
   const houseDoc = controlHouseDoc(docs, d);
@@ -694,13 +692,13 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
       <SectionHead
         eyebrow="Second vs third reading"
         headline="Changes between the House’s second and third reading"
-        dek={`${PLAIN_TERMS.reading.meaning} This compares the text printed for each vote.`}
+        dek={`${PLAIN_TERMS.reading.meaning} This compares the text published for each vote.`}
       />
       <HgabDetails>
         <p>
           Rows are keyed on title, PAP, region, office and funding zone. Where a key repeats, the rows
           are grouped rather than guessed. Second-reading rows cite Volume I-C of the second-reading
-          printing; third-reading rows cite Volume I-C of the third.
+          text; third-reading rows cite Volume I-C of the third.
         </p>
       </HgabDetails>
       <KpiStrip
@@ -737,7 +735,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
           </div>
         </div>
         <div>
-          <SectionHead size="sm" eyebrow="Totals that moved" headline="Program lines whose printed total changed" />
+          <SectionHead size="sm" eyebrow="Totals that moved" headline="Program lines whose published total changed" />
           {r.changed_controls.length ? (
             <div className="nep-table-wrap">
               <table className="nep-table">
@@ -770,7 +768,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
                 </tbody>
               </table>
             </div>
-          ) : <p className="nep-empty">No printed total changed between the two votes.</p>}
+          ) : <p className="nep-empty">No published total changed between the two votes.</p>}
         </div>
       </div>
 
@@ -779,7 +777,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
           size="sm"
           eyebrow="New at third reading"
           headline={`${r.third_only.length.toLocaleString()} rows not in the second-reading text`}
-          dek="Printed in the third-reading volume with no matching line in the second. These are changes inside the House bill itself, not comparisons with the President’s proposal."
+          dek="Listed in the third-reading volume with no matching line in the second. These are changes inside the House bill itself, not comparisons with the NEP."
           right={<Link className="hgab-ds-seeall" to={`${datasetPath(d.key, 'projects')}&reading=third_only`}>Open in Projects →</Link>}
         />
         <TopTable rows={r.third_only} dataset={d} docs={docs} emptyLabel="Nothing was added at third reading." />
@@ -802,7 +800,7 @@ function DocumentsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[]
       <SectionHead
         eyebrow="Source documents"
         headline="The PDFs behind this program’s figures"
-        dek="Every amount on these pages cites a page in one of these files. Page numbers count PDF file pages, not the numbers printed on the page. The fingerprint identifies the exact copy we read."
+        dek="Every amount on these pages cites a page in one of these files. Page numbers count PDF file pages, not the page numbers shown on the page. The fingerprint identifies the exact copy we read."
       />
       <div className="nep-table-wrap hgab-ds-docs">
         <table className="nep-table">
@@ -852,7 +850,7 @@ function DocumentsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[]
           {rows.map((doc) => (
             <div key={doc.key} style={{ display: 'contents' }}>
               <dt>{doc.key}</dt>
-              <dd>{doc.volume ? `Volume ${doc.volume} · ` : ''}SHA-256 <code>{doc.sha256}</code></dd>
+              <dd>{doc.volume ? `${/^[IVX]+(-[A-Z])?\b/.test(doc.volume) ? 'Volume ' : ''}${doc.volume} · ` : ''}SHA-256 <code>{doc.sha256}</code></dd>
             </div>
           ))}
         </dl>

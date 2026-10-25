@@ -53,7 +53,7 @@ export function isDatasetKey(v: string | undefined): v is DatasetKey {
 export type StageKey = 'nep' | 'hgab2' | 'hgab3' | 'api';
 export const STAGE_ORDER: readonly StageKey[] = ['nep', 'hgab2', 'hgab3', 'api'];
 export const STAGE_LABELS: Record<StageKey, { short: string; label: string; plain: string }> = {
-  nep: { short: 'NEP', label: "President's proposed budget (NEP)", plain: "the President's proposal" },
+  nep: { short: 'NEP', label: 'NEP', plain: 'the NEP' },
   hgab2: { short: 'House 2R', label: 'House bill, second reading', plain: 'the House bill at second reading' },
   hgab3: { short: 'House 3R', label: 'House bill, third reading', plain: 'the House bill at third reading' },
   api: { short: 'DPWH site', label: 'DPWH transparency website listing', plain: "the DPWH transparency website's list" },
@@ -65,7 +65,7 @@ export const STAGE_LABELS: Record<StageKey, { short: string; label: string; plai
  * nothing technical should appear on a reader-facing surface without one.
  */
 export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
-  nep: { term: 'NEP', meaning: "National Expenditure Program: the President's proposed budget, sent to Congress every August." },
+  nep: { term: 'NEP', meaning: 'National Expenditure Program: the budget the President submits to Congress each August.' },
   hgab: { term: 'House bill', meaning: "The House of Representatives' version of the budget, House Bill 10858 for 2027. It goes to the Senate next." },
   reading: { term: 'Second and third reading', meaning: 'The House votes on a bill twice. The third-reading text is the version it sends to the Senate.' },
   pap: { term: 'Program line', meaning: "A heading in the budget under which projects are listed, for example 'Preventive Maintenance - Primary Roads'." },
@@ -74,7 +74,7 @@ export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
   candidate: { term: 'Candidate', meaning: 'A match or a gap found by comparing project names, places and amounts. It is a lead for checking, not a confirmed change.' },
   tier: { term: 'Tier A and Tier B', meaning: 'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.' },
   residual: { term: 'Not assigned to a district', meaning: 'Money listed under the DPWH Central Office or a regional office. It does not appear on any district card.' },
-  stages: { term: 'Two versions, not two budgets', meaning: "The President's proposal and the House bill are two versions of the same budget. Compare them; never add them together." },
+  stages: { term: 'Two versions, not two budgets', meaning: 'The NEP and the House bill are two versions of the same budget. Compare them; never add them together.' },
 };
 
 // ---------------------------------------------------------------------------
@@ -102,12 +102,12 @@ export const BRIDGE_LABELS: Record<BridgeGroup, { label: string; sub: string; he
   house_only: {
     label: 'In the House bill only',
     sub: 'insertion candidates',
-    help: "Projects listed in the House bill that we could not find in the President's proposal. Some may be new; others may be renamed or re-scoped lines. That is why they are called candidates.",
+    help: 'Projects listed in the House bill that we could not find in the NEP. Some may be new; others may be renamed or re-scoped lines. That is why they are called candidates.',
   },
   nep_only: {
-    label: "In the President's proposal only",
+    label: 'In the NEP only',
     sub: 'deletion candidates',
-    help: "Projects in the President's proposal that we could not find in the House bill. They may have been dropped, renamed or merged, so they are called candidates.",
+    help: 'Projects in the NEP that we could not find in the House bill. They may have been dropped, renamed or merged, so they are called candidates.',
   },
   unchanged: {
     label: 'Same amount in both',
@@ -117,12 +117,12 @@ export const BRIDGE_LABELS: Record<BridgeGroup, { label: string; sub: string; he
   increased: {
     label: 'Higher in the House bill',
     sub: 'matched, amount raised',
-    help: 'Projects found in both documents where the House bill carries a larger amount than the proposal.',
+    help: 'Projects found in both documents where the House bill carries a larger amount than the NEP.',
   },
   decreased: {
     label: 'Lower in the House bill',
     sub: 'matched, amount reduced',
-    help: 'Projects found in both documents where the House bill carries a smaller amount than the proposal.',
+    help: 'Projects found in both documents where the House bill carries a smaller amount than the NEP.',
   },
   scope_review: {
     label: 'Different stretch of the same road',
@@ -172,12 +172,12 @@ export interface Bridge {
  */
 export const TRACE_LABELS: Record<string, { label: string; group: BridgeGroup; held?: boolean; help: string }> = {
   amount_same: { label: 'Same amount in both', group: 'unchanged', help: 'Found in both documents with the same amount.' },
-  house_only_candidate: { label: 'House bill only', group: 'house_only', help: "Listed in the House bill; no matching line found in the President's proposal. A candidate, not a confirmed addition." },
-  nep_only_candidate: { label: "President's proposal only", group: 'nep_only', help: "Listed in the President's proposal; no matching line found in the House bill. A candidate, not a confirmed removal." },
+  house_only_candidate: { label: 'House bill only', group: 'house_only', help: 'Listed in the House bill; no matching line found in the NEP. A candidate, not a confirmed addition.' },
+  nep_only_candidate: { label: 'NEP only', group: 'nep_only', help: 'Listed in the NEP; no matching line found in the House bill. A candidate, not a confirmed removal.' },
   candidate_increase: { label: 'Higher in the House bill', group: 'increased', help: 'Found in both documents; the House bill carries a larger amount.' },
   candidate_decrease: { label: 'Lower in the House bill', group: 'decreased', help: 'Found in both documents; the House bill carries a smaller amount.' },
-  fuzzy_candidate: { label: 'Possible match, unconfirmed', group: 'house_only', held: true, help: "A House line with a similar-looking line in the President's proposal that could not be confirmed as the same project. Counted under 'In the House bill only'; left out of the ranked lists of largest changes." },
-  ambiguous: { label: 'Several possible matches', group: 'house_only', held: true, help: "More than one line in the President's proposal could be this project, so none was chosen." },
+  fuzzy_candidate: { label: 'Possible match, unconfirmed', group: 'house_only', held: true, help: "A House line with a similar-looking line in the NEP that could not be confirmed as the same project. Counted under 'In the House bill only'; left out of the ranked lists of largest changes." },
+  ambiguous: { label: 'Several possible matches', group: 'house_only', held: true, help: 'More than one line in the NEP could be this project, so none was chosen.' },
   segment_scope_review: { label: 'Different stretch of the same road', group: 'scope_review', help: 'Same road in both documents, but a different stretch of it. Not counted as an increase or a reduction.' },
   transparency_gap_then_amount_same: { label: 'Same amount in both · not on the DPWH site', group: 'unchanged', help: "Same amount in both documents. The project is missing from the DPWH transparency website's list." },
   transparency_gap_then_candidate_increase: { label: 'Higher in the House bill · not on the DPWH site', group: 'increased', help: "Larger amount in the House bill. The project is missing from the DPWH transparency website's list." },
@@ -206,7 +206,7 @@ export const MATCH_LABELS: Record<string, string> = {
   soft_match_candidate: 'Close match',
   fuzzy_candidate: 'Similar name only',
   ambiguous: 'Several possible matches',
-  house_unmatched: "No match in the President's proposal",
+  house_unmatched: 'No match in the NEP',
   nep_unmatched: 'No match in the House bill',
   // Annex pairing methods (FMR, NIA, HFEP), carried from their workbenches.
   title_and_coordinates: 'Same name and map coordinates',
@@ -569,7 +569,7 @@ export interface HgabDistrictIndex {
 
 export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
   return cached('districts', () =>
-    getJson<HgabDistrictIndex>(dataUrl(`${HGAB_BASE}/districts.json`), 'Failed to load the FY2027 HGAB district index'),
+    getJson<HgabDistrictIndex>(dataUrl(`${HGAB_BASE}/districts.json`), 'Failed to load the FY2027 House bill district index'),
   );
 }
 
@@ -753,7 +753,7 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
 
 export function loadHgabOverview(): Promise<HgabOverview> {
   return cached('overview', () =>
-    getJson<HgabOverview>(dataUrl(`${HGAB_BASE}/overview.json`), 'Failed to load the FY2027 HGAB overview'),
+    getJson<HgabOverview>(dataUrl(`${HGAB_BASE}/overview.json`), 'Failed to load the FY2027 House bill overview'),
   );
 }
 
@@ -761,7 +761,7 @@ export function loadHgabDataset(key: DatasetKey): Promise<HgabDatasetSummary> {
   return cached(`dataset:${key}`, () =>
     getJson<HgabDatasetSummary>(
       dataUrl(`${HGAB_BASE}/${key}/summary.json`),
-      `Failed to load the FY2027 HGAB ${key.toUpperCase()} summary`,
+      `Failed to load the FY2027 House bill ${key.toUpperCase()} summary`,
     ),
   );
 }

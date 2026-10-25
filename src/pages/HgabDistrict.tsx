@@ -16,7 +16,7 @@
  * straight to that district's page, so a reader can move between districts
  * without going back. The back link returns to the list at this region.
  *
- * Copy is plain first; office aliases, the printed labels each year was
+ * Copy is plain first; office aliases, the published labels each year was
  * matched on, crosswalk ids and data scopes sit in "Details for analysts".
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -162,8 +162,8 @@ export default function HgabDistrict() {
             )}
             {offices.length > 0 && (
               <>
-                {' '}The page shows the enacted budget (GAA) for 2020 to 2026. For 2027 it compares the President’s
-                proposed budget (NEP) with the House bill (third reading).
+                {' '}The page shows the enacted budget (GAA) for 2020 to 2026. For 2027 it compares the NEP with the
+                House bill (third reading). The NEP is the budget the President submits to Congress each August.
               </>
             )}
           </>
@@ -171,7 +171,7 @@ export default function HgabDistrict() {
         note={
           <>
             This page follows the office, not the district. It shows which districts an office serves, never
-            which district a project is in. Figures are the office’s, as each document prints them.
+            which district a project is in. Figures are the office’s, as each document publishes them.
           </>
         }
       >
@@ -265,11 +265,11 @@ export default function HgabDistrict() {
                 </li>
                 <li>
                   <strong>2027 changes are leads, not findings.</strong> An <Term>insertion candidate</Term> is a House
-                  bill project we could not find in the proposal. A <Term>deletion candidate</Term> is the reverse.
+                  bill project we could not find in the NEP. A <Term>deletion candidate</Term> is the reverse.
                   Uncertain matches are left out of the counts.
                 </li>
                 <li>
-                  <strong>The two 2027 bars measure different things.</strong> The proposal bar is the whole office. The
+                  <strong>The two 2027 bars measure different things.</strong> The NEP bar is the whole office. The
                   House bill bar counts named projects only, so compare it with the thin line, not the bar.
                 </li>
               </ol>
@@ -278,7 +278,7 @@ export default function HgabDistrict() {
             <DisclaimerNotice compact />
 
             <p className="nep-provenance">
-              Sources: the enacted budgets for 2020–2026, the President’s proposed budget for 2027, House Bill 10858
+              Sources: the enacted budgets for 2020–2026, the NEP for 2027, House Bill 10858
               at third reading, the DEO2LEG office-to-district map, and bills.juris.ph for representatives.
               {' · '}<Link to={regionHref}>All districts in {region.name}</Link>
               {' · '}<Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
@@ -309,7 +309,7 @@ export default function HgabDistrict() {
           </div>
         </div>
       </main>
-      <SiteFooter source={`SOURCE: ENACTED BUDGETS (GAA) 2020–2026 · PRESIDENT’S PROPOSED BUDGET (NEP) 2027 · HOUSE BILL 10858, THIRD READING · DEO2LEG OFFICE-TO-DISTRICT MAP · ${card.label.toUpperCase()}`} />
+      <SiteFooter source={`SOURCE: ENACTED BUDGETS (GAA) 2020–2026 · NEP 2027 · HOUSE BILL 10858, THIRD READING · DEO2LEG OFFICE-TO-DISTRICT MAP · ${card.label.toUpperCase()}`} />
     </>
   );
 }
@@ -376,13 +376,12 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
       <div className="hgab-dd-fy27">
         <SectionHead
           size="sm"
-          eyebrow="2027 · the House bill compared with the proposal"
+          eyebrow="2027 · the House bill compared with the NEP"
           headline="What the House bill changed for this office’s projects"
           dek={
             <>
-              Named projects listed under this office in the President’s proposed budget (NEP) and in the House
-              bill. A project “in the House bill only” is an <Term>insertion candidate</Term>; “in the proposal
-              only”, a <Term>deletion candidate</Term>. Both are leads to check, not findings.
+              Named projects listed under this office in the NEP and in the House bill. A project “in the House
+              bill only” is an <Term>insertion candidate</Term>; “in the NEP only”, a <Term>deletion candidate</Term>. Both are leads to check, not findings.
             </>
           }
         />
@@ -390,7 +389,7 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
           <>
             <KpiStrip
               items={[
-                { label: 'Proposal (NEP)', value: f.nep_php == null ? '—' : fmt.shortPhp(f.nep_php), sub: `${f.nep_records.toLocaleString()} named projects` },
+                { label: 'NEP', value: f.nep_php == null ? '—' : fmt.shortPhp(f.nep_php), sub: `${f.nep_records.toLocaleString()} named projects` },
                 { label: 'House bill, second reading', value: f.hgab2_php == null ? '—' : fmt.shortPhp(f.hgab2_php), sub: 'the earlier House vote' },
                 {
                   label: 'House bill, third reading',
@@ -398,12 +397,12 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
                   tone: delta == null ? undefined : delta >= 0 ? 'up' : 'down',
                   sub: delta == null
                     ? `${f.hgab3_records.toLocaleString()} named projects`
-                    : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs the proposal · ${formatPct(pctChange(f.hgab3_php, f.nep_php))} · ${f.hgab3_records.toLocaleString()} named projects`,
+                    : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs the NEP · ${formatPct(pctChange(f.hgab3_php, f.nep_php))} · ${f.hgab3_records.toLocaleString()} named projects`,
                 },
                 {
                   label: 'Projects in each',
                   value: `${f.nep_records.toLocaleString()} → ${f.hgab3_records.toLocaleString()}`,
-                  sub: 'proposal → House bill · compared, not added',
+                  sub: 'NEP → House bill · compared, not added',
                 },
               ]}
             />
@@ -422,7 +421,7 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
           size="sm"
           eyebrow="Largest 2027 projects"
           headline="The office’s largest 2027 projects"
-          dek={`The ${TOP_N} largest by House bill amount, then by proposal amount for projects the House bill drops. Each links to its own page and to the budget page it comes from.`}
+          dek={`The ${TOP_N} largest by House bill amount, then by NEP amount for projects the House bill drops. Each links to its own page and to the budget page it comes from.`}
           right={
             <Link className="hgab-ds-seeall" to={officeProjectsHref(office)}>
               See every project for this office →
@@ -434,13 +433,13 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
 
       <HgabDetails title="Details for analysts: how this office was matched">
         <p>
-          Projects link and table: rows whose House-side office is printed exactly <code>{label}</code>. Both amounts of a
-          paired row are booked to the office printed on the House side, as in the HGAB section. Crosswalk id{' '}
+          Projects link and table: rows whose House-side office reads exactly <code>{label}</code>. Both amounts of a
+          paired row are booked to the office listed on the House side, as elsewhere in the House bill section. Crosswalk id{' '}
           <code>{office.id}</code>; kind <code>{office.kind}</code>; tier <code>{office.tier}</code>.
         </p>
         {office.aliases_used.length > 0 && (
           <p>
-            Joined across years by these printed labels:{' '}
+            Joined across years by these labels, as published:{' '}
             {office.aliases_used.map((a, i) => <span key={a}>{i > 0 && ', '}<code>{a}</code></span>)}.
           </p>
         )}
@@ -497,7 +496,7 @@ function HistoryTable({ office }: { office: OfficeHistory }) {
                     {sub.years.length
                       ? `${fiscalYearRange(sub.years).replace('FY', '')} · ${sub.years.length} ${sub.years.length === 1 ? 'year' : 'years'}`
                       : 'no enacted figure found'}
-                    {term.years.includes(2027) ? ' · the 2027 proposal and House bill are listed, not added' : ''}
+                    {term.years.includes(2027) ? ' · the 2027 NEP and House bill are listed, not added' : ''}
                   </span>
                 </td>
                 <td className="num" title={sub.php == null ? undefined : fmt.php(sub.php, { unit: 'full' })}>
@@ -510,7 +509,7 @@ function HistoryTable({ office }: { office: OfficeHistory }) {
       </table>
       <p className="nep-hier-note">
         Hover a figure for the exact pesos. A dash means the office was not found in that year’s data, never
-        zero. Totals add enacted budgets only; the 2027 figures are proposals, listed beside them.
+        zero. Totals add enacted budgets only; the 2027 figures are not yet law, so they are listed beside them.
       </p>
     </div>
   );
@@ -600,7 +599,7 @@ LIMIT ${TOP_N}`,
               <th className="nep-th-name">Project</th>
               <th>What changed</th>
               <th>Amounts</th>
-              <th className="num">Change from the proposal</th>
+              <th className="num">Change from the NEP</th>
               <th>Source pages</th>
             </tr>
           </thead>

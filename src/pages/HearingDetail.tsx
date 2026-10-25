@@ -482,7 +482,7 @@ function HgabRelated({ links }: { links: ReadonlyArray<{ key: DatasetKey; label:
           return (
             <li key={l.key}>
               <Link to={datasetPath(l.key)}>
-                Compare the House bill with the President’s proposal for {l.label} →
+                Compare the House bill with the NEP for {l.label} →
               </Link>
               {meta && (
                 <span className="hgab-crosslink-scope" style={{ display: 'block', fontWeight: 400, marginTop: 2 }}>

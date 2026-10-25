@@ -10,24 +10,12 @@
   --hgi-nep: var(--ink-3);
 }
 
-/* The bill's title is long; take the deck's display scale down a step so it
-   holds on four lines at most, and let the chapter headings carry numbers. */
-.hgab-intro .story-hero-title {
-  font-size: clamp(38px, 7vw, 108px);
-  max-width: 19ch;
-}
+/* The hero is the title alone at the deck's display scale; the chapter
+   headings step down so they can carry numbers. */
 .hgab-intro .story-h {
   font-size: clamp(32px, 4.6vw, 64px);
   max-width: 980px;
   text-wrap: balance;
-}
-.hgi-hero-dek {
-  font-family: var(--font-body);
-  font-size: clamp(16px, 1.6vw, 21px);
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.86);
-  max-width: 760px;
-  margin: 26px 0 0;
 }
 
 /* --- shared bits --------------------------------------------------------- */
@@ -171,14 +159,6 @@
   color: var(--ink-3);
   margin: 10px 0 0;
 }
-.hgi-pair-grain {
-  font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--ink-mute);
-  margin: 6px 0 0;
-}
-.hgi-pair-grain span { color: var(--ink-3); font-weight: 600; }
 
 /* --- diverging bars (02, 07) --------------------------------------------- */
 

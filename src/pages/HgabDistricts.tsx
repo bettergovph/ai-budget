@@ -15,7 +15,7 @@
  *   and grouping live in the URL; `#region-<key>` and `#d-<district>` say
  *   where the reader is, so a position is shareable and Back returns to it.
  *
- * The page groups money by office, not by district. DPWH prints the
+ * The page groups money by office, not by district. DPWH lists the
  * implementing office on every project row; the DEO2LEG crosswalk says which
  * districts each office serves. Nothing here infers which district a project
  * is in, no shared office's money is divided, and the residual that no card
@@ -64,7 +64,7 @@ const REGION_PREVIEW = 3;
 /** When a filter leaves this few districts, the sidebar opens every region. */
 const NARROW = 40;
 
-const SOURCES_LINE = 'SOURCE: ENACTED BUDGETS (GAA) 2020–2026 · PRESIDENT’S PROPOSED BUDGET (NEP) 2027 · HOUSE BILL 10858, THIRD READING · DEO2LEG OFFICE-TO-DISTRICT MAP · BILLS.JURIS.PH';
+const SOURCES_LINE = 'SOURCE: ENACTED BUDGETS (GAA) 2020–2026 · NEP 2027 · HOUSE BILL 10858, THIRD READING · DEO2LEG OFFICE-TO-DISTRICT MAP · BILLS.JURIS.PH';
 
 export default function HgabDistricts() {
   const [index, setIndex] = useState<HgabDistrictIndex | null>(null);
@@ -242,9 +242,9 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
               <th className="num">Districts</th>
               <th className="num">Offices</th>
               <th className="num" title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</th>
-              <th className="num" title={`${FISCAL_STAGE_LONG.nep} Whole office.`}>2027 proposal</th>
+              <th className="num" title={`${FISCAL_STAGE_LONG.nep} Whole office.`}>2027 NEP</th>
               <th className="num" title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</th>
-              <th className="num" title="House bill minus proposal, for the same named projects in both">Change, same projects</th>
+              <th className="num" title="House bill minus the NEP, for the same named projects in both">Change, same projects</th>
               <th><span className="visually-hidden">Open the list</span></th>
             </tr>
           </thead>
@@ -302,8 +302,9 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
         </table>
       </div>
       <p className="nep-hier-note">
-        The proposal column is the whole office; the House bill column counts named projects only. The change
-        compares the same named projects in both, so it is not the gap between those two columns. Money under
+        The NEP is the budget the President submits to Congress each August. Its column is the whole office;
+        the House bill column counts named projects only. The change compares the same named projects in
+        both, so it is not the gap between those two columns. Money under
         the Central Office and regional offices is in no row. Hover a figure for the exact pesos.
       </p>
     </>
@@ -619,8 +620,9 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
             </p>
 
             <p className="hgab-dx-lede">
-              A 2027 project “not in the proposal” is an {term('insertion candidate')}. One “in the proposal
-              only” is a {term('deletion candidate')}. Both are leads to check, not findings.
+              The NEP is the budget the President submits to Congress each August. A 2027 project “not in
+              the NEP” is an {term('insertion candidate')}. One “in the NEP only” is a {term('deletion candidate')}.
+              Both are leads to check, not findings.
             </p>
 
             {hashCardHidden && (
@@ -668,10 +670,9 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
             )}
 
             <p className="hgab-dx-note">
-              Card figures are the office’s totals as each document prints them. The 2020–2026 figures are the
-              enacted budgets (GAA) for the whole office. The 2027 proposal figure is the whole office’s listing
-              in the President’s proposed budget (NEP). The 2027 House bill figure, and the change beside it,
-              cover named projects only. The three sit side by side; they are never added. A region’s totals add
+              Card figures are the office’s totals as each document publishes them. The 2020–2026 figures are the
+              enacted budgets (GAA) for the whole office. The 2027 NEP figure is the whole office’s listing. The
+              2027 House bill figure, and the change beside it, cover named projects only. The three sit side by side; they are never added. A region’s totals add
               each office serving it once, so a shared office is not counted twice. A card’s “Projects” link opens
               every DPWH project recorded under that office.
             </p>
@@ -756,7 +757,7 @@ function RegionSection({ group, index, size, limit, onOpen }: {
 function Provenance() {
   return (
     <p className="nep-provenance">
-      Sources: the enacted budgets for 2020–2026, the President’s proposed budget for 2027, House Bill 10858
+      Sources: the enacted budgets for 2020–2026, the NEP for 2027, House Bill 10858
       at third reading, the DEO2LEG office-to-district map, and bills.juris.ph for representatives.
       {' · '}<Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
       {' · '}<Link to={`${HGAB_ROOT}/sources`}>Sources</Link>
@@ -771,11 +772,11 @@ function DistrictsDetails({ index }: { index: HgabDistrictIndex }) {
       <ul>
         {built && <li>Index built {built.toLocaleString('en-PH')}.</li>}
         <li>
-          Office lists are joined by printed operating-unit name across this portal’s GAA data, the DBM NEP
+          Office lists are joined by operating-unit name, as published, across this portal’s GAA data, the DBM NEP
           operating-unit listing and{' '}
           <a href={HGAB_SOURCE_REPO} target="_blank" rel="noopener noreferrer">the extraction workbench</a>
           {index.source_commit && <> at commit <code>{index.source_commit.slice(0, 7)}</code></>}.
-          The FY2027 House 3R figure and its Δ cover the DPWH operations population compared in the HGAB section.
+          The FY2027 House 3R figure and its Δ cover the DPWH operations population compared in the House bill section.
         </li>
         <li>
           Office-to-district map: DEO2LEG crosswalk v{index.crosswalk.schema_version} ({index.crosswalk.build_date}),{' '}
@@ -786,7 +787,7 @@ function DistrictsDetails({ index }: { index: HgabDistrictIndex }) {
         <li>
           Regions: each district sits under the region label the crosswalk gives it (<code>card.region</code>),
           normalised with <code>regionKeyOf</code>; labels that do not normalise go to “Other”. Region totals sum
-          the 2026 GAA, FY2027 NEP and FY2027 HGAB 3R slots of the distinct offices on the region’s cards; the
+          the 2026 GAA, FY2027 NEP and FY2027 House bill (3R) slots of the distinct offices on the region’s cards; the
           change column sums the offices’ <code>fy2027</code> blocks (compared population). Districts served only
           by the BARMM regional grouping keep the crosswalk’s DPWH region (IX, X or XII).
         </li>

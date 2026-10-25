@@ -63,10 +63,10 @@ export interface ProjectFilters {
 /** Plain names for the sort keys, as the Projects tab's Sort menu prints them. */
 export const SORT_LABELS: Record<SortKey, string> = {
   title: 'Project name',
-  nep: 'Amount in the proposal (NEP)',
+  nep: 'Amount in the NEP',
   hgab2: 'House amount, 2nd reading',
   hgab3: 'House amount, 3rd reading',
-  delta: 'Change, House minus proposal',
+  delta: 'Change from the NEP',
 };
 
 const SORT_COLUMN: Record<SortKey, string> = {
@@ -181,28 +181,28 @@ export function tracesFor(groups: readonly BridgeGroup[], held: HeldMode): strin
  */
 export const FLAG_LABELS: Record<string, string> = {
   // DPWH
-  house_only: 'House bill only · no match in the proposal',
-  nep_only: 'Proposal only · no match in the House bill',
+  house_only: 'House bill only · no match in the NEP',
+  nep_only: 'NEP only · no match in the House bill',
   region_difference: 'Region differs between the two documents',
   office_difference: 'Office differs between the two documents',
   no_office: 'No office recorded',
   repeated_key: 'Repeated line · House lines grouped together',
   uncertain_match: 'Matched by a looser rule (road markers, place, scope or a close name)',
-  nep_evidence_review: 'Proposal amount still being checked against the scan',
+  nep_evidence_review: 'NEP amount still being checked against the scan',
   length_review: 'Road length was fixed or looks wrong',
   twin_review: 'Same name appears under another program line',
-  nep_twin: 'Proposal side of a same-name pair',
+  nep_twin: 'NEP side of a same-name pair',
   segment_scope: 'Same road, a different stretch',
-  transparency_gap: 'Proposal line missing from the DPWH transparency website',
+  transparency_gap: 'NEP line missing from the DPWH transparency website',
   outside_api: 'Not covered by the DPWH transparency website',
-  group_exhausted: 'Grouped road · House lines with no proposal match in the group',
-  group_nep_leftover: 'Grouped road · proposal lines left unmatched in the group',
+  group_exhausted: 'Grouped road · House lines with no NEP match in the group',
+  group_nep_leftover: 'Grouped road · NEP lines left unmatched in the group',
   // FMR
   'method:title_and_coordinates': 'Matched on name and map coordinates',
   'method:title': 'Matched on name only',
   'method:coordinates': 'Matched on map coordinates only',
   ambiguous_title: 'Name appears more than once',
-  coordinate_review: 'Printed map coordinates need checking',
+  coordinate_review: 'Published map coordinates need checking',
   // NIA
   'method:ai_corrected': 'Matched after an AI-assisted spelling fix',
   'strict:split_pair': 'Match holds only after the spelling fix',
@@ -212,8 +212,8 @@ export const FLAG_LABELS: Record<string, string> = {
   'near_miss:exact_variant': 'Near miss · same name, details differ',
   unresolved: 'No match, near miss noted',
   // HFEP
-  column_added: 'Amount in the proposal, blank in the House bill',
-  column_dropped: 'Amount in the House bill, blank in the proposal',
+  column_added: 'Amount in the NEP, blank in the House bill',
+  column_dropped: 'Amount in the House bill, blank in the NEP',
 };
 
 export function flagLabel(flag: string): string {
@@ -269,10 +269,10 @@ export function splitFlags(flags: string | null | undefined): string[] {
 
 /** `api_presence` on DPWH rows: Transparency-listing coverage of the NEP side. */
 export const API_PRESENCE_LABELS: Record<string, { label: string; help: string }> = {
-  paired: { label: 'On the DPWH website', help: "The proposal line also appears on the DPWH transparency website's list." },
-  nep_not_in_transparency: { label: 'Not on the DPWH website', help: "The proposal line is missing from the DPWH transparency website's list. That is a gap in the list, not proof that anything was hidden." },
+  paired: { label: 'On the DPWH website', help: "The NEP line also appears on the DPWH transparency website's list." },
+  nep_not_in_transparency: { label: 'Not on the DPWH website', help: "The NEP line is missing from the DPWH transparency website's list. That is a gap in the list, not proof that anything was hidden." },
   outside_api_scope: { label: 'Not covered by the DPWH website', help: 'The DPWH transparency website does not list this kind of project (mostly foreign-assisted ones).' },
-  no_nep_anchor: { label: 'Nothing to check on the DPWH website', help: 'This line is only in the House bill, so there is no proposal line to look up on the DPWH website.' },
+  no_nep_anchor: { label: 'Nothing to check on the DPWH website', help: 'This line is only in the House bill, so there is no NEP line to look up on the DPWH website.' },
 };
 
 export function apiPresenceInfo(v: string | null | undefined): { label: string; help: string } | null {

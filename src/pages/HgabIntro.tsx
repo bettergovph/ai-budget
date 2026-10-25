@@ -27,7 +27,7 @@ import {
   type BridgeGroup, type ControlRow, type DatasetKey, type HgabDatasetMeta, type HgabDatasetSummary,
   type HgabDistrictIndex, type HgabOverview, type ResidualYear,
 } from '../lib/hgab';
-import { COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetOneRow, plainControlsLabel } from '../lib/hgab-ui';
+import { COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, plainControlsLabel } from '../lib/hgab-ui';
 import '../nep2027.css';
 import '../nep2027-story.css';
 import '../hgab-intro.css';
@@ -156,34 +156,26 @@ export default function HgabIntro() {
         {/* ---- Hero ---- */}
         <section className="story-band story-hero hgi-hero">
           <div className="story-hero-inner">
-            <p className="story-kicker">Fiscal Year 2027 · House Bill 10858</p>
-            <h1 className="story-hero-title">House Bill 10858 compared with the President’s proposed 2027 budget</h1>
-            <p className="hgi-hero-dek">
-              Every year the President proposes a budget, the National Expenditure Program (NEP). The
-              House then passes its own version, the House bill (HB 10858). Here the two are compared
-              project by project for four programs: public works, farm-to-market roads, health
-              facilities and irrigation.
-            </p>
-            <p className="story-hero-sub">
-              Four of the bill’s programs, not the whole bill · {ov.documents.length} printed source documents
-            </p>
+            <h1 className="story-hero-title">House Budget Analysis</h1>
             <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
           </div>
         </section>
 
         {/* ---- 01 · Four programs ---- */}
-        <Chapter n={next()} kicker="Four programs" id="hgi-ch-programs" title="Four programs, printed project by project.">
+        <Chapter n={next()} kicker="Four programs" id="hgi-ch-programs" title="Four programs, listed project by project.">
+          <p className="story-lede">Four of the bill’s programs, not the whole bill.</p>
           <div className="hgi-pairs">
             {datasets.map((d) => <PairedBars key={d.key} d={d} />)}
           </div>
           <p className="hgi-note">
-            “{H3}” is the House bill as passed on third reading. Each pair of bars has its own scale.
+            “{NEP}” is the budget the President submits to Congress each August. “{H3}” is the House bill
+            as passed on third reading. Each pair of bars has its own scale.
           </p>
           {dpwhMeta && (
             <p className="hgi-note">
-              The DPWH figures cover the project lists compared here, not the whole department. The department’s printed totals are{' '}
+              The DPWH figures cover the project lists compared here, not the whole department. The totals published for the whole department are{' '}
               <span title={exact(dpwhMeta.printed?.nep_new_appropriations_php)}>{peso(dpwhMeta.printed?.nep_new_appropriations_php)}</span> in
-              the proposal and{' '}
+              the NEP and{' '}
               <span title={exact(dpwhMeta.printed?.house_new_appropriations_php)}>{peso(dpwhMeta.printed?.house_new_appropriations_php)}</span> in
               the House bill.
             </p>
@@ -216,7 +208,7 @@ export default function HgabIntro() {
               }))}
             />
             <p className="hgi-note">
-              Each bar is the House bill minus the proposal for one DPWH program, as printed.
+              Each bar is the House bill minus the NEP for one DPWH program, as published.
               Foreign-assisted projects are listed on their own.
             </p>
             <Link className="story-cta" to={datasetPath('dpwh')}>Open DPWH →</Link>
@@ -229,7 +221,7 @@ export default function HgabIntro() {
             n={next()}
             kicker="Foreign-assisted projects"
             id="hgi-ch-fap"
-            title={`Foreign-assisted projects: ${peso(Math.abs(fapDelta))} ${fapDelta <= 0 ? 'less' : 'more'} than proposed.`}
+            title={`Foreign-assisted projects: ${peso(Math.abs(fapDelta))} ${fapDelta <= 0 ? 'less' : 'more'} than in the NEP.`}
           >
             <p className="story-big-num hgi-big" title={exact(fapDelta)}>{signed(fapDelta)}</p>
             <p className="hgi-figline">
@@ -267,7 +259,7 @@ export default function HgabIntro() {
             )}
             <p className="hgi-note">
               A foreign-assisted project is paid for partly with a loan or grant from abroad. These are
-              the same projects at lower House amounts, as printed.
+              the same projects at lower House amounts, as published.
             </p>
             <Link className="story-cta" to={datasetPath('dpwh', 'changes')}>All DPWH changes →</Link>
           </Chapter>
@@ -280,18 +272,18 @@ export default function HgabIntro() {
             kicker="How the two versions differ"
             id="hgi-ch-bridge"
             tint
-            title={`${peso(bridge.house_only.php)} in House lines has no match in the proposal.`}
+            title={`${peso(bridge.house_only.php)} in House lines has no match in the NEP.`}
           >
             <p className="hgi-figline">
               <strong>{bridge.house_only.rows.toLocaleString()}</strong> DPWH lines are in the House bill only.{' '}
               <strong>{bridge.nep_only.rows.toLocaleString()}</strong> lines,{' '}
-              <strong title={exact(bridge.nep_only.php)}>{peso(bridge.nep_only.php)}</strong>, are in the President’s proposal only.
+              <strong title={exact(bridge.nep_only.php)}>{peso(bridge.nep_only.php)}</strong>, are in the NEP only.
             </p>
             <Composition bridge={bridge} />
             <WhatThisMeans>{PLAIN.bridgeMeans}</WhatThisMeans>
             {topIncreased.length > 0 && (
               <>
-                <h3 className="hgi-sub-h">Program lines with the largest increases, House minus proposal</h3>
+                <h3 className="hgi-sub-h">Program lines with the largest increases, House bill minus the NEP</h3>
                 <ol className="hgi-rank hgi-rank-tight">
                   {topIncreased.map((c) => (
                     <li key={c.id}>
@@ -337,7 +329,7 @@ export default function HgabIntro() {
               caption={`${NEP} and ${H3} DPWH totals by region`}
               other={otherRegions.length ? { count: otherRegions.length, nep: otherNep, house: otherHouse } : null}
             />
-            <p className="hgi-note">Each document’s amounts are counted under the region that document prints.</p>
+            <p className="hgi-note">Each document’s amounts are counted under the region that document lists.</p>
             <Link className="story-cta" to={datasetPath('dpwh', 'projects')}>DPWH projects by region →</Link>
           </Chapter>
         )}
@@ -404,11 +396,11 @@ export default function HgabIntro() {
                   if (!na) return null;
                   return (
                     <p className="hgi-small">
-                      DPWH’s printed total for the year:{' '}
+                      DPWH’s published total for the year:{' '}
                       <span title={exact(na.second_php)}>{peso(na.second_php)}</span> at second reading and{' '}
                       <span title={exact(na.third_php)}>{peso(na.third_php)}</span> at third
                       {na.delta_php === 0 ? ', unchanged.' : `, ${signed(na.delta_php)}.`}
-                      {same > 0 && ` ${same} other printed totals did not move.`}
+                      {same > 0 && ` ${same} other published totals did not move.`}
                       {moved.length > 0 && (
                         <>
                           {' These moved: '}
@@ -482,8 +474,8 @@ export default function HgabIntro() {
           <p className="story-kicker">Before the tables</p>
           <h2 className="story-h story-h-paper" id="hgi-finale-h">How to read these figures</h2>
           <ul className="hgi-rules">
-            <li>Matches between the proposal and the House bill come from written rules. They are leads to check, not confirmed findings.</li>
-            <li>The proposal and the House bill are {COMPARE_NOT_ADD}.</li>
+            <li>Matches between the NEP and the House bill come from written rules. They are leads to check, not confirmed findings.</li>
+            <li>The NEP and the House bill are {COMPARE_NOT_ADD}.</li>
             <li>Amounts are what the documents set aside, not money spent.</li>
             <li>Nothing here says any office or official did anything wrong.</li>
           </ul>
@@ -492,7 +484,7 @@ export default function HgabIntro() {
               <Link key={d.key} to={datasetPath(d.key)}>
                 <strong>{DATASET_SHORT[d.key]}</strong>
                 <span>
-                  {d.counts.nep.toLocaleString()} lines in the proposal · {(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill
+                  {d.counts.nep.toLocaleString()} lines in the NEP · {(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill
                 </span>
               </Link>
             ))}
@@ -666,10 +658,9 @@ function PairedBars({ d }: { d: HgabDatasetMeta }) {
         <span className="hgi-muted">{pct == null ? '' : `${formatPct(pct)} vs ${NEP}`}</span>
       </p>
       <p className="hgi-pair-counts">
-        {d.counts.nep.toLocaleString()} lines in the proposal · {houseRows == null ? '—' : houseRows.toLocaleString()} in the House bill
+        {d.counts.nep.toLocaleString()} lines in the NEP · {houseRows == null ? '—' : houseRows.toLocaleString()} in the House bill
         {!d.has_readings && ' · the House list is the same at both readings'}
       </p>
-      <p className="hgi-pair-grain"><span>What one row is:</span> {datasetOneRow(d)}</p>
     </article>
   );
 }

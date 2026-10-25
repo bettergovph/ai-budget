@@ -63,8 +63,6 @@
   color: var(--ink-3);
   max-width: 760px;
 }
-.hgab-crosslink-grain { color: var(--ink-2); font-weight: 600; }
-
 .hgab-crosslink-links {
   display: flex;
   flex-wrap: wrap;

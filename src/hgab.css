@@ -145,13 +145,6 @@ a.hgab-stage-name:hover { color: var(--accent); }
 }
 .hgab-card-title a { color: var(--ink); text-decoration: none; }
 .hgab-card-title a:hover { color: var(--accent); }
-.hgab-card-grain {
-  font-family: var(--font-body);
-  font-size: 13px;
-  color: var(--ink-3);
-  margin: 6px 0 0;
-}
-.hgab-card-grain strong { color: var(--ink-2); font-weight: 600; }
 
 .hgab-card-stages {
   display: grid;

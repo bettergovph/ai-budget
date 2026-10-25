@@ -77,7 +77,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
     || location.pathname.startsWith('/explore')
     ? 'FY 2020 \u2013 2026'
     : location.pathname.startsWith('/hgab')
-    ? 'FY 2027 HGAB'
+    ? 'FY 2027 House bill'
     : 'FY 2027 NEP';
 
   const today = useMemo(
@@ -241,7 +241,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             NEP 2027 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
-            HGAB 2027 <span className="drawer-link-arrow">→</span>
+            House bill 2027 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/hearings" onClick={() => setMenuOpen(false)}>
             Budget Hearings <span className="drawer-link-arrow">→</span>

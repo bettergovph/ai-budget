@@ -3,11 +3,11 @@
  *
  * Two layers in one inline SVG, no map library and no tiles:
  *   1. regions — every province filled by its region's figure: the change
- *      (House bill − President's proposal, diverging) or either version's
+ *      (House bill − NEP, diverging) or either version's
  *      amount (sequential, one shared maximum);
- *   2. dots — the projects whose documents print coordinates, coloured by how
+ *   2. dots — the projects whose documents give coordinates, coloured by how
  *      the two versions differ, unconfirmed matches hollow. Farm-to-market
- *      roads also draw their printed road segments once a region is zoomed in.
+ *      roads also draw their published road segments once a region is zoomed in.
  *
  * Performance: outlines and dot paths are built once per data load
  * (`lib/hgab-map.ts`). Each group's dots are one `<path>`, so ~2,400 dots are a
@@ -52,12 +52,12 @@ import '../hgab-map.css';
 // ---------------------------------------------------------------------------
 
 const MEASURE_BUTTON: Record<Measure, string> = {
-  delta: 'Change (House − proposal)',
-  nep: 'President’s proposal',
+  delta: 'Change (House bill − NEP)',
+  nep: 'NEP',
   house: 'House bill',
 };
 
-/** What one comparison row is, for the coverage line. */
+/** The noun for the comparison lines, for the coverage line. */
 const ROW_NOUN: Record<DatasetKey, string> = {
   dpwh: 'DPWH projects',
   fmr: 'farm-to-market road projects',
@@ -162,7 +162,7 @@ function NotPlaceable({ dataset, map }: { dataset: HgabDatasetMeta; map: HgabDat
   return (
     <div className="hgab-map-panel">
       <p className="hgab-map-panel-title">There is no map for this program</p>
-      <p>{map.note || 'The documents do not print where these projects are.'}</p>
+      <p>{map.note || 'The documents do not show where these projects are.'}</p>
       <NotOnMap map={map} onMap={false} />
       <p>
         <Link to={datasetPath(dataset.key, 'projects')}>See every project in the Projects tab →</Link>
@@ -365,18 +365,18 @@ function mapAriaLabel(
   const listed = values.filter((v) => v.listed);
   const parts = [`Map of the Philippines, ${listed.length} regions shaded by`];
   if (measure === 'delta') {
-    parts[0] += ` the change from the President’s proposal to the ${houseLabel}.`;
+    parts[0] += ` the change from the NEP to the ${houseLabel}.`;
     const withDelta = listed.filter((v) => v.delta != null);
     const up = [...withDelta].sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))[0];
     const down = [...withDelta].sort((a, b) => (a.delta ?? 0) - (b.delta ?? 0))[0];
     if (up && (up.delta ?? 0) > 0) parts.push(`Largest increase: ${up.name}, ${signedPeso(up.delta)}.`);
     if (down && (down.delta ?? 0) < 0) parts.push(`Largest reduction: ${down.name}, ${signedPeso(down.delta)}.`);
   } else {
-    parts[0] += measure === 'nep' ? ' the amounts in the President’s proposal.' : ` the amounts in the ${houseLabel}.`;
+    parts[0] += measure === 'nep' ? ' the amounts in the NEP.' : ` the amounts in the ${houseLabel}.`;
     const top = [...listed].sort((a, b) => (measureValue(b, measure) ?? 0) - (measureValue(a, measure) ?? 0))[0];
     if (top) parts.push(`Largest: ${top.name}, ${peso(measureValue(top, measure))}.`);
   }
-  if (dots) parts.push(`${count(dots)} project dots where the documents print coordinates.`);
+  if (dots) parts.push(`${count(dots)} project dots where the documents list coordinates.`);
   if (selected) parts.push(`Zoomed to ${REGION_LABELS[selected]?.name ?? selected}.`);
   parts.push('The table of regions lists every figure.');
   return parts.join(' ');
@@ -700,7 +700,7 @@ function PointTip({ p, houseLabel, touch }: { p: MapPoint; houseLabel: string; t
     <>
       <p className="hgab-map-tip-title">{clip(p.title)}</p>
       <dl className="hgab-map-tip-rows">
-        <div><dt>President’s proposal</dt><dd>{p.nep_php == null ? 'not listed' : peso(p.nep_php)}</dd></div>
+        <div><dt>NEP</dt><dd>{p.nep_php == null ? 'not listed' : peso(p.nep_php)}</dd></div>
         <div><dt>{houseLabel}</dt><dd>{p.house_php == null ? 'not listed' : peso(p.house_php)}</dd></div>
         {delta != null && delta !== 0 && (
           <div><dt>Change</dt><dd>{signedPeso(delta)} · {formatPct(pctChange(p.house_php, p.nep_php))}</dd></div>
@@ -730,7 +730,7 @@ function RegionTip({ v, k, houseLabel, touch, zoomed }: {
       </p>
       {v?.listed ? (
         <dl className="hgab-map-tip-rows">
-          <div><dt>President’s proposal</dt><dd>{peso(v.nep)} <small>· {plural(v.nepRows, 'line')}</small></dd></div>
+          <div><dt>NEP</dt><dd>{peso(v.nep)} <small>· {plural(v.nepRows, 'line')}</small></dd></div>
           <div><dt>{houseLabel}</dt><dd>{peso(v.house)} <small>· {plural(v.houseRows, 'line')}</small></dd></div>
           <div><dt>Change</dt><dd>{signedPeso(v.delta)} · {formatPct(v.pct)}</dd></div>
         </dl>
@@ -748,8 +748,8 @@ function RegionTip({ v, k, houseLabel, touch, zoomed }: {
 
 function ScaleKey({ scale, measure, houseLabel }: { scale: RegionScale; measure: Measure; houseLabel: string }) {
   const title = measure === 'delta'
-    ? `Change: ${houseLabel} minus the President’s proposal`
-    : measure === 'nep' ? 'President’s proposal, amount listed in each region' : `${houseLabel}, amount listed in each region`;
+    ? `Change: ${houseLabel} minus the NEP`
+    : measure === 'nep' ? 'NEP, amount listed in each region' : `${houseLabel}, amount listed in each region`;
   const v = (n: number) => (measure === 'delta' ? signedPeso(n) : peso(n));
   const stepTitle = (from: number, to: number, cls: string) => {
     const text = !Number.isFinite(from) ? `${v(to)} or lower`
@@ -797,7 +797,7 @@ function ScaleKey({ scale, measure, houseLabel }: { scale: RegionScale; measure:
       {outlier && <p className="hgab-map-key-note">{outlier}</p>}
       <p className="visually-hidden">
         {scale.kind === 'diverging'
-          ? `Darker blue means the House bill lists more money in the region than the President’s proposal, darker red means less, light grey means about the same. The darkest shades stand for ${signedPeso(scale.max)}${scale.capped ? ' or more' : ''} either way.`
+          ? `Darker blue means the House bill lists more money in the region than the NEP, darker red means less, light grey means about the same. The darkest shades stand for ${signedPeso(scale.max)}${scale.capped ? ' or more' : ''} either way.`
           : `Darker blue means a larger amount; the darkest shade stands for ${peso(scale.max)}${scale.capped ? ' or more' : ''}.`}
       </p>
     </div>
@@ -852,7 +852,7 @@ function DotsKey({ pp, hidden, showHeld, disabled, lines, onToggle, onToggleHeld
           </button>
         )}
       </div>
-      {lines && <p className="hgab-map-dotkey-note">Zoom into a region to see each road drawn from its printed start and end points.</p>}
+      {lines && <p className="hgab-map-dotkey-note">Zoom into a region to see each road drawn from its published start and end points.</p>}
     </div>
   );
 }
@@ -866,8 +866,8 @@ function Coverage({ dataset, map }: { dataset: HgabDatasetMeta; map: HgabDataset
   let lead: ReactNode = null;
   if (map.points.length > 0 && c.rows_total > 0 && !noteHasCount) {
     lead = n >= c.rows_total
-      ? <><strong>All {count(c.rows_total)} {noun}</strong> print map coordinates and are shown as dots. </>
-      : <><strong>{count(n)} of {count(c.rows_total)} {noun}</strong> print map coordinates; only those are shown as dots. </>;
+      ? <><strong>All {count(c.rows_total)} {noun}</strong> are listed with map coordinates and are shown as dots. </>
+      : <><strong>{count(n)} of {count(c.rows_total)} {noun}</strong> are listed with map coordinates; only those are shown as dots. </>;
   }
   return (
     <p className="hgab-map-coverage">
@@ -915,7 +915,7 @@ function RegionTable({
       </th>
     );
   }
-  const sortedBy = sort.by === 'delta' ? 'by change' : sort.by === 'nep' ? 'by the President’s proposal'
+  const sortedBy = sort.by === 'delta' ? 'by change' : sort.by === 'nep' ? 'by the NEP'
     : sort.by === 'house' ? 'by the House bill' : sort.by === 'pct' ? 'by percent change' : 'north to south';
   return (
     <div className="hgab-map-tablewrap">
@@ -926,14 +926,14 @@ function RegionTable({
       <div className="hgab-map-tablescroll">
       <table className="nep-table hgab-map-table" onPointerLeave={() => onHover(null)}>
         <caption className="visually-hidden">
-          Amount listed in each region by the President’s proposal and the {houseLabel}, and the change between them, {sortedBy}.
+          Amount listed in each region by the NEP and the {houseLabel}, and the change between them, {sortedBy}.
         </caption>
         <thead>
           <tr>
             {head('order', 'Region', 'hgab-map-th-name', 'Sort north to south')}
-            {head('nep', 'President’s proposal', 'num')}
+            {head('nep', 'NEP', 'num')}
             {head('house', 'House bill', 'num', houseLabel)}
-            {head('delta', 'Change', 'num', 'House bill minus the President’s proposal')}
+            {head('delta', 'Change', 'num', 'House bill minus the NEP')}
           </tr>
         </thead>
         <tbody>
@@ -999,7 +999,7 @@ function NotOnMap({ map, onMap = true }: { map: HgabDatasetMap; onMap?: boolean 
     <div className="hgab-map-noregion">
       <p>
         <strong>{onMap ? 'Listed as nationwide or with no region:' : 'Listed with no region:'}</strong>{' '}
-        <span title={exact(n.nep_php)}>{peso(n.nep_php)}</span> in the President’s proposal ({plural(n.nep_rows, 'line')})
+        <span title={exact(n.nep_php)}>{peso(n.nep_php)}</span> in the NEP ({plural(n.nep_rows, 'line')})
         {' '}and <span title={exact(n.house_php)}>{peso(n.house_php)}</span> in the House bill ({plural(n.house_rows, 'line')}).
         {n.house_php != null && n.nep_php != null && n.house_php !== n.nep_php && (
           <> Change: <span title={exact(n.house_php - n.nep_php)}>{signedPeso(n.house_php - n.nep_php)}</span>.</>

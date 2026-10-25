@@ -57,7 +57,7 @@ export default function HgabSources() {
         compact
         crumb="Sources"
         title="Documents, downloads and where the figures come from"
-        dek="These are the printed documents every figure was read from, and the files you can download. Each document has a fingerprint, so anyone can check they hold the same copy. The last section shows how to quote a figure."
+        dek="These are the published documents every figure was read from, and the files you can download. Each document has a fingerprint, so anyone can check they hold the same copy. The last section shows how to quote a figure."
       />
 
       <main className="nep-main">
@@ -65,8 +65,8 @@ export default function HgabSources() {
         <section className="nep-section" aria-labelledby="hgab-src-docs">
           <SectionHead
             eyebrow="Source documents"
-            headline={<span id="hgab-src-docs">The {docs.length.toLocaleString()} printed documents</span>}
-            dek="The President’s proposal (NEP) and the House bill (HB 10858) are printed in several volumes. Each link opens the PDF we read; the fingerprint proves which exact copy it was."
+            headline={<span id="hgab-src-docs">The {docs.length.toLocaleString()} published documents</span>}
+            dek="The NEP and the House bill (HB 10858) are published in several volumes. Each link opens the PDF we read; the fingerprint proves which exact copy it was."
           />
           <div className="nep-table-wrap">
             <table className="nep-table hgab-src-table">
@@ -116,7 +116,7 @@ export default function HgabSources() {
           </div>
           <HgabDetails>
             <p>
-              Pages are one-based PDF file pages, not the printed page labels; they are not
+              Pages are one-based PDF file pages, not the page numbers shown on the pages; they are not
               interchangeable across readings or volumes. The fingerprint is the SHA-256 of the file as
               retained. The small code under each title is the document key used in the data files.
             </p>
@@ -145,7 +145,7 @@ export default function HgabSources() {
                 <div className="hgab-dl-group" key={k}>
                   <h3>{d?.label ?? DATASET_SHORT[k]}</h3>
                   <p className="hgab-dl-sub">
-                    {d ? `${d.counts.nep.toLocaleString()} lines in the proposal · ${(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill` : k}
+                    {d ? `${d.counts.nep.toLocaleString()} lines in the NEP · ${(d.counts.hgab3 ?? d.counts.hgab2 ?? 0).toLocaleString()} in the House bill` : k}
                   </p>
                   <ul>
                     <li><a href={dataUrl(`${HGAB_BASE}/${k}/summary.json`)}>{k}/summary.json</a><span className="hgab-dl-kind">Summary</span></li>
@@ -179,7 +179,7 @@ LIMIT 25;`}</pre>
           <SectionHead
             eyebrow="Provenance"
             headline={<span id="hgab-src-prov">Where the figures come from</span>}
-            dek="The figures come from an independent analysis of the printed documents, published as open source. This portal copies them unchanged and does not redo the matching."
+            dek="The figures come from an independent analysis of the published documents, published as open source. This portal copies them unchanged and does not redo the matching."
           />
           <table className="nep-table nep-kv">
             <tbody>
@@ -212,7 +212,7 @@ LIMIT 25;`}</pre>
               </tr>
               <tr>
                 <th>Units</th>
-                <td>Integer pesos throughout. Versions are compared, never added; a printed total and the lines under it are never added together.</td>
+                <td>Integer pesos throughout. Versions are compared, never added; a published total and the lines under it are never added together.</td>
               </tr>
             </tbody>
           </table>
@@ -231,7 +231,7 @@ LIMIT 25;`}</pre>
               <li><strong>Record id</strong> — the <code>id</code> column, also the last segment of a record page URL.</li>
               <li><strong>Pipeline commit</strong> — <code>{commit ? commit.slice(0, 12) : '<source_commit>'}</code>, from <code>overview.json</code>.</li>
               <li><strong>Source document</strong> — the document key, its reading and volume{example ? <> (e.g. <code>{example.key}</code>)</> : null}.</li>
-              <li><strong>PDF page</strong> — one-based file page, as shown on the record page; include the printed page label separately if you have it.</li>
+              <li><strong>PDF page</strong> — one-based file page, as shown on the record page; include the page number shown on the page separately if you have it.</li>
             </ol>
             <pre>{`BetterGov Budget, FY2027 House bill vs NEP. Dataset hgab/2027/<dataset>/projects.parquet, record <id>; pipeline ${repo} @ ${commit ? commit.slice(0, 12) : '<commit>'}; source <doc key> (<reading>, <volume>), PDF p. <page>; accessed <date>. Independent and unofficial; matching is provisional.`}</pre>
           </div>
