@@ -23,6 +23,12 @@
  *     year and stage (HGAB 3R ₱587,075,661,000; NEP ₱643,953,276,000; GAA
  *     yearly totals), per-office bridge identity and parquet tie-out,
  *     headline sums, and ≥ 250 of 254 representatives joined.
+ *   - the leaderboards (`npm run build:hgab-leaderboard`), recomputed from
+ *     districts.json and the DPWH parquet: field lists parsed from
+ *     src/lib/hgab-leaderboard.ts, the office–district groups, tiers, people,
+ *     every entry figure, slices (Σ entries = district offices; the three
+ *     office kinds = the DPWH totals), the 389 held rows, regions, every board
+ *     in BOARDS (≥ 3 rows, first row = the pool's extreme), credits and notes.
  *
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -47,6 +53,10 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions,
+  type LeaderEntry, type LeaderSlice, type LeaderboardData,
+} from "../src/lib/hgab-leaderboard";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -550,11 +560,356 @@ async function main(): Promise<void> {
     for (const r of D.residual) process.stdout.write(`  ${r.stage.padEnd(5)} FY${r.fy}: residual ${((1 - r.deo_php / r.total_php) * 100).toFixed(1)}% · unmatched ${peso(r.unmatched_php)}${r.unmatched_labels.length ? ` (${r.unmatched_labels.length} labels)` : ""}\n`);
   }
 
+  await verifyLeaderboard(overview, c);
+
   if (D1_MODE === "local") await verifyD1(overview, c);
 
   c.closeSync(); db.closeSync();
   process.stdout.write(`\n${checks - failures}/${checks} checks passed${failures ? ` — ${failures} FAILED` : ""}\n`);
   if (failures) process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboards (npm run build:hgab-leaderboard): leaderboard.json
+// ---------------------------------------------------------------------------
+
+const LEADERBOARD_CONTRACT = resolve(arg("leaderboard-contract", "src/lib/hgab-leaderboard.ts"));
+const EXPECTED_LEADERBOARD = {
+  held: { rows: 389, php: 10_517_119_000 }, fuzzy: { rows: 385, php: 10_395_246_000 }, ambiguous: { rows: 4, php: 121_873_000 },
+  deo: { nep: 124_275_109_000, hgab3: 176_097_432_000 }, central: { nep: 448_495_965_000, hgab3: 410_825_229_000 }, regional: { nep: 153_000_000, hgab3: 153_000_000 },
+  without_office: 5, min_rows: 3, note_words: 20,
+};
+const OFFICE_KIND_LABELS = { deo: "District engineering offices (DEOs)", central: "Central Office", regional: "Regional offices" } as const;
+/** docs/hgab-copy.md: say "NEP", "House bill", "as published". */
+const COPY_RULES: ReadonlyArray<[string, RegExp]> = [
+  ["printed", /\bprinted\b/i], ["President's proposal", /President[’']s (proposed|proposal)/i], ["proposal", /\bproposals?\b/i], ["HGAB", /\bHGAB\b/],
+];
+const copyHits = (text: string): string[] => COPY_RULES.filter(([, re]) => re.test(text)).map(([n]) => n);
+
+/** Top-level field names of an exported interface in the leaderboard contract (with the fields it extends). */
+function contractFields(src: string, name: string, indent = 2): string[] {
+  const m = new RegExp(`export interface ${name}(?: extends (\\w+))? \\{([\\s\\S]*?)\\n\\}`).exec(src);
+  if (!m) throw new Error(`interface ${name} not found in ${LEADERBOARD_CONTRACT}`);
+  const own = [...m[2].matchAll(new RegExp(`^ {${indent}}([a-z0-9_]+)\\??:`, "gm"))].map((x) => x[1]);
+  return m[1] ? [...contractFields(src, m[1]), ...own] : own;
+}
+
+async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nleaderboard.json (leaderboards)\n");
+  const path = resolve(OUT, "leaderboard.json");
+  check("leaderboard.json present (npm run build:hgab-leaderboard)", existsSync(path), path);
+  if (!existsSync(path)) return;
+  const LB = { BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions };
+  type Entry = LeaderEntry;
+  type Slice = LeaderSlice;
+  const raw = readFileSync(path, "utf8");
+  const L = JSON.parse(raw) as LeaderboardData;
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  const summary = readJson<Summary>(resolve(OUT, "dpwh", "summary.json"));
+  const K = contractD1(CONTRACT);
+  const src = readFileSync(LEADERBOARD_CONTRACT, "utf8");
+  const sumOrNull = (xs: Array<number | null | undefined>) => { const p = xs.filter((x): x is number => x != null); return p.length ? p.reduce((a, b) => a + b, 0) : null; };
+  const close = (a: number | null, b: number | null) => (a == null || b == null ? a === b : Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)));
+  const isInt = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v);
+  const intOrNull = (v: unknown) => v === null || isInt(v);
+  const finiteOrNull = (v: unknown) => v === null || (typeof v === "number" && Number.isFinite(v));
+  const strOrNull = (v: unknown) => v === null || typeof v === "string";
+  const sameKeys = (o: object, keys: string[]) => JSON.stringify(Object.keys(o).sort()) === JSON.stringify([...keys].sort());
+  const byLabel = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
+  const regionKey = (r: string | null) => (r == null ? null : r.replace(/^Region\s+/i, ""));
+
+  // Header and schema (field lists parsed from the contract's interfaces).
+  check("schema 1, fiscal year 2027, dataset dpwh, source commit equals districts.json and the overview",
+    L.schema === LB.LEADERBOARD_SCHEMA && L.fiscal_year === 2027 && L.dataset === "dpwh" && L.source_commit === D.source_commit && L.source_commit === overview.source_commit && !Number.isNaN(Date.parse(L.built_at)),
+    `${L.schema} ${L.fiscal_year} ${L.dataset} ${L.source_commit}`);
+  const F = {
+    data: contractFields(src, "LeaderboardData"), totals: contractFields(src, "LeaderboardData", 4), entry: contractFields(src, "LeaderEntry"),
+    person: contractFields(src, "LeaderPerson"), slice: contractFields(src, "LeaderSlice"), region: contractFields(src, "LeaderRegion"),
+  };
+  const sliceOk = (s: Slice) => sameKeys(s, F.slice) && F.slice.every((k) => isInt(s[k as keyof Slice]) && s[k as keyof Slice] >= 0);
+  const entryOk = (e: Entry) => sameKeys(e, F.entry) && typeof e.key === "string" && (e.tier === "A" || e.tier === "B") && K.regionOrder.includes(e.region) && typeof e.href === "string"
+    && Array.isArray(e.offices) && e.offices.length > 0 && e.offices.every((o) => sameKeys(o, ["id", "name"]) && typeof o.id === "string" && typeof o.name === "string")
+    && Array.isArray(e.people) && e.people.length > 0 && e.people.every((p) => sameKeys(p, F.person) && typeof p.district_id === "string" && typeof p.district === "string" && typeof p.jurisdiction === "string"
+      && typeof p.district_label === "string" && typeof p.region === "string" && strOrNull(p.name) && ["resolved", "ambiguous", "missing"].includes(p.status) && strOrNull(p.portrait_url) && strOrNull(p.portrait_credit)
+      && strOrNull(p.portrait_source_url) && strOrNull(p.profile_url) && strOrNull(p.juris_url) && intOrNull(p.bill_count) && Array.isArray(p.leadership_roles) && p.leadership_roles.every((x) => typeof x === "string") && typeof p.href === "string")
+    && [e.nep_php, e.hgab3_php, e.delta_php, e.hgab3_rows, e.gaa_total_php].every(intOrNull) && finiteOrNull(e.delta_pct) && finiteOrNull(e.growth_pct)
+    && [e.added_php, e.added_rows, e.held_php, e.held_rows, e.dropped_php, e.dropped_rows].every((v) => isInt(v) && v >= 0)
+    && sameKeys(e.gaa, ["2020", "2021", "2022", "2023", "2024", "2025", "2026"]) && Object.values(e.gaa).every(intOrNull)
+    && Array.isArray(e.gaa_years) && e.gaa_years.every(isInt) && sameKeys(e.congress, ["18", "19", "20"]) && Object.values(e.congress).every(intOrNull)
+    && typeof e.reorganised === "boolean" && Array.isArray(e.reorganised_notes) && e.reorganised_notes.every((x) => typeof x === "string");
+  const badEntries = L.entries.filter((e) => !entryOk(e));
+  const badRegions = L.regions.filter((r) => !(sameKeys(r, F.region) && K.regionOrder.includes(r.region) && isInt(r.units) && isInt(r.districts) && isInt(r.delta_php) && intOrNull(r.gaa2026_php)
+    && F.slice.every((k) => isInt(r[k as keyof Slice]) && r[k as keyof Slice] >= 0)));
+  check(`every field the contract names, and only those, with the right types (${F.entry.length} per entry, ${F.person.length} per person, ${F.slice.length} per slice, ${F.region.length} per region)`,
+    sameKeys(L, F.data) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional"]) && sliceOk(L.totals.all) && Object.values(L.totals.by_office_kind).every(sliceOk)
+      && [L.totals.units, L.totals.units_tier_a, L.totals.units_tier_b, L.totals.districts].every(isInt) && sameKeys(L.credits, ["portraits", "representatives", "documents"])
+      && Object.values(L.credits).every((s) => typeof s === "string" && s.trim().length > 0) && Array.isArray(L.notes) && L.notes.every((s) => typeof s === "string")
+      && badEntries.length === 0 && badRegions.length === 0,
+    `entries ${badEntries.slice(0, 3).map((e) => e.key).join(", ")} · regions ${badRegions.map((r) => r.region).join(", ")}`);
+  const numbers: number[] = [];
+  JSON.parse(raw, (_k, v) => { if (typeof v === "number") numbers.push(v); return v; });
+  check(`no NaN or Infinity anywhere (${numbers.length.toLocaleString("en-US")} numbers)`, !/\b(NaN|Infinity)\b/.test(raw) && numbers.every(Number.isFinite));
+
+  // The units, recomputed: connected components of engineering offices and the districts they serve.
+  const ledger = Object.values(D.offices).filter((o) => o.kind !== "regional_group");
+  const ledgerIds = new Set(ledger.map((o) => o.id));
+  const servedDistricts = D.districts.filter((d) => d.office_ids.some((id) => ledgerIds.has(id)));
+  const unserved = D.districts.filter((d) => !d.office_ids.some((id) => ledgerIds.has(id)));
+  const comps: Array<{ offices: string[]; districts: string[] }> = [];
+  const seen = new Set<string>();
+  for (const start of ledger) {
+    if (seen.has(`o:${start.id}`)) continue;
+    const comp = { offices: [] as string[], districts: [] as string[] };
+    const stack = [`o:${start.id}`];
+    seen.add(stack[0]);
+    while (stack.length) {
+      const n = stack.pop()!;
+      const id = n.slice(2);
+      const next = n.startsWith("o:") ? (comp.offices.push(id), D.offices[id].district_ids.map((x) => `d:${x}`))
+        : (comp.districts.push(id), D.districts.find((d) => d.id === id)!.office_ids.filter((x) => ledgerIds.has(x)).map((x) => `o:${x}`));
+      for (const m of next) if (!seen.has(m)) { seen.add(m); stack.push(m); }
+    }
+    comps.push(comp);
+  }
+  const compKey = (c: { offices: string[]; districts: string[] }) => (c.districts.length === 1 ? c.districts[0] : `shared:${[...c.offices].sort().join("+")}`);
+  const want = new Map(comps.map((x) => [compKey(x), x]));
+  const entryOffices = L.entries.flatMap((e) => e.offices.map((o) => o.id));
+  check(`every engineering office in exactly one entry, no regional grouping ranked (${ledger.length} offices)`,
+    entryOffices.length === ledger.length && new Set(entryOffices).size === ledger.length && entryOffices.every((id) => ledgerIds.has(id)));
+  const entryDistricts = L.entries.flatMap((e) => e.people.map((p) => p.district_id));
+  check(`people are every district an engineering office serves, once each (${servedDistricts.length}); the other ${unserved.length} are listed as without an office`,
+    entryDistricts.length === servedDistricts.length && new Set(entryDistricts).size === servedDistricts.length && servedDistricts.every((d) => entryDistricts.includes(d.id))
+      && unserved.length === EXPECTED_LEADERBOARD.without_office && unserved.every((d) => d.attribution === "none")
+      && JSON.stringify(L.totals.districts_without_office) === JSON.stringify(unserved.map((d) => ({ id: d.id, label: d.label })).sort((a, b) => byLabel(a.label, b.label)))
+      && L.totals.districts === servedDistricts.length,
+    `${entryDistricts.length} people, ${unserved.length} without an office`);
+  const badUnits = L.entries.filter((e) => {
+    const w = want.get(e.key);
+    return !w || JSON.stringify([...w.offices].sort()) !== JSON.stringify(e.offices.map((o) => o.id).sort()) || JSON.stringify([...w.districts].sort()) !== JSON.stringify(e.people.map((p) => p.district_id).sort());
+  });
+  check(`entries are the ${comps.length} connected office–district groups, keyed by district id or "shared:" + sorted office ids`,
+    L.entries.length === comps.length && new Set(L.entries.map((e) => e.key)).size === L.entries.length && badUnits.length === 0, badUnits.slice(0, 5).map((e) => e.key).join(", "));
+  const badTier = L.entries.filter((e) => e.tier !== (e.people.length === 1 ? "A" : "B") || e.offices.some((o) => D.offices[o.id].tier !== e.tier)
+    || e.people.some((p) => D.districts.find((d) => d.id === p.district_id)!.attribution !== e.tier));
+  check(`tier A exactly for one-district groups, equal to every office's tier and district's attribution (A ${L.totals.units_tier_a}, B ${L.totals.units_tier_b})`,
+    badTier.length === 0 && L.totals.units === L.entries.length && L.totals.units_tier_a === L.entries.filter((e) => e.tier === "A").length && L.totals.units_tier_a + L.totals.units_tier_b === L.totals.units,
+    badTier.map((e) => e.key).join(", "));
+  const badRegion = L.entries.filter((e) => e.offices.some((o) => regionKey(D.offices[o.id].region) !== e.region) || e.people.some((p) => p.region !== regionKey(D.districts.find((d) => d.id === p.district_id)!.region)));
+  check("each entry's region is the region of all its offices; each person's region is the district's", badRegion.length === 0, badRegion.map((e) => e.key).join(", "));
+  const badOrder = L.entries.filter((e) => e.people.some((p, i) => i > 0 && byLabel(e.people[i - 1].district, p.district) > 0) || e.href !== e.people[0].href
+    || e.people.some((p) => p.href !== `/hgab/2027/districts/${encodeURIComponent(p.district_id)}`));
+  check("people sorted by district label; entry href is the first district page", badOrder.length === 0, badOrder.map((e) => e.key).join(", "));
+
+  // People: the districts.json representative fields.
+  const badPeople = L.entries.flatMap((e) => e.people).filter((p) => {
+    const d = D.districts.find((x) => x.id === p.district_id)!;
+    const r = d.representative;
+    const name = !r ? null : r.status === "ambiguous" ? (r.name || (r.candidates ?? []).map((x) => x.name).filter(Boolean).join(" / ") || null) : r.name;
+    const expected = {
+      district: d.label, jurisdiction: d.jurisdiction, district_label: d.district_label, name, status: r ? r.status : "missing",
+      portrait_url: r?.portrait_url ?? null, portrait_credit: r?.portrait_url ? `${r.portrait_attribution} · ${r.portrait_license}` : null,
+      portrait_source_url: r?.portrait_url ? r.portrait_source_url : null, profile_url: r?.profile_url ?? null, juris_url: r?.juris_url ?? null,
+      bill_count: r?.bill_count ?? null, leadership_roles: r?.leadership_roles ?? [],
+    };
+    return (Object.keys(expected) as Array<keyof typeof expected>).some((k) => JSON.stringify(p[k]) !== JSON.stringify(expected[k]));
+  });
+  check("every person's name, status, portrait, credit, links, bill count and roles equal the districts.json representative", badPeople.length === 0, badPeople.slice(0, 5).map((p) => p.district_id).join(", "));
+
+  // FY2027 figures, recomputed from the parquet by the office label the House bill lists.
+  const dp = resolve(OUT, "dpwh", "projects.parquet");
+  const P = (await c.runAndReadAll(`
+    SELECT office, office_kind, trace, count(*), sum(nep_php), sum(hgab3_php),
+           sum(coalesce(json_array_length(record_json->'$.third.records'), 1)) FILTER (hgab3_php IS NOT NULL)
+    FROM read_parquet('${q(dp)}') GROUP BY 1, 2, 3`)).getRows().map((r) => ({
+    office: String(r[0]), kind: String(r[1]), trace: String(r[2]), n: num(r[3]), nep: r[4] == null ? null : num(r[4]), h3: r[5] == null ? null : num(r[5]), records: r[6] == null ? 0 : num(r[6]),
+  }));
+  const role = (trace: string) => { const t = K.traceGroups[trace]; return !t ? null : t.group === "house_only" ? (t.held ? "held" : "added") : t.group === "nep_only" ? "dropped" : null; };
+  const sliceOf = (rows: typeof P): Slice => {
+    const s: Slice = { nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 };
+    for (const r of rows) {
+      s.nep_php += r.nep ?? 0; s.hgab3_php += r.h3 ?? 0;
+      const k = role(r.trace);
+      if (k === "added") { s.added_php += r.h3 ?? 0; s.added_rows += r.n; }
+      if (k === "held") { s.held_php += r.h3 ?? 0; s.held_rows += r.n; }
+      if (k === "dropped") { s.dropped_php += r.nep ?? 0; s.dropped_rows += r.n; }
+    }
+    return s;
+  };
+  const labelOf = (id: string) => D.offices[id].years.find((y) => y.stage === "hgab3" && y.fy === 2027)?.matched_label ?? null;
+  const officeRows = (id: string) => { const l = labelOf(id); return l ? P.filter((r) => r.office === l) : []; };
+  const badBridge = ledger.filter((o) => {
+    const s = sliceOf(officeRows(o.id)), b = o.fy2027?.bridge;
+    return b ? s.added_rows + s.held_rows !== b.house_only.rows || s.added_php + s.held_php !== b.house_only.php || s.dropped_rows !== b.nep_only.rows || s.dropped_php !== b.nep_only.php
+      : s.added_rows + s.held_rows + s.dropped_rows > 0;
+  });
+  check("per office, added + held equal the bridge's House-only cell and dropped its NEP-only cell (rows and pesos)", badBridge.length === 0, badBridge.map((o) => o.id).join(", "));
+  const badFy = L.entries.filter((e) => {
+    const rows = e.offices.flatMap((o) => officeRows(o.id));
+    const perOffice = e.offices.map((o) => { const r = officeRows(o.id); return { nep: sumOrNull(r.map((x) => x.nep)), h3: sumOrNull(r.map((x) => x.h3)), rec: labelOf(o.id) && r.length ? r.reduce((a, x) => a + x.records, 0) : null }; });
+    const nep = sumOrNull(perOffice.map((x) => x.nep)), h3 = sumOrNull(perOffice.map((x) => x.h3));
+    const s = sliceOf(rows);
+    return e.nep_php !== nep || e.hgab3_php !== h3 || e.nep_php !== sumOrNull(e.offices.map((o) => D.offices[o.id].fy2027?.nep_php)) || e.hgab3_php !== sumOrNull(e.offices.map((o) => D.offices[o.id].fy2027?.hgab3_php))
+      || e.delta_php !== (nep != null && h3 != null ? h3 - nep : null) || !close(e.delta_pct, nep != null && h3 != null && nep > 0 ? ((h3 - nep) / nep) * 100 : null)
+      || e.hgab3_rows !== sumOrNull(perOffice.map((x) => x.rec))
+      || e.added_php !== s.added_php || e.added_rows !== s.added_rows || e.held_php !== s.held_php || e.held_rows !== s.held_rows || e.dropped_php !== s.dropped_php || e.dropped_rows !== s.dropped_rows;
+  });
+  check("per entry, NEP, House bill, change, percent change, House bill records and added / held / dropped recomputed from the parquet", badFy.length === 0, badFy.slice(0, 5).map((e) => e.key).join(", "));
+
+  // Enacted budgets, by Congress and growth (the district cards' rule).
+  const gaaOf = (id: string, fy: number) => D.offices[id].years.find((y) => y.stage === "gaa" && y.fy === fy)?.php ?? null;
+  const badGaa = L.entries.filter((e) => {
+    const ids = e.offices.map((o) => o.id);
+    const gaa = Object.fromEntries([2020, 2021, 2022, 2023, 2024, 2025, 2026].map((fy) => [String(fy), sumOrNull(ids.map((id) => gaaOf(id, fy)))]));
+    const congress = Object.fromEntries(D.terms.map((t) => [String(t.congress), sumOrNull(ids.map((id) => sumOrNull(t.years.filter((fy) => fy !== 2027).map((fy) => gaaOf(id, fy)))))]));
+    const mean = (cg: number) => {
+      const yrs = D.terms.find((t) => t.congress === cg)!.years.filter((fy) => fy !== 2027);
+      return sumOrNull(ids.map((id) => { const v = yrs.map((fy) => gaaOf(id, fy)).filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }));
+    };
+    const m20 = mean(20), m18 = mean(18);
+    return JSON.stringify(e.gaa) !== JSON.stringify(gaa) || e.gaa_total_php !== sumOrNull(Object.values(gaa)) || JSON.stringify(e.gaa_years) !== JSON.stringify(Object.keys(gaa).filter((k) => gaa[k] != null).map(Number))
+      || JSON.stringify(e.congress) !== JSON.stringify(congress) || !close(e.growth_pct, m20 != null && m18 ? ((m20 - m18) / m18) * 100 : null);
+  });
+  check("per entry, GAA by year, total, years present, by-Congress subtotals and 18th→20th growth recomputed", badGaa.length === 0, badGaa.slice(0, 5).map((e) => e.key).join(", "));
+
+  // Reorganisation: the offices' notes that record a change of office within 2020–2026, classified independently of
+  // the builder. Every note must match one known pattern; "counts" = it moves earlier money to another office name.
+  const yearRuns = /^(?:\d{4}(?:–\d{4})?)(?:, \d{4}(?:–\d{4})?)*$/;
+  const inEnacted = (runs: string) => runs.split(", ").every((r) => r.split("–").map(Number).every((y) => y >= 2020 && y <= 2026));
+  const NOTE_RULES: ReadonlyArray<[RegExp, (m: RegExpExecArray) => boolean]> = [
+    [/^Not listed under this name in the (.+) enacted budgets?\.$/, (m) => yearRuns.test(m[1]) && inEnacted(m[1])],
+    [/^(?:Before \d{4} this area was served by|The budget also lists an undivided) .+ \(enacted budgets? ([\d–, ]+?)(?:, 2027 NEP)?(?:, 2027 House bill)?\) is left unassigned, not split among its \d+ successors\.$/, (m) => yearRuns.test(m[1]) && inEnacted(m[1])],
+    [/^(?:Before \d{4} this area was served by|The budget also lists an undivided) .+ \(2027 (?:NEP|House bill)(?:, 2027 House bill)?\) is left unassigned, not split among its \d+ successors\.$/, () => false],
+    [/^Not listed under this name in the 2027 NEP\.$/, () => false],
+    [/^No projects under this office in the 2027 House bill or the NEP\.$/, () => false],
+    [/^A regional grouping, not an engineering office; /, () => false],
+  ];
+  const unknownNotes: string[] = [];
+  const counts = new Map<string, boolean>();
+  for (const o of Object.values(D.offices)) for (const n of o.notes) {
+    const rule = NOTE_RULES.map(([re, f]) => { const m = re.exec(n); return m ? f(m) : null; }).find((x) => x != null);
+    if (rule == null) unknownNotes.push(`${o.id}: ${n}`); else counts.set(n, rule);
+  }
+  const allNotes = Object.values(D.offices).flatMap((o) => o.notes);
+  check(`every office note matches a known pattern (${allNotes.length} notes on ${Object.values(D.offices).filter((o) => o.notes.length).length} offices; ${allNotes.filter((n) => counts.get(n)).length} record a 2020–2026 change of office)`,
+    unknownNotes.length === 0, unknownNotes.join("; "));
+  const badReorg = L.entries.filter((e) => {
+    const want = [...new Set(e.offices.flatMap((o) => D.offices[o.id].notes.filter((n) => counts.get(n) === true)))];
+    return JSON.stringify(e.reorganised_notes) !== JSON.stringify(want) || e.reorganised !== want.length > 0;
+  });
+  const reorgCount = L.entries.filter((e) => e.reorganised).length;
+  check(`reorganised_notes = the offices' 2020–2026 change-of-office notes, verbatim, deduplicated, in office order; reorganised = any (${reorgCount} entries)`,
+    badReorg.length === 0, badReorg.map((e) => e.key).join(", "));
+  const historyBoards = ["growth", "decline"].map((id) => LB.BOARDS.find((b) => b.id === id));
+  const leak = historyBoards.flatMap((b) => (b ? LB.rankEntries(L, b).rows.filter((r) => r.entry.reorganised || r.entry.congress["18"] == null || r.entry.congress["18"] / 3 < 500_000_000).map((r) => `${b.id}: ${r.entry.key}`) : [`missing board`]));
+  check(`no reorganised entry, and none averaging under ₱500 million a year in 2020–2022, on growth or decline (${historyBoards.map((b) => `${b?.id} ${b ? LB.rankEntries(L, b).rows.length : 0} rows`).join(", ")})`,
+    leak.length === 0, leak.join(", "));
+
+  // Slices: entries = district offices; the three office kinds = everything = the DPWH summary.
+  const eq = (a: Slice, b: Slice) => F.slice.every((k) => a[k as keyof Slice] === b[k as keyof Slice]);
+  const entrySum = (es: Entry[]): Slice => {
+    const s: Slice = { nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 };
+    for (const e of es) { s.nep_php += e.nep_php ?? 0; s.hgab3_php += e.hgab3_php ?? 0; s.added_php += e.added_php; s.added_rows += e.added_rows; s.held_php += e.held_php; s.held_rows += e.held_rows; s.dropped_php += e.dropped_php; s.dropped_rows += e.dropped_rows; }
+    return s;
+  };
+  const kinds = Object.fromEntries((Object.keys(OFFICE_KIND_LABELS) as Array<keyof typeof OFFICE_KIND_LABELS>).map((k) => [k, sliceOf(P.filter((r) => r.kind === OFFICE_KIND_LABELS[k]))])) as Record<keyof typeof OFFICE_KIND_LABELS, Slice>;
+  const BK = L.totals.by_office_kind;
+  check("by_office_kind recomputed from the parquet (the Camarines Norte Sub-DEO is listed as a district office)",
+    eq(BK.deo, kinds.deo) && eq(BK.central, kinds.central) && eq(BK.regional, kinds.regional) && P.every((r) => (Object.values(OFFICE_KIND_LABELS) as string[]).includes(r.kind))
+      && P.some((r) => /sub district engineering office/i.test(r.office) && r.kind === OFFICE_KIND_LABELS.deo));
+  check(`Σ entries = district offices on every slice field (NEP ${peso(BK.deo.nep_php)} → House ${peso(BK.deo.hgab3_php)})`, eq(entrySum(L.entries), BK.deo),
+    JSON.stringify(entrySum(L.entries)));
+  check(`district offices + Central Office + regional offices = all, and all equals the DPWH totals (NEP ${peso(EXPECTED.dpwh.nep)}, House ${peso(EXPECTED.dpwh.hgab3)})`,
+    F.slice.every((k) => BK.deo[k as keyof Slice] + BK.central[k as keyof Slice] + BK.regional[k as keyof Slice] === L.totals.all[k as keyof Slice])
+      && L.totals.all.nep_php === summary.dataset.totals.nep_php && L.totals.all.hgab3_php === summary.dataset.totals.hgab3_php && L.totals.all.nep_php === EXPECTED.dpwh.nep && L.totals.all.hgab3_php === EXPECTED.dpwh.hgab3
+      && (["deo", "central", "regional"] as const).every((k) => BK[k].nep_php === EXPECTED_LEADERBOARD[k].nep && BK[k].hgab3_php === EXPECTED_LEADERBOARD[k].hgab3),
+    `${peso(L.totals.all.nep_php)} / ${peso(L.totals.all.hgab3_php)}`);
+  const fuzzy = P.filter((r) => r.trace === "fuzzy_candidate"), amb = P.filter((r) => r.trace === "ambiguous");
+  const tot = (rs: typeof P) => ({ rows: rs.reduce((a, r) => a + r.n, 0), php: rs.reduce((a, r) => a + (r.h3 ?? 0), 0) });
+  check(`unconfirmed matches held out: ${EXPECTED_LEADERBOARD.held.rows} rows, ${peso(EXPECTED_LEADERBOARD.held.php)} (fuzzy ${EXPECTED_LEADERBOARD.fuzzy.rows} + ambiguous ${EXPECTED_LEADERBOARD.ambiguous.rows})`,
+    L.totals.all.held_rows === EXPECTED_LEADERBOARD.held.rows && L.totals.all.held_php === EXPECTED_LEADERBOARD.held.php
+      && JSON.stringify(tot(fuzzy)) === JSON.stringify(EXPECTED_LEADERBOARD.fuzzy) && JSON.stringify(tot(amb)) === JSON.stringify(EXPECTED_LEADERBOARD.ambiguous)
+      && Object.entries(K.traceGroups).filter(([, t]) => t.held).map(([k]) => k).sort().join() === "ambiguous,fuzzy_candidate",
+    `${L.totals.all.held_rows} rows ${peso(L.totals.all.held_php)}`);
+
+  // Regions.
+  const regionKeys = K.regionOrder.filter((r) => L.entries.some((e) => e.region === r));
+  const badReg = L.regions.filter((r) => {
+    const es = L.entries.filter((e) => e.region === r.region), s = entrySum(es);
+    return !eq(r, s) || r.units !== es.length || r.districts !== es.reduce((a, e) => a + e.people.length, 0) || r.delta_php !== s.hgab3_php - s.nep_php || r.gaa2026_php !== sumOrNull(es.map((e) => e.gaa["2026"]));
+  });
+  check(`regions: one per region with entries, in REGION_ORDER, each the sum of its entries; together they equal the district offices (${L.regions.length} regions)`,
+    JSON.stringify(L.regions.map((r) => r.region)) === JSON.stringify(regionKeys) && badReg.length === 0 && eq(entrySum(L.entries), (() => {
+      const s = entrySum([]); for (const r of L.regions) for (const k of F.slice) s[k as keyof Slice] += r[k as keyof Slice]; return s;
+    })()), badReg.map((r) => r.region).join(", "));
+
+  // Boards: each returns at least three rows and leads with the true extreme of its eligible pool.
+  const best = (vals: number[], order: "asc" | "desc") => (order === "asc" ? Math.min(...vals) : Math.max(...vals));
+  const boardResult = (b: (typeof LB.BOARDS)[number]): { ok: boolean; detail: string } => {
+    if (b.kind === "ranking") {
+      const r = LB.rankEntries(L, b);
+      const pool = L.entries.filter((e) => { const v = b.metric!(e); return v != null && Number.isFinite(v) && (!b.keep || b.keep(e)); }).map((e) => b.metric!(e)!);
+      const n = r.rows.length;
+      return {
+        ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && r.rows[0].value === best(pool, b.order) && r.rows.every((x, i) => i === 0 || (b.order === "asc" ? x.value >= r.rows[i - 1].value : x.value <= r.rows[i - 1].value)),
+        detail: `${n} rows; first ${r.rows[0] ? `${r.rows[0].entry.key} ${LB.formatValue(r.rows[0].value, b.value)}` : "none"}`,
+      };
+    }
+    if (b.kind === "members") {
+      const r = LB.rankMembers(L);
+      const pool = L.entries.flatMap((e) => e.people).filter((p) => p.status === "resolved" && p.bill_count != null).map((p) => p.bill_count!);
+      const n = r.rows.length;
+      return { ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && r.rows[0].value === Math.max(...pool), detail: `${n} rows; first ${r.rows[0]?.person.district_id} ${r.rows[0]?.value}` };
+    }
+    if (b.kind === "congress") {
+      const terms = LB.rankByCongress(L);
+      const n = Math.min(...terms.map((t) => t.rows.length));
+      return {
+        ok: terms.length === 3 && n >= EXPECTED_LEADERBOARD.min_rows && terms.every((t) => t.rows[0].value === Math.max(...L.entries.map((e) => e.congress[t.congress]).filter((v): v is number => v != null))),
+        detail: terms.map((t) => `${t.congress}: ${t.rows.length} rows`).join(", "),
+      };
+    }
+    if (b.kind === "regions") {
+      const r = LB.rankRegions(L, b);
+      const n = r.length;
+      return {
+        ok: n >= EXPECTED_LEADERBOARD.min_rows && r[0].value === best(L.regions.map((x) => b.regionMetric!(x)).filter((v): v is number => v != null), b.order),
+        detail: `${n} rows; first ${r[0]?.region.region} ${LB.formatValue(r[0]?.value, b.value)}`,
+      };
+    }
+    const n = Object.values(BK).filter((s) => s.nep_php > 0 && s.hgab3_php > 0).length;
+    return { ok: n === 3, detail: `${n} office kinds with both figures` };
+  };
+  for (const b of LB.BOARDS) {
+    const { ok, detail } = boardResult(b);
+    check(`board ${b.id}: at least ${EXPECTED_LEADERBOARD.min_rows} rows and the first is the ${b.order === "asc" ? "minimum" : "maximum"} of its pool (${detail})`, ok, detail);
+  }
+  const ranking = LB.BOARDS.filter((b) => b.kind === "ranking" && b.regionFilter);
+  const badFilter = ranking.filter((b) => {
+    const per = L.regions.map((r) => LB.rankEntries(L, b, { region: r.region }));
+    return per.some((p, i) => p.rows.some((x) => x.entry.region !== L.regions[i].region)) || per.reduce((a, p) => a + p.eligible, 0) !== LB.rankEntries(L, b).eligible;
+  });
+  check(`?region= partitions every ranking board's rows by region (${ranking.length} boards)`, badFilter.length === 0, badFilter.map((b) => b.id).join(", "));
+
+  // Reader-facing strings: credits and notes.
+  const portraits = L.entries.flatMap((e) => e.people).filter((p) => p.portrait_url);
+  const reps = D.districts.map((d) => d.representative).filter((r): r is Representative => !!r && !!r.portrait_url);
+  check(`credits.portraits matches every portrait (${reps.length} in districts.json, ${portraits.length} on ranked seats: House of Representatives of the Philippines, public domain, Wikimedia Commons)`,
+    L.credits.portraits === "Photos: House of Representatives of the Philippines, public domain, via Wikimedia Commons"
+      && reps.every((r) => r.portrait_attribution === "House of Representatives of the Philippines" && r.portrait_license === "Public domain")
+      && portraits.every((p) => p.portrait_credit === "House of Representatives of the Philippines · Public domain" && (p.portrait_source_url ?? "").startsWith("https://commons.wikimedia.org/")),
+    L.credits.portraits);
+  check("credits.representatives cites bills.juris.ph /api/authors and the 20th Congress directory; credits.documents names the NEP volume and House Bill 10858 third reading",
+    /bills\.juris\.ph \/api\/authors/.test(L.credits.representatives) && /20th Congress directory/.test(L.credits.representatives)
+      && /NEP 2027 Volume II-B/.test(L.credits.documents) && /House Bill 10858 Volume I-C \(third reading\)/.test(L.credits.documents));
+  const reader = [L.credits.portraits, L.credits.representatives, ...L.notes];
+  // credits.documents is a document citation and keeps its volume names, as document titles do; every other rule applies.
+  const hits = [...reader.flatMap((t) => readerCopyHits(t).map((n) => `${n} in "${t}"`)),
+    ...readerCopyHits(L.credits.documents).filter((n) => n !== "I-B/I-C/II-A/II-B").map((n) => `${n} in "${L.credits.documents}"`),
+    ...[...reader, L.credits.documents].flatMap((t) => copyHits(t).map((n) => `${n} in "${t}"`))];
+  check(`credits and notes use plain words and the section's wording (no ${[...BANNED_IN_READER_COPY.map(([n]) => n), ...COPY_RULES.map(([n]) => n)].join(", ")})`, hits.length === 0, hits.join("; "));
+  check(`notes: 2 to 4 plain sentences of at most ${EXPECTED_LEADERBOARD.note_words} words`, L.notes.length >= 2 && L.notes.length <= 4 && L.notes.every((n) => n.trim().length > 0 && words(n) <= EXPECTED_LEADERBOARD.note_words),
+    L.notes.map((n) => `${words(n)} words: ${n}`).join("; "));
+  process.stdout.write(`  ${L.entries.length} entries (A ${L.totals.units_tier_a} · B ${L.totals.units_tier_b}) · ${L.totals.districts} districts ranked · ${L.regions.length} regions\n`);
 }
 
 // ---------------------------------------------------------------------------
