@@ -522,12 +522,23 @@ Streamable HTTP: no auth, no sessions, JSON-RPC over POST.</p>
   <tr><td><code>search_gaa_programs</code></td><td>Find programs by name across all departments</td></tr>
   <tr><td><code>get_gaa_department_programs</code></td><td>All programs of one department, paginated</td></tr>
   <tr><td><code>search_gaa_line_items</code></td><td>Object-level line items with text/agency/expense-class filters</td></tr>
+  <tr><td><code>get_gaa_year_snapshot</code></td><td>One fiscal year in isolation: national total and every department's share, largest first</td></tr>
+  <tr><td><code>browse_gaa_hierarchy</code></td><td>Drill one department's hierarchy for a single year: agencies → programs → operating units → funds → expenses</td></tr>
   <tr><td><code>get_nep_2027_overview</code></td><td>The FY2027 proposal at national level, vs FY2026</td></tr>
   <tr><td><code>list_nep_2027_departments</code></td><td>All 39 NEP departments with deltas</td></tr>
   <tr><td><code>get_nep_2027_department</code></td><td>One department's FY2027 proposal in full</td></tr>
   <tr><td><code>get_nep_2027_rollup</code></td><td>Slice FY2027 by agency/program/region/object/… nationally, per department, or cross-department</td></tr>
   <tr><td><code>get_budget_cycle</code></td><td>NEP→GAA→execution stages for covered departments</td></tr>
+  <tr><td><code>list_hearings</code></td><td>House appropriations hearings, newest first, filterable by fiscal year, agency, or title keyword</td></tr>
+  <tr><td><code>search_hearings</code></td><td>What was said on a subject across all hearings: matching topics plus timestamped moments (start here for hearings)</td></tr>
+  <tr><td><code>get_hearing</code></td><td>One hearing's metadata and topic index, with each topic's status, summary, and outcome</td></tr>
+  <tr><td><code>get_hearing_topics</code></td><td>Full deliberation record per topic: who said what, positions, figures as spoken, commitments</td></tr>
+  <tr><td><code>get_hearing_timeline</code></td><td>The proceedings in order, section by section</td></tr>
+  <tr><td><code>get_hearing_transcript</code></td><td>Raw machine transcript for a time window, to check exact wording</td></tr>
 </table>
+<p>Hearing records are built from machine transcripts: speaker names are inferred and figures are
+recorded as spoken. Each moment carries a <code>url</code> that opens the video at that second —
+cite it when quoting, and verify figures against the video or official documents.</p>
 
 <h3 id="mcp-examples">Example prompts</h3>
 <p>Once connected, ask your assistant things like:</p>
@@ -552,6 +563,17 @@ Streamable HTTP: no auth, no sessions, JSON-RPC over POST.</p>
 </ol>
 <p>National "who spends on X?" questions go straight to <code>search_gaa_programs</code> (GAA) or
 <code>get_nep_2027_rollup</code> with <code>by_department: true</code> (FY2027 proposal).</p>
+<p>Hearing questions like <i>"what did DOH say about medical assistance (MAIFIP) in its FY2027 hearing?"</i>
+chain the same way:</p>
+<ol>
+  <li><code>search_hearings {"query": "MAIFIP", "agency": "DOH", "fiscal_year": "2027"}</code> → matching
+  topics with their status and outcome, plus the timestamped moments that mention the term</li>
+  <li><code>get_hearing_topics {"video_id": "…", "topic_index": 2}</code> → that topic's full thread,
+  positions, figures, and commitments</li>
+  <li><code>get_hearing_transcript {"video_id": "…", "from_seconds": 3600, "to_seconds": 3900}</code> →
+  the exact wording around a moment, when a quote or figure needs checking</li>
+</ol>
+<p>Pair the result with <code>get_nep_2027_department</code> to set what was said against what was proposed.</p>
 
 <h3>Raw protocol examples (curl)</h3>
 <p>The transport is stateless JSON-RPC over POST — you can drive it with curl. Handshake:</p>
