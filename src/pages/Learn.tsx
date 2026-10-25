@@ -305,6 +305,38 @@ export default function Learn() {
           <DocumentFlow />
         </section>
 
+        {/* ---- the House stage ---- */}
+        <section className="nep-section" id="house-bill">
+          <p className="learn-eyebrow">The House stage</p>
+          <h2 className="learn-h">The House bill: what changes between the NEP and the GAB.</h2>
+          <p className="learn-lede">
+            The NEP reaches Congress as a bill — for FY 2027, House Bill 10858. The Committee on
+            Appropriations holds the hearings on this site, then reports a substitute bill; the
+            plenary approves it on second reading, amends it, and approves the amended text on
+            third reading. Congress may not raise the President’s total, so every change is a
+            realignment: rows added, removed, resized or re-titled inside the same ceiling. A
+            department total can barely move while thousands of rows underneath it change.
+          </p>
+          <p className="learn-lede">
+            Those rows are where scrutiny pays, and for four programs they can be read one by one:
+            the bill prints named projects for DPWH, for the DA’s farm-to-market roads, for the
+            DOH’s Health Facilities Enhancement Program and for NIA irrigation. Matching each
+            printed project to its NEP counterpart sorts every peso of difference into a short list
+            of causes — unchanged, increased, decreased, House-only, NEP-only — that adds back up to
+            the gap between the two totals, with a page reference into both documents.
+          </p>
+          <p className="learn-note">
+            Mind the words. A House row with no NEP match is an <strong>insertion candidate</strong>;
+            an NEP row with no House match is a <strong>deletion candidate</strong>. Both are
+            observations about matching, not findings — a project may have been re-titled,
+            re-scoped or moved to another office. And the House bill is one chamber’s version: the
+            Senate writes its own, and the bicam reconciles the two before anything becomes law.
+          </p>
+          <div className="learn-cta-row">
+            <Link to="/hgab/2027">Compare the FY 2027 House bill against the NEP →</Link>
+          </div>
+        </section>
+
         {/* ---- money flow ---- */}
         <section className="nep-section" id="flow">
           <p className="learn-eyebrow">From law to cash</p>

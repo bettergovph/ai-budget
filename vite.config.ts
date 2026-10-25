@@ -11,14 +11,16 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0',
+    // Reserved in ~/projects/ports.md (ai-reports web). strictPort so a
+    // collision fails loudly instead of silently moving the reader's URL.
+    port: 5130,
+    strictPort: true,
     // duckdb-wasm fetches parquet via HTTP Range requests; Vite's dev server
-    // supports them natively. The headers below enable cross-origin isolation,
-    // which lets duckdb-wasm use SharedArrayBuffer + Web Workers for the
-    // multi-threaded build (EH bundle). If you only need MVP, these can drop.
-    headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
-    },
+    // supports them natively. Dev deliberately does NOT send the cross-origin
+    // isolation headers (COOP/COEP): production never has, so DuckDB already
+    // runs its non-threaded bundle there, and with them on, every cross-origin
+    // image without a resource-policy header (the masthead logo, the juris.ph
+    // portraits on /hgab/2027/districts) is blocked in dev only.
     allowedHosts: ["dev.neonplayground.com"]
   },
   optimizeDeps: {

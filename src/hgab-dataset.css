@@ -1,0 +1,636 @@
+/* FY2027 HGAB dataset hub (/hgab/2027/:dataset) and record page (/…/p/:id).
+
+   Builds on the NEP microsite's table/explorer vocabulary (nep2027.css) and the
+   HGAB section chrome (hgab.css). Everything here is scoped to .hgab-ds-* (hub)
+   and .hgab-rec-* (record) so it cannot collide with either. */
+@import './nep2027.css';
+@import './hgab.css';
+
+/* --- hub ---------------------------------------------------------------- */
+
+.hgab-ds-switch { margin: 18px 0 0; }
+
+.hgab-ds-kpi-text {
+  display: block;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: var(--ink-2);
+  max-width: 34ch;
+}
+
+.hgab-ds-identity {
+  margin-top: 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 900px;
+}
+.hgab-ds-identity code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.hgab-ds-null { color: var(--ink-mute); }
+
+/* Page links: "NEP p.112 · 3R p.5" */
+.hgab-ds-pages {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.hgab-ds-pages a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent);
+}
+.hgab-ds-pages a:hover { border-bottom-style: solid; }
+.hgab-ds-pages span { color: var(--ink-mute); }
+
+/* Controls table: group as a sub-line under the label; reconciliation footer. */
+.hgab-ds-controls tfoot td {
+  border-top: 2px solid var(--rule);
+  border-bottom: none;
+  font-weight: 600;
+  background: var(--paper-2);
+}
+.hgab-ds-controls .nep-td-name { max-width: 420px; }
+
+/* Dimension toggle (region / office kind / program / PAP). */
+.hgab-ds-dims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.hgab-ds-dims button {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+.hgab-ds-dims button:hover { color: var(--ink); border-color: var(--ink-3); }
+.hgab-ds-dims button[aria-pressed="true"] {
+  color: var(--accent-deep);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Bar pair: NEP above, House below, one shared scale. */
+.hgab-ds-barpair {
+  display: grid;
+  gap: 3px;
+  min-width: 120px;
+}
+.hgab-ds-barpair span {
+  display: block;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--paper-3);
+  position: relative;
+  overflow: hidden;
+}
+.hgab-ds-barpair span::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w, 0%);
+  border-radius: 2px;
+}
+.hgab-ds-barpair .is-nep::after { background: var(--rule); }
+.hgab-ds-barpair .is-house::after { background: var(--accent); }
+.hgab-ds-side {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+/* Changes tab ------------------------------------------------------------ */
+
+.hgab-ds-change { margin-top: 36px; }
+.hgab-ds-change:first-child { margin-top: 0; }
+.hgab-ds-change .nep-td-name { max-width: 520px; }
+.hgab-ds-rank {
+  width: 32px;
+  color: var(--ink-mute);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.hgab-ds-seeall {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hgab-ds-seeall:hover { text-decoration: underline; }
+.hgab-ds-change .hgab-stages { margin: 0; }
+
+/* Projects tab ----------------------------------------------------------- */
+
+.hgab-ds-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.hgab-ds-groups-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin-right: 4px;
+}
+.hgab-ds-group {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.hgab-ds-group::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--hgab-group, var(--ink-mute));
+}
+.hgab-ds-group:hover { border-color: var(--ink-3); }
+.hgab-ds-group[aria-pressed="true"] {
+  border-color: var(--hgab-group, var(--accent));
+  background: color-mix(in srgb, var(--hgab-group, var(--accent)) 10%, var(--paper));
+  color: var(--ink);
+}
+.hgab-ds-group small {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+.hgab-ds-held {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+
+.hgab-ds-filters { margin-top: 14px; }
+
+.hgab-ds-summary strong { color: var(--ink); }
+.hgab-ds-stage-sums {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hgab-ds-stage-sums li { display: inline-flex; gap: 5px; align-items: baseline; }
+.hgab-ds-stage-sums em {
+  font-style: normal;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+.hgab-ds-notadditive {
+  font-family: var(--font-body);
+  font-style: italic;
+  color: var(--ink-mute);
+}
+.hgab-ds-actions button,
+.hgab-ds-actions a {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.hgab-ds-actions button:disabled { color: var(--ink-mute); cursor: default; }
+.hgab-ds-actions button:hover:not(:disabled) { color: var(--accent-deep); }
+.hgab-ds-copied { color: var(--positive) !important; }
+
+.hgab-ds-table .nep-td-name { max-width: 460px; white-space: normal; }
+.hgab-ds-table .nep-td-name a { border-bottom-color: transparent; }
+.hgab-ds-table .nep-td-name a:hover { border-bottom-color: var(--accent); }
+.hgab-ds-table .hgab-ds-td-status { white-space: nowrap; }
+.hgab-ds-sub {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+  white-space: normal;
+  max-width: 180px;
+}
+.hgab-ds-table tbody tr.is-held td { background: repeating-linear-gradient(135deg, transparent 0 8px, rgba(0, 0, 0, 0.025) 8px 10px); }
+.hgab-ds-table tbody tr.is-held .nep-td-name::after {
+  content: "held";
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border: 1px dashed var(--ink-mute);
+  border-radius: 2px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+.hgab-ds-table tbody tr[aria-busy="true"] td { opacity: 0.45; }
+
+.hgab-ds-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.hgab-ds-pager button {
+  padding: 5px 12px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.hgab-ds-pager button:disabled { opacity: 0.4; cursor: default; }
+.hgab-ds-pager button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+.hgab-ds-pager .select-input { margin-left: auto; }
+
+.hgab-ds-parquet-err {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--negative);
+  background: var(--paper-2);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.hgab-ds-parquet-err code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--paper-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.hgab-ds-parquet-err pre {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--negative);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Documents tab ---------------------------------------------------------- */
+
+.hgab-ds-docs .hgab-ds-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* --- record page -------------------------------------------------------- */
+
+.hgab-rec-head { margin-top: 8px; }
+.hgab-rec-crumb {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  margin: 0 0 10px;
+}
+.hgab-rec-crumb a { color: var(--accent); text-decoration: none; }
+.hgab-rec-crumb a:hover { text-decoration: underline; }
+.hgab-rec-crumb .sep { padding: 0 6px; }
+.hgab-rec-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0;
+  max-width: 1100px;
+  text-wrap: balance;
+}
+.hgab-rec-meta {
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.hgab-rec-meta .nep-code { display: inline; margin-left: 8px; }
+
+.hgab-rec-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.hgab-rec-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.hgab-rec-label em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-rec-help {
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+  max-width: 820px;
+}
+
+.hgab-rec-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+.hgab-rec-card {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 14px 16px 14px;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.hgab-rec-card.is-empty { background: var(--paper-2); border-style: dashed; }
+.hgab-rec-card.is-delta { border-color: var(--ink); }
+.hgab-rec-card-stage {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+}
+.hgab-rec-card-stage small {
+  display: block;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  margin-top: 2px;
+}
+.hgab-rec-card-amt {
+  font-family: var(--font-hero);
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.05;
+}
+.hgab-rec-card-amt.is-empty { color: var(--ink-mute); font-weight: 500; }
+.hgab-rec-card-amt.is-up { color: var(--positive); }
+.hgab-rec-card-amt.is-down { color: var(--negative); }
+.hgab-rec-card-exact {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-rec-kv {
+  margin: 4px 0 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 10px;
+  font-size: 12px;
+}
+.hgab-rec-kv dt {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  padding-top: 2px;
+}
+.hgab-rec-kv dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.hgab-rec-card-title {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.hgab-rec-card-actions {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.hgab-rec-card-actions a,
+.hgab-rec-card-actions button {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.hgab-rec-card-actions a:hover,
+.hgab-rec-card-actions button:hover { color: var(--accent-deep); }
+.hgab-rec-card-actions button[aria-expanded="true"] { color: var(--ink); }
+.hgab-rec-card-actions .hgab-ds-null { font-size: 11px; }
+
+/* Evidence pane ----------------------------------------------------------- */
+
+.hgab-rec-evidence {
+  margin-top: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.hgab-rec-evidence-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-rec-evidence-bar strong { color: var(--ink); font-weight: 600; }
+.hgab-rec-evidence-bar a { color: var(--accent); text-decoration: none; }
+.hgab-rec-evidence-bar a:hover { text-decoration: underline; }
+.hgab-rec-evidence-bar button {
+  all: unset;
+  cursor: pointer;
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.hgab-rec-evidence-bar button:hover { border-color: var(--ink-3); }
+.hgab-rec-evidence iframe {
+  display: block;
+  width: 100%;
+  height: min(78vh, 980px);
+  border: 0;
+  background: var(--paper-3);
+}
+.hgab-rec-evidence-note {
+  margin: 0;
+  padding: 6px 12px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-mute);
+  border-top: 1px solid var(--rule-soft);
+}
+
+/* Flags, suggestions, path, source ---------------------------------------- */
+
+.hgab-rec-section { margin-top: 36px; }
+.hgab-rec-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hgab-rec-flag {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-3);
+  border-radius: 3px;
+  background: var(--paper);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.hgab-rec-flag code {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+.hgab-rec-sugg .nep-td-name { max-width: 520px; white-space: normal; }
+.hgab-rec-sugg .nep-code { display: inline-block; margin-top: 2px; }
+.hgab-rec-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.hgab-rec-tags span {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--paper-3);
+  color: var(--ink-3);
+}
+
+.hgab-rec-path {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.hgab-rec-path li + li::before {
+  content: "›";
+  color: var(--ink-mute);
+  padding: 0 8px;
+}
+.hgab-rec-path li:last-child { color: var(--ink); font-weight: 500; }
+.hgab-rec-path-stage {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  margin: 12px 0 4px;
+}
+
+.hgab-rec-json { margin-top: 0; }
+.hgab-rec-json pre { max-height: 60vh; overflow: auto; white-space: pre; word-break: normal; }
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (max-width: 960px) {
+  .hgab-ds-table .hgab-ds-col-office,
+  .hgab-ds-table .hgab-ds-col-pap { display: none; }
+}
+@media (max-width: 720px) {
+  .hgab-ds-kpi-text { font-size: 12.5px; }
+  .hgab-ds-table .hgab-ds-col-region { display: none; }
+  .hgab-ds-held { margin-left: 0; }
+  .hgab-ds-pager { flex-wrap: wrap; }
+  .hgab-ds-pager .select-input { margin-left: 0; }
+  .hgab-rec-cards { grid-template-columns: 1fr; }
+  .hgab-rec-evidence iframe { height: 70vh; }
+}
