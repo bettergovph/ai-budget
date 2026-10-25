@@ -192,3 +192,10 @@ The optional NEP → GAA → execution dataset has a separate import, verificati
 - AI-assisted aggregation and editorial material should be verified against official source documents before citation.
 
 See the in-app methodology page for the complete set of coverage and data-quality caveats.
+
+## License
+
+The code in this repository is released under the [MIT License](LICENSE).
+The underlying budget documents are works of the Philippine government; the
+datasets derived from them here carry the caveats on the methodology pages
+and should be cited with the document, edition and page they come from.
