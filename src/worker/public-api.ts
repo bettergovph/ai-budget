@@ -11,6 +11,8 @@
  *   gaa           FY2020–2026 General Appropriations Act (38 departments)
  *   nep/2027      FY2027 National Expenditure Program vs the FY2026 GAA
  *   budget-cycle  NEP → GAA → execution stages for selected departments
+ *   hearings      House budget hearings (hearings-api.ts)
+ *   hgab/2027     FY2027 House bill vs the NEP, project by project (hgab-api.ts)
  *
  * Conventions:
  *   - Envelope: { meta: {...}, data: ... } (+ next_cursor on paginated lists)
@@ -32,6 +34,18 @@ import {
   hearingsList,
   hearingsSearch,
 } from "./hearings-api";
+import {
+  hgabDataset,
+  hgabDatasets,
+  hgabDistrict,
+  hgabDistricts,
+  hgabDocuments,
+  hgabOverview,
+  hgabProject,
+  hgabProjects,
+  hgabReconciliation,
+  hgabRegions,
+} from "./hgab-api";
 
 export const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -143,6 +157,15 @@ function yearParam(raw: string | null): number {
 
 function escapeLike(s: string): string {
   return s.replace(/[%_\\]/g, (m) => `\\${m}`);
+}
+
+/** A percent-encoded path segment (ids may carry `:` or `|`). */
+function pathSegment(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new ApiError(400, "bad_request", "The id in the path is not valid percent-encoding");
+  }
 }
 
 /** Opaque keyset cursor: base64(JSON {v: sortValue, k: tiebreakKey}). */
@@ -987,8 +1010,10 @@ function apiIndex(origin: string) {
     version: "1.0.0",
     description:
       "Public read-only API over the Philippine General Appropriations Act (FY2020–2026), " +
-      "the FY2027 National Expenditure Program, NEP→GAA→execution budget-cycle data, and the " +
-      "House budget hearings (per-topic deliberation records, timelines, transcripts). " +
+      "the FY2027 National Expenditure Program, NEP→GAA→execution budget-cycle data, the " +
+      "House budget hearings (per-topic deliberation records, timelines, transcripts), and the " +
+      "FY2027 House bill (HGAB) compared with the NEP project by project for DPWH, farm-to-market " +
+      "roads, health facilities and irrigation, with DPWH money by district engineering office. " +
       "All amounts are exact Philippine pesos.",
     documentation: `${origin}/docs`,
     openapi: `${origin}/api/v1/openapi.json`,
@@ -1025,6 +1050,18 @@ function apiIndex(origin: string) {
         "GET /api/v1/hearings/{video_id}/topics/{index}",
         "GET /api/v1/hearings/{video_id}/timeline",
         "GET /api/v1/hearings/{video_id}/transcript",
+      ],
+      hgab_2027: [
+        "GET /api/v1/hgab/2027",
+        "GET /api/v1/hgab/2027/datasets",
+        "GET /api/v1/hgab/2027/datasets/{key}",
+        "GET /api/v1/hgab/2027/datasets/{key}/projects",
+        "GET /api/v1/hgab/2027/datasets/{key}/projects/{id}",
+        "GET /api/v1/hgab/2027/datasets/{key}/regions",
+        "GET /api/v1/hgab/2027/documents",
+        "GET /api/v1/hgab/2027/reconciliation",
+        "GET /api/v1/hgab/2027/districts",
+        "GET /api/v1/hgab/2027/districts/{id}",
       ],
     },
   };
@@ -1166,6 +1203,58 @@ export async function handlePublicApi(request: Request, env: Env, url: URL): Pro
         limit: intParam(sp.get("limit"), 300, 1, 1000),
       }), 300);
     }
+
+    // ---- House bill FY2027 (HGAB) ----
+    if (path === "/api/v1/hgab/2027") return ok(await hgabOverview(env));
+    if (path === "/api/v1/hgab/2027/datasets") return ok(await hgabDatasets(env));
+    if (path === "/api/v1/hgab/2027/documents") return ok(await hgabDocuments(env));
+    if (path === "/api/v1/hgab/2027/reconciliation") {
+      return ok(await hgabReconciliation(env, {
+        dataset: sp.get("dataset") ?? undefined,
+        status: sp.get("status") ?? undefined,
+      }));
+    }
+    if (path === "/api/v1/hgab/2027/districts") {
+      return ok(await hgabDistricts(env, {
+        region: sp.get("region") ?? undefined,
+        q: sp.get("q") ?? undefined,
+        attribution: sp.get("attribution") ?? undefined,
+        sort: sp.get("sort") ?? undefined,
+        limit: intParam(sp.get("limit"), 50, 1, 254),
+        offset: intParam(sp.get("offset"), 0, 0, 100000),
+      }));
+    }
+    m = /^\/api\/v1\/hgab\/2027\/districts\/([^/]+)$/.exec(path);
+    if (m) return ok(await hgabDistrict(env, pathSegment(m[1])));
+    m = /^\/api\/v1\/hgab\/2027\/datasets\/([^/]+)$/.exec(path);
+    if (m) return ok(await hgabDataset(env, pathSegment(m[1])));
+    m = /^\/api\/v1\/hgab\/2027\/datasets\/([^/]+)\/regions$/.exec(path);
+    if (m) return ok(await hgabRegions(env, pathSegment(m[1])));
+    m = /^\/api\/v1\/hgab\/2027\/datasets\/([^/]+)\/projects$/.exec(path);
+    if (m) {
+      const opt = (k: string) => sp.get(k) ?? undefined;
+      return ok(await hgabProjects(env, pathSegment(m[1]), {
+        q: opt("q"),
+        group: opt("group"),
+        held: opt("held"),
+        region: opt("region"),
+        program: opt("program"),
+        pap: opt("pap"),
+        office: opt("office"),
+        office_kind: opt("office_kind"),
+        zone: opt("zone"),
+        trace: opt("trace"),
+        reading_status: opt("reading_status"),
+        flag: opt("flag"),
+        has_coordinates: opt("has_coordinates"),
+        sort: opt("sort"),
+        order: opt("order"),
+        limit: intParam(sp.get("limit"), 50, 1, 200),
+        offset: intParam(sp.get("offset"), 0, 0, 1000000),
+      }));
+    }
+    m = /^\/api\/v1\/hgab\/2027\/datasets\/([^/]+)\/projects\/([^/]+)$/.exec(path);
+    if (m) return ok(await hgabProject(env, pathSegment(m[1]), pathSegment(m[2])));
 
     throw new ApiError(404, "not_found", `No such endpoint: ${path} — see /api/v1 for the endpoint index`);
   } catch (e) {

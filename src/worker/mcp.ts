@@ -47,6 +47,22 @@ import {
   hearingsList,
   hearingsSearch,
 } from "./hearings-api";
+import {
+  HGAB_ATTRIBUTIONS,
+  HGAB_BRIDGE_GROUPS,
+  HGAB_DATASET_KEYS,
+  HGAB_DISTRICT_SORTS,
+  HGAB_HELD_MODES,
+  HGAB_ORDERS,
+  HGAB_PROJECT_SORTS,
+  HGAB_REGION_KEYS,
+  hgabDataset,
+  hgabDistrict,
+  hgabDistricts,
+  hgabOverview,
+  hgabProject,
+  hgabProjects,
+} from "./hgab-api";
 
 const SERVER_INFO = {
   name: "ph-budget-data",
@@ -73,11 +89,49 @@ search_hearings for a question ("what did DOH say about PhilHealth?") or list_he
 find a hearing, then get_hearing_topics for the full record. Cite the 'url' of a moment when
 you quote it — every claim is verifiable against the video. Figures in hearing records are
 AS SPOKEN (machine transcript); treat them as evidence to verify, not as exact data.
+(5) HGAB FY2027 — the House of Representatives' version of the FY2027 budget (House Bill 10858,
+second and third reading) set against the President's proposal (NEP), line by line, for the four
+programs where the bill lists projects: dpwh (DPWH infrastructure, one row per named project),
+fmr (farm-to-market roads, one row per road), hfep (health facilities, one row per facility and
+funding column) and nia (irrigation, one row per irrigation project). Every row sits in one of six
+groups: in the House bill only (insertion candidates), in the proposal only (deletion candidates),
+same amount, higher, lower, or a different stretch of the same road. Pairings are CANDIDATES found
+by comparing names, places and amounts — leads to check, not confirmed changes; never call them
+insertions or deletions. The NEP and the House bill are two versions of ONE budget: compare them,
+never add them (filtered sums come per version, marked not_additive_across_versions). held = true
+marks an unconfirmed (fuzzy or ambiguous) match; bridge figures include those, so the six groups add
+up to net_php, and each group's unconfirmed_rows / unconfirmed_php says how much of it is unconfirmed.
+Districts: DPWH money by district engineering office, with the congressional districts each office
+serves. A Tier A office serves one district; a Tier B office is shared and its money is never
+split, so a shared district headline is a range, not that district's own; money under the Central
+Office and regional offices is on no district card (the residual). Start with
+get_hgab_2027_overview, then get_hgab_2027_dataset or search_hgab_2027_projects. Cite each row's
+'url' (its page on the site) and 'pdf_url' (the source page) when you use it.
 
 All amounts are exact Philippine pesos (PHP). GAA and NEP department ids differ:
 GAA uses two digits ("07" = DepEd); NEP adds synthetic "SPF" (special purpose funds)
 and "AUTO" (automatic appropriations) — do not confuse "AUTO" with department "04".
 Start with list_gaa_departments or get_nep_2027_overview to discover valid ids.`;
+
+const HGAB_DATASET_SCHEMA = {
+  type: "string",
+  enum: [...HGAB_DATASET_KEYS],
+  description:
+    "Program: dpwh (DPWH infrastructure projects), fmr (DA farm-to-market roads), hfep (DOH health facilities), " +
+    "nia (NIA irrigation projects)",
+};
+
+/** A comma string or an array, as clients send either. */
+function strList(args: Record<string, unknown>, key: string): string | undefined {
+  const v = args[key];
+  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string").join(",") || undefined;
+  return str(args, key);
+}
+
+const BRIDGE_HELD_WORDING =
+  "Bridge figures include unconfirmed matches (so the six groups add up to net_php); each group's " +
+  "unconfirmed_rows / unconfirmed_php says how much of it is unconfirmed. The 10 largest per group leave " +
+  "unconfirmed matches out.";
 
 // ---------------------------------------------------------------------------
 // Tool registry
@@ -502,6 +556,164 @@ const TOOLS: Tool[] = [
       to: typeof a.to_seconds === "number" ? a.to_seconds : undefined,
       limit: typeof a.limit === "number" ? a.limit : undefined,
     }),
+  },
+  {
+    name: "get_hgab_2027_overview",
+    title: "House bill FY2027 overview",
+    description:
+      "The FY2027 House bill (House Bill 10858) against the President's proposed budget (NEP) for the four programs " +
+      "where the bill lists projects (dpwh, fmr, hfep, nia): for each, a plain summary, what one row is, caveats, " +
+      "totals per version (never add them), record counts, and the six-group bridge with plain labels (House bill " +
+      "only = insertion candidates, proposal only = deletion candidates, same, higher, lower, different stretch). " +
+      `${BRIDGE_HELD_WORDING} Also the source documents with PDF links, the reconciliation status counts, the plain ` +
+      "meaning of each term, and the rules. Start here for any House bill question.",
+    inputSchema: { type: "object", properties: {} },
+    handler: (env) => hgabOverview(env),
+  },
+  {
+    name: "get_hgab_2027_dataset",
+    title: "House bill FY2027: one program",
+    description:
+      "One program's House bill against the proposal: everything in its overview entry plus the totals each document " +
+      "prints (controls, with PDF page links), House vs proposal by region / office kind / program / program line " +
+      "(dims), the 18 regions plus amounts printed as nationwide, the second vs third reading comparison (DPWH only), " +
+      `and the 10 largest rows in each bridge group. ${BRIDGE_HELD_WORDING} Versions are compared, never added.`,
+    inputSchema: {
+      type: "object",
+      properties: { dataset: HGAB_DATASET_SCHEMA },
+      required: ["dataset"],
+    },
+    handler: (env, a) => hgabDataset(env, requireStr(a, "dataset")),
+  },
+  {
+    name: "search_hgab_2027_projects",
+    title: "Search House bill FY2027 project rows",
+    description:
+      "Filter, sort and page one program's comparison rows (one row per project line as the documents print it). " +
+      "Each row: title, program, program line (pap), region, office, the amount in each version (nep_php, hgab2_php, " +
+      "hgab3_php, house_php = latest House reading; null = no such line, never zero), delta_php (House minus " +
+      "proposal), the plain status_label beside the raw trace code, held (true = unconfirmed match), url (the row's " +
+      "page) and pdf_url per version (the source page). Statuses are candidates, not confirmed changes. Returns " +
+      "total (all matched rows) and per-version sums over every matched row, which are never to be added across " +
+      "versions. At most 50 rows per call: when total is larger, page with offset (next_offset).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dataset: HGAB_DATASET_SCHEMA,
+        query: { type: "string", description: "Words that must all appear in the title, program, program line, region or office" },
+        group: {
+          type: "array",
+          items: { type: "string", enum: [...HGAB_BRIDGE_GROUPS] },
+          description: "Keep rows in these bridge groups: house_only (insertion candidates), nep_only (deletion candidates), unchanged, increased, decreased, scope_review",
+        },
+        region: {
+          type: "string",
+          description: `A region key (${HGAB_REGION_KEYS.join(", ")}) or a region label exactly as the documents print it`,
+        },
+        program: { type: "string", description: "Exact program as printed, e.g. 'Flood Management Program'" },
+        office: { type: "string", description: "Exact implementing office as printed (DPWH), e.g. 'Bulacan 1st District Engineering Office'" },
+        held: {
+          type: "string",
+          enum: [...HGAB_HELD_MODES],
+          description: "Unconfirmed matches: all (default), hide (confirmed only), only (unconfirmed only)",
+        },
+        sort: {
+          type: "string",
+          enum: [...HGAB_PROJECT_SORTS],
+          description: "house (latest House amount, default), nep, delta (House minus proposal), abs_delta (size of the change), title",
+        },
+        order: { type: "string", enum: [...HGAB_ORDERS], description: "desc (default for amounts) or asc (default for title); rows with no amount always sort last" },
+        limit: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+        offset: { type: "integer", minimum: 0, default: 0, description: "Rows to skip, for paging (use next_offset)" },
+      },
+      required: ["dataset"],
+    },
+    handler: (env, a) =>
+      hgabProjects(env, requireStr(a, "dataset"), {
+        q: str(a, "query"),
+        group: strList(a, "group"),
+        region: str(a, "region"),
+        program: str(a, "program"),
+        office: str(a, "office"),
+        held: str(a, "held"),
+        sort: str(a, "sort"),
+        order: str(a, "order"),
+        limit: Math.min(Math.max(Math.trunc(num(a, "limit") ?? 20), 1), 50),
+        offset: num(a, "offset"),
+      }),
+  },
+  {
+    name: "get_hgab_2027_project",
+    title: "One House bill FY2027 project row",
+    description:
+      "One comparison row in full: the amounts per version, plain labels for its status (with what it means), how the " +
+      "pairing was made, second vs third reading, the DPWH website listing, and every review flag; a pdf_url per " +
+      "version that opens the source page; the row's page url; and the source workbench's full record. The status " +
+      "is a candidate, not a confirmed change.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dataset: HGAB_DATASET_SCHEMA,
+        id: { type: "string", description: "Row id from search_hgab_2027_projects or get_hgab_2027_dataset, e.g. 'house-reading:848'" },
+      },
+      required: ["dataset", "id"],
+    },
+    handler: (env, a) => hgabProject(env, requireStr(a, "dataset"), requireStr(a, "id")),
+  },
+  {
+    name: "list_hgab_2027_districts",
+    title: "DPWH money by congressional district",
+    description:
+      "Congressional district cards (254): the representative (name, seat, portrait with its attribution and licence, " +
+      "bills link), the DPWH district engineering offices that serve the district with their tier, and headline " +
+      "amounts (FY2026 enacted, FY2027 proposal, FY2027 House bill). Tier A = the office serves only this district; " +
+      "Tier B = shared, and its money is never split, so a shared headline (shared_office_total: true) is a range, " +
+      "not the district's own. fy2027_vs_proposal is the like-for-like 2027 change. Always returns the residual: " +
+      "DPWH money on no district card (Central Office, regional offices), per year. Nothing here says a " +
+      "representative requested or controlled any amount.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        region: { type: "string", description: `Region key: ${HGAB_REGION_KEYS.join(", ")}` },
+        query: { type: "string", description: "Words that must all appear in the district, representative or office name" },
+        attribution: {
+          type: "string",
+          enum: [...HGAB_ATTRIBUTIONS],
+          description: "A (every office serves only this district), B (every office shared), mixed, none (no office found)",
+        },
+        sort: {
+          type: "string",
+          enum: [...HGAB_DISTRICT_SORTS],
+          description: "hgab3 (largest House bill amount, default), gaa2026 (largest 2026 enacted), change (largest House-minus-proposal on the same rows), name",
+        },
+        limit: { type: "integer", minimum: 1, maximum: 254, default: 50 },
+        offset: { type: "integer", minimum: 0, default: 0 },
+      },
+    },
+    handler: (env, a) =>
+      hgabDistricts(env, {
+        region: str(a, "region"),
+        q: str(a, "query"),
+        attribution: str(a, "attribution"),
+        sort: str(a, "sort"),
+        limit: num(a, "limit"),
+        offset: num(a, "offset"),
+      }),
+  },
+  {
+    name: "get_hgab_2027_district",
+    title: "One congressional district's DPWH offices",
+    description:
+      "One district: its card and representative, plus the full history of every office that serves it: FY2020–2026 " +
+      "enacted budgets and the FY2027 proposal (whole office) and House bill (named projects only), totals per " +
+      "Congress, the FY2027 six-group comparison, notes, and links to the office's DPWH project rows. A shared " +
+      "(Tier B) office's figures are the whole office's and are not split. null = not found that year, never zero.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "District id from list_hgab_2027_districts, e.g. 'leg:abra:lone'" } },
+      required: ["id"],
+    },
+    handler: (env, a) => hgabDistrict(env, requireStr(a, "id")),
   },
 ];
 
