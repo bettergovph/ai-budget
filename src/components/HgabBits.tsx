@@ -27,13 +27,17 @@ import {
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import '../hgab.css';
 
-/** Section entries that are plain links (programs are dropdowns, see PROGRAM_NAV). */
+/**
+ * Section entries that are plain links (programs and Districts are dropdowns,
+ * see PROGRAM_NAV). The first is Intro; the rest follow Districts, in order.
+ */
 const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
   {
     to: `${HGAB_ROOT}/intro`,
     label: 'Intro',
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/intro`,
   },
+  { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
 ];

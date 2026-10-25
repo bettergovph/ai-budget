@@ -183,7 +183,8 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
             <h2 id="hgab-dx-browse-title">All {all.length.toLocaleString()} congressional districts</h2>
             <p>
               Each card shows the representative, the office that builds there and its budget from 2020 to the
-              2027 House bill. A sidebar lists every region and district.
+              2027 House bill. A sidebar lists every region and district. Offices ranked by amount are on
+              the <Link to={`${HGAB_ROOT}/leaderboard`}>leaderboards</Link>.
             </p>
           </div>
           <Link className="hgab-cta hgab-cta-primary" to={districtListHref()}>{browse}</Link>

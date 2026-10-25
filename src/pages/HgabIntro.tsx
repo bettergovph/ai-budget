@@ -489,6 +489,7 @@ export default function HgabIntro() {
               </Link>
             ))}
             <Link to={districtPath()}><strong>Districts</strong><span>DPWH offices and the districts they serve</span></Link>
+            <Link to={`${HGAB_ROOT}/leaderboard`}><strong>Leaderboards</strong><span>district offices ranked, as images to share</span></Link>
             <Link to={`${HGAB_ROOT}/sources`}><strong>Sources</strong><span>the documents, their fingerprints and downloads</span></Link>
             <Link to={`${HGAB_ROOT}/methodology`}><strong>Methodology</strong><span>how lines were matched, and the limits</span></Link>
           </div>
