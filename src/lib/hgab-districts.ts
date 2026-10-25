@@ -18,13 +18,13 @@
  * "list", "document" and nothing about matching outside a Details block.
  */
 import {
-  BRIDGE_LABELS, CONGRESS_TERMS, PLAIN_TERMS, REGION_LABELS, REGION_ORDER, datasetPath, pctChange, regionKeyOf,
+  BRIDGE_LABELS, CONGRESS_TERMS, PLAIN_TERMS, REGION_LABELS, REGION_ORDER, datasetPath, districtPath, pctChange, regionKeyOf,
   type BridgeGroup, type CongressTerm, type DistrictCard, type DistrictRepresentative, type FiscalStage,
   type HgabDistrictIndex, type OfficeHistory, type RegionKey, type ResidualYear,
 } from './hgab';
 
 // ---------------------------------------------------------------------------
-// URL state (`?q=…&region=…&tier=…&sort=…&group=none`)
+// URL state (`?view=list&q=…&region=…&tier=…&sort=…&group=none`)
 // ---------------------------------------------------------------------------
 
 export type DistrictSortKey = 'hgab3' | 'gaa2026' | 'change' | 'growth' | 'name';
@@ -82,9 +82,13 @@ export function districtFiltersFromParams(params: URLSearchParams): DistrictFilt
   };
 }
 
-/** Filters → URL, writing only non-default values so shared links stay short. */
+/**
+ * Filters → URL, writing only non-default values so shared links stay short.
+ * Always leads with `view=list`: these filters belong to the list, and
+ * clearing every filter must not drop the reader back on the overview.
+ */
 export function paramsFromDistrictFilters(f: DistrictFilters): URLSearchParams {
-  const p = new URLSearchParams();
+  const p = new URLSearchParams({ view: 'list' });
   if (f.q.trim()) p.set('q', f.q.trim());
   if (f.region) p.set('region', f.region);
   if (f.tier) p.set('tier', f.tier);
@@ -435,10 +439,22 @@ export function districtSearchText(card: DistrictCard, index: HgabDistrictIndex)
     .toLowerCase();
 }
 
+/**
+ * The region a `region=` value names: a key (`III`, `IV-A`, `NCR`, `other`)
+ * or any label `regionKeyOf` reads ("Region III"). Null for a label it does
+ * not recognise, which then matches the card's label exactly.
+ */
+export function regionFilterKey(value: string): RegionSectionKey | null {
+  if (!value) return null;
+  if (value === 'other' || (REGION_ORDER as readonly string[]).includes(value)) return value as RegionSectionKey;
+  return regionKeyOf(value);
+}
+
 export function filterDistricts(index: HgabDistrictIndex, f: DistrictFilters): DistrictCard[] {
   const words = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const regionKey = regionFilterKey(f.region);
   return index.districts.filter((card) => {
-    if (f.region && (card.region ?? '') !== f.region) return false;
+    if (f.region && (regionKey ? districtRegionKey(card) !== regionKey : (card.region ?? '') !== f.region)) return false;
     if (f.tier === 'A' && card.attribution !== 'A') return false;
     if (f.tier === 'B' && card.attribution !== 'B' && card.attribution !== 'mixed') return false;
     if (f.tier === 'none' && card.attribution !== 'none') return false;
@@ -535,8 +551,19 @@ export interface RegionTotals {
   offices: number;
   /** Sum of those offices' 2026 enacted figures; null when none has one. */
   gaa2026_php: number | null;
+  /** Sum of those offices' 2027 proposal (NEP) listings, whole office; null when none has one. */
+  nep2027_php: number | null;
   /** Sum of those offices' 2027 House bill figures (named projects only); null when none has one. */
   hgab3_php: number | null;
+  /**
+   * House bill minus proposal on the compared population (the offices'
+   * `fy2027` blocks, same named projects), summed over offices that carry
+   * both figures; null when none does. Not `hgab3_php − nep2027_php`: the
+   * proposal listing is the whole office, the House bill named projects only.
+   */
+  delta_php: number | null;
+  /** The proposal side of `delta_php` (same named projects), for a percentage. */
+  compared_nep_php: number | null;
 }
 
 /**
@@ -548,14 +575,94 @@ export function regionTotals(cards: readonly DistrictCard[], index: HgabDistrict
   const offices = new Map<string, OfficeHistory>();
   for (const c of cards) for (const o of cardOffices(c, index)) offices.set(o.id, o);
   let gaa: number | null = null;
+  let nep: number | null = null;
   let h3: number | null = null;
+  let delta: number | null = null;
+  let cnep: number | null = null;
   for (const o of offices.values()) {
     const g = yearAmount(o, 2026, 'gaa');
     if (g != null) gaa = (gaa ?? 0) + g;
+    const n = yearAmount(o, 2027, 'nep');
+    if (n != null) nep = (nep ?? 0) + n;
     const h = yearAmount(o, 2027, 'hgab3');
     if (h != null) h3 = (h3 ?? 0) + h;
+    const f = o.fy2027;
+    if (f && f.nep_php != null && f.hgab3_php != null) {
+      delta = (delta ?? 0) + (f.hgab3_php - f.nep_php);
+      cnep = (cnep ?? 0) + f.nep_php;
+    }
   }
-  return { districts: cards.length, offices: offices.size, gaa2026_php: gaa, hgab3_php: h3 };
+  return {
+    districts: cards.length, offices: offices.size, gaa2026_php: gaa, nep2027_php: nep, hgab3_php: h3,
+    delta_php: delta, compared_nep_php: cnep,
+  };
+}
+
+/** Every region section in page order: `REGION_ORDER`, then "other". */
+export const REGION_SECTION_ORDER: readonly RegionSectionKey[] = [...REGION_ORDER, 'other'];
+
+// ---------------------------------------------------------------------------
+// The list's addresses: `?view=list`, `#region-<key>`, `#d-<district>`
+// ---------------------------------------------------------------------------
+
+/** `/hgab/2027/districts?view=list`, with `#<anchor>` when given: the list, opened at a region or a card. */
+export function districtListHref(anchor?: string): string {
+  return `${districtPath()}?view=list${anchor ? `#${anchor}` : ''}`;
+}
+
+/**
+ * Element id of a district's card, and the `#hash` that links to it:
+ * `leg:bulacan:1st` → `d-bulacan-1st`. Ids are unique after slugging (the
+ * verifier's district ids are lower-case words joined by `:`).
+ */
+export function districtAnchor(id: string): string {
+  return `d-${id.replace(/^leg:/, '').replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+}
+
+/** `#d-bulacan-1st` → `d-bulacan-1st`; null for any other hash. Resolve it with a map built from `districtAnchor`. */
+export function districtAnchorFromHash(hash: string): string | null {
+  const m = /^#(d-.+)$/.exec(hash);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// ---------------------------------------------------------------------------
+// The sidebar's tree: regions → districts
+// ---------------------------------------------------------------------------
+
+export interface SidebarDistrict {
+  id: string;
+  label: string;
+  anchor: string;
+  /** The card's 2027 House bill figure (its offices' named projects, undivided); null when none. */
+  hgab3_php: number | null;
+  /** Tier B or mixed: the figure is a shared office total, not the district's own. */
+  shared: boolean;
+  /** No office found, so no figure. */
+  none: boolean;
+}
+
+export interface SidebarRegion {
+  key: RegionSectionKey;
+  anchor: string;
+  districts: SidebarDistrict[];
+}
+
+/** Districts by region in `REGION_ORDER`, each region's districts by name ("2nd" before "10th"). Empty regions are left out. */
+export function sidebarRegions(cards: readonly DistrictCard[]): SidebarRegion[] {
+  return groupDistrictsByRegion(cards).map((g) => ({
+    key: g.key,
+    anchor: regionAnchor(g.key),
+    districts: g.cards
+      .map((c) => ({
+        id: c.id,
+        label: c.label,
+        anchor: districtAnchor(c.id),
+        hgab3_php: c.headline.fy2027_hgab3_php,
+        shared: c.attribution === 'B' || c.attribution === 'mixed',
+        none: c.attribution === 'none',
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'en', { numeric: true })),
+  }));
 }
 
 /**

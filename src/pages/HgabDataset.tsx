@@ -82,12 +82,17 @@ export default function HgabDataset() {
     return <HgabError message={`There is no House-bill program called “${key}”. The four programs are dpwh, fmr, hfep and nia.`} />;
   }
   if (current?.err) return <HgabError message={current.err} />;
-  if (!summary || !overview || !d) return <HgabLoading what={`the ${key.toUpperCase()} program`} />;
+  // Overview keeps the navy band and the headline figures; the other views open
+  // with a compact heading and go straight to their content.
+  const viewParam = params.get('view');
+  const wantsOverview = !viewParam || viewParam === 'overview';
+  if (!summary || !overview || !d) return <HgabLoading what={`the ${key.toUpperCase()} program`} heroBlend={wantsOverview} />;
 
   const tabs = hubViews(d.has_readings);
   const view = params.get('view');
   const tab: TabKey = tabs.some((t) => t.key === view) ? (view as TabKey) : 'overview';
   const tabLabel = tabs.find((t) => t.key === tab)?.label ?? 'Overview';
+  const isOverview = tab === 'overview';
 
   const houseKey: 'hgab2' | 'hgab3' = d.totals.hgab3_php != null ? 'hgab3' : 'hgab2';
   const houseTotal = houseKey === 'hgab3' ? d.totals.hgab3_php : d.totals.hgab2_php;
@@ -105,59 +110,64 @@ export default function HgabDataset() {
       <HgabHeader
         crumb={DATASET_SHORT[d.key]}
         compiledMeta={houseTotal != null ? `${fmt.shortPhp(houseTotal)} · ${houseLabel}` : undefined}
+        heroBlend={isOverview}
       />
 
       <HgabHero
-        compact
-        crumb={d.agency}
+        compact={!isOverview}
+        crumb={isOverview ? d.agency : <>{d.agency}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{tabLabel}</span></>}
         title={d.label}
         dek={plainSummary}
         note={<><strong>What one row is:</strong> {oneRow}</>}
       />
 
       <main className="nep-main">
-        <KpiStrip
-          items={[
-            {
-              label: STAGE_LABELS.nep.short,
-              value: fmt.shortPhp(d.totals.nep_php),
-              sub: `${d.counts.nep.toLocaleString()} rows · ${STAGE_LABELS.nep.label}`,
-            },
-            {
-              label: houseLabel,
-              value: houseTotal == null ? '—' : fmt.shortPhp(houseTotal),
-              tone: delta == null ? undefined : delta >= 0 ? 'up' : 'down',
-              sub: delta == null
-                ? 'No House total for these projects'
-                : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs ${STAGE_LABELS.nep.short} · ${formatPct(pct)}`,
-            },
-            {
-              label: 'Rows in each version',
-              value: `${d.counts.nep.toLocaleString()} → ${houseCount == null ? '—' : houseCount.toLocaleString()}`,
-              sub: d.has_readings && d.counts.hgab2 != null && d.counts.hgab3 != null
-                ? `${STAGE_LABELS.nep.short} → House · 2R ${d.counts.hgab2.toLocaleString()} · 3R ${d.counts.hgab3.toLocaleString()} · ${COMPARE_NOT_ADD}`
-                : `${STAGE_LABELS.nep.short} → House · ${COMPARE_NOT_ADD}`,
-            },
-            {
-              label: 'What is compared',
-              value: <span className="hgab-ds-kpi-text" title={plainSummary}>The project lists, not the agency’s whole budget</span>,
-              sub: `${summary.controls.length.toLocaleString()} printed totals, by ${singular(totalsLabel)}`,
-            },
-          ]}
-        />
+        {isOverview && (
+          <>
+            <KpiStrip
+              items={[
+                {
+                  label: STAGE_LABELS.nep.short,
+                  value: fmt.shortPhp(d.totals.nep_php),
+                  sub: `${d.counts.nep.toLocaleString()} rows · ${STAGE_LABELS.nep.label}`,
+                },
+                {
+                  label: houseLabel,
+                  value: houseTotal == null ? '—' : fmt.shortPhp(houseTotal),
+                  tone: delta == null ? undefined : delta >= 0 ? 'up' : 'down',
+                  sub: delta == null
+                    ? 'No House total for these projects'
+                    : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs ${STAGE_LABELS.nep.short} · ${formatPct(pct)}`,
+                },
+                {
+                  label: 'Rows in each version',
+                  value: `${d.counts.nep.toLocaleString()} → ${houseCount == null ? '—' : houseCount.toLocaleString()}`,
+                  sub: d.has_readings && d.counts.hgab2 != null && d.counts.hgab3 != null
+                    ? `${STAGE_LABELS.nep.short} → House · 2R ${d.counts.hgab2.toLocaleString()} · 3R ${d.counts.hgab3.toLocaleString()} · ${COMPARE_NOT_ADD}`
+                    : `${STAGE_LABELS.nep.short} → House · ${COMPARE_NOT_ADD}`,
+                },
+                {
+                  label: 'What is compared',
+                  value: <span className="hgab-ds-kpi-text" title={plainSummary}>The project lists, not the agency’s whole budget</span>,
+                  sub: `${summary.controls.length.toLocaleString()} printed totals, by ${singular(totalsLabel)}`,
+                },
+              ]}
+            />
 
-        <Caveats items={caveats} />
+            <Caveats items={caveats} />
 
-        <HgabDetails>
-          <dl>
-            <dt>One row</dt>
-            <dd>{d.grain}</dd>
-            <dt>Scope</dt>
-            <dd>{d.scope}</dd>
-            <dt>Totals table</dt>
-            <dd>{summary.controls.length.toLocaleString()} {d.controls_label.toLowerCase()} as printed in the documents</dd>
-          </dl>
-        </HgabDetails>
+            <HgabDetails>
+              <dl>
+                <dt>One row</dt>
+                <dd>{d.grain}</dd>
+                <dt>Scope</dt>
+                <dd>{d.scope}</dd>
+                <dt>Totals table</dt>
+                <dd>{summary.controls.length.toLocaleString()} {d.controls_label.toLowerCase()} as printed in the documents</dd>
+              </dl>
+            </HgabDetails>
+          </>
+        )}
 
         <div className="hgab-view-bar">
           <h2 className="hgab-view-title">{tabLabel}</h2>

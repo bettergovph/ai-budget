@@ -11,11 +11,16 @@
  * undivided; nothing here attributes a project or an amount to the
  * representative.
  *
+ * A sidebar lists every region and district (`HgabDistrictSidebar`, page
+ * mode): this district is current and its region open, and every row links
+ * straight to that district's page, so a reader can move between districts
+ * without going back. The back link returns to the list at this region.
+ *
  * Copy is plain first; office aliases, the printed labels each year was
  * matched on, crosswalk ids and data scopes sit in "Details for analysts".
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
@@ -27,6 +32,7 @@ import {
   AttributionBadge, ChartKeyRow, CoServedLinks, CongressCaveat, HistoryChart, Portrait, PortraitCredit,
   RepresentativeBlock, TierBadge,
 } from '../components/HgabDistrictBits';
+import DistrictSidebar from '../components/HgabDistrictSidebar';
 import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import {
@@ -36,9 +42,10 @@ import {
   type ProjectRow,
 } from '../lib/hgab';
 import {
-  ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SHORT, cardOffices, cardRegionalGroups, coServedIds,
-  districtRegionKey, fiscalYearRange, findDistrict, gaaSubtotal, historySlots, officeKindText, officeParquetLabel,
-  officeProjectsHref, officeTierText, regionAnchor, regionNames, slotLabel,
+  ATTRIBUTION_LABELS, DEFAULT_DISTRICT_SORT, FISCAL_STAGE_LONG, FISCAL_STAGE_SHORT, cardOffices, cardRegionalGroups,
+  coServedIds, districtListHref, districtRegionKey, filterDistricts, fiscalYearRange, findDistrict, gaaSubtotal,
+  historySlots, officeKindText, officeParquetLabel, officeProjectsHref, officeTierText, regionAnchor, regionNames,
+  sidebarRegions, slotLabel,
 } from '../lib/hgab-districts';
 import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-query';
 import '../hgab-districts.css';
@@ -72,6 +79,25 @@ export default function HgabDistrict() {
     if (card) document.title = `${card.label} — public works budget by Congress and the 2027 House bill · BetterGov Budget`;
   }, [card]);
 
+  // Moving between districts from the sidebar keeps this page mounted; start
+  // each district at the top, as a new page would.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [id, hash]);
+
+  // The sidebar's own filter (this page has no list filters in its URL).
+  const [find, setFind] = useState('');
+  const tree = useMemo(
+    () => (index ? sidebarRegions(filterDistricts(index, { q: find, region: '', tier: '', sort: DEFAULT_DISTRICT_SORT, group: true })) : []),
+    [index, find],
+  );
+  const regionSize = useMemo(() => {
+    const m = new Map<ReturnType<typeof districtRegionKey>, number>();
+    for (const d of index?.districts ?? []) m.set(districtRegionKey(d), (m.get(districtRegionKey(d)) ?? 0) + 1);
+    return m;
+  }, [index]);
+
   if (err) return <HgabError message={err} />;
   if (!index) return <HgabLoading what="the 2027 district index" />;
   if (!card) {
@@ -92,7 +118,7 @@ export default function HgabDistrict() {
   const built = index.built_at ? new Date(index.built_at) : null;
   const regionKey = districtRegionKey(card);
   const region = regionNames(regionKey);
-  const regionHref = `${districtPath()}#${regionAnchor(regionKey)}`;
+  const regionHref = districtListHref(regionAnchor(regionKey));
   const regionCount = index.districts.filter((d) => districtRegionKey(d) === regionKey).length;
   const one = offices.length === 1 ? offices[0] : null;
 
@@ -155,119 +181,133 @@ export default function HgabDistrict() {
       </HgabHero>
 
       <main className="nep-main">
-        {/* ---- representative ---- */}
-        <section className={`hgab-dd-rep ${ambiguous ? 'is-ambiguous' : ''}`.trim()} aria-labelledby="hgab-dd-rep-title">
-          {!ambiguous && <Portrait rep={rep} large />}
-          <div>
-            <p className="hgab-dd-rep-eyebrow" id="hgab-dd-rep-title">Representative · 20th Congress</p>
-            <RepresentativeBlock rep={rep} large showProfile />
-            {!ambiguous && <PortraitCredit rep={rep} />}
-            {ambiguous && rep?.candidates?.map((c) => <PortraitCredit key={c.name} rep={c} />)}
-            <p className="hgab-dd-rep-source">The seat holder is from the House of Representatives’ member list for the 20th Congress.</p>
-            <CongressCaveat />
+        <div className="hgab-dx-layout">
+          <DistrictSidebar
+            mode="page"
+            regions={tree}
+            regionSize={regionSize}
+            query={find}
+            onQuery={setFind}
+            selectedId={card.id}
+            focusRegion={regionKey}
+            narrowed={find.trim() !== '' && tree.reduce((n, r) => n + r.districts.length, 0) <= 40}
+          />
+          <div className="hgab-dx-content hgab-dd-content">
+            {/* ---- representative ---- */}
+            <section className={`hgab-dd-rep ${ambiguous ? 'is-ambiguous' : ''}`.trim()} aria-labelledby="hgab-dd-rep-title">
+              {!ambiguous && <Portrait rep={rep} large />}
+              <div>
+                <p className="hgab-dd-rep-eyebrow" id="hgab-dd-rep-title">Representative · 20th Congress</p>
+                <RepresentativeBlock rep={rep} large showProfile />
+                {!ambiguous && <PortraitCredit rep={rep} />}
+                {ambiguous && rep?.candidates?.map((c) => <PortraitCredit key={c.name} rep={c} />)}
+                <p className="hgab-dd-rep-source">The seat holder is from the House of Representatives’ member list for the 20th Congress.</p>
+                <CongressCaveat />
+              </div>
+            </section>
+
+            {/* ---- whose budget is this? ---- */}
+            <section className="nep-section" aria-labelledby="hgab-dd-attr">
+              <SectionHead
+                eyebrow="Whose budget is this?"
+                headline={<span id="hgab-dd-attr"><AttributionBadge attribution={card.attribution} /> {attribution.label}</span>}
+                dek={attribution.help}
+              />
+              {coServed.length > 0 && (
+                <p className="hgab-dd-coserved">
+                  <strong>Other districts {offices.length === 1 ? 'this office serves' : 'these offices serve'}:</strong>{' '}
+                  <CoServedLinks ids={coServed} index={index} />. Their
+                  cards show the same office figures. Do not add the cards together, or the money is counted twice.
+                </p>
+              )}
+              {groups.map((g) => (
+                <p className="hgab-dd-coserved" key={g.id}>
+                  {g.name} is a regional grouping, not a district office. Its money is not assigned to a district and
+                  appears on no card.
+                </p>
+              ))}
+              {offices.length === 0 && groups.length === 0 && (
+                <p className="hgab-dd-coserved">{ATTRIBUTION_LABELS.none.help}</p>
+              )}
+            </section>
+
+            {/* ---- one section per office ---- */}
+            {offices.map((o, i) => (
+              <OfficeSection
+                key={o.id}
+                office={o}
+                card={card}
+                index={index}
+                dpwh={dpwh}
+                docs={overview?.documents ?? null}
+                position={offices.length > 1 ? { n: i + 1, of: offices.length } : null}
+                first={i === 0}
+              />
+            ))}
+
+            {/* ---- how to read ---- */}
+            <aside className="hgab-dd-howto" aria-labelledby="hgab-dd-howto-title">
+              <h2 id="hgab-dd-howto-title">How to read this page</h2>
+              <ol>
+                <li>
+                  <strong>Every figure says whose it is.</strong> Tier A: the office serves only this district. Tier B:
+                  it serves several, and its figure is shared, not split.
+                </li>
+                <li>
+                  <strong>Shared money is never split.</strong> A shared office’s total is shown whole, with the other
+                  districts named beside it. Splitting it by population or road length would invent a figure the data
+                  cannot support.
+                </li>
+                <li>
+                  <strong>Most DPWH money is on no district card.</strong> Money listed under the DPWH Central Office or
+                  a regional office is not assigned to a district. <Link to={districtPath()}>The Districts overview</Link> shows
+                  how much, every year.
+                </li>
+                <li>
+                  <strong>2027 changes are leads, not findings.</strong> An <Term>insertion candidate</Term> is a House
+                  bill project we could not find in the proposal. A <Term>deletion candidate</Term> is the reverse.
+                  Uncertain matches are left out of the counts.
+                </li>
+                <li>
+                  <strong>The two 2027 bars measure different things.</strong> The proposal bar is the whole office. The
+                  House bill bar counts named projects only, so compare it with the thin line, not the bar.
+                </li>
+              </ol>
+            </aside>
+
+            <DisclaimerNotice compact />
+
+            <p className="nep-provenance">
+              Sources: the enacted budgets for 2020–2026, the President’s proposed budget for 2027, House Bill 10858
+              at third reading, the DEO2LEG office-to-district map, and bills.juris.ph for representatives.
+              {' · '}<Link to={regionHref}>All districts in {region.name}</Link>
+              {' · '}<Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
+              {' · '}<Link to={`${HGAB_ROOT}/sources`}>Sources</Link>
+            </p>
+
+            <HgabDetails>
+              <ul>
+                {built && <li>Index built {built.toLocaleString('en-PH')}.</li>}
+                <li>
+                  GAA FY2020–2026 from this portal’s operating-unit data; the DBM NEP FY2027 operating-unit listing;
+                  House Bill 10858 third reading against the NEP from{' '}
+                  <a href={HGAB_SOURCE_REPO} target="_blank" rel="noopener noreferrer">the extraction workbench</a>
+                  {index.source_commit && <> at commit <code>{index.source_commit.slice(0, 7)}</code></>}.
+                </li>
+                <li>
+                  DEO2LEG crosswalk v{index.crosswalk.schema_version} ({index.crosswalk.build_date}). District id{' '}
+                  <code>{card.id}</code>; region label <code>{card.region ?? 'null'}</code>; attribution <code>{card.attribution}</code>.
+                </li>
+                <li>
+                  Seat holder from the congress.gov.ph 20th Congress directory as captured by the crosswalk, joined to{' '}
+                  <a href="https://bills.juris.ph" target="_blank" rel="noopener noreferrer">bills.juris.ph</a> on the member code
+                  {rep?.member_code && <> (<code>{rep.member_code}</code>)</>}.
+                </li>
+                {index.scope_notes.map((n) => <li key={n}>{n}</li>)}
+              </ul>
+            </HgabDetails>
           </div>
-        </section>
-
-        {/* ---- whose budget is this? ---- */}
-        <section className="nep-section" aria-labelledby="hgab-dd-attr">
-          <SectionHead
-            eyebrow="Whose budget is this?"
-            headline={<span id="hgab-dd-attr"><AttributionBadge attribution={card.attribution} /> {attribution.label}</span>}
-            dek={attribution.help}
-          />
-          {coServed.length > 0 && (
-            <p className="hgab-dd-coserved">
-              <strong>Other districts {offices.length === 1 ? 'this office serves' : 'these offices serve'}:</strong>{' '}
-              <CoServedLinks ids={coServed} index={index} />. Their
-              cards show the same office figures. Do not add the cards together, or the money is counted twice.
-            </p>
-          )}
-          {groups.map((g) => (
-            <p className="hgab-dd-coserved" key={g.id}>
-              {g.name} is a regional grouping, not a district office. Its money is not assigned to a district and
-              appears on no card.
-            </p>
-          ))}
-          {offices.length === 0 && groups.length === 0 && (
-            <p className="hgab-dd-coserved">{ATTRIBUTION_LABELS.none.help}</p>
-          )}
-        </section>
-
-        {/* ---- one section per office ---- */}
-        {offices.map((o, i) => (
-          <OfficeSection
-            key={o.id}
-            office={o}
-            card={card}
-            index={index}
-            dpwh={dpwh}
-            docs={overview?.documents ?? null}
-            position={offices.length > 1 ? { n: i + 1, of: offices.length } : null}
-            first={i === 0}
-          />
-        ))}
-
-        {/* ---- how to read ---- */}
-        <aside className="hgab-dd-howto" aria-labelledby="hgab-dd-howto-title">
-          <h2 id="hgab-dd-howto-title">How to read this page</h2>
-          <ol>
-            <li>
-              <strong>Every figure says whose it is.</strong> Tier A: the office serves only this district. Tier B:
-              it serves several, and its figure is shared, not split.
-            </li>
-            <li>
-              <strong>Shared money is never split.</strong> A shared office’s total is shown whole, with the other
-              districts named beside it. Splitting it by population or road length would invent a figure the data
-              cannot support.
-            </li>
-            <li>
-              <strong>Most DPWH money is on no district card.</strong> Money listed under the DPWH Central Office or
-              a regional office is not assigned to a district. <Link to={districtPath()}>The Districts page</Link> shows
-              how much, every year.
-            </li>
-            <li>
-              <strong>2027 changes are leads, not findings.</strong> An <Term>insertion candidate</Term> is a House
-              bill project we could not find in the proposal. A <Term>deletion candidate</Term> is the reverse.
-              Uncertain matches are left out of the counts.
-            </li>
-            <li>
-              <strong>The two 2027 bars measure different things.</strong> The proposal bar is the whole office. The
-              House bill bar counts named projects only, so compare it with the thin line, not the bar.
-            </li>
-          </ol>
-        </aside>
-
-        <DisclaimerNotice compact />
-
-        <p className="nep-provenance">
-          Sources: the enacted budgets for 2020–2026, the President’s proposed budget for 2027, House Bill 10858
-          at third reading, the DEO2LEG office-to-district map, and bills.juris.ph for representatives.
-          {' · '}<Link to={regionHref}>All districts in {region.name}</Link>
-          {' · '}<Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
-          {' · '}<Link to={`${HGAB_ROOT}/sources`}>Sources</Link>
-        </p>
-
-        <HgabDetails>
-          <ul>
-            {built && <li>Index built {built.toLocaleString('en-PH')}.</li>}
-            <li>
-              GAA FY2020–2026 from this portal’s operating-unit data; the DBM NEP FY2027 operating-unit listing;
-              House Bill 10858 third reading against the NEP from{' '}
-              <a href={HGAB_SOURCE_REPO} target="_blank" rel="noopener noreferrer">the extraction workbench</a>
-              {index.source_commit && <> at commit <code>{index.source_commit.slice(0, 7)}</code></>}.
-            </li>
-            <li>
-              DEO2LEG crosswalk v{index.crosswalk.schema_version} ({index.crosswalk.build_date}). District id{' '}
-              <code>{card.id}</code>; region label <code>{card.region ?? 'null'}</code>; attribution <code>{card.attribution}</code>.
-            </li>
-            <li>
-              Seat holder from the congress.gov.ph 20th Congress directory as captured by the crosswalk, joined to{' '}
-              <a href="https://bills.juris.ph" target="_blank" rel="noopener noreferrer">bills.juris.ph</a> on the member code
-              {rep?.member_code && <> (<code>{rep.member_code}</code>)</>}.
-            </li>
-            {index.scope_notes.map((n) => <li key={n}>{n}</li>)}
-          </ul>
-        </HgabDetails>
+        </div>
       </main>
       <SiteFooter source={`SOURCE: ENACTED BUDGETS (GAA) 2020–2026 · PRESIDENT’S PROPOSED BUDGET (NEP) 2027 · HOUSE BILL 10858, THIRD READING · DEO2LEG OFFICE-TO-DISTRICT MAP · ${card.label.toUpperCase()}`} />
     </>
