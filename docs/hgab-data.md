@@ -188,6 +188,209 @@ Computed on every import into `overview.json → reconciliation`; 69 rows,
 5. Record the new commit in the report/PR; `manifest.json → source_commit` is the
    pin the UI shows.
 
+## Districts index (the DEO lens)
+
+`data/hgab/2027/districts.json` (`HgabDistrictIndex` in `src/lib/hgab.ts`) is
+one card per legislative district: the DPWH district engineering office(s)
+the DEO2LEG crosswalk links to it, each office's budget history by fiscal year
+and by Congress, the FY2027 House bill against the NEP for the office's rows,
+and the seat's representative from bills.juris.ph. It follows the one use the
+crosswalk authorises ("The one authorized project-level use: the DEO lens",
+`DEO2LEG/README.md`): money is grouped by the office the documents print, a
+shared office's total is never divided, and the Central Office / regional /
+unmatched residual is published for every year and stage.
+
+| Command | Script | Does |
+| --- | --- | --- |
+| `npm run build:hgab-districts` | `scripts/build-hgab-districts.ts` | Writes `districts.json`, `districts-manifest.json` (inputs with sha256, coverage, aliases) and caches `juris-authors.json`. Flags: `--src=<clone>`, `--out=data/hgab/2027`, `--gaa=data/18`, `--nep=data/2027/18`, `--contract=src/lib/hgab.ts`, `--offline` (reuse the cached juris response) |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "districts.json (DEO lens)" section: 34 checks listed below. `--gaa=data/18` for the GAA yearly totals |
+
+### Inputs
+
+| Input | Used for |
+| --- | --- |
+| `DEO2LEG/outputs/deo_leg_crosswalk.json` (+ `MANIFEST.json`), schema 2.1.0, built 2026-10-23, at `a0caa778` | 213 offices (211 DEOs, 1 sub-DEO, 1 `regional_group` BARMM), 254 districts, 264 relationships; office names and aliases; `legacy` blocks; representatives with congress.gov.ph member codes. Structure only: its scanned allocation amounts (`source_amounts.json`) are never read |
+| `data/18/operating_units.json`, `data/18/yearly_totals.json` | FY2020–2026 enacted GAA by operating unit (`description`), thousands of pesos ×1000; rows with `description == 'nan'` skipped (they carry no money). Whole department, all funds, all expense classes |
+| `data/2027/18/operating_units.json`, `data/2027/18/summary.json` | FY2027 NEP by operating unit on the same whole-department basis, total ₱643,953,276,000 |
+| `data/hgab/2027/dpwh/projects.parquet`, `overview.json` | FY2027 House bill 3R vs NEP per printed `office`: sums, member counts, and a five-group bridge using the `TRACE_LABELS` trace→group map read from the contract (identity asserted per office). Operations population: NEP ₱572,924,074,000, HGAB 3R ₱587,075,661,000 |
+| `https://bills.juris.ph/api/authors` (20th Congress, 345 authors, 321 House) | Representatives and portraits, joined on `officialMemberId` = crosswalk `representative.profile.memberCode`. Cached with `fetched_at` in `juris-authors.json` |
+
+### Shape notes
+
+- `offices{}` holds the 200 crosswalk offices linked to at least one district
+  (167 Tier A, 33 Tier B; BARMM is `kind: regional_group`, Tier B, with no
+  ledger). `years` is always nine entries in order: FY2020–2026 `gaa`, FY2027
+  `nep`, FY2027 `hgab3`; `php` is null when no operating unit matched or the
+  matched unit carried a zero appropriation (never 0); `matched_label` is the
+  source label actually joined, two labels joined with ` + ` when a year prints
+  two spellings of one unit. `by_congress` sums only the GAA years present.
+  `fy2027` is the parquet block (199 of 200 offices; BARMM has none).
+- **Two FY2027 NEP figures per office.** The `nep` slot is the DBM operating-unit
+  listing (whole department); `fy2027.nep_php` is the HGAB operations
+  population. They differ for the same office and are never added or compared
+  as like for like; `scope_notes` say so.
+- Cards: `office_ids` are the crosswalk's (may include `office:barmm`);
+  `attribution` is computed over offices that are not regional groups and have
+  a ledger (A / B / mixed; `none` for the 5 BARMM-only districts, whose
+  headlines are null). `headline` sums the serving offices' undivided values.
+  `co_served_district_ids` = other districts sharing an engineering office
+  (regional-group links excluded). Labels are `"<Jurisdiction>, <Nth|Lone>
+  District"` with the crosswalk jurisdiction title-cased.
+- 69 paired FY2027 rows print different offices on the two stages; as in the
+  HGAB section both amounts sit under the House-side office (the parquet
+  `office` column).
+
+### Office-name join and aliases
+
+Labels join the crosswalk by a normalised key only (after the workbench's
+`officeJoinKey`): NFKD accents off, `DEO` / `Sub-DEO` / `Sub DEO` expanded to
+"(sub) district engineering office", hyphens to spaces, ordinal words
+First…Seventh to numerals, trailing ` - Proper` dropped, the `Las Pi±as`
+mojibake repaired, spaces collapsed, lower-cased. A key resolving to more than
+one office is not a join. `Central Office` is `/^central office$/i`; regional
+offices are `/regional office/i`. Every variant that needed more than the plain
+DEO expansion is recorded on the office's `aliases_used` with the steps it
+needed, and in `districts-manifest.json → normalised_joins`.
+
+Normalised joins (formatting only): `Las Piñas-Muntinlupa` / `Las Pi±as-Muntinlupa`
+(GAA) / `Las Piñas Muntinlupa` (HGAB) → `office:las-pinas-muntinlupa-deo`;
+`Malabon Navotas` (HGAB) → `office:malabon-navotas-deo`; `Mountain Province
+First DEO` → `office:mountain-province-1st-deo`; `Cavite Third DEO` →
+`office:cavite-3rd-deo`. (`Camarines Norte Sub District Engineering Office` is
+the plain expansion of `Camarines Norte Sub-DEO` and needs no step.)
+
+Explicit aliases (declared in `ALIASES` in the builder, one line each to revert):
+
+| Source label | Office | Basis | Status |
+| --- | --- | --- | --- |
+| `Surigao del Norte 1st District Engineering Office (formerly Surigao del Norte 2nd District Engineering Office)` (GAA FY2020–2026) | `office:surigao-del-norte-1st-deo` | The label's own primary name is the 1st DEO and it carries DBM operating-unit code 1800181, the code the plain `Surigao del Norte 1st DEO` label uses in FY2024–2026; `Surigao del Norte 2nd DEO` keeps 1800180 throughout | provisional |
+| `Davao de Oro District Engineering Office` (GAA FY2022) | `office:compostela-valley-deo` (legacy, no district) | RA 11297 rename; the crosswalk's `legacy.renamed_province` block; same DBM code 1800159 as `Compostela Valley DEO`. A predecessor: its money stays in the residual | firm |
+
+Coverage of DEO-like labels (labels matching "district engineering office"):
+
+| Slot | Labels | Joined a card office | Joined a legacy office (residual) | Unmatched | Residual share |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| FY2020 GAA | 185 | 177 | 6 | 2 | 59.8% |
+| FY2021 GAA | 186 | 179 | 6 | 1 | 63.4% |
+| FY2022 GAA | 188 | 181 | 6 | 1 | 63.7% |
+| FY2023 GAA | 190 | 184 | 4 | 2 | 70.6% |
+| FY2024 GAA | 191 | 186 | 4 | 1 | 74.0% |
+| FY2025 GAA | 198 | 191 | 4 | 3 | 75.5% |
+| FY2026 GAA | 200 | 195 | 3 | 2 | 62.6% |
+| FY2027 NEP | 199 | 196 | 1 | 2 | 80.1% |
+| FY2027 HGAB 3R | 199 | 199 | 0 | 0 | 70.0% |
+
+Residual share = 1 − deo_php / total_php; it is mostly the Central Office
+(₱326,997,958,000 of the FY2026 GAA; ₱510,414,711,000 of the FY2027 NEP;
+₱410,825,229,000 of HGAB 3R).
+
+### The residual and the predecessor rule
+
+`residual[]` has one entry per slot and the verifier proves
+`deo_php + central_office_php + regional_offices_php + unmatched_php = total_php`
+(GAA totals from `yearly_totals.json`, NEP ₱643,953,276,000, HGAB 3R
+₱587,075,661,000) and that Σ offices' `php` equals `deo_php`. `unmatched_php`
+holds two things, both named in `unmatched_labels` (labels with non-zero money
+only): labels that join a crosswalk **legacy** office (a predecessor with no
+district, `legacy.status` superseded_by_split / renamed_province /
+registry_only) and labels that join nothing. A predecessor's history is never
+split across its successors; each successor carries a note saying which label
+holds that money and where.
+
+| Label | Kind | Crosswalk office | FY2020 | FY2021 | FY2022 | FY2023 | FY2024 | FY2025 | FY2026 | FY2027 NEP | Total (₱ bn) |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cavite District Engineering Office (code 1800061) | legacy | `office:cavite-deo` | 3.524 | 2.987 | 3.841 | 2.209 | 3.230 | 2.643 | 1.305 | 1.790 | 21.529 |
+| Compostela Valley District Engineering Office (1800159) | legacy | `office:compostela-valley-deo` | 3.320 | 3.370 | — | — | — | — | — | — | 6.691 |
+| Davao de Oro District Engineering Office (1800159, alias) | legacy | `office:compostela-valley-deo` | — | — | 2.268 | — | — | — | — | — | 2.268 |
+| Cotabato City District Engineering Office | legacy | `office:cotabato-city-deo` | 1.264 | 0.884 | 0.030 | 0.033 | 0.047 | 0.010 | — | — | 2.268 |
+| South Cotabato District Engineering Office | legacy | `office:south-cotabato-deo` | 1.040 | 1.420 | 0.035 | — | — | — | — | — | 2.495 |
+| Southern Leyte District Engineering Office | legacy | `office:southern-leyte-deo` | 1.655 | 2.132 | 2.179 | 0.982 | 0.907 | 0.046 | 0.046 | — | 7.948 |
+| Zamboanga City District Engineering Office | legacy | `office:zamboanga-city-deo` | 1.284 | 1.313 | 0.987 | 1.408 | 1.277 | 0.035 | 0.035 | — | 6.340 |
+| Misamis Occidental District Engineering Office (1800155) | unmatched | — | 0.861 | 1.303 | 0.974 | 1.301 | 0.867 | 1.160 | 0.898 | 0.212 | 7.576 |
+| Cagayan de Oro 2nd District Engineering Office (1800188) | unmatched | — | 0.030 | — | — | — | — | 0.100 | 0.010 | 0 | 0.140 |
+| Cavite 5th District Engineering Office (1800205) | unmatched | — | — | — | — | — | — | 0.180 | — | — | 0.180 |
+| Southern Sub Leyte District Engineering Office | unmatched | — | — | — | — | 0.003 | — | — | — | — | 0.003 |
+| **Total** | | | 12.980 | 13.410 | 10.314 | 5.936 | 6.329 | 4.175 | 2.294 | 2.002 | 57.439 |
+
+`Road Board` (GAA, ₱0 every year) is also unmatched and never listed. The
+HGAB 3R slot has no unmatched money: all 199 printed DEOs join.
+
+Two of these are candidate aliases the rules do not allow without a decision:
+`Misamis Occidental DEO` (DBM 1800155) is the only unnumbered Misamis
+Occidental unit beside `Misamis Occidental 2nd DEO` (1800156) and the printed
+FY2027 NEP volume calls the same office `Misamis Occidental 1st DEO`; `Cavite
+DEO` (1800061) sits beside `Cavite 2nd` and `Cavite Third` while the printed
+volume prints `Cavite 1st DEO`. The crosswalk has no legacy block for the
+former and marks the latter `superseded_by_split` with three candidate
+successors, so both stay in the residual. Likewise DBM code 1800159 runs
+through `Compostela Valley DEO` → `Davao de Oro DEO` → `Davao de Oro 1st DEO`
+(the 2nd DEO has its own code 1800193 from FY2023), which would let the
+Compostela Valley history be assigned to the 1st DEO; the crosswalk calls that
+succession unverified, so it is not done.
+
+### Representatives and portraits
+
+Seats and names are the crosswalk's capture of the congress.gov.ph 20th
+Congress directory (2026-10-22; 252 resolved, 2 ambiguous). Each is joined to
+bills.juris.ph `/api/authors` on the member code: 253 of 254 seats join
+(`representatives_source.matched`); the one gap is Jennifer Austria-Barzaga
+(I007), one of the two candidates listed for Cavite 4th, who has no juris
+profile. Ambiguous seats (Antipolo City 2nd, Cavite 4th) have
+`status: 'ambiguous'`, `candidates[]` with both members, and no chosen member.
+bills.juris.ph has no per-member page: `juris_url` is
+`https://bills.juris.ph/authors/house?author=<canonicalName>`, which opens the
+House directory with the member selected (`BrowseAuthorDirectoryPage` reads the
+`author` query parameter); ambiguous seats link the bare directory.
+
+Portraits are the juris mirror (`https://juris-assets.bettergov.ph/…`), sourced
+from attributed government photographs on Wikimedia Commons; every entry
+carries `portrait_attribution`, `portrait_license` (all "Public domain" at this
+fetch) and `portrait_source_url`, which the UI must show with the image. The
+crosswalk's own scraped portraits under `DEO2LEG/legislative_profiles/` are not
+used (reuse rights unclear). Nothing in the index establishes that a
+representative requested, sponsored or controlled any project or amount.
+
+Deployment note (2026-10-25): this portal is served with
+`Cross-Origin-Embedder-Policy: require-corp` (`vite.config.ts` and production,
+needed by DuckDB-Wasm), and `juris-assets.bettergov.ph` sends neither
+`Cross-Origin-Resource-Policy` nor `Access-Control-Allow-Origin`, so browsers
+block every `portrait_url` and the UI falls back to a placeholder. Photos will
+show once that host adds `Cross-Origin-Resource-Policy: cross-origin` (a
+Cloudflare response-header rule on the asset host is enough). `npm run
+verify:hgab -- --probe-portraits` prints the host's current headers as an
+informational line; it is not a failing check because the host is outside this
+data tree.
+
+### Verifier checks (districts section)
+
+File present; fiscal year, source commit and crosswalk counts; `terms` equal
+`CONGRESS_TERMS` parsed from the contract; 254 unique card ids; every
+`office_ids` entry exists and every office is on a card, with
+`district_ids`/`office_ids` agreeing both ways; tier A iff one district; nine
+slots in order with `php` null or a non-zero integer and a `matched_label`;
+`by_congress` recomputed; residual identity and Σ offices = `deo_php` on every
+slot; HGAB 3R and NEP totals pinned; GAA totals equal `yearly_totals.json`;
+no Central/regional label in `unmatched_labels`; per-office bridge identity
+and net = hgab3 − nep; `fy2027` sums re-derived from the parquet by printed
+label, Σ offices' `fy2027.nep_php` + Central + regional = ₱572,924,074,000,
+every printed DEO on a card; headline, attribution and co-served recomputed;
+label format; ≥ 250 seats joined (exact number and unmatched names printed);
+resolved reps carry member code and profile, ambiguous seats choose none;
+portraits carry attribution and licence; juris cache `fetched_at` matches;
+notice and scope notes say what they must.
+
+### Refresh
+
+1. Re-run `npm run import:hgab` if the parquet changed (the index reads it and
+   `overview.json`).
+2. `npm run build:hgab-districts -- --src=<clone>` (add `--offline` to keep the
+   cached juris response; without it the response is re-fetched and
+   `fetched_at` moves).
+3. `npm run verify:hgab -- --src=<clone>`; fix any ✗.
+4. When adding an alias, add one `ALIASES` entry with its basis; when the
+   crosswalk gains a legacy block or alias that resolves one of the labels
+   above, the join picks it up without code changes.
+
 ## Known limits
 
 - FMR's PSGC enrichment (per-point geocoding, location agreement) is absent

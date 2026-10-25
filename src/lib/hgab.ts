@@ -393,6 +393,152 @@ export interface ProjectRecord extends ProjectRow {
 }
 
 // ---------------------------------------------------------------------------
+// Districts: the DEO lens (`/hgab/2027/districts`)
+// ---------------------------------------------------------------------------
+//
+// Groups DPWH money by the district engineering office the documents print,
+// then lists the legislative districts that office serves. It never infers
+// which district a project is in, never divides a shared office's money, and
+// publishes the Central Office / regional residual that no district card
+// shows. Representatives come from bills.juris.ph (our own directory, joined
+// on the congress.gov.ph member code); portraits are its Commons-mirrored,
+// attributed images.
+
+/** Which Congress deliberated each fiscal year's budget. */
+export interface CongressTerm {
+  congress: number;
+  label: string;
+  /** Fiscal years whose GAA (or, for FY2027, NEP and House bill) this Congress handled. */
+  years: number[];
+  note: string;
+}
+
+export const CONGRESS_TERMS: readonly CongressTerm[] = [
+  { congress: 18, label: '18th Congress', years: [2020, 2021, 2022], note: 'Convened July 2019; passed the FY2020, FY2021 and FY2022 GAAs.' },
+  { congress: 19, label: '19th Congress', years: [2023, 2024, 2025], note: 'Convened July 2022; passed the FY2023, FY2024 and FY2025 GAAs.' },
+  { congress: 20, label: '20th Congress', years: [2026, 2027], note: 'Convened July 2025; passed the FY2026 GAA. FY2027 is the NEP and the House bill, not yet enacted.' },
+];
+
+/** Where a fiscal year's figure comes from. GAA is enacted; NEP and HGAB are proposals. */
+export type FiscalStage = 'gaa' | 'nep' | 'hgab3';
+
+export interface YearAmount {
+  fy: number;
+  stage: FiscalStage;
+  /** Integer pesos; null when the office could not be found in that year's data (never 0). */
+  php: number | null;
+  /** The operating-unit or office label actually matched in that year's source, for audit. */
+  matched_label: string | null;
+}
+
+export interface OfficeHistory {
+  /** Crosswalk office id, e.g. `office:bulacan-1st-deo`. */
+  id: string;
+  name: string;
+  kind: 'district_engineering_office' | 'sub_district_engineering_office' | 'regional_group';
+  region: string | null;
+  /** Districts this office serves (crosswalk ids). */
+  district_ids: string[];
+  /** A = serves exactly one district; B = shared, figures are undivided. */
+  tier: 'A' | 'B';
+  /** FY2020–2026 GAA, FY2027 NEP, FY2027 HGAB 3R, in that order. */
+  years: YearAmount[];
+  /** GAA totals per Congress term (FY2027 is listed separately as nep/hgab3). */
+  by_congress: Array<{ congress: number; gaa_php: number | null; years_counted: number[] }>;
+  /** FY2027 House bill against the NEP for this office's rows. */
+  fy2027: {
+    nep_php: number | null;
+    hgab2_php: number | null;
+    hgab3_php: number | null;
+    nep_records: number;
+    hgab3_records: number;
+    bridge: Bridge | null;
+  } | null;
+  /** Name variants used to join this office across years, and any gaps. */
+  aliases_used: string[];
+  notes: string[];
+}
+
+export interface DistrictRepresentative {
+  name: string;
+  seat: string;
+  status: 'resolved' | 'ambiguous';
+  member_code: string | null;
+  /** congress.gov.ph profile. */
+  profile_url: string | null;
+  /** bills.juris.ph author profile id and page. */
+  juris_id: string | null;
+  juris_url: string | null;
+  portrait_url: string | null;
+  portrait_attribution: string | null;
+  portrait_license: string | null;
+  portrait_source_url: string | null;
+  bill_count: number | null;
+  leadership_roles: string[];
+  /** Ambiguous seats list every candidate and choose none. */
+  candidates?: DistrictRepresentative[];
+}
+
+export interface DistrictCard {
+  /** Crosswalk id, e.g. `leg:bulacan:1st`. */
+  id: string;
+  /** "Bulacan, 1st District". */
+  label: string;
+  jurisdiction: string;
+  district_label: string;
+  region: string | null;
+  representative: DistrictRepresentative | null;
+  office_ids: string[];
+  /** A when every serving office is Tier A, B when every one is shared, mixed otherwise, none when no office ledger exists. */
+  attribution: 'A' | 'B' | 'mixed' | 'none';
+  /**
+   * Headline figures: the sum of the serving offices' UNDIVIDED totals. When
+   * attribution is B or mixed these include money shared with other districts
+   * and must be labelled as a range, never as the district's own.
+   */
+  headline: { fy2026_gaa_php: number | null; fy2027_nep_php: number | null; fy2027_hgab3_php: number | null };
+  co_served_district_ids: string[];
+}
+
+export interface ResidualYear {
+  fy: number;
+  stage: FiscalStage;
+  /** DPWH total for the year in this stage's own scope. */
+  total_php: number;
+  /** Money under offices that appear on at least one district card. */
+  deo_php: number;
+  central_office_php: number;
+  regional_offices_php: number;
+  /** Operating units that matched no crosswalk office (named in `unmatched_labels`). */
+  unmatched_php: number;
+  unmatched_labels: string[];
+}
+
+export interface HgabDistrictIndex {
+  fiscal_year: number;
+  built_at: string;
+  source_commit: string;
+  crosswalk: { schema_version: string; build_date: string; offices: number; districts: number; relationships: number };
+  representatives_source: { url: string; congress: number; fetched_at: string; notice: string; matched: number; unmatched: number };
+  terms: CongressTerm[];
+  districts: DistrictCard[];
+  offices: Record<string, OfficeHistory>;
+  residual: ResidualYear[];
+  /** What the GAA scope per year is (all funds, all expense classes) versus FY2027 (operations population), in one sentence each. */
+  scope_notes: string[];
+}
+
+export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
+  return cached('districts', () =>
+    getJson<HgabDistrictIndex>(dataUrl(`${HGAB_BASE}/districts.json`), 'Failed to load the FY2027 HGAB district index'),
+  );
+}
+
+export function districtPath(id?: string): string {
+  return id ? `${HGAB_ROOT}/districts/${encodeURIComponent(id)}` : `${HGAB_ROOT}/districts`;
+}
+
+// ---------------------------------------------------------------------------
 // Loaders and URLs
 // ---------------------------------------------------------------------------
 

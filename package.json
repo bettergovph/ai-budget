@@ -10,6 +10,7 @@
     "import:hgab": "tsx scripts/import-hgab.ts",
     "verify:hgab": "tsx scripts/verify-hgab.ts",
     "upload:hgab": "tsx scripts/upload-hgab-to-r2.ts",
+    "build:hgab-districts": "tsx scripts/build-hgab-districts.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",
