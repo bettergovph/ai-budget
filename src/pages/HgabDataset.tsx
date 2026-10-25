@@ -224,7 +224,8 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
         {identityHolds
           ? <>The six groups add up to the difference exactly, to the peso. </>
           : <>The groups add up to <code>{fmt.php(check, { unit: 'full' })}</code> against a difference of <code>{fmt.php(net, { unit: 'full' })}</code>; see Methodology. </>}
-        “Same amount in both” adds nothing to the difference. Unconfirmed matches are left out of these counts;{' '}
+        “Same amount in both” adds nothing to the difference. “In the House bill only” includes lines with a possible
+        but unconfirmed match in the proposal;{' '}
         <Link to={`${datasetPath(d.key, 'projects')}&held=only`}>see them under Projects</Link>.
       </p>
 

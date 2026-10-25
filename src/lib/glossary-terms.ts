@@ -86,7 +86,7 @@ export const TERMS: Term[] = [
     aka: 'House-only row',
     cat: 'documents',
     def: 'A row printed in the House bill with no matching row in the NEP. The word “candidate” is doing real work: it is a matching observation, not a finding. The project may be new, or it may be an NEP project re-titled, re-scoped or moved to another office so that the match failed.',
-    detail: 'On this site every House-only row carries the status that produced it, and rows with unresolved similar-title suggestions are held out of the headline count. Calling a candidate an insertion takes reading the two printed pages side by side — which is what the evidence links are for.',
+    detail: 'On this site every House-only row carries the status that produced it, and rows with unresolved similar-title suggestions are counted as House-only but marked as unconfirmed matches, and the ranked lists of largest changes leave them out. Calling a candidate an insertion takes reading the two printed pages side by side — which is what the evidence links are for.',
     see: { to: '/hgab/2027/dpwh?view=projects&group=house_only&held=hide&sort=hgab3&dir=desc', label: 'Browse insertion candidates by size' },
   },
   {

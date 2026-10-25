@@ -189,9 +189,9 @@ export default function HgabMethodology() {
             DPWH rows carry the compounds: <code>transparency_gap_then_*</code> means the NEP row is
             absent from the Transparency listing, <code>outside_api_then_*</code> that it falls outside
             that listing’s scope (mostly foreign-assisted projects). Neither says anything about the
-            House pairing beyond the suffix. <em>Held out</em> rows — fuzzy and ambiguous — sit in the
-            insertion-candidate group for the money identity but are excluded from headline insertion
-            counts.
+            House pairing beyond the suffix. Unconfirmed matches — fuzzy and ambiguous — are counted in the
+            insertion-candidate group, so the six groups add up to the total change. They are left out
+            of the ranked lists of largest changes, and the Projects tab can show or hide them.
           </p>
 
           <h3 className="headline sm" style={{ marginTop: 24 }}>How the pairing was made (<code>house_match</code>, DPWH)</h3>
