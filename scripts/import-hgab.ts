@@ -111,6 +111,7 @@ interface DatasetSummary {
   top: Partial<Record<BridgeGroup, ProjectRow[]>>;
   readings: {
     second_php: number; third_php: number; delta_php: number; status_counts: Record<string, number>;
+    printed_controls: Array<{ id: string; label: string; second_php: number | null; third_php: number | null; delta_php: number | null }>;
     third_only: ProjectRow[]; changed_controls: ControlRow[];
   } | null;
 }
@@ -301,12 +302,32 @@ interface DpwhPap {
 }
 interface SideStats { records: number; amount_php: number; comparison_rows: number; offices: Record<string, { records: number; amount_php: number }> }
 interface DimEntry { label: string; nep_php: number; house_php: number; nep_records: number; house_records: number }
+/** Agency-level printed controls the workbench's reading comparison records per House reading. */
+type ReadingControlId =
+  | "new_appropriations" | "personnel_services" | "mooe" | "capital_outlays" | "gas_total" | "s2o_total"
+  | "regular_operations" | "local_projects" | "foreign_assisted_projects" | "operations_including_projects";
+type ReadingControls = {
+  operations_including_projects: number; allocations: number; new_appropriations: number;
+} & Partial<Record<ReadingControlId, number>>;
+const READING_CONTROL_LABELS: ReadonlyArray<[ReadingControlId, string]> = [
+  ["new_appropriations", "New appropriations"],
+  ["personnel_services", "Personnel services"],
+  ["mooe", "Maintenance and other operating expenses"],
+  ["capital_outlays", "Capital outlays"],
+  ["gas_total", "General administration and support"],
+  ["s2o_total", "Support to operations"],
+  ["regular_operations", "Regular operations"],
+  ["local_projects", "Locally funded projects"],
+  ["foreign_assisted_projects", "Foreign-assisted projects"],
+  ["operations_including_projects", "Operations including projects"],
+];
 interface DpwhOverviewPayload {
   summary: { stages: { official_nep: { new_appropriations_php: number; projects: number }; house: { printed_new_appropriations_php: number } } };
   readingSummary: {
-    second: { operations_including_projects: number; allocations: number; new_appropriations: number };
-    third: { operations_including_projects: number; allocations: number; new_appropriations: number };
+    second: ReadingControls;
+    third: ReadingControls;
     status_counts: Record<string, number>; allocation_delta_php: number;
+    control_deltas_php?: Partial<Record<ReadingControlId, number>>;
   };
   headlines: {
     sources: Record<"third" | "second" | "nep" | "api", SideStats>;
@@ -479,9 +500,19 @@ function buildDpwh(src: string, mainWs: MainWorkspace): { meta: HgabDatasetMeta;
   const thirdOnly = built.filter((b) => b.row.reading_status === "third_only").map((b) => stripRecord(b.row));
   ensure(thirdOnly.length === EXPECTED.dpwh.third_only && rs.allocation_delta_php === EXPECTED.dpwh.reading_delta, "dpwh reading delta drifted");
   ensure(rs.third.operations_including_projects - rs.second.operations_including_projects === rs.allocation_delta_php, "reading delta does not tie");
+  // Agency-level printed controls per reading, verbatim from the workbench's
+  // reading comparison. The deltas must tie to its control_deltas_php block.
+  const printedControls = READING_CONTROL_LABELS.map(([id, label]) => {
+    const second = rs.second[id] ?? null;
+    const third = rs.third[id] ?? null;
+    const delta = second != null && third != null ? third - second : null;
+    ensure(rs.control_deltas_php?.[id] == null || rs.control_deltas_php[id] === delta, `reading control ${id} delta does not tie to the source`);
+    return { id, label, second_php: second, third_php: third, delta_php: delta };
+  });
   const readings = {
     second_php: rs.second.operations_including_projects, third_php: rs.third.operations_including_projects, delta_php: rs.allocation_delta_php,
     status_counts: rs.status_counts, third_only: thirdOnly, changed_controls: controls.filter((c) => c.reading_delta_php),
+    printed_controls: printedControls,
   };
 
   const meta: HgabDatasetMeta = {

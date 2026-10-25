@@ -325,6 +325,13 @@ export interface HgabDatasetSummary {
     status_counts: Record<string, number>;
     third_only: ProjectRow[];
     changed_controls: ControlRow[];
+    /**
+     * The agency-level printed controls at each reading (new appropriations,
+     * expense classes, GAS, support to operations, operations), carried from
+     * the source's reading comparison so "unchanged between readings" is a
+     * data fact, not prose.
+     */
+    printed_controls: Array<{ id: string; label: string; second_php: number | null; third_php: number | null; delta_php: number | null }>;
   } | null;
 }
 
