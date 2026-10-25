@@ -16,6 +16,78 @@
 export interface PageMeta {
   title: string;
   description: string;
+  /** Social preview image; falls back to the site card in index.html. */
+  image?: string;
+  imageAlt?: string;
+  imageWidth?: string;
+  imageHeight?: string;
+}
+
+/** Fields the hearings SEO needs, mirroring the D1 `hearings` row. */
+export interface HearingSeoRow {
+  video_id: string;
+  title: string | null;
+  agency: string | null;
+  fiscal_year: string | null;
+  published_at: string | null;
+  length_text: string | null;
+  has_sections: number | null;
+}
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "2026-09-02" → "2 September 2026"; anything unparseable returns "". */
+export function longDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+  if (!m) return "";
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${Number(m[3])} ${month} ${m[1]}` : "";
+}
+
+/**
+ * Metadata for one hearing page.
+ *
+ * The YouTube titles are shouted and repetitive ("COMMITTEE ON APPROPRIATIONS -
+ * BUDGET BRIEFING/HEARINGS OF THE FY 2027 PROPOSED BUDGET (DOH)"), which reads
+ * badly in a search result and buries the part people actually search for. Build
+ * the title from the fields instead, and use the video's own thumbnail as the
+ * social card so a shared link looks like the hearing it points to.
+ */
+export function hearingMeta(row: HearingSeoRow): PageMeta {
+  const date = longDate(row.published_at);
+  const fy = row.fiscal_year ? `FY ${row.fiscal_year}` : "";
+  const who = row.agency
+    ? `${row.agency} budget hearing`
+    : "Committee on Appropriations hearing";
+  const title = [
+    [who, date].filter(Boolean).join(", "),
+    [fy, "House Committee on Appropriations"].filter(Boolean).join(" · "),
+  ]
+    .filter(Boolean)
+    .join(" — ") + ` · ${SITE}`;
+
+  const subject = row.agency
+    ? `the ${row.agency}'s ${fy || "proposed"} budget`
+    : `the ${fy || "proposed"} national budget`;
+  const record = row.has_sections
+    ? "Read what was said topic by topic, with every question, answer and peso figure timestamped to the video"
+    : "Watch alongside the full transcript, timestamped to the video";
+  const description =
+    `${record}. House Committee on Appropriations deliberations on ${subject}` +
+    (date ? `, streamed ${date}` : "") +
+    (row.length_text ? ` (${row.length_text})` : "") + ".";
+
+  return {
+    title,
+    description,
+    image: `https://i.ytimg.com/vi/${row.video_id}/maxresdefault.jpg`,
+    imageAlt: `${who}${date ? `, ${date}` : ""} — House Committee on Appropriations`,
+    imageWidth: "1280",
+    imageHeight: "720",
+  };
 }
 
 const SITE = "BetterGov Budget";
@@ -25,6 +97,18 @@ const DEFAULT_META: PageMeta = {
   description:
     "The Philippine national budget, visualized and browsable: the enacted GAA for FY 2020–2026 and " +
     "the FY 2027 NEP proposal, drillable from national totals down to individual line items.",
+};
+
+/**
+ * The four HGAB datasets, keyed by their URL segment. Kept here (not imported
+ * from lib/hgab.ts) so this module stays free of `import.meta.env` and runs
+ * unchanged inside the Worker.
+ */
+const HGAB_DATASETS: Record<string, { short: string; long: string }> = {
+  dpwh: { short: "DPWH", long: "Department of Public Works and Highways national infrastructure" },
+  fmr: { short: "Farm-to-Market Roads", long: "Department of Agriculture farm-to-market roads" },
+  hfep: { short: "Health Facilities", long: "DOH Health Facilities Enhancement Program" },
+  nia: { short: "Irrigation", long: "National Irrigation Administration irrigation projects" },
 };
 
 /** Portal sub-view names, keyed by the path segment after /d/:id/. */
@@ -57,6 +141,23 @@ export function pageMeta(pathname: string): PageMeta {
         "A citizen's guide to the Philippine budget: the four-phase budget cycle, how appropriations " +
         "become spending, where the fine print lives in the NEP and GAA volumes, and how citizens " +
         "can scrutinize the budget at every phase.",
+    };
+  }
+  if (p === "/hearings") {
+    return {
+      title: `Budget Hearings — House Committee on Appropriations FY 2027 · ${SITE}`,
+      description:
+        "Every FY 2027 budget briefing and hearing of the Philippine House Committee on " +
+        "Appropriations: searchable transcripts, a topic-by-topic record of what each " +
+        "agency was asked and answered, and every peso figure timestamped to the video.",
+    };
+  }
+  if (p.startsWith("/hearings/")) {
+    return {
+      title: `Budget Hearing Transcript · ${SITE}`,
+      description:
+        "Full transcript, summary, and highlights of a House Committee on Appropriations " +
+        "budget hearing, with an interactive transcript cued to the video.",
     };
   }
   if (p === "/glossary") {
@@ -98,6 +199,89 @@ export function pageMeta(pathname: string): PageMeta {
       description:
         "One department's FY 2027 proposal vs its FY 2026 GAA baseline: agencies, programs, " +
         "expense classes, regions, and the biggest movers.",
+    };
+  }
+
+  // --- FY2027 House General Appropriations Bill (HB 10858) ---------------
+  // `/hgab` and `/hgab/2027` redirect to the introduction, so they share its
+  // metadata; the Worker folds their canonical onto `/hgab/2027/intro` too.
+  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") {
+    return {
+      title: `House Bill 10858 against the 2027 NEP — Four Programs, Project by Project · ${SITE}`,
+      description:
+        "House Bill 10858, the FY 2027 General Appropriations Bill at third reading, compared " +
+        "project by project with the President's NEP for DPWH infrastructure, farm-to-market " +
+        "roads, health facilities and irrigation: program and region totals, the five-group " +
+        "bridge, foreign-assisted projects and the reading-to-reading difference, in short " +
+        "illustrated chapters.",
+    };
+  }
+  if (p === "/hgab/2027/overview") {
+    return {
+      title: `House Bill 10858 vs NEP 2027 — Dashboard View · ${SITE}`,
+      description:
+        "Dashboard view of House Bill 10858 against the FY 2027 NEP: stage totals, record counts and " +
+        "the five-group bridge for DPWH infrastructure, farm-to-market roads, health facilities and " +
+        "irrigation, the reconciliation against this portal's NEP data, and the printed source documents.",
+    };
+  }
+  if (p === "/hgab/2027/sources") {
+    return {
+      title: `HGAB 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,
+      description:
+        "The source documents behind the FY 2027 House bill comparison — HB 10858 volumes at both " +
+        "readings and the DBM NEP volumes — with SHA-256 checksums, page ranges, downloadable " +
+        "JSON and parquet files, and how to cite a figure.",
+    };
+  }
+  if (p === "/hgab/2027/methodology") {
+    return {
+      title: `HGAB 2027 Methodology — How the House Bill Was Matched to the NEP · ${SITE}`,
+      description:
+        "How FY 2027 House bill rows were extracted and paired with NEP rows, the five-group bridge " +
+        "that reconciles House to NEP, the status vocabulary, the checks against this portal's NEP " +
+        "data, the limits, and the full disclaimer.",
+    };
+  }
+  if (p === "/hgab/2027/districts") {
+    return {
+      title: `Districts — DPWH District Engineering Offices and the Districts They Serve, FY 2027 · ${SITE}`,
+      description:
+        "One card per Philippine legislative district: the representative in the 20th Congress, the " +
+        "DPWH district engineering office(s) serving it, that office's budget by Congress and fiscal " +
+        "year (FY 2020–2026 GAA), and the FY 2027 House bill against the NEP for its rows — with " +
+        "shared offices shown undivided and the Central Office residual published every year.",
+    };
+  }
+  if (/^\/hgab\/2027\/districts\/[^/]+$/.test(p)) {
+    return {
+      title: `District — DPWH Office Budget by Congress and the FY 2027 House Bill vs NEP · ${SITE}`,
+      description:
+        "One legislative district's DPWH district engineering office(s): attribution tier, budget by " +
+        "fiscal year and Congress (FY 2020–2026 GAA, FY 2027 NEP and House bill), the FY 2027 bridge, " +
+        "the largest projects, and the representative who holds the seat in the 20th Congress.",
+    };
+  }
+  const hgabRecord = /^\/hgab\/2027\/([a-z]+)\/p\/[^/]+$/.exec(p);
+  if (hgabRecord) {
+    const ds = HGAB_DATASETS[hgabRecord[1]];
+    return {
+      title: `${ds ? `${ds.short} project` : "Project"} — House Bill vs NEP, FY 2027 · ${SITE}`,
+      description:
+        `One ${ds ? ds.long : "FY 2027"} record across budget stages — NEP, House second and ` +
+        "third reading — with its matching status and the PDF page each amount was read from.",
+    };
+  }
+  const hgabDataset = /^\/hgab\/2027\/([a-z]+)$/.exec(p);
+  if (hgabDataset) {
+    const ds = HGAB_DATASETS[hgabDataset[1]];
+    const short = ds?.short ?? hgabDataset[1].toUpperCase();
+    return {
+      title: `${short} · House Bill vs NEP, FY 2027 · ${SITE}`,
+      description:
+        `${ds ? ds.long : "FY 2027 program"} in House Bill 10858 against the NEP: printed controls, ` +
+        "every project with its matching status, the largest insertions, deletions, increases and " +
+        "cuts, and the PDF page behind each amount.",
     };
   }
 
@@ -146,7 +330,6 @@ export function pageMeta(pathname: string): PageMeta {
       description: DEFAULT_META.description,
     };
   }
-
   return DEFAULT_META;
 }
 

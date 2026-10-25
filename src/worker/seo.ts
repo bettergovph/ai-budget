@@ -11,7 +11,13 @@
  * the same D1 tables.
  */
 
-import { deptTitle, NOT_FOUND_META, isKnownRoute, pageMeta, type PageMeta } from "../lib/seo";
+import {
+  deptTitle,
+  hearingMeta,
+  pageMeta,
+  type HearingSeoRow,
+  type PageMeta,
+} from "../lib/seo";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -44,6 +50,17 @@ async function enhanceWithDeptName(env: Env, pathname: string, meta: PageMeta): 
       );
       if (row) return { ...meta, title: deptTitle(row.description, "nep") };
     }
+    const hearing = /^\/hearings\/([A-Za-z0-9_-]{6,20})(?:\/|$)/.exec(pathname);
+    if (hearing) {
+      const row = await one<HearingSeoRow>(
+        env,
+        `SELECT video_id, title, agency, fiscal_year, published_at, length_text,
+                has_sections
+           FROM hearings WHERE video_id = ?`,
+        hearing[1],
+      );
+      if (row) return hearingMeta(row);
+    }
   } catch {
     /* fall through to the static meta */
   }
@@ -56,6 +73,7 @@ function canonicalFor(pathname: string): string {
   let p = pathname.replace(/\/+$/, "") || "/";
   if (p === "/" || p === "/2027") p = "/2027/overview";
   if (p === "/2027/explore") p = "/2027/search";
+  if (p === "/hgab" || p === "/hgab/2027") p = "/hgab/2027/intro";
   return p === "/" ? CANONICAL_HOST + "/" : CANONICAL_HOST + p;
 }
 
@@ -84,7 +102,7 @@ export async function serveSpaHtml(request: Request, env: Env, url: URL): Promis
     : NOT_FOUND_META;
   const canonical = canonicalFor(url.pathname);
 
-  const rewritten = new HTMLRewriter()
+  let rewriter = new HTMLRewriter()
     .on("title", {
       element(el) {
         el.setInnerContent(meta.title);
@@ -94,15 +112,19 @@ export async function serveSpaHtml(request: Request, env: Env, url: URL): Promis
     .on('link[rel="canonical"]', setAttr("href", canonical))
     .on('meta[property="og:title"]', setAttr("content", meta.title))
     .on('meta[property="og:description"]', setAttr("content", meta.description))
-    .on('meta[property="og:url"]', setAttr("content", canonical))
-    .transform(res);
+    .on('meta[property="og:url"]', setAttr("content", canonical));
 
-  if (known) return rewritten;
+  // Only routes that name their own image override the site card, so every
+  // other page keeps the default og.png already in index.html.
+  if (meta.image) {
+    rewriter = rewriter
+      .on('meta[property="og:image"]', setAttr("content", meta.image))
+      .on('meta[property="og:image:width"]', setAttr("content", meta.imageWidth ?? "1200"))
+      .on('meta[property="og:image:height"]', setAttr("content", meta.imageHeight ?? "630"))
+      .on('meta[property="og:image:alt"]', setAttr("content", meta.imageAlt ?? meta.title));
+  }
 
-  return new Response(rewritten.body, {
-    status: 404,
-    headers: rewritten.headers,
-  });
+  return rewriter.transform(res);
 }
 
 // ---------------------------------------------------------------------------
@@ -179,18 +201,40 @@ const STATIC_SITEMAP_PATHS = [
   "/explore",
   "/methodology",
   "/docs",
+  "/glossary",
+  "/hearings",
+  // FY2027 House bill section: the introduction, the dashboard overview, the
+  // two static pages and the four dataset hubs. Record pages are too many
+  // (≈19k) to list; the hubs link to them.
+  "/hgab/2027/intro",
+  "/hgab/2027/overview",
+  "/hgab/2027/sources",
+  "/hgab/2027/methodology",
+  "/hgab/2027/dpwh",
+  "/hgab/2027/fmr",
+  "/hgab/2027/hfep",
+  "/hgab/2027/nia",
+  // The Districts lens grid; the ~250 district pages are linked from it.
+  "/hgab/2027/districts",
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {
   let deptPaths: string[] = [];
   try {
-    const [gaa, nep] = await Promise.all([
+    const [gaa, nep, hearings] = await Promise.all([
       env.DB.prepare(`SELECT id FROM departments ORDER BY id`).all<{ id: string }>(),
       env.DB.prepare(`SELECT id FROM nep_departments ORDER BY id`).all<{ id: string }>(),
+      // Only hearings with a transcript: a page that says "no transcript" is
+      // not worth a crawler's time.
+      env.DB.prepare(
+        `SELECT video_id FROM hearings WHERE has_transcript = 1
+          ORDER BY published_at DESC`,
+      ).all<{ video_id: string }>(),
     ]);
     deptPaths = [
       ...(gaa.results ?? []).map((d) => `/d/${d.id}`),
       ...(nep.results ?? []).map((d) => `/2027/d/${d.id}`),
+      ...(hearings.results ?? []).map((h) => `/hearings/${h.video_id}`),
     ];
   } catch {
     /* static pages alone still make a valid sitemap */

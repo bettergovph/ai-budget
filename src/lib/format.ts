@@ -4,6 +4,21 @@ export interface PhpOptions {
   unit?: Unit;
 }
 
+/**
+ * Add thousands separators to bare long integers embedded in prose.
+ *
+ * The surrounding-character checks deliberately leave already formatted
+ * numbers and alphanumeric identifiers alone. Four-digit values are also
+ * excluded because hearing records frequently contain years.
+ */
+export function numbersInText(text: string): string {
+  return text.replace(
+    /(^|[^\p{L}\p{N}_,.])(\d{5,})(\.\d+)?(?![\p{L}\p{N}_,.])/gu,
+    (_match, prefix: string, digits: string, decimal = '') =>
+      prefix + digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + decimal,
+  );
+}
+
 export function php(n: number | null | undefined, opts: PhpOptions = {}): string {
   if (n == null || !Number.isFinite(n)) return '—';
   const unit = opts.unit || 'auto';

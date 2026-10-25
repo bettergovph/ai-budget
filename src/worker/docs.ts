@@ -130,6 +130,11 @@ export function docsHtml(origin: string): string {
   <h4>Budget cycle</h4>
   <a href="#cycle-overview">Coverage</a>
   <a href="#cycle-department">Department facts</a>
+  <h4>Budget hearings</h4>
+  <a href="#hearings-list">List hearings</a>
+  <a href="#hearings-search">Search what was said</a>
+  <a href="#hearings-topics">Deliberation record by topic</a>
+  <a href="#hearings-timeline">Timeline &amp; transcript</a>
   <h4>Machine access</h4>
   <a href="#openapi">OpenAPI spec</a>
   <a href="#mcp">MCP server</a>
@@ -140,8 +145,9 @@ export function docsHtml(origin: string): string {
 
 <h1 id="overview">Philippine Budget Data API</h1>
 <p class="lead">A free, public, read-only API over Philippine national budget data — the enacted
-General Appropriations Act (FY2020–2026), the FY2027 National Expenditure Program, and
-budget-cycle execution data. Also available as an <a href="#mcp">MCP server</a> for AI agents.</p>
+General Appropriations Act (FY2020–2026), the FY2027 National Expenditure Program,
+budget-cycle execution data, and the House budget hearings (what was actually said, topic by
+topic, with timestamps). Also available as an <a href="#mcp">MCP server</a> for AI agents.</p>
 
 <div class="pill-row">
   <span class="pill">Base URL <code>${O}/api/v1</code></span>
@@ -171,6 +177,11 @@ descriptive <code>User-Agent</code>.</p>
   <tr><td><code>budget-cycle</code></td><td>FY2018–2026, selected departments</td>
       <td>How appropriations moved through the cycle: NEP → GAA → authorized/adjusted appropriation →
       adjusted allotment → obligations → disbursements, per program × year × stage × expense class.</td></tr>
+  <tr><td><code>hearings</code></td><td>FY2027 season, House Committee on Appropriations</td>
+      <td>The budget <b>deliberations</b>: for each hearing (2–9 hours of video), a per-topic record of what
+      transpired — the question at issue, who said what and when, the agency's answer, figures as spoken,
+      commitments, and where it landed — plus a section-by-section timeline and the transcript. Every item
+      is timestamped and deep-linked to the video.</td></tr>
 </table>
 
 <p><b>Units.</b> Every amount anywhere in this API is an <b>exact Philippine peso</b> figure.
@@ -400,6 +411,49 @@ confidence) and facts — one row per program × fiscal year × stage × expense
 </table>
 <pre><code>curl ${O}/api/v1/budget-cycle/departments/14</code></pre>
 
+<h2>Budget hearings — what was said, topic by topic</h2>
+<p>The House Committee on Appropriations deliberates each agency's proposed budget in hearings that
+run 2–9 hours. We transcribe the streams (speaker-labelled) and build a <b>deliberation record</b>:
+not a summary of the hearing, but an account of what transpired on <i>each topic</i>. Machine
+transcripts are imperfect — names and figures are as heard — so every item carries a timestamp and a
+<code>url</code> that opens the hearing page with the video at that moment. Treat the records as an
+index into the video, and verify before you quote.</p>
+
+<div class="ep" id="hearings-list"><span class="method">GET</span><code>/api/v1/hearings</code></div>
+<p>All hearings, newest first. Filters: <code>fiscal_year</code>, <code>agency</code> (acronym as in the title,
+e.g. <code>DOH</code>), <code>q</code> (title keyword), <code>limit</code>, <code>offset</code>. <code>has_record</code>
+says whether the topic record exists; <code>transcript_source</code> says how the transcript was made.</p>
+<pre><code>curl "${O}/api/v1/hearings?agency=DOH"</code></pre>
+
+<div class="ep" id="hearings-search"><span class="method">GET</span><code>/api/v1/hearings/search?q=…</code></div>
+<p>Keyword search over every topic record across all hearings — the topic, its summary, question, outcome,
+and every spoken moment. All terms must match. Each hit returns the topic and the specific
+<code>matching_moments</code> (timestamp, speaker, what was said, url). Optional <code>fiscal_year</code>,
+<code>agency</code>, <code>status</code> (<code>resolved | committed | parked | unresolved | informational</code>).</p>
+<pre><code>curl "${O}/api/v1/hearings/search?q=philhealth%20subsidy"
+curl "${O}/api/v1/hearings/search?q=flood%20control&amp;status=committed"</code></pre>
+
+<div class="ep" id="hearings-topics"><span class="method">GET</span><code>/api/v1/hearings/{video_id}</code></div>
+<p>One hearing's metadata and its topic index (topic, status, first timestamp, summary, outcome).</p>
+<div class="ep"><span class="method">GET</span><code>/api/v1/hearings/{video_id}/topics</code>
+  &nbsp;·&nbsp; <code>/topics/{index}</code></div>
+<p>The full deliberation record. For each topic: <code>question</code> (what the committee was trying to
+establish), <code>thread</code> (chronological moments: <code>timestamp</code>, <code>speaker</code>, <code>side</code>,
+<code>kind</code>, <code>said</code>, <code>url</code>), <code>agency_position</code>, <code>positions</code>,
+<code>figures</code> (as spoken; <code>amount</code> is a best-effort peso parse), <code>actions</code> (document
+requests, commitments, motions, rulings), <code>outcome</code> and <code>status</code>. <code>?thread=0</code> omits the
+moment-by-moment thread.</p>
+<pre><code>curl ${O}/api/v1/hearings/7U4YvhlnbZY/topics
+curl "${O}/api/v1/hearings/7U4YvhlnbZY/topics?thread=0"</code></pre>
+
+<div class="ep" id="hearings-timeline"><span class="method">GET</span><code>/api/v1/hearings/{video_id}/timeline</code></div>
+<p>The proceedings in order — roll call, presentation, each interpellation, motions, suspensions — with
+per-section summaries, exchanges, figures and actions.</p>
+<div class="ep"><span class="method">GET</span><code>/api/v1/hearings/{video_id}/transcript?from=&amp;to=</code></div>
+<p>Raw transcript segments for a time window (seconds; default 20 minutes from <code>from</code>, at most
+1000 segments), with the inferred speaker name when known.</p>
+<pre><code>curl "${O}/api/v1/hearings/7U4YvhlnbZY/transcript?from=3600&amp;to=3900"</code></pre>
+
 <h2 id="openapi">OpenAPI specification</h2>
 <p>A machine-readable OpenAPI 3.1 description of every endpoint, parameter, and schema:</p>
 <pre><code>${O}/api/v1/openapi.json</code></pre>
@@ -468,12 +522,23 @@ Streamable HTTP: no auth, no sessions, JSON-RPC over POST.</p>
   <tr><td><code>search_gaa_programs</code></td><td>Find programs by name across all departments</td></tr>
   <tr><td><code>get_gaa_department_programs</code></td><td>All programs of one department, paginated</td></tr>
   <tr><td><code>search_gaa_line_items</code></td><td>Object-level line items with text/agency/expense-class filters</td></tr>
+  <tr><td><code>get_gaa_year_snapshot</code></td><td>One fiscal year in isolation: national total and every department's share, largest first</td></tr>
+  <tr><td><code>browse_gaa_hierarchy</code></td><td>Drill one department's hierarchy for a single year: agencies → programs → operating units → funds → expenses</td></tr>
   <tr><td><code>get_nep_2027_overview</code></td><td>The FY2027 proposal at national level, vs FY2026</td></tr>
   <tr><td><code>list_nep_2027_departments</code></td><td>All 39 NEP departments with deltas</td></tr>
   <tr><td><code>get_nep_2027_department</code></td><td>One department's FY2027 proposal in full</td></tr>
   <tr><td><code>get_nep_2027_rollup</code></td><td>Slice FY2027 by agency/program/region/object/… nationally, per department, or cross-department</td></tr>
   <tr><td><code>get_budget_cycle</code></td><td>NEP→GAA→execution stages for covered departments</td></tr>
+  <tr><td><code>list_hearings</code></td><td>House appropriations hearings, newest first, filterable by fiscal year, agency, or title keyword</td></tr>
+  <tr><td><code>search_hearings</code></td><td>What was said on a subject across all hearings: matching topics plus timestamped moments (start here for hearings)</td></tr>
+  <tr><td><code>get_hearing</code></td><td>One hearing's metadata and topic index, with each topic's status, summary, and outcome</td></tr>
+  <tr><td><code>get_hearing_topics</code></td><td>Full deliberation record per topic: who said what, positions, figures as spoken, commitments</td></tr>
+  <tr><td><code>get_hearing_timeline</code></td><td>The proceedings in order, section by section</td></tr>
+  <tr><td><code>get_hearing_transcript</code></td><td>Raw machine transcript for a time window, to check exact wording</td></tr>
 </table>
+<p>Hearing records are built from machine transcripts: speaker names are inferred and figures are
+recorded as spoken. Each moment carries a <code>url</code> that opens the video at that second —
+cite it when quoting, and verify figures against the video or official documents.</p>
 
 <h3 id="mcp-examples">Example prompts</h3>
 <p>Once connected, ask your assistant things like:</p>
@@ -484,6 +549,8 @@ Streamable HTTP: no auth, no sessions, JSON-RPC over POST.</p>
   <li><i>"Which regions gain and which lose in the FY2027 NEP compared to the FY2026 GAA?"</i></li>
   <li><i>"For the Department of Health, compare what was proposed (NEP), enacted (GAA), obligated, and disbursed across recent years."</i></li>
   <li><i>"What are the special purpose funds in the FY2027 proposal and how much is each?"</i></li>
+  <li><i>"What did the DOH say in its budget hearing about the PhilHealth subsidy, and what did members demand? Link me to the moments."</i></li>
+  <li><i>"Across all FY2027 hearings, which topics ended with the agency committing to submit documents?"</i></li>
 </ul>
 
 <h3>How an agent typically chains the tools</h3>
@@ -496,6 +563,17 @@ Streamable HTTP: no auth, no sessions, JSON-RPC over POST.</p>
 </ol>
 <p>National "who spends on X?" questions go straight to <code>search_gaa_programs</code> (GAA) or
 <code>get_nep_2027_rollup</code> with <code>by_department: true</code> (FY2027 proposal).</p>
+<p>Hearing questions like <i>"what did DOH say about medical assistance (MAIFIP) in its FY2027 hearing?"</i>
+chain the same way:</p>
+<ol>
+  <li><code>search_hearings {"query": "MAIFIP", "agency": "DOH", "fiscal_year": "2027"}</code> → matching
+  topics with their status and outcome, plus the timestamped moments that mention the term</li>
+  <li><code>get_hearing_topics {"video_id": "…", "topic_index": 2}</code> → that topic's full thread,
+  positions, figures, and commitments</li>
+  <li><code>get_hearing_transcript {"video_id": "…", "from_seconds": 3600, "to_seconds": 3900}</code> →
+  the exact wording around a moment, when a quote or figure needs checking</li>
+</ol>
+<p>Pair the result with <code>get_nep_2027_department</code> to set what was said against what was proposed.</p>
 
 <h3>Raw protocol examples (curl)</h3>
 <p>The transport is stateless JSON-RPC over POST — you can drive it with curl. Handshake:</p>

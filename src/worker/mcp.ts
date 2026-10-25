@@ -38,6 +38,15 @@ import {
   nepOverview,
   nepRollup,
 } from "./public-api";
+import {
+  HEARING_STATUSES,
+  hearingGet,
+  hearingTimeline,
+  hearingTopics,
+  hearingTranscript,
+  hearingsList,
+  hearingsSearch,
+} from "./hearings-api";
 
 const SERVER_INFO = {
   name: "ph-budget-data",
@@ -54,7 +63,16 @@ Datasets: (1) GAA — enacted General Appropriations Act, FY2020–2026, 38 depa
 down to UACS object-level line items; (2) NEP FY2027 — the Executive's ₱7.20T proposal,
 every figure paired with its FY2026 GAA baseline (amount vs base_amount, plus delta/pct);
 (3) budget-cycle — NEP→GAA→execution stages (appropriations, allotments, obligations,
-disbursements) for a small set of covered departments, Current New Appropriations scope only.
+disbursements) for a small set of covered departments, Current New Appropriations scope only;
+(4) hearings — House Committee on Appropriations budget hearings (FY2027 season and on):
+per-topic DELIBERATION RECORDS built from the transcript of each 2–9 hour hearing — for every
+topic, the question at issue, the chronological thread of who said what (timestamped, with a
+deep link that opens the video at that moment), the agency's position, members' positions,
+figures as spoken, commitments/document requests, and where it landed (status). Start with
+search_hearings for a question ("what did DOH say about PhilHealth?") or list_hearings to
+find a hearing, then get_hearing_topics for the full record. Cite the 'url' of a moment when
+you quote it — every claim is verifiable against the video. Figures in hearing records are
+AS SPOKEN (machine transcript); treat them as evidence to verify, not as exact data.
 
 All amounts are exact Philippine pesos (PHP). GAA and NEP department ids differ:
 GAA uses two digits ("07" = DepEd); NEP adds synthetic "SPF" (special purpose funds)
@@ -364,6 +382,126 @@ const TOOLS: Tool[] = [
       "Includes the synthetic 'SPF' and 'AUTO' departments.",
     inputSchema: { type: "object", properties: {} },
     handler: (env) => nepDepartments(env),
+  },
+  {
+    name: "list_hearings",
+    title: "List budget hearings",
+    description:
+      "House Committee on Appropriations budget hearings (YouTube streams), newest first: agency under review, date, " +
+      "length, whether a transcript and a per-topic deliberation record exist. Filter by fiscal_year (e.g. '2027'), " +
+      "agency acronym (e.g. 'DOH'), or a title keyword.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fiscal_year: { type: "string", description: "Budget fiscal year, e.g. '2027'" },
+        agency: { type: "string", description: "Agency acronym as in the hearing title, e.g. 'DOH', 'DPWH'" },
+        query: { type: "string", description: "Keyword matched against the hearing title" },
+        limit: { type: "integer", minimum: 1, maximum: 500, default: 100 },
+      },
+    },
+    handler: (env, a) => hearingsList(env, {
+      fiscal_year: str(a, "fiscal_year"), agency: str(a, "agency"), query: str(a, "query"),
+      limit: typeof a.limit === "number" ? a.limit : undefined,
+    }),
+  },
+  {
+    name: "search_hearings",
+    title: "Search what was said in the hearings",
+    description:
+      "Search across every hearing's deliberation topics by keyword(s): returns the matching topic records " +
+      "(summary, agency position, outcome/status) plus the specific timestamped moments that mention the terms, each " +
+      "with a URL that opens the video there. All terms must match. Use this first for questions like " +
+      "'what was said about flood control' or 'which hearings discussed unpaid health-worker benefits'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "One or more keywords, e.g. 'PhilHealth subsidy'" },
+        fiscal_year: { type: "string" },
+        agency: { type: "string", description: "Restrict to one agency's hearing(s), e.g. 'DOH'" },
+        status: { type: "string", enum: [...HEARING_STATUSES], description: "Restrict to topics with this outcome status" },
+        limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+      },
+      required: ["query"],
+    },
+    handler: (env, a) => hearingsSearch(env, {
+      query: requireStr(a, "query"), fiscal_year: str(a, "fiscal_year"), agency: str(a, "agency"),
+      status: str(a, "status"), limit: typeof a.limit === "number" ? a.limit : undefined,
+    }),
+  },
+  {
+    name: "get_hearing",
+    title: "Hearing overview and topic index",
+    description:
+      "One hearing: metadata (agency, date, length, YouTube and page URLs, transcript provenance) and its topic index — " +
+      "every deliberation topic with status, first timestamp, one-paragraph summary and outcome. " +
+      "Use get_hearing_topics for the full thread of each topic.",
+    inputSchema: {
+      type: "object",
+      properties: { video_id: { type: "string", description: "YouTube video id from list_hearings or search_hearings" } },
+      required: ["video_id"],
+    },
+    handler: (env, a) => hearingGet(env, requireStr(a, "video_id")),
+  },
+  {
+    name: "get_hearing_topics",
+    title: "Full deliberation record by topic",
+    description:
+      "Every topic's full deliberation record for one hearing: question at issue, chronological thread of moments " +
+      "(timestamp, speaker, side, kind, what was said, url), agency position, members' positions, figures as spoken, " +
+      "actions (document requests, commitments, motions, rulings), outcome and status. Long hearings return 10–25 " +
+      "topics with up to 40 moments each; pass topic_index to fetch just one.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        video_id: { type: "string" },
+        topic_index: { type: "integer", minimum: 0, description: "0-based index from get_hearing's topic list; omit for all topics" },
+        include_thread: { type: "boolean", default: true, description: "false = summaries only, no moment-by-moment thread" },
+      },
+      required: ["video_id"],
+    },
+    handler: async (env, a) => {
+      const id = requireStr(a, "video_id");
+      const all = await hearingTopics(env, id, { thread: a.include_thread !== false });
+      if (typeof a.topic_index === "number") {
+        const one = all.data.find((t) => t.index === a.topic_index);
+        if (!one) throw new ApiError(404, "not_found", `Hearing ${id} has no topic ${a.topic_index}`);
+        return { meta: all.meta, data: one };
+      }
+      return all;
+    },
+  },
+  {
+    name: "get_hearing_timeline",
+    title: "Hearing timeline (section by section)",
+    description:
+      "The proceedings in order — roll call, agency presentation, each member's interpellation, motions, suspensions — " +
+      "with per-section summaries, question/answer exchanges, figures and actions, all timestamped and deep-linked. " +
+      "Use when the question is about the flow of the hearing rather than one topic.",
+    inputSchema: { type: "object", properties: { video_id: { type: "string" } }, required: ["video_id"] },
+    handler: (env, a) => hearingTimeline(env, requireStr(a, "video_id")),
+  },
+  {
+    name: "get_hearing_transcript",
+    title: "Raw transcript window",
+    description:
+      "Machine transcript segments (with inferred speaker names) for a time window of one hearing — to read exactly " +
+      "what was said around a moment found via search_hearings or a topic thread. Default window is 20 minutes from " +
+      "from_seconds; at most 1000 segments.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        video_id: { type: "string" },
+        from_seconds: { type: "integer", minimum: 0, default: 0 },
+        to_seconds: { type: "integer", minimum: 0 },
+        limit: { type: "integer", minimum: 1, maximum: 1000, default: 300 },
+      },
+      required: ["video_id"],
+    },
+    handler: (env, a) => hearingTranscript(env, requireStr(a, "video_id"), {
+      from: typeof a.from_seconds === "number" ? a.from_seconds : 0,
+      to: typeof a.to_seconds === "number" ? a.to_seconds : undefined,
+      limit: typeof a.limit === "number" ? a.limit : undefined,
+    }),
   },
 ];
 

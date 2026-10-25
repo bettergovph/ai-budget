@@ -38,11 +38,14 @@ function isActivePath(pathname: string, href: string): boolean {
 
 export default function SiteHeader({ headerClassName, subNav, drawerExtras, crumb, compiledMeta }: SiteHeaderProps) {
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
+  // The drawer is "open at a pathname": navigating anywhere closes it without
+  // an effect, since a different pathname simply no longer matches.
+  const [openAt, setOpenAt] = useState<string | null>(null);
+  const menuOpen = openAt === location.pathname;
+  const setMenuOpen = (next: boolean | ((open: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(menuOpen) : next;
+    setOpenAt(value ? location.pathname : null);
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -62,7 +65,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
 
   // The masthead coverage label follows the section you're in: the GAA portal
   // covers FY2020-2026 (a single year on the /gaa/:year browser), the /2027
-  // microsite covers the FY2027 NEP alone.
+  // microsite covers the FY2027 NEP alone, and /hgab the House bill stage.
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
   const coverage = location.pathname.startsWith('/learn') || location.pathname.startsWith('/glossary')
     ? null // the guide and glossary span both documents; a fiscal-year tag would mislead
@@ -73,6 +76,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
     || location.pathname.startsWith('/methodology')
     || location.pathname.startsWith('/explore')
     ? 'FY 2020 \u2013 2026'
+    : location.pathname.startsWith('/hgab')
+    ? 'FY 2027 HGAB'
     : 'FY 2027 NEP';
 
   const today = useMemo(
@@ -167,6 +172,18 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               National Expenditures 2027
             </Link>
             <Link
+              to="/hgab"
+              className={`primary-nav-link ${location.pathname.startsWith('/hgab') ? 'active' : ''}`}
+            >
+              House Appropriations Bill 2027
+            </Link>
+            <Link
+              to="/hearings"
+              className={`primary-nav-link ${location.pathname.startsWith('/hearings') ? 'active' : ''}`}
+            >
+              Budget Hearings
+            </Link>
+            <Link
               to="/gaa"
               className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
@@ -222,6 +239,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
         <nav className="drawer-nav" aria-label="Site sections">
           <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
             NEP 2027 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
+            HGAB 2027 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to="/hearings" onClick={() => setMenuOpen(false)}>
+            Budget Hearings <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2020–2026 <span className="drawer-link-arrow">→</span>

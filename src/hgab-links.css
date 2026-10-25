@@ -1,0 +1,94 @@
+/*
+ * Cross-links into the FY2027 House bill section (/hgab/2027) from pages that
+ * are not part of it: the "House bill for this group" card on /2027/d/:deptId
+ * and the related-link block on /hearings/:videoId. Imported only by
+ * Nep2027Department.tsx and HearingDetail.tsx. hgab.css does not depend on it,
+ * and every rule here is scoped under .hgab-crosslink so the two cannot clash.
+ */
+
+.hgab-crosslink {
+  margin-top: 20px;
+  padding: 14px 18px 12px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  background: var(--paper-2);
+  max-width: 920px;
+}
+
+.hgab-crosslink-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* NEP · House · Δ, read as one line; the pill with the row counts trails it. */
+.hgab-crosslink-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 22px;
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.hgab-crosslink-figures em {
+  font-style: normal;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  margin-right: 6px;
+}
+.hgab-crosslink-figures strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.hgab-crosslink-figures .is-up strong { color: var(--positive); }
+.hgab-crosslink-figures .is-down strong { color: var(--negative); }
+.hgab-crosslink-pct { margin-left: 4px; color: var(--ink-3); }
+.hgab-crosslink-figures .nep-pill { margin-left: 0; align-self: center; }
+
+.hgab-crosslink-scope {
+  margin: 8px 0 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  max-width: 760px;
+}
+.hgab-crosslink-grain { color: var(--ink-2); font-weight: 600; }
+
+.hgab-crosslink-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.hgab-crosslink a { color: var(--accent); text-decoration: none; }
+.hgab-crosslink a:hover { color: var(--accent-deep); text-decoration: underline; }
+
+/* Hearing-page variant: one line per matching program, no figures. */
+.hgab-crosslink-compact { margin: 14px 0 0; padding: 10px 16px; }
+.hgab-crosslink-compact ul { list-style: none; margin: 4px 0 0; padding: 0; }
+.hgab-crosslink-compact li {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+@media (max-width: 720px) {
+  .hgab-crosslink { padding: 12px 14px 10px; }
+  .hgab-crosslink-figures { gap: 6px 16px; }
+  .hgab-crosslink-figures strong { font-size: 15px; }
+}

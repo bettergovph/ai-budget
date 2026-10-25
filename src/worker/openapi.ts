@@ -27,6 +27,14 @@ const errorResponse = {
   },
 } as const;
 
+const hearingIdParam = {
+  name: "video_id",
+  in: "path",
+  required: true,
+  schema: { type: "string" },
+  description: "YouTube video id of the hearing (from the list or search endpoints).",
+} as const;
+
 const deptIdParam = (desc: string) => ({
   name: "id",
   in: "path",
@@ -126,6 +134,7 @@ export const OPENAPI_SPEC = {
     { name: "gaa", description: "General Appropriations Act, FY2020–2026 (enacted)" },
     { name: "nep-2027", description: "FY2027 National Expenditure Program (proposed) vs FY2026 GAA baseline" },
     { name: "budget-cycle", description: "NEP → GAA → execution stages for covered departments" },
+    { name: "hearings", description: "House budget hearings: per-topic deliberation records, timelines, transcripts" },
   ],
   paths: {
     "/api/v1": {
@@ -448,6 +457,141 @@ export const OPENAPI_SPEC = {
         responses: { "200": { description: "OK" }, "404": errorResponse, "500": errorResponse },
       },
     },
+
+    // ---- Budget hearings ----
+    "/api/v1/hearings": {
+      get: {
+        tags: ["hearings"],
+        operationId: "listHearings",
+        summary: "List budget hearings",
+        description:
+          "House Committee on Appropriations budget hearings (one per YouTube stream), newest first, with agency, date, " +
+          "length, transcript provenance and whether a per-topic deliberation record exists.",
+        parameters: [
+          { name: "fiscal_year", in: "query", schema: { type: "string" }, description: "Budget fiscal year, e.g. 2027" },
+          { name: "agency", in: "query", schema: { type: "string" }, description: "Agency acronym as in the title, e.g. DOH" },
+          { name: "status", in: "query", schema: { type: "string", enum: ["ok", "no_captions"] } },
+          { name: "q", in: "query", schema: { type: "string" }, description: "Keyword matched against the title" },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 500, default: 100 } },
+          { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { type: "object", properties: {
+              meta: { $ref: "#/components/schemas/Meta" },
+              data: { type: "array", items: { $ref: "#/components/schemas/Hearing" } },
+            } } } },
+          },
+          "500": errorResponse,
+        },
+      },
+    },
+    "/api/v1/hearings/search": {
+      get: {
+        tags: ["hearings"],
+        operationId: "searchHearings",
+        summary: "Search what was said across all hearings",
+        description:
+          "Keyword search over every hearing's deliberation topics (topic, summary, question, outcome and every spoken " +
+          "moment). All terms must match. Each hit returns the topic record and the timestamped moments that mention " +
+          "the terms, with URLs that open the video at that moment.",
+        parameters: [
+          { name: "q", in: "query", required: true, schema: { type: "string", minLength: 2 } },
+          { name: "fiscal_year", in: "query", schema: { type: "string" } },
+          { name: "agency", in: "query", schema: { type: "string" } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["resolved", "committed", "parked", "unresolved", "informational"] } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { type: "object", properties: {
+              meta: { $ref: "#/components/schemas/Meta" },
+              data: { type: "array", items: { type: "object", properties: {
+                hearing: { type: "object", additionalProperties: true },
+                topic: { $ref: "#/components/schemas/HearingTopic" },
+                matching_moments: { type: "array", items: { $ref: "#/components/schemas/HearingMoment" } },
+              } } },
+            } } } },
+          },
+          "400": errorResponse,
+          "500": errorResponse,
+        },
+      },
+    },
+    "/api/v1/hearings/{video_id}": {
+      get: {
+        tags: ["hearings"],
+        operationId: "getHearing",
+        summary: "Hearing overview and topic index",
+        description: "One hearing's metadata plus its topic index (topic, status, first timestamp, summary, outcome).",
+        parameters: [hearingIdParam],
+        responses: { "200": { description: "OK" }, "404": errorResponse, "500": errorResponse },
+      },
+    },
+    "/api/v1/hearings/{video_id}/topics": {
+      get: {
+        tags: ["hearings"],
+        operationId: "getHearingTopics",
+        summary: "Deliberation record, topic by topic",
+        description:
+          "For every topic deliberated in the hearing: the question at issue, the chronological thread of who said what " +
+          "(timestamped, deep-linked), the agency's position, members' positions, figures as spoken, actions, outcome and status.",
+        parameters: [
+          hearingIdParam,
+          { name: "thread", in: "query", schema: { type: "string", enum: ["0", "1"], default: "1" }, description: "0 = omit the moment-by-moment thread" },
+        ],
+        responses: {
+          "200": {
+            description: "OK",
+            content: { "application/json": { schema: { type: "object", properties: {
+              meta: { $ref: "#/components/schemas/Meta" },
+              data: { type: "array", items: { $ref: "#/components/schemas/HearingTopic" } },
+            } } } },
+          },
+          "404": errorResponse,
+          "500": errorResponse,
+        },
+      },
+    },
+    "/api/v1/hearings/{video_id}/topics/{index}": {
+      get: {
+        tags: ["hearings"],
+        operationId: "getHearingTopic",
+        summary: "One topic's deliberation record",
+        parameters: [hearingIdParam, { name: "index", in: "path", required: true, schema: { type: "integer", minimum: 0 } }],
+        responses: { "200": { description: "OK" }, "404": errorResponse, "500": errorResponse },
+      },
+    },
+    "/api/v1/hearings/{video_id}/timeline": {
+      get: {
+        tags: ["hearings"],
+        operationId: "getHearingTimeline",
+        summary: "Timeline of the proceedings",
+        description:
+          "Contiguous sections in order (procedural, presentation, interpellation, motion, suspension) with summaries, " +
+          "question/answer exchanges, figures and actions, each timestamped and deep-linked. Served from the hearing's " +
+          "sections.json in the data host.",
+        parameters: [hearingIdParam],
+        responses: { "200": { description: "OK" }, "404": errorResponse, "502": errorResponse },
+      },
+    },
+    "/api/v1/hearings/{video_id}/transcript": {
+      get: {
+        tags: ["hearings"],
+        operationId: "getHearingTranscript",
+        summary: "Transcript segments for a time window",
+        description: "Machine transcript segments (inferred speaker names when known) between from and to seconds; default window 20 minutes, at most 1000 segments.",
+        parameters: [
+          hearingIdParam,
+          { name: "from", in: "query", schema: { type: "integer", minimum: 0, default: 0 }, description: "Start, seconds into the video" },
+          { name: "to", in: "query", schema: { type: "integer", minimum: 0 }, description: "End, seconds (default from + 1200)" },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 1000, default: 300 } },
+        ],
+        responses: { "200": { description: "OK" }, "404": errorResponse, "502": errorResponse },
+      },
+    },
   },
   components: {
     parameters: {
@@ -467,7 +611,7 @@ export const OPENAPI_SPEC = {
         type: "object",
         description: "Response metadata. Always states the dataset, currency (PHP), and scale (pesos); list endpoints add filters, limits, and whole-set totals.",
         properties: {
-          dataset: { type: "string", enum: ["gaa", "nep", "budget-cycle"] },
+          dataset: { type: "string", enum: ["gaa", "nep", "budget-cycle", "hearings"] },
           currency: { type: "string", const: "PHP" },
           scale: { type: "string", const: "pesos" },
         },
@@ -548,6 +692,64 @@ export const OPENAPI_SPEC = {
           fund_id: { type: ["string", "null"] },
           expense_id: { type: ["string", "null"], description: "Trailing digit is the expense class." },
           years: yearsMap,
+        },
+        additionalProperties: true,
+      },
+      Hearing: {
+        type: "object",
+        description: "One House budget hearing stream.",
+        properties: {
+          video_id: { type: "string", description: "YouTube video id" },
+          title: { type: "string" },
+          agency: { type: ["string", "null"], description: "Agency acronym under review" },
+          fiscal_year: { type: ["string", "null"] },
+          hearing_date: { type: ["string", "null"], format: "date" },
+          duration_seconds: { type: ["integer", "null"] },
+          youtube_url: { type: "string" },
+          page_url: { type: "string", description: "Hearing page on the site; append ?t=<seconds> to open at a moment" },
+          has_transcript: { type: "boolean" },
+          transcript_source: { type: ["string", "null"], description: "captions | nova3 | whisper | hybrid" },
+          has_record: { type: "boolean", description: "A per-topic deliberation record exists" },
+          topic_count: { type: ["integer", "null"] },
+          status: { type: "string" },
+          links: { type: "object", additionalProperties: { type: "string" } },
+        },
+        additionalProperties: true,
+      },
+      HearingMoment: {
+        type: "object",
+        description: "One timestamped moment in a topic's deliberation thread.",
+        properties: {
+          seconds: { type: "integer" },
+          timestamp: { type: "string" },
+          speaker: { type: ["string", "null"] },
+          side: { type: "string", enum: ["committee", "agency", "executive", "other"] },
+          kind: { type: "string", enum: ["question", "answer", "statement", "figure", "commitment", "motion", "ruling", "procedural"] },
+          said: { type: "string" },
+          url: { type: "string", description: "Opens the hearing page with the video at this moment" },
+        },
+      },
+      HearingTopic: {
+        type: "object",
+        description: "What transpired on one topic across the whole hearing, built from the transcript.",
+        properties: {
+          video_id: { type: "string" },
+          index: { type: "integer" },
+          topic: { type: "string" },
+          status: { type: ["string", "null"], enum: ["resolved", "committed", "parked", "unresolved", "informational", null] },
+          summary: { type: ["string", "null"] },
+          question: { type: ["string", "null"], description: "What the committee was trying to establish" },
+          agency_position: { type: ["string", "null"] },
+          outcome: { type: ["string", "null"] },
+          first_seconds: { type: ["integer", "null"] },
+          timestamp: { type: ["string", "null"] },
+          url: { type: "string" },
+          timeline_sections: { type: "array", items: { type: "integer" }, description: "Indices into the timeline's sections" },
+          positions: { type: "array", items: { type: "object", properties: { who: { type: "string" }, position: { type: "string" } } } },
+          figures: { type: "array", items: { type: "object", additionalProperties: true, description: "amount_text as spoken; amount = best-effort pesos or null" } },
+          actions: { type: "array", items: { type: "object", additionalProperties: true } },
+          moment_count: { type: "integer" },
+          thread: { type: "array", items: { $ref: "#/components/schemas/HearingMoment" } },
         },
         additionalProperties: true,
       },
