@@ -61,6 +61,8 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".parquet")) return "application/vnd.apache.parquet";
   if (path.endsWith(".json")) return "application/json";
   if (path.endsWith(".pdf")) return "application/pdf";
+  // share/<board>.png: link previews (npm run build:hgab-share), read by social crawlers.
+  if (path.endsWith(".png")) return "image/png";
   return "application/octet-stream";
 }
 /** JSON changes with every rebuild; parquet and PDFs are pinned to the manifest commit. */

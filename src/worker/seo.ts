@@ -18,6 +18,7 @@ import {
   type HearingSeoRow,
   type PageMeta,
 } from "../lib/seo";
+import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -156,6 +157,9 @@ const STATIC_SITEMAP_PATHS = [
   "/hgab/2027/nia",
   // The Districts lens grid; the ~250 district pages are linked from it.
   "/hgab/2027/districts",
+  // The leaderboards gallery and every board (national; `?region=` views are not listed).
+  LEADERBOARD_ROOT,
+  ...BOARDS.map((b) => `${LEADERBOARD_ROOT}/${b.id}`),
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

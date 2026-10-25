@@ -13,6 +13,8 @@
  * their data loads.
  */
 
+import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
+
 export interface PageMeta {
   title: string;
   description: string;
@@ -260,6 +262,36 @@ export function pageMeta(pathname: string): PageMeta {
         "One legislative district's DPWH district engineering office(s): attribution tier, budget by " +
         "fiscal year and Congress (FY 2020–2026 GAA, FY 2027 NEP and House bill), the FY 2027 bridge, " +
         "the largest projects, and the representative who holds the seat in the 20th Congress.",
+    };
+  }
+  // Leaderboards: before the dataset pattern, which would read "leaderboard"
+  // as a program key. A board's link preview is its pre-rendered national
+  // image on R2; an unknown board id falls back to the gallery.
+  if (p === LEADERBOARD_ROOT || p.startsWith(`${LEADERBOARD_ROOT}/`)) {
+    const gallery: PageMeta = {
+      title: `House Budget Analysis 2027 Leaderboards — DPWH District Offices and House Members Ranked · ${SITE}`,
+      description:
+        "DPWH district offices ranked by their money in the FY 2027 House bill and the NEP, and by " +
+        "enacted budgets from 2020 to 2026; district representatives ranked by bills authored. " +
+        "Each board is an image to download and share. Amounts belong to offices, not people.",
+    };
+    const m = /^\/hgab\/2027\/leaderboard\/([^/]+)$/.exec(p);
+    if (!m) return gallery;
+    let id = m[1];
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      /* keep the raw segment */
+    }
+    const board = boardById(id);
+    if (!board) return gallery;
+    return {
+      title: `${board.title} — House Budget Analysis 2027 Leaderboards · ${SITE}`,
+      description: `${board.subtitle} ${board.notes[0] ?? ""}`.trim(),
+      image: `https://budget-assets.bettergov.ph/${shareImageKey(board.id)}`,
+      imageAlt: board.title,
+      imageWidth: "1200",
+      imageHeight: "630",
     };
   }
   const hgabRecord = /^\/hgab\/2027\/([a-z]+)\/p\/[^/]+$/.exec(p);

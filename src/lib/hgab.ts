@@ -26,6 +26,7 @@
  *   pdf/<doc_key>.pdf             the source documents the evidence links open
  */
 import { dataUrl } from './data-url';
+import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -570,6 +571,13 @@ export interface HgabDistrictIndex {
 export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
   return cached('districts', () =>
     getJson<HgabDistrictIndex>(dataUrl(`${HGAB_BASE}/districts.json`), 'Failed to load the FY2027 House bill district index'),
+  );
+}
+
+/** The leaderboards file (`npm run build:hgab-leaderboard`); the boards themselves live in `lib/hgab-leaderboard.ts`. */
+export function loadHgabLeaderboard(): Promise<LeaderboardData> {
+  return cached('leaderboard', () =>
+    getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
   );
 }
 

@@ -89,10 +89,10 @@ builder emit for readers:
 Type-check and lint:
 
 ```sh
-npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts
+npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts scripts/build-hgab-leaderboard.ts
 npx tsc --noEmit --ignoreConfig --strict --target es2023 --module esnext --moduleResolution bundler \
   --types node --skipLibCheck --verbatimModuleSyntax --noUnusedLocals --noUnusedParameters --erasableSyntaxOnly \
-  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts
+  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts scripts/build-hgab-leaderboard.ts
 ```
 
 ## Layout
@@ -523,6 +523,91 @@ NEP / HGAB 3R forms.
 4. When adding an alias, add one `ALIASES` entry with its basis; when the
    crosswalk gains a legacy block or alias that resolves one of the labels
    above, the join picks it up without code changes.
+
+## Leaderboards
+
+`data/hgab/2027/leaderboard.json` (`LeaderboardData` in
+`src/lib/hgab-leaderboard.ts`, which also defines the 17 boards, the ranking
+and the share formats) ranks DPWH district offices on the 2027 House bill
+against the NEP and on their enacted budgets. It reads only `districts.json`,
+`overview.json`, `dpwh/projects.parquet`, `dpwh/summary.json` and the
+contract, so the order is `import:hgab` → `build:hgab-districts` →
+`build:hgab-leaderboard` → `verify:hgab -- --src=<clone>`. The upload walks
+the tree, so it lands on R2 at `hgab/2027/leaderboard.json`
+(`LEADERBOARD_DATA_PATH`).
+
+| Command | Script | Does |
+| --- | --- | --- |
+| `npm run build:hgab-leaderboard` | `scripts/build-hgab-leaderboard.ts` | Writes `leaderboard.json`, prints the slices and the top 3 of every board. Flags: `--out=data/hgab/2027`, `--contract=src/lib/hgab.ts` (`TRACE_LABELS`, `REGION_ORDER`). Fails on any broken rule below |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "leaderboard.json (leaderboards)" section: 44 checks, recomputed from `districts.json` and the parquet. Required: a missing file fails |
+
+**The unit** is a connected group of engineering offices (the BARMM
+`regional_group` excluded) and every district they serve, found by union-find
+over `office.district_ids` / `district.office_ids`. One district is Tier A;
+several is Tier B, shown with every district and never split. Each office is
+in exactly one entry; group tier = every office's `tier` = every district's
+`attribution` (asserted). `key` is the district id, or `shared:` + the sorted
+office ids joined by `+`. At this build: 190 entries, 159 Tier A (151 with one
+office, 8 with two) and 31 Tier B (2 to 7 districts; North + South Manila is
+the 7-district, 2-office group). The 5 BARMM-only districts go to
+`totals.districts_without_office`; `totals.districts` counts the 249 ranked.
+
+**Fields** (integer pesos; null = no figure, never 0):
+
+- 2027, the compared DPWH project lines: `nep_php`, `hgab3_php` = Σ the
+  offices' `fy2027` figures; `delta_php` = House − NEP when both exist;
+  `delta_pct` = delta / NEP × 100 when NEP > 0 (`pctChange`); `hgab3_rows` =
+  Σ `fy2027.hgab3_records` (House bill records as published).
+- `added_*` = `house_only_candidate` rows at the House amount; `held_*` =
+  `fuzzy_candidate` + `ambiguous` (unconfirmed match: carried, never counted as
+  added); `dropped_*` = `nep_only_candidate` at the NEP amount. Row counts are
+  parquet rows, joined by the office's hgab3 `matched_label` (the label the
+  House bill lists). Per office, added + held = `bridge.house_only` and dropped
+  = `bridge.nep_only`. The three trace sets are read from `TRACE_LABELS`
+  (`group`, `held`); the builder stops if they change.
+- Enacted: `gaa` "2020"–"2026" = Σ the offices' GAA slots (null where none),
+  `gaa_total_php`, `gaa_years`, `congress` "18"/"19"/"20" = Σ `by_congress`,
+  `growth_pct` = `cardGrowth` (mean annual GAA per office per term, summed
+  over offices; 20th against 18th).
+- `reorganised_notes`: the group's offices' `notes` (verbatim, deduplicated,
+  in office order) that record a change of office within the enacted years
+  2020–2026, so part of the earlier money sits under another name: "Not
+  listed under this name in the <years> enacted budget(s)", "Before <year>
+  this area was served by …" and "The budget also lists an undivided …" (the
+  last two only when their amount covers enacted years). Notes about the 2027
+  documents or the BARMM grouping do not count. `reorganised` = any such
+  note. Every note pattern is classified explicitly in `NOTE_PATTERNS`; an
+  unknown one (including "Listed with no money in …", which no office carries
+  yet) stops the build. Nothing else is inferred: Davao City DEO, whose
+  decline starts in 2023, has no such note and is not flagged. At this build
+  26 entries are reorganised (34 of the 39 notes on 27 offices count). The
+  growth and decline boards keep only `steadyHistory` entries (not
+  reorganised, 18th-Congress average at least ₱500 million a year).
+- `people[]`: one per district, sorted by label, from the district's
+  `representative`: `name` by the `repName` rule (ambiguous seats: both names
+  joined " / "; null when there is no representative), `status`
+  (`resolved` / `ambiguous` / `missing`), portrait with
+  `"<attribution> · <licence>"`, profile and juris links, `bill_count`,
+  `leadership_roles`, `href` = the district page. The entry's `region` is its
+  offices' `RegionKey` (the builder warns and takes the first office's if a
+  group ever spans two); each person's is the district's own, and they agree.
+- `totals.all` and `by_office_kind` come from the parquet grouped by
+  `office_kind` (the Camarines Norte Sub-DEO is listed under "District
+  engineering offices (DEOs)"). Σ entries = `deo` on every field; deo +
+  central + regional = all = the DPWH totals (NEP ₱572,924,074,000, House
+  ₱587,075,661,000); held = 389 rows, ₱10,517,119,000.
+- `regions[]`: in `REGION_ORDER`, district offices only (Central Office and
+  regional offices are in no region), each the sum of its entries.
+- `credits` and `notes` are reader-facing: plain sentences of at most 20
+  words, `docs/hgab-copy.md` wording, the banned-word list above.
+  `credits.documents` keeps its volume names, as document titles do.
+
+**`bill_count`** is bills.juris.ph `billCount`: the House bills in its 20th
+Congress catalog that list the member as a principal author (checked on a
+sample against `/api/authors/{id}/bills`: `total = primaryTotal`, no coauthor
+credits counted). The catalog says it is not yet complete
+(`meta.listingComplete: false`), and many bills list dozens of principal
+authors.
 
 ## D1 layer (public API and MCP)
 
