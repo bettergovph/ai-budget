@@ -73,7 +73,7 @@ export default function HgabDistrict() {
   }, [card]);
 
   if (err) return <HgabError message={err} />;
-  if (!index) return <HgabLoading what="the 2027 district index" heroBlend />;
+  if (!index) return <HgabLoading what="the 2027 district index" />;
   if (!card) {
     return (
       <HgabError
@@ -105,10 +105,10 @@ export default function HgabDistrict() {
           </>
         }
         compiledMeta={`${offices.length} ${offices.length === 1 ? 'office' : 'offices'} · ${attribution.label}`}
-        heroBlend
       />
 
       <HgabHero
+        compact
         crumb={
           <>
             <Link to={districtPath()}>Districts</Link>

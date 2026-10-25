@@ -55,8 +55,9 @@ export default function HgabMethodology() {
 
   return (
     <>
-      <HgabHeader crumb="Methodology" heroBlend />
+      <HgabHeader crumb="Methodology" />
       <HgabHero
+        compact
         crumb="Methodology"
         title="How the House bill was matched to the President’s proposal"
         dek="We compare two printed documents line by line. This page explains how each line was read and matched, what every label means, and where the comparison stops."

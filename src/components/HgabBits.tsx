@@ -240,25 +240,45 @@ export function HgabHero({
   dek,
   note,
   children,
+  compact = false,
 }: {
   crumb: ReactNode;
   title: ReactNode;
   dek?: ReactNode;
   note?: ReactNode;
   children?: ReactNode;
+  /**
+   * Subpages: breadcrumb, title and a short line on the page itself, with no
+   * navy band. The landing pages (intro, overview) keep the full band.
+   */
+  compact?: boolean;
 }) {
+  const trail = (
+    <span className="hgab-crumb" aria-label="Breadcrumb">
+      <span>FY2027</span>
+      <span className="hgab-crumb-sep" aria-hidden="true">·</span>
+      <Link to={HGAB_ROOT}>House Bill 10858</Link>
+      <span className="hgab-crumb-sep" aria-hidden="true">·</span>
+      {typeof crumb === 'string' ? <span className="hgab-crumb-here">{crumb}</span> : crumb}
+    </span>
+  );
+  if (compact) {
+    return (
+      <header className="hgab-pagehead">
+        <div className="hgab-pagehead-inner">
+          <p className="page-eyebrow">{trail}</p>
+          <h1 className="page-title">{title}</h1>
+          {dek && <p className="page-dek">{dek}</p>}
+          {note && <p className="hgab-pagehead-note">{note}</p>}
+          {children}
+        </div>
+      </header>
+    );
+  }
   return (
     <section className="nep-dept-hero hgab-hero">
       <div className="nep-dept-hero-inner">
-        <p className="nep-dept-hero-eyebrow">
-          <span className="hgab-crumb" aria-label="Breadcrumb">
-            <span>FY2027</span>
-            <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-            <Link to={HGAB_ROOT}>House Bill 10858</Link>
-            <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-            {typeof crumb === 'string' ? <span className="hgab-crumb-here">{crumb}</span> : crumb}
-          </span>
-        </p>
+        <p className="nep-dept-hero-eyebrow">{trail}</p>
         <h1 className="nep-dept-hero-title">{title}</h1>
         {dek && <p className="nep-dept-hero-dek">{dek}</p>}
         {note && <p className="nep-dept-hero-note">{note}</p>}

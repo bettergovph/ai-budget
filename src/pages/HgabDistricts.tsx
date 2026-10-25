@@ -174,7 +174,7 @@ export default function HgabDistricts() {
   };
 
   if (err) return <HgabError message={err} />;
-  if (!index) return <HgabLoading what="the 2027 district index" heroBlend />;
+  if (!index) return <HgabLoading what="the 2027 district index" />;
 
   const all = index.districts;
   const offices = Object.values(index.offices).filter(isOfficeLedger);
@@ -192,21 +192,13 @@ export default function HgabDistricts() {
 
   return (
     <>
-      <HgabHeader crumb="Districts" compiledMeta={`${all.length.toLocaleString()} districts · ${offices.length.toLocaleString()} offices`} heroBlend />
+      <HgabHeader crumb="Districts" compiledMeta={`${all.length.toLocaleString()} districts · ${offices.length.toLocaleString()} offices`} />
 
       <HgabHero
+        compact
         crumb="Districts"
         title="Public works money, by district office"
-        dek={
-          <>
-            The Department of Public Works and Highways (DPWH) builds roads, bridges and flood control through
-            its district engineering offices (DEOs). Every project in the budget names its office. This page
-            adds up the money by office, then lists the congressional districts each office serves. It covers
-            the enacted budget (GAA) for 2020 to 2026. For 2027 it compares the President’s proposed budget
-            (NEP) with the House bill (third reading). An office that serves several districts is shown whole,
-            not split.
-          </>
-        }
+        dek="DPWH money grouped by the district engineering office (DEO) that carries out the work, with the congressional districts each office serves. An office that serves several districts is shown whole, not split."
         note={
           <>
             The representative shown holds the seat in the 20th Congress. The 2020–2025 budgets were passed by

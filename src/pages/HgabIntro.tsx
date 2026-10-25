@@ -157,7 +157,7 @@ export default function HgabIntro() {
         <section className="story-band story-hero hgi-hero">
           <div className="story-hero-inner">
             <p className="story-kicker">Fiscal Year 2027 · House Bill 10858</p>
-            <h1 className="story-hero-title">What the House changed in the President’s 2027 budget</h1>
+            <h1 className="story-hero-title">House Bill 10858 compared with the President’s proposed 2027 budget</h1>
             <p className="hgi-hero-dek">
               Every year the President proposes a budget, the National Expenditure Program (NEP). The
               House then passes its own version, the House bill (HB 10858). Here the two are compared
