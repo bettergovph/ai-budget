@@ -1,6 +1,6 @@
-# HGAB in the public API and MCP server — contract
+# House bill FY2027 in the public API and MCP server — contract
 
-The FY2027 House General Appropriations Bill section (`/hgab/2027`) served
+The FY2027 House bill section (House Bill 10858, `/hgab/2027`) served
 through the read-only public API (`/api/v1/hgab/2027/…`) and the MCP server
 (`/mcp`), alongside the GAA, NEP, budget-cycle and hearings datasets.
 
@@ -13,10 +13,10 @@ which is the one the source workbench's own builders produced.
 
 - Amounts are **integer pesos**. `null` means "this version has no such
   line", never zero.
-- The President's proposal (NEP) and the House bill are **two versions of one
-  budget**. Responses compare them; nothing returned adds them together.
-  Sums over a filtered set are returned per version, labelled
-  `not_additive_across_versions: true`.
+- The NEP (the budget the President submits to Congress each August) and the
+  House bill are **two versions of one budget**. Responses compare them;
+  nothing returned adds them together. Sums over a filtered set are returned
+  per version, labelled `not_additive_across_versions: true`.
 - Pairings are **candidates**. Status labels are the plain ones the pages use
   (`TRACE_LABELS` in `src/lib/hgab.ts`), and the raw `trace` code is returned
   beside them. "Insertion" and "deletion" only ever appear as
@@ -186,7 +186,7 @@ existing `ApiError` shape (`400 bad_request`, `404 not_found`).
 Projects query parameters: `q` (every word must appear in `search_text`),
 `group` (comma list of `house_only,nep_only,unchanged,increased,decreased,scope_review`),
 `held` (`all` default | `hide` | `only`), `region` (a region key such as
-`IV-A`, or a printed label), `program`, `pap`, `office`, `office_kind`,
+`IV-A`, or a label as published), `program`, `pap`, `office`, `office_kind`,
 `zone` (`local`|`fap`), `trace`, `reading_status`, `flag` (contained in
 `flags`), `has_coordinates` (`1`), `sort` (`house` default | `nep` | `delta`
 | `abs_delta` | `title`), `order` (`desc` default for amounts, `asc` for
@@ -217,9 +217,10 @@ Added to `src/worker/mcp.ts`, each a thin wrapper over the REST functions:
 | `get_hgab_2027_district` | `id` | `/districts/{id}` |
 
 The server `INSTRUCTIONS` gain a fifth dataset paragraph: what the House bill
-is, the four programs and their grain, that pairings are candidates and
-versions are compared not added, that district figures carry tiers and shared
-offices are not split, and that tools should cite the `url` of a row.
+and the NEP are, the four programs and their grain, that pairings are
+candidates and versions are compared not added, that district figures carry
+tiers and shared offices are not split, and that tools should cite the `url`
+of a row.
 
 ## Loading
 

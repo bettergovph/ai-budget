@@ -10,9 +10,9 @@
  * Rules every function here follows:
  *   - amounts are integer pesos; null means "this version has no such line",
  *     never zero;
- *   - the President's proposal (NEP) and the House bill are two versions of
- *     one budget: responses compare them and never add them; sums over a
- *     filtered set are per version, marked `not_additive_across_versions`;
+ *   - the NEP and the House bill are two versions of one budget: responses
+ *     compare them and never add them; sums over a filtered set are per
+ *     version, marked `not_additive_across_versions`;
  *   - pairings are candidates; the plain status labels are the pages' own
  *     (`TRACE_LABELS`), returned beside the raw `trace` code;
  *   - unconfirmed matches (`held`: fuzzy or ambiguous) are flagged on every
@@ -80,20 +80,20 @@ export const HGAB_BRIDGE_NOTE =
   "Bridge figures are the stored ones the pages show: they include unconfirmed matches (fuzzy or ambiguous " +
   "pairings, counted under 'In the House bill only'), so the six groups add up to net_php. Each group's " +
   "unconfirmed_rows / unconfirmed_php is the unconfirmed part of it (non-zero only on DPWH house_only). " +
-  "php is the group's money basis: the House amount for house_only and unchanged, the proposal amount for " +
+  "php is the group's money basis: the House amount for house_only and unchanged, the NEP amount for " +
   "nep_only, the size of the movement for increased and decreased, and the signed net for scope_review.";
 
 export const HGAB_TOP_NOTE =
   "The 10 largest rows in each group by that group's money basis, unconfirmed matches left out (held = 0).";
 
 const COMPARE_RULE =
-  "The President's proposal (NEP) and the House bill are two versions of one budget: compare them, never add them.";
+  "The NEP and the House bill are two versions of one budget: compare them, never add them.";
 
 const RULES: string[] = [
   "Amounts are integer pesos. null means the version has no such line, never zero.",
   `${COMPARE_RULE} Sums over a filtered set are given per version and marked not_additive_across_versions.`,
   "Pairings are candidates: leads for checking, not confirmed changes. A line found in one version only is an " +
-    "insertion candidate (House bill only) or a deletion candidate (proposal only), never a confirmed insertion or deletion.",
+    "insertion candidate (House bill only) or a deletion candidate (NEP only), never a confirmed insertion or deletion.",
   `Unconfirmed matches (held: fuzzy or ambiguous pairings) are flagged on every row. ${HGAB_BRIDGE_NOTE} ` +
     "The largest-rows lists leave unconfirmed matches out.",
   "District figures carry their tier. A shared (Tier B) office's money is never divided between the districts it " +
@@ -108,7 +108,7 @@ const STAGE_ORDER_INFO = [
     label: STAGE_LABELS.nep.label,
     in_this_dataset: true,
     versions: ["nep"],
-    note: "The President's proposed budget, sent to Congress in August.",
+    note: FISCAL_STAGE_LONG.nep,
   },
   {
     stage: "house",
@@ -116,7 +116,7 @@ const STAGE_ORDER_INFO = [
     in_this_dataset: true,
     versions: ["hgab2", "hgab3"],
     note:
-      "Printed for second and third reading. DPWH is compared at third reading; the other three programs print " +
+      "Published at second and third reading. DPWH is compared at third reading; the other three programs publish " +
       "one list, identical at both readings, and are compared at second.",
   },
   { stage: "senate", label: "Senate version", in_this_dataset: false, versions: [], note: "Not in this dataset." },
@@ -179,7 +179,7 @@ async function rows<T>(env: Env, sql: string, ...binds: unknown[]): Promise<T[]>
     return results ?? [];
   } catch (e) {
     if (/no such table:\s*hgab_/i.test(String((e as Error)?.message ?? e))) {
-      throw new ApiError(503, "not_loaded", "FY2027 House bill (HGAB) data is not loaded on this deployment");
+      throw new ApiError(503, "not_loaded", "FY2027 House bill data is not loaded on this deployment");
     }
     throw e;
   }
@@ -192,10 +192,10 @@ async function firstRow<T>(env: Env, sql: string, ...binds: unknown[]): Promise<
 
 function assertKey(raw: string): DatasetKey {
   if ((HGAB_DATASET_KEYS as readonly string[]).includes(raw)) return raw as DatasetKey;
-  throw new ApiError(404, "not_found", `No HGAB dataset "${clip(raw)}"; use one of ${HGAB_DATASET_KEYS.join(", ")}`);
+  throw new ApiError(404, "not_found", `No House bill dataset "${clip(raw)}"; use one of ${HGAB_DATASET_KEYS.join(", ")}`);
 }
 
-/** A region key (any case) or the printed label(s), "|"-separated. */
+/** A region key (any case) or the published label(s), "|"-separated. */
 function regionFilter(raw: string): { column: "region_key" | "region"; values: string[] } {
   const v = raw.trim();
   const key = REGION_ORDER.find((k) => k.toLowerCase() === v.toLowerCase());
@@ -241,7 +241,7 @@ async function metaRow(env: Env): Promise<MetaRow> {
     env,
     `SELECT fiscal_year, built_at, source_repo, source_commit, notice, terms_json FROM hgab_meta WHERE id = 1`,
   );
-  if (!m) throw new ApiError(503, "not_loaded", "FY2027 House bill (HGAB) data is not loaded on this deployment");
+  if (!m) throw new ApiError(503, "not_loaded", "FY2027 House bill data is not loaded on this deployment");
   return m;
 }
 
@@ -427,7 +427,7 @@ function datasetEntry(d: DatasetRow, held: HeldStat[], full: boolean) {
 
 async function datasetRow(env: Env, key: DatasetKey): Promise<DatasetRow> {
   const d = await firstRow<DatasetRow>(env, `SELECT * FROM hgab_datasets WHERE key = ?`, key);
-  if (!d) throw new ApiError(404, "not_found", `No HGAB dataset "${key}" in the loaded data`);
+  if (!d) throw new ApiError(404, "not_found", `No House bill dataset "${key}" in the loaded data`);
   return d;
 }
 
@@ -506,7 +506,7 @@ export async function hgabDocuments(env: Env) {
       total: docs.length,
       note:
         "The source PDFs every page reference opens. Page numbers are positions in the file (what #page=N uses), " +
-        "not the numbers printed on the pages. sha256 and bytes identify the exact file.",
+        "not the page numbers shown on the pages. sha256 and bytes identify the exact file.",
     },
     data: docs.map((d) => publicDocument(d, usedBy(d.key))),
   };
@@ -543,11 +543,12 @@ export async function hgabOverview(env: Env) {
   return {
     meta: baseMeta(m),
     data: {
-      title: "FY2027 House bill (House Bill 10858) against the President's proposed budget (NEP)",
+      title: "FY2027 House bill (House Bill 10858) against the NEP",
       summary:
         "For the four programs where the House bill lists projects one by one (DPWH infrastructure, " +
         "farm-to-market roads, health facilities and irrigation), every project line in the House bill set " +
-        "against the President's proposal: what was added, dropped, raised, reduced or left unchanged.",
+        "against the NEP (the budget the President submits to Congress each August): what was added, dropped, " +
+        "raised, reduced or left unchanged.",
       stage_order: STAGE_ORDER_INFO,
       record_versions: (["nep", "hgab2", "hgab3", "api"] as const).map((k) => ({ key: k, ...STAGE_LABELS[k] })),
       rules: RULES,
@@ -855,10 +856,10 @@ export async function hgabDataset(env: Env, rawKey: string) {
         };
       }),
       controls_note:
-        "The subtotals each document prints for these projects, side by side; delta_php is the latest House reading " +
-        "minus the proposal. Columns are versions: compare them, never add them.",
+        "The subtotals published in each document for these projects, side by side; delta_php is the latest House " +
+        "reading minus the NEP. Columns are versions: compare them, never add them.",
       dims: dimsOut,
-      dims_note: "House bill against the proposal by each source's own recorded label (house_php is the latest House reading).",
+      dims_note: "House bill against the NEP by each source's own recorded label (house_php is the latest House reading).",
       regions: regionsBlock(d, regions),
       readings,
       top: topOut,
@@ -879,8 +880,8 @@ export async function hgabRegions(env: Env, rawKey: string) {
       ...baseMeta(m),
       dataset_key: key,
       note:
-        "All 18 regions, north to south, under the region each document prints (normalised to one key per region; " +
-        "null where a document lists nothing there). Amounts printed as nationwide or with no region are in " +
+        "All 18 regions, north to south, under the region each document lists (normalised to one key per region; " +
+        "null where a document lists nothing there). Amounts listed as nationwide or with no region are in " +
         "not_on_map. Nothing is geocoded from place names.",
     },
     data: regionsBlock(d, regions),
@@ -1362,7 +1363,7 @@ function publicCard(card: DistrictCard, index: HgabDistrictIndex, regionKey: str
       ...fy27,
       not_additive_across_versions: true as const,
       note:
-        "The 2027 House bill against the proposal on the same project rows of the serving offices (named projects " +
+        "The 2027 House bill against the NEP on the same project rows of the serving offices (named projects " +
         "only). This, not the headline pair, is the like-for-like change; it is what sort=change ranks on." +
         (shared ? " Shared office totals, not split." : ""),
     },
@@ -1398,7 +1399,7 @@ async function residualRows(env: Env) {
 const RESIDUAL_NOTE =
   "Every year's DPWH total split into money under offices that appear on a district card (deo_php) and money on no " +
   "district card: the Central Office, regional offices, and office names that matched nothing " +
-  "(not_on_any_district_php). Nine slots: FY2020–2026 enacted, FY2027 proposal, FY2027 House bill.";
+  "(not_on_any_district_php). Nine slots: FY2020–2026 enacted, FY2027 NEP, FY2027 House bill.";
 
 export interface HgabDistrictsOpts {
   region?: string;
@@ -1467,7 +1468,7 @@ export async function hgabDistricts(env: Env, o: HgabDistrictsOpts = {}) {
       tier_meaning: TIER_MEANING,
       representatives_note: REPRESENTATIVES_NOTE,
       note:
-        "DPWH money by the district engineering office the documents print, with the congressional districts each " +
+        "DPWH money by the district engineering office the documents list, with the congressional districts each " +
         "office serves. No project is assigned to a district; a shared office's money is never divided. Headline " +
         "amounts are the undivided totals of the serving offices. Money on no district card is in residual.",
     },
@@ -1568,11 +1569,11 @@ export async function hgabDistrict(env: Env, id: string) {
         matched_label: y.matched_label,
       })),
       years_note:
-        "FY2020–2026 enacted budgets and the FY2027 proposal cover the whole office; the FY2027 House bill covers " +
+        "FY2020–2026 enacted budgets and the FY2027 NEP cover the whole office; the FY2027 House bill covers " +
         "named projects only. null = the office was not found in that year's data, never zero. Versions are " +
         "compared, never added.",
       by_congress: o.by_congress,
-      by_congress_note: "Enacted (GAA) totals per Congress term; FY2027 proposals are never part of a subtotal.",
+      by_congress_note: "Enacted (GAA) totals per Congress term; the FY2027 NEP and House bill are never part of a subtotal.",
       fy2027: publicOfficeFy2027(o.fy2027),
       notes: o.notes,
       aliases_used: o.aliases_used,
