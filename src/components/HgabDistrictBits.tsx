@@ -186,20 +186,20 @@ function slotTitle(s: HistorySlot): string {
   return `${head} · ${fmt.php(s.php, { unit: 'full' })} · ${FISCAL_STAGE_SCOPE[s.stage]}`;
 }
 
-/** Tick under each bar: ’20…’26, then "proposal" and "House bill" (card) or "2027 proposal" / "2027 House bill" (full). */
+/** Tick under each bar: ’20…’26, then "NEP" and "House bill" (card) or "2027 NEP" / "2027 House bill" (full). */
 function fyTick(s: HistorySlot, full: boolean): string {
   if (s.fy === 2027) {
-    if (full) return s.stage === 'nep' ? '2027 proposal' : '2027 House bill';
-    return s.stage === 'nep' ? 'proposal' : 'House bill';
+    if (full) return s.stage === 'nep' ? '2027 NEP' : '2027 House bill';
+    return s.stage === 'nep' ? 'NEP' : 'House bill';
   }
   return full ? String(s.fy) : `’${String(s.fy).slice(2)}`;
 }
 
 /**
  * One office's budget across the nine slots — FY2020–2026 enacted (solid),
- * FY2027 proposal (hatched) and FY2027 House bill (House accent) — grouped
+ * FY2027 NEP (hatched) and FY2027 House bill (House accent) — grouped
  * under the Congress that handled each year, with that Congress's enacted
- * subtotal printed. A null year is a dashed empty slot, never a zero bar. Pure
+ * subtotal shown. A null year is a dashed empty slot, never a zero bar. Pure
  * inline SVG; the `<title>` on every slot and the aria-label carry the exact
  * figures.
  *
@@ -218,7 +218,7 @@ export function HistoryChart({ office, max, size = 'card', showValues = size ===
   const W = full ? 760 : 360;
   const H = full ? 260 : 132;
   const top = (full ? 42 : 30) + (showValues ? (full ? 14 : 11) : 0);
-  // Two tick lines: years and "proposal" on the upper one, "House bill" on the
+  // Two tick lines: years and "NEP" on the upper one, "House bill" on the
   // lower, so the two 2027 labels never overlap at card width.
   const bottom = full ? 32 : 24;
   const groupGap = full ? 18 : 10;
@@ -248,7 +248,7 @@ export function HistoryChart({ office, max, size = 'card', showValues = size ===
             {gi > 0 && <line className="hgab-hc-sep" x1={x0 - groupGap / 2} x2={x0 - groupGap / 2} y1={4} y2={plotBottom} />}
             <text className="hgab-hc-term" x={x0 + 3} y={full ? 13 : 10}>{full ? term.label : `${term.congress}th`}</text>
             <text className="hgab-hc-term-sub" x={x0 + 3} y={full ? 29 : 22}>
-              <title>{`${term.label}: ${sub.php == null ? 'no enacted figure found' : `${fmt.php(sub.php, { unit: 'full' })} enacted across ${fiscalYearRange(sub.years).replace('FY', '')}`}. The 2027 proposal and House bill are listed, not added.`}</title>
+              <title>{`${term.label}: ${sub.php == null ? 'no enacted figure found' : `${fmt.php(sub.php, { unit: 'full' })} enacted across ${fiscalYearRange(sub.years).replace('FY', '')}`}. The 2027 NEP and House bill are listed, not added.`}</title>
               {subText}{yearsText}
             </text>
           </g>
@@ -279,7 +279,7 @@ export function HistoryChart({ office, max, size = 'card', showValues = size ===
           );
         }
         const valueY = s.php == null ? null : plotBottom - Math.max((s.php / scale) * plotH, 1.5) - 4;
-        // On the proposal slot, a tick marks the proposal for the same named
+        // On the NEP slot, a tick marks the NEP for the same named
         // projects — the figure the House bill is actually compared with.
         const comparedNep = s.stage === 'nep' ? office.fy2027?.nep_php ?? null : null;
         return (
@@ -288,7 +288,7 @@ export function HistoryChart({ office, max, size = 'card', showValues = size ===
             {body}
             {comparedNep != null && comparedNep > 0 && (
               <g>
-                <title>{`2027 proposal, same named projects as the House bill: ${fmt.php(comparedNep, { unit: 'full' })}. This is the figure the House bill is compared with.`}</title>
+                <title>{`2027 NEP, same named projects as the House bill: ${fmt.php(comparedNep, { unit: 'full' })}. This is the figure the House bill is compared with.`}</title>
                 <line className="hgab-hc-mark" x1={x - 2} x2={x + barW + 2} y1={plotBottom - (comparedNep / scale) * plotH} y2={plotBottom - (comparedNep / scale) * plotH} />
               </g>
             )}
@@ -331,7 +331,7 @@ export function ChartKeyRow({ terms = CONGRESS_TERMS }: { terms?: readonly Congr
       </ol>
       <ul className="hgab-keyrow-bars" aria-label="Bar styles">
         <li title={FISCAL_STAGE_LONG.gaa}><i className="is-gaa" aria-hidden="true" /><KeyText long="enacted budget" short="enacted" /></li>
-        <li title={FISCAL_STAGE_LONG.nep}><i className="is-nep" aria-hidden="true" /><KeyText long="2027 proposal" short="proposal" /></li>
+        <li title={FISCAL_STAGE_LONG.nep}><i className="is-nep" aria-hidden="true" /><KeyText long="2027 NEP" short="NEP" /></li>
         <li title={FISCAL_STAGE_LONG.hgab3}><i className="is-hgab3" aria-hidden="true" /><KeyText long="2027 House bill" short="House bill" /></li>
         <li title="The office was not found in that year’s data. This never means zero.">
           <i className="is-empty" aria-hidden="true" /><KeyText long="office not found that year" short="not found" />
@@ -345,7 +345,7 @@ export function ChartKeyRow({ terms = CONGRESS_TERMS }: { terms?: readonly Congr
             total, without 2027.
           </p>
           <p>
-            The House bill bar counts named projects only; the thin line on the proposal bar marks those
+            The House bill bar counts named projects only; the thin line on the NEP bar marks those
             same projects.
           </p>
           <p>A dashed outline means the office was not found in that year’s data, never that it got zero.</p>
@@ -469,7 +469,7 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
         </div>
         {unmatched.length > 0 && (
           <p className="hgab-res-unmatched">
-            Offices we could not place: office names printed in a year’s budget that match no office on our
+            Offices we could not place: office names listed in a year’s budget that match no office on our
             office-to-district map. Their money is counted here and assigned to no district. They are:{' '}
             {unmatched.join('; ')}.
           </p>
@@ -532,8 +532,8 @@ export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: H
 
 /** Short, plain name of each group in the one-line 2027 summary; the tooltip carries the full meaning. */
 const GROUP_PHRASE: Record<BridgeGroup, (rows: number) => string> = {
-  house_only: (n) => `${n === 1 ? 'project' : 'projects'} not in the proposal`,
-  nep_only: () => 'in the proposal only',
+  house_only: (n) => `${n === 1 ? 'project' : 'projects'} not in the NEP`,
+  nep_only: () => 'in the NEP only',
   unchanged: () => 'same amount in both',
   increased: () => 'raised',
   decreased: () => 'cut',
@@ -550,8 +550,8 @@ function BridgeCellText({ group, cell, sign }: { group: BridgeGroup; cell: { row
 }
 
 /**
- * One line: how the House bill differs from the proposal for an office's
- * projects. "Not in the proposal" and "in the proposal only" are leads for
+ * One line: how the House bill differs from the NEP for an office's
+ * projects. "Not in the NEP" and "in the NEP only" are leads for
  * checking, not findings; uncertain matches are left out upstream.
  */
 export function OfficeBridgeLine({ office, withName = false }: { office: OfficeHistory; withName?: boolean }) {
@@ -572,7 +572,7 @@ export function OfficeBridgeLine({ office, withName = false }: { office: OfficeH
       <BridgeCellText group="decreased" cell={b.decreased} sign="−" />
       {b.scope_review.rows > 0 && <>{' · '}<BridgeCellText group="scope_review" cell={b.scope_review} sign="±" /></>}
       {' · '}
-      <span className="hgab-dc-bridge-net" title="House bill total minus proposal total, for the same named projects">net <SignedPhp value={b.net_php} /></span>
+      <span className="hgab-dc-bridge-net" title="House bill total minus NEP total, for the same named projects">net <SignedPhp value={b.net_php} /></span>
     </p>
   );
 }
@@ -655,7 +655,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           <dl className="hgab-dc-figures">
             <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</dt><dd><Figure v={h.fy2026_gaa_php} /></dd></div>
             <div>
-              <dt title={`${FISCAL_STAGE_LONG.nep} Whole office; not the figure the change below is measured from.`}>2027 proposal</dt>
+              <dt title={`${FISCAL_STAGE_LONG.nep} Whole office; not the figure the change below is measured from.`}>2027 NEP</dt>
               <dd><Figure v={h.fy2027_nep_php} /></dd>
             </div>
             <div>
@@ -665,9 +665,9 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
                 {fy27.delta_php != null && (
                   <span
                     className="hgab-delta-line"
-                    title={`House bill (third reading) against the President’s proposal, same named projects: proposal ${fmt.php(fy27.nep_php, { unit: 'full' })} → House bill ${fmt.php(fy27.hgab3_php, { unit: 'full' })}`}
+                    title={`House bill (third reading) against the NEP, same named projects: NEP ${fmt.php(fy27.nep_php, { unit: 'full' })} → House bill ${fmt.php(fy27.hgab3_php, { unit: 'full' })}`}
                   >
-                    <SignedPhp value={fy27.delta_php} /> <span className="hgab-delta">vs the proposal, same projects</span>
+                    <SignedPhp value={fy27.delta_php} /> <span className="hgab-delta">vs the NEP, same projects</span>
                   </span>
                 )}
               </dd>

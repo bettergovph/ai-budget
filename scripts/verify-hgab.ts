@@ -395,7 +395,7 @@ async function main(): Promise<void> {
   check("DPWH new appropriations reconcile exactly to ₱642,612,015,000", pick("dpwh", "DPWH total")?.status === "exact" && pick("dpwh", "DPWH total")?.theirs_php === EXPECTED.dpwh.printed_nep);
   check("capital outlays and the six operations programs are exact", pick("dpwh", "DPWH capital outlays")?.status === "exact" && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program total:")).length === 6 && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program total:")).every((r) => r.status === "exact"));
   check("45 printed PAP controls (program lines) each exact or explained", R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program line:")).length === 45 && R.filter((r) => r.check.startsWith("Program line:")).every((r) => r.status === "exact" || r.status === "explained"));
-  check("FMR activity, HFEP capital outlays and the six NIA sub-programs are exact", pick("fmr", "Farm-to-market roads")?.status === "exact" && pick("hfep", "Health facilities: our construction and equipment budget against the total printed")?.status === "exact"
+  check("FMR activity, HFEP capital outlays and the six NIA sub-programs are exact", pick("fmr", "Farm-to-market roads")?.status === "exact" && pick("hfep", "Health facilities: our construction and equipment budget against the total published")?.status === "exact"
     && R.filter((r) => r.dataset === "nia" && r.check.startsWith("Irrigation program:")).length === 6 && R.filter((r) => r.dataset === "nia").every((r) => r.status === "exact"));
   const t = { exact: 0, explained: 0, mismatch: 0, info: 0 } as Record<string, number>;
   for (const r of R) t[r.status] = (t[r.status] ?? 0) + 1;

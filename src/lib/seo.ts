@@ -207,10 +207,10 @@ export function pageMeta(pathname: string): PageMeta {
   // metadata; the Worker folds their canonical onto `/hgab/2027/intro` too.
   if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") {
     return {
-      title: `House Bill 10858 against the 2027 NEP — Four Programs, Project by Project · ${SITE}`,
+      title: `House Budget Analysis — House Bill 10858 against the 2027 NEP, Four Programs · ${SITE}`,
       description:
         "House Bill 10858, the FY 2027 General Appropriations Bill at third reading, compared " +
-        "project by project with the President's NEP for DPWH infrastructure, farm-to-market " +
+        "project by project with the NEP for DPWH infrastructure, farm-to-market " +
         "roads, health facilities and irrigation: program and region totals, the five-group " +
         "bridge, foreign-assisted projects and the reading-to-reading difference, in short " +
         "illustrated chapters.",
@@ -222,12 +222,12 @@ export function pageMeta(pathname: string): PageMeta {
       description:
         "Dashboard view of House Bill 10858 against the FY 2027 NEP: stage totals, record counts and " +
         "the five-group bridge for DPWH infrastructure, farm-to-market roads, health facilities and " +
-        "irrigation, the reconciliation against this portal's NEP data, and the printed source documents.",
+        "irrigation, the reconciliation against this portal's NEP data, and the published source documents.",
     };
   }
   if (p === "/hgab/2027/sources") {
     return {
-      title: `HGAB 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,
+      title: `House Budget Analysis 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,
       description:
         "The source documents behind the FY 2027 House bill comparison — HB 10858 volumes at both " +
         "readings and the DBM NEP volumes — with SHA-256 checksums, page ranges, downloadable " +
@@ -236,7 +236,7 @@ export function pageMeta(pathname: string): PageMeta {
   }
   if (p === "/hgab/2027/methodology") {
     return {
-      title: `HGAB 2027 Methodology — How the House Bill Was Matched to the NEP · ${SITE}`,
+      title: `House Budget Analysis 2027 Methodology — How the House Bill Was Matched to the NEP · ${SITE}`,
       description:
         "How FY 2027 House bill rows were extracted and paired with NEP rows, the five-group bridge " +
         "that reconciles House to NEP, the status vocabulary, the checks against this portal's NEP " +
@@ -279,7 +279,7 @@ export function pageMeta(pathname: string): PageMeta {
     return {
       title: `${short} · House Bill vs NEP, FY 2027 · ${SITE}`,
       description:
-        `${ds ? ds.long : "FY 2027 program"} in House Bill 10858 against the NEP: printed controls, ` +
+        `${ds ? ds.long : "FY 2027 program"} in House Bill 10858 against the NEP: the totals each document publishes, ` +
         "every project with its matching status, the largest insertions, deletions, increases and " +
         "cuts, and the PDF page behind each amount.",
     };

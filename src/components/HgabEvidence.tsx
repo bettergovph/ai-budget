@@ -44,7 +44,7 @@ export default function HgabEvidence({
       </div>
       <iframe src={src} title={`Source document: ${where}`} loading="lazy" />
       <p className="hgab-rec-evidence-note">
-        Page numbers count the pages of the PDF file, not the number printed on the page. If the
+        Page numbers count the pages of the PDF file, not the page number shown on the page. If the
         viewer stays blank, your browser would not show the file here; use “Open in new tab”.
       </p>
     </div>

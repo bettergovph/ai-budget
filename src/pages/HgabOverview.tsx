@@ -9,9 +9,9 @@
  * grand total across them would be a number without a meaning. The source
  * workbench follows the same rule.
  *
- * Copy: plain first. Cards show the dataset's reader-facing `summary`,
- * `one_row` and `caveats`; the technical `grain` and `scope` sit inside a
- * "Details for analysts" block on each card.
+ * Copy: plain first. Cards show the dataset's reader-facing `summary` and
+ * `caveats`; the technical `grain` and `scope` sit inside a "Details for
+ * analysts" block on each card.
  */
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -30,7 +30,7 @@ import {
   type HgabDatasetMeta, type HgabDistrictIndex, type HgabDocument, type HgabOverview as Overview,
 } from '../lib/hgab';
 import { headlineResidual, residualShare, residualUnattributed, slotLabel } from '../lib/hgab-districts';
-import { DATASET_SHORT, datasetCaveats, datasetOneRow, datasetSummary, formatBytes, ordinal } from '../lib/hgab-ui';
+import { DATASET_SHORT, datasetCaveats, datasetSummary, formatBytes, ordinal } from '../lib/hgab-ui';
 import '../nep2027.css';
 import '../hgab-districts.css';
 
@@ -68,10 +68,10 @@ export default function HgabOverview() {
         title="What the House changed in the 2027 budget"
         dek={
           <>
-            Every year the President sends Congress a proposed budget, the National Expenditure
-            Program (NEP). The House of Representatives then passes its own version, House Bill 10858.
+            The NEP, or National Expenditure Program, is the budget the President submits to Congress
+            each August. The House of Representatives then passes its own version, House Bill 10858.
             This section sets the two side by side, project by project. It shows what the House added,
-            dropped, raised or cut, each traceable to a page of the printed documents.
+            dropped, raised or cut, each traceable to a page of the published documents.
           </>
         }
         note={
@@ -96,7 +96,7 @@ export default function HgabOverview() {
           <SectionHead
             eyebrow="Four programs, four kinds of row"
             headline={<span id="hgab-datasets">{datasets.length === 4 ? 'Four' : datasets.length} programs compared project by project</span>}
-            dek="Each card shows the amount in the President’s proposal and in the House bill, then how the two differ. The four programs are not added together: a road segment and a hospital ward are not the same unit."
+            dek="Each card shows the amount in the NEP and in the House bill, then how the two differ. The four programs are not added together: a road segment and a hospital ward are not the same unit."
           />
           <div className="hgab-cards">
             {datasets.map((d, i) => <DatasetCard key={d.key} d={d} explain={i === 0} />)}
@@ -107,9 +107,9 @@ export default function HgabOverview() {
         {/* ---- reconciliation ---- */}
         <section className="nep-section" aria-labelledby="hgab-recon">
           <SectionHead
-            eyebrow="Two readings of the President’s proposal"
-            headline={<span id="hgab-recon">{recon.length.toLocaleString()} checks against this portal’s own copy of the proposal</span>}
-            dek="The analysis read the proposal from the printed PDF volumes. This portal reads it from the budget department’s spreadsheet. Where the two disagree, the difference has a written explanation, or it is flagged."
+            eyebrow="Two readings of the NEP"
+            headline={<span id="hgab-recon">{recon.length.toLocaleString()} checks against this portal’s own copy of the NEP</span>}
+            dek="The analysis read the NEP from the published PDF volumes. This portal reads it from the budget department’s spreadsheet. Where the two disagree, the difference has a written explanation, or it is flagged."
           />
           <KpiStrip
             items={[
@@ -134,13 +134,13 @@ export default function HgabOverview() {
         <section className="nep-section" aria-labelledby="hgab-docs">
           <SectionHead
             eyebrow="Documents"
-            headline={<span id="hgab-docs">The printed sources</span>}
+            headline={<span id="hgab-docs">The published sources</span>}
             dek="Every amount on these pages links back to a page in one of these PDFs. File fingerprints, sizes and downloads are on the Sources page."
             right={<Link className="hgab-cta hgab-cta-quiet" to={`${HGAB_ROOT}/sources`}>All sources & downloads →</Link>}
           />
           <div className="hgab-docs">
             <div>
-              <h3>{STAGE_LABELS.nep.label}</h3>
+              <h3>The {STAGE_LABELS.nep.short}</h3>
               <DocList docs={nepDocs} />
             </div>
             <div>
@@ -186,7 +186,7 @@ function DistrictsCallout({ index }: { index: HgabDistrictIndex | null }) {
           One card per congressional district. Each card names the district’s representative in the
           20th Congress. It lists the DPWH district engineering office, or offices, that serve it. It
           shows that office’s budget by Congress and by year, from the enacted budgets (GAA) of 2020 to
-          2026. It then sets the 2027 House bill against the President’s proposal for the office’s
+          2026. It then sets the 2027 House bill against the NEP for the office’s
           lines. An office shared by several districts is shown as one whole total; nothing is split
           or guessed.
         </p>
@@ -228,9 +228,6 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
           <Link to={datasetPath(d.key)}>{d.label}</Link>
         </h3>
         <p className="hgab-card-summary">{datasetSummary(d)}</p>
-        <p className="hgab-card-grain">
-          <strong>What one row is:</strong> {datasetOneRow(d)}
-        </p>
       </header>
 
       <dl className="hgab-card-stages">
@@ -266,7 +263,7 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
       )}
       {d.printed && (d.printed.nep_new_appropriations_php != null || d.printed.house_new_appropriations_php != null) && (
         <p className="hgab-rows" style={{ marginTop: -6 }} title="Broader than the project lists compared on this card">
-          Totals printed for the whole {d.key === 'dpwh' ? 'agency' : 'program'} — {STAGE_LABELS.nep.short}{' '}
+          Totals published for the whole {d.key === 'dpwh' ? 'agency' : 'program'} — {STAGE_LABELS.nep.short}{' '}
           {fmt.shortPhp(d.printed.nep_new_appropriations_php)} · House{' '}
           {fmt.shortPhp(d.printed.house_new_appropriations_php)}
         </p>
@@ -278,7 +275,7 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
 
       <HgabDetails>
         <dl>
-          <dt>One row</dt>
+          <dt>Each row</dt>
           <dd>{d.grain}</dd>
           <dt>Scope</dt>
           <dd>{d.scope}</dd>

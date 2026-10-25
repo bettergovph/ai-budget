@@ -22,7 +22,7 @@ import {
   BASE_YEAR, NEP_YEAR, SYNTHETIC_DEPTS, formatPct, loadNepDept, loadNepIndex, pctChange,
   type NepDeptSummary, type NepNationalIndex, type NepRollupRow,
 } from '../lib/nep2027';
-import { datasetOneRow, datasetSummary } from '../lib/hgab-ui';
+import { datasetSummary } from '../lib/hgab-ui';
 import '../nep2027.css';
 import '../hgab-links.css';
 
@@ -350,8 +350,8 @@ const HGAB_DATASET_BY_DEPT: Readonly<Record<string, DatasetKey>> = {
 
 /**
  * A quiet card under the KPI strip: the compared projects' NEP total against
- * the latest House reading, the dataset's plain `summary` and "what one row
- * is", and links into the hub. The technical grain and scope stay on the hub's
+ * the latest House reading, the dataset's plain `summary`, and links into
+ * the hub. The technical grain and scope stay on the hub's
  * "Details for analysts". The overview is optional context — when it is not
  * published yet (or fails to parse) the card renders nothing rather than an
  * error.
@@ -396,17 +396,17 @@ function HgabCallout({ deptId }: { deptId: string }) {
           <strong>{fmt.shortPhp(house)}</strong>
         </span>
         <span className={delta >= 0 ? 'is-up' : 'is-down'}>
-          <em title="House bill minus the President’s proposal">Change</em>
+          <em title="House bill minus the NEP">Change</em>
           <strong>{delta >= 0 ? '+' : '−'}{fmt.shortPhp(Math.abs(delta))}</strong>
           <span className="hgab-crosslink-pct">{formatHgabPct(hgabPctChange(house, nep))}</span>
         </span>
         <span className="pill nep-pill">
-          {meta.counts.nep.toLocaleString()} lines in the proposal
+          {meta.counts.nep.toLocaleString()} lines in the NEP
           {houseRows != null && ` · ${houseRows.toLocaleString()} in the House bill`}
         </span>
       </p>
       <p className="hgab-crosslink-scope">
-        {datasetSummary(meta)} <span className="hgab-crosslink-grain">What one row is:</span> {datasetOneRow(meta)}
+        {datasetSummary(meta)}
       </p>
       <p className="hgab-crosslink-links">
         <Link to={datasetPath(key)}>Compare with the House bill (HB 10858) →</Link>

@@ -37,7 +37,7 @@ export const DEFAULT_DISTRICT_SORT: DistrictSortKey = 'hgab3';
 export const DISTRICT_SORT_LABELS: Record<DistrictSortKey, string> = {
   hgab3: 'Largest House bill amount',
   gaa2026: 'Largest 2026 budget',
-  change: 'Biggest change from the proposal',
+  change: 'Biggest change from the NEP',
   growth: 'Fastest growth across Congresses',
   name: 'Name',
 };
@@ -107,13 +107,13 @@ export function hasDistrictFilters(f: DistrictFilters): boolean {
 // ---------------------------------------------------------------------------
 
 /** Table-cell label of the document a figure comes from. Acronyms are expanded in every page's hero first. */
-export const FISCAL_STAGE_SHORT: Record<FiscalStage, string> = { gaa: 'Enacted (GAA)', nep: 'Proposal (NEP)', hgab3: 'House bill' };
-/** One-word form for chart ticks, residual rows and sentences: "2026 enacted budget", "2027 House bill". */
-export const FISCAL_STAGE_WORD: Record<FiscalStage, string> = { gaa: 'enacted budget', nep: 'proposal', hgab3: 'House bill' };
+export const FISCAL_STAGE_SHORT: Record<FiscalStage, string> = { gaa: 'Enacted (GAA)', nep: 'NEP', hgab3: 'House bill' };
+/** Short form for chart ticks, residual rows and sentences: "2026 enacted budget", "2027 NEP", "2027 House bill". */
+export const FISCAL_STAGE_WORD: Record<FiscalStage, string> = { gaa: 'enacted budget', nep: 'NEP', hgab3: 'House bill' };
 /** Tooltip form: what the document is, in one plain sentence. */
 export const FISCAL_STAGE_LONG: Record<FiscalStage, string> = {
   gaa: 'The enacted budget (GAA): the law Congress passed and the President signed for that year.',
-  nep: 'The President’s proposed budget (NEP), sent to Congress in August.',
+  nep: 'The NEP: the budget the President submits to Congress each August.',
   hgab3: 'The House bill (third reading): the House of Representatives’ version of the 2027 budget, not yet law.',
 };
 /** What each document's figure covers for one office. */
@@ -134,7 +134,7 @@ export interface HistorySlot {
   listed: boolean;
 }
 
-/** "2026 enacted budget", "2027 proposal", "2027 House bill". */
+/** "2026 enacted budget", "2027 NEP", "2027 House bill". */
 export function slotLabel(s: { fy: number; stage: FiscalStage }): string {
   return `${s.fy} ${FISCAL_STAGE_WORD[s.stage]}`;
 }
@@ -161,7 +161,7 @@ export function congressPlain(term: Pick<CongressTerm, 'years' | 'label'>): stri
     ? enacted.join('')
     : `${enacted.slice(0, -1).join(', ')} and ${enacted[enacted.length - 1]}`;
   const head = enacted.length ? `passed the ${list} ${enacted.length === 1 ? 'budget' : 'budgets'}` : 'passed no budget yet';
-  return term.years.includes(2027) ? `${head}. The 2027 budget is still before it: the proposal and the House bill.` : `${head}.`;
+  return term.years.includes(2027) ? `${head}. The 2027 budget is still before it: the NEP and the House bill.` : `${head}.`;
 }
 
 export function congressOf(fy: number): CongressTerm | undefined {

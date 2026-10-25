@@ -403,11 +403,11 @@ export function BridgeStrip({ bridge, dataset, explain = false }: { bridge: Brid
   const houseShort = dataset && dataset !== 'dpwh'
     ? 'House bill'
     : bridge.house_stage === 'hgab3' ? 'House bill (3rd reading)' : 'House bill (2nd reading)';
-  const nepShort = 'the proposal';
+  const nepShort = 'the NEP';
   const [oneRow, manyRows] = dataset ? BRIDGE_ROW_NOUN[dataset] : ['line', 'lines'];
   return (
     <div className="hgab-bridge-block" data-dataset={dataset}>
-      <div className="hgab-bridge" role="list" aria-label="How the House bill differs from the President's proposal, in six groups">
+      <div className="hgab-bridge" role="list" aria-label="How the House bill differs from the NEP, in six groups">
         {BRIDGE_ORDER.map((g) => {
           const cell = bridge[g];
           const meta = BRIDGE_LABELS[g];
@@ -426,7 +426,7 @@ export function BridgeStrip({ bridge, dataset, explain = false }: { bridge: Brid
               </span>
               {bothSides && (
                 <span className="hgab-bridge-sides">
-                  Proposal {fmt.shortPhp(cell.nep_php!)} → House {fmt.shortPhp(cell.house_php!)}
+                  NEP {fmt.shortPhp(cell.nep_php!)} → House {fmt.shortPhp(cell.house_php!)}
                 </span>
               )}
             </div>
@@ -438,7 +438,7 @@ export function BridgeStrip({ bridge, dataset, explain = false }: { bridge: Brid
           {houseShort} minus {nepShort}: <SignedPhp value={bridge.net_php} />
         </span>
         <span title="The six groups add up to the difference between the two versions">
-          House only − proposal only + raised − reduced ± different stretches = this difference
+          House only − NEP only + raised − reduced ± different stretches = this difference
         </span>
       </p>
       {explain && <WhatThisMeans>{PLAIN.bridgeMeans}</WhatThisMeans>}
@@ -486,11 +486,11 @@ export function DisclaimerNotice({ compact = false }: { compact?: boolean }) {
     <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''}`.trim()} aria-label="Disclaimer">
       <p className="hgab-disclaimer-eyebrow">Independent and unofficial</p>
       <p>
-        This comparison is our own reading of the printed documents. It is not an official record of
-        the budget department, the agencies or the House. Matches between the President’s proposal and
+        This comparison is our own reading of the published documents. It is not an official record of
+        the budget department, the agencies or the House. Matches between the NEP and
         the House bill are candidates found by written rules, not confirmed findings. A line found in
         only one document does not prove a project was added, dropped or cut. Nothing here says any
-        office or official did anything wrong. Figures are the amounts printed in the documents, not
+        office or official did anything wrong. Figures are the amounts published in the documents, not
         money spent.{' '}
         <Link to={`${HGAB_ROOT}/methodology#disclaimer`}>Read the full notice</Link>.
       </p>
@@ -561,7 +561,7 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
  */
 export function HgabStageStrip() {
   const stages: Array<{ name: string; meta: string; to?: string; state?: 'done' | 'current' | 'future' }> = [
-    { name: 'President’s proposal (NEP)', meta: 'Sent to Congress in August 2026', to: '/2027', state: 'done' },
+    { name: 'NEP', meta: 'Submitted by the President to Congress, August 2026', to: '/2027', state: 'done' },
     { name: 'House hearings', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
     { name: 'House bill', meta: 'HB 10858 · voted on twice (2nd and 3rd reading)', state: 'current' },
     { name: 'Senate', meta: 'Its own committee, then a floor vote', state: 'future' },

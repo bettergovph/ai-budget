@@ -145,9 +145,9 @@ const HGAB_PATHS = {
       operationId: "getHgab2027Overview",
       summary: "House bill FY2027 overview",
       description:
-        "The FY2027 House bill (House Bill 10858) against the President's proposed budget (NEP) for the four programs " +
-        "where the bill lists projects. Each dataset: plain summary, what one row is, caveats, totals per version, " +
-        `record counts, the six-group bridge with plain labels, and links. ${HGAB_BRIDGE_WORDING} Also the documents, ` +
+        "The FY2027 House bill (House Bill 10858) against the NEP (the budget the President submits to Congress each " +
+        "August) for the four programs where the bill lists projects. Each dataset: plain summary, caveats, totals " +
+        `per version, record counts, the six-group bridge with plain labels, and links. ${HGAB_BRIDGE_WORDING} Also the documents, ` +
         "reconciliation status counts, the plain terms, the rules, and the stage order NEP → House → Senate → GAA.",
       responses: {
         "200": hgabOk({
@@ -192,8 +192,8 @@ const HGAB_PATHS = {
       operationId: "getHgab2027Dataset",
       summary: "One program in full",
       description:
-        "Everything in the dataset's overview entry plus the totals each document prints (`controls`, with PDF page " +
-        "links), House vs proposal by recorded label (`dims`: region, office_kind, program, pap as available), the 18 " +
+        "Everything in the dataset's overview entry plus the totals published in each document (`controls`, with PDF " +
+        "page links), House vs NEP by recorded label (`dims`: region, office_kind, program, pap as available), the 18 " +
         "regions plus the not-on-map amounts, the second vs third reading comparison (`readings`, DPWH only), and " +
         `\`top\`: the 10 largest rows per bridge group by that group's money basis. ${HGAB_BRIDGE_WORDING}`,
       parameters: [hgabKeyParam],
@@ -207,7 +207,7 @@ const HGAB_PATHS = {
                 controls: { type: "array", items: { $ref: "#/components/schemas/HgabControl" } },
                 dims: { type: "object", additionalProperties: { type: "array", items: { $ref: "#/components/schemas/HgabDim" } } },
                 regions: { $ref: "#/components/schemas/HgabRegions" },
-                readings: { type: ["object", "null"], additionalProperties: true, description: "DPWH only: second vs third reading totals, status counts, changed controls, printed controls." },
+                readings: { type: ["object", "null"], additionalProperties: true, description: "DPWH only: second vs third reading totals, status counts, `changed_controls` (totals that changed between the readings) and `printed_controls` (the totals published at each reading)." },
                 top: {
                   type: "object",
                   description: "The 10 largest rows per bridge group, unconfirmed matches left out (held = 0).",
@@ -235,16 +235,16 @@ const HGAB_PATHS = {
         { name: "q", in: "query", schema: { type: "string" }, description: "Words (space-separated) that must all appear in the title, program, program line, region or office." },
         { name: "group", in: "query", schema: { type: "string" }, description: `Comma list of bridge groups: ${HGAB_GROUPS.join(", ")}.` },
         { name: "held", in: "query", schema: { type: "string", enum: ["all", "hide", "only"], default: "all" }, description: "Unconfirmed (fuzzy or ambiguous) matches: keep all, hide them, or only them." },
-        { name: "region", in: "query", schema: { type: "string" }, description: `A region key (${HGAB_REGIONS.join(", ")}) or a region label exactly as printed ("|"-separated for several).` },
-        { name: "program", in: "query", schema: { type: "string" }, description: "Exact program as printed." },
-        { name: "pap", in: "query", schema: { type: "string" }, description: "Exact program line (PAP / sub-program / funding column) as printed." },
-        { name: "office", in: "query", schema: { type: "string" }, description: "Exact implementing office as printed (DPWH)." },
+        { name: "region", in: "query", schema: { type: "string" }, description: `A region key (${HGAB_REGIONS.join(", ")}) or a region label exactly as published ("|"-separated for several).` },
+        { name: "program", in: "query", schema: { type: "string" }, description: "Exact program as published." },
+        { name: "pap", in: "query", schema: { type: "string" }, description: "Exact program line (PAP / sub-program / funding column) as published." },
+        { name: "office", in: "query", schema: { type: "string" }, description: "Exact implementing office as published (DPWH)." },
         { name: "office_kind", in: "query", schema: { type: "string" }, description: "Central Office · District engineering offices (DEOs) · Regional offices · Other recorded offices · No recorded office." },
         { name: "zone", in: "query", schema: { type: "string", enum: ["local", "fap"] }, description: "local = locally funded; fap = foreign-assisted." },
         { name: "trace", in: "query", schema: { type: "string" }, description: "Exact raw status code, e.g. house_only_candidate, fuzzy_candidate." },
         { name: "reading_status", in: "query", schema: { type: "string" }, description: "DPWH second vs third reading: same_amount, third_only, second_only, amount_changed, repeated_key." },
         { name: "flag", in: "query", schema: { type: "string" }, description: "One review flag that must be present, e.g. region_difference." },
-        { name: "has_coordinates", in: "query", schema: { type: "string", enum: ["1", "0"] }, description: "1 = only rows whose documents print coordinates; 0 = only rows without." },
+        { name: "has_coordinates", in: "query", schema: { type: "string", enum: ["1", "0"] }, description: "1 = only rows whose documents publish coordinates; 0 = only rows without." },
         { name: "sort", in: "query", schema: { type: "string", enum: ["house", "nep", "delta", "abs_delta", "title"], default: "house" }, description: "house = latest House amount." },
         { name: "order", in: "query", schema: { type: "string", enum: ["desc", "asc"] }, description: "Default desc for amounts, asc for title." },
         { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 200, default: 50 } },
@@ -285,7 +285,7 @@ const HGAB_PATHS = {
       tags: ["hgab-2027"],
       operationId: "getHgab2027Regions",
       summary: "The 18 regions plus amounts not on the map",
-      description: "All 18 regions north to south under the region each document prints (null where a document lists nothing), and `not_on_map`: amounts printed as nationwide or with no region. Nothing is geocoded.",
+      description: "All 18 regions north to south under the region each document lists (null where a document lists nothing), and `not_on_map`: amounts listed as nationwide or with no region. Nothing is geocoded.",
       parameters: [hgabKeyParam],
       responses: { "200": hgabOk({ $ref: "#/components/schemas/HgabRegions" }), ...hgabErrors },
     },
@@ -295,7 +295,7 @@ const HGAB_PATHS = {
       tags: ["hgab-2027"],
       operationId: "listHgab2027Documents",
       summary: "Source documents",
-      description: "The eight source PDFs (proposal and House bill volumes) with `pdf_url`, page ranges used, sha256 and size, and which datasets cite each.",
+      description: "The eight source PDFs (NEP and House bill volumes) with `pdf_url`, page ranges used, sha256 and size, and which datasets cite each.",
       responses: { "200": hgabOk({ type: "array", items: { $ref: "#/components/schemas/HgabDocument" } }), "503": errorResponse },
     },
   },
@@ -322,10 +322,10 @@ const HGAB_PATHS = {
         "nine year slots. A shared (Tier B) office's money is never divided: when attribution is B or mixed the " +
         "headline carries `shared_office_total: true` and the co-served district ids.",
       parameters: [
-        { name: "region", in: "query", schema: { type: "string" }, description: `Region key (${HGAB_REGIONS.join(", ")}) or a printed region label.` },
+        { name: "region", in: "query", schema: { type: "string" }, description: `Region key (${HGAB_REGIONS.join(", ")}) or a region label as published.` },
         { name: "q", in: "query", schema: { type: "string" }, description: "Words that must all appear in the district, representative or office name." },
         { name: "attribution", in: "query", schema: { type: "string", enum: ["A", "B", "mixed", "none"] } },
-        { name: "sort", in: "query", schema: { type: "string", enum: ["hgab3", "gaa2026", "change", "name"], default: "hgab3" }, description: "change = House minus proposal on the same rows (fy2027_vs_proposal)." },
+        { name: "sort", in: "query", schema: { type: "string", enum: ["hgab3", "gaa2026", "change", "name"], default: "hgab3" }, description: "change = House minus NEP on the same rows (fy2027_vs_proposal)." },
         { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 254, default: 50 } },
         { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
       ],
@@ -373,7 +373,7 @@ const HGAB_PATHS = {
 const HGAB_SCHEMAS = {
   HgabMeta: {
     type: "object",
-    description: "Every HGAB response's meta. `notice` is the disclaimer paragraph; quote it when republishing.",
+    description: "Every House bill response's meta. `notice` is the disclaimer paragraph; quote it when republishing.",
     properties: {
       dataset: { type: "string", const: "hgab" },
       fiscal_year: { type: "integer", const: 2027 },
@@ -396,7 +396,7 @@ const HGAB_SCHEMAS = {
       help: { type: "string" },
       rows: { type: "integer", description: "Stored figure; includes unconfirmed matches." },
       php: { type: "integer", description: "The group's money basis in pesos (stored figure; includes unconfirmed matches)." },
-      nep_php: pesosOrNull("Proposal-side sum of the group's rows, when that side exists."),
+      nep_php: pesosOrNull("NEP-side sum of the group's rows, when that side exists."),
       house_php: pesosOrNull("House-side sum of the group's rows, when that side exists."),
       unconfirmed_rows: { type: "integer", description: "How many of `rows` are unconfirmed matches." },
       unconfirmed_php: { type: "integer", description: "How much of `php` is unconfirmed matches." },
@@ -408,7 +408,7 @@ const HGAB_SCHEMAS = {
     properties: {
       house_stage: { type: "string", enum: ["hgab2", "hgab3"] },
       house_stage_label: { type: "string" },
-      net_php: { type: "integer", description: "House total minus proposal total for the compared population." },
+      net_php: { type: "integer", description: "House total minus NEP total for the compared population." },
       identity: { type: "string" },
       groups: { type: "object", additionalProperties: { $ref: "#/components/schemas/HgabBridgeGroup" } },
       note: { type: "string" },
@@ -418,7 +418,7 @@ const HGAB_SCHEMAS = {
     type: "object",
     description: "One figure per version. Versions are compared, never added.",
     properties: {
-      nep_php: pesosOrNull("President's proposal."),
+      nep_php: pesosOrNull("The NEP (the budget the President submits to Congress each August)."),
       hgab2_php: pesosOrNull("House bill, second reading."),
       hgab3_php: pesosOrNull("House bill, third reading."),
       api_php: pesosOrNull("DPWH transparency website listing (DPWH only)."),
@@ -429,7 +429,7 @@ const HGAB_SCHEMAS = {
     type: "object",
     description: "Per-version sums over every matched row. Never add them across versions.",
     properties: {
-      nep_php: pesosOrNull("null when no matched row has a proposal amount."),
+      nep_php: pesosOrNull("null when no matched row has an NEP amount."),
       hgab2_php: pesosOrNull(""),
       hgab3_php: pesosOrNull(""),
       api_php: pesosOrNull(""),
@@ -447,7 +447,7 @@ const HGAB_SCHEMAS = {
       agency: { type: "string" },
       dept_id: { type: "string", description: "The NEP / GAA department id this program belongs to." },
       summary: { type: "string", description: "One plain sentence." },
-      one_row: { type: "string", description: "What one row is, in plain words." },
+      one_row: { type: "string", description: "Each row, in plain words, e.g. 'One irrigation project.'" },
       caveats: { type: "array", items: { type: "string" } },
       grain: { type: "string" },
       scope: { type: "string" },
@@ -464,7 +464,7 @@ const HGAB_SCHEMAS = {
   },
   HgabControl: {
     type: "object",
-    description: "A subtotal each document prints, side by side.",
+    description: "A subtotal published in each document, side by side.",
     properties: {
       id: { type: "string" },
       label: { type: "string" },
@@ -473,7 +473,7 @@ const HGAB_SCHEMAS = {
       hgab2_php: pesosOrNull(""),
       hgab3_php: pesosOrNull(""),
       api_php: pesosOrNull(""),
-      delta_php: pesosOrNull("Latest House reading minus the proposal."),
+      delta_php: pesosOrNull("Latest House reading minus the NEP."),
       reading_delta_php: pesosOrNull("Third minus second reading."),
       nep_page: { type: ["integer", "null"] },
       house_pages: { type: "array", items: { type: "integer" } },
@@ -495,7 +495,7 @@ const HGAB_SCHEMAS = {
     type: "object",
     properties: {
       house_stage: { type: "string" },
-      placeable: { type: "boolean", description: "False when the documents print no location (NIA)." },
+      placeable: { type: "boolean", description: "False when the documents give no location (NIA)." },
       note: { type: ["string", "null"] },
       points_note: { type: ["string", "null"] },
       regions: {
@@ -511,7 +511,7 @@ const HGAB_SCHEMAS = {
             delta_php: pesosOrNull(""),
             nep_rows: { type: "integer" },
             house_rows: { type: "integer" },
-            source_labels: { type: "array", items: { type: "string" }, description: "The region labels exactly as printed." },
+            source_labels: { type: "array", items: { type: "string" }, description: "The region labels exactly as published." },
           },
           additionalProperties: true,
         },
@@ -530,7 +530,7 @@ const HGAB_SCHEMAS = {
       title: { type: "string" },
       program: { type: ["string", "null"] },
       pap: { type: ["string", "null"] },
-      region: { type: ["string", "null"], description: "As printed." },
+      region: { type: ["string", "null"], description: "As published." },
       region_key: { type: ["string", "null"], enum: [...HGAB_REGIONS, null] },
       office: { type: ["string", "null"] },
       office_kind: { type: ["string", "null"] },
@@ -549,7 +549,7 @@ const HGAB_SCHEMAS = {
       hgab3_php: pesosOrNull(""),
       house_php: pesosOrNull("Latest House reading."),
       api_php: pesosOrNull(""),
-      delta_php: pesosOrNull("Latest House reading minus the proposal, when both exist."),
+      delta_php: pesosOrNull("Latest House reading minus the NEP, when both exist."),
       nep_page: { type: ["integer", "null"] },
       hgab2_page: { type: ["integer", "null"] },
       hgab3_page: { type: ["integer", "null"] },
@@ -653,7 +653,7 @@ const HGAB_SCHEMAS = {
         type: "object",
         properties: {
           fy2026_gaa_php: pesosOrNull("Enacted 2026, whole office."),
-          fy2027_nep_php: pesosOrNull("2027 proposal, whole office."),
+          fy2027_nep_php: pesosOrNull("2027 NEP, whole office."),
           fy2027_hgab3_php: pesosOrNull("2027 House bill, named projects only."),
           shared_office_total: { type: "boolean", description: "True when attribution is B or mixed: undivided office totals, a range, not the district's own." },
           co_served_district_ids: { type: "array", items: { type: "string" } },
@@ -663,7 +663,7 @@ const HGAB_SCHEMAS = {
       },
       fy2027_vs_proposal: {
         type: "object",
-        description: "House bill against the proposal on the same project rows of the serving offices: the like-for-like change.",
+        description: "House bill against the NEP on the same project rows of the serving offices: the like-for-like change.",
         properties: {
           nep_php: pesosOrNull(""),
           hgab3_php: pesosOrNull(""),
@@ -737,7 +737,7 @@ export const OPENAPI_SPEC = {
       "Program (NEP)** — the Executive's ₱7.20T proposal, every figure paired with its FY2026 GAA " +
       "baseline — and **budget-cycle** data tracing NEP → GAA → execution stages for selected " +
       "departments. Also the **House budget hearings** (per-topic deliberation records) and the " +
-      "**FY2027 House bill (HGAB)** compared with the NEP project by project for four programs, with DPWH " +
+      "**FY2027 House bill** (House Bill 10858) compared with the NEP project by project for four programs, with DPWH " +
       "money by district engineering office.\n\n" +
       "**Units.** Every amount is an exact Philippine peso figure (`currency: PHP`, `scale: pesos` " +
       "in each response's `meta`). NEP responses carry `amount` (FY2027 proposal), `base_amount` " +
@@ -766,8 +766,9 @@ export const OPENAPI_SPEC = {
     {
       name: "hgab-2027",
       description:
-        "FY2027 House bill (House Bill 10858) against the President's proposal (NEP), project by project for DPWH, " +
-        "farm-to-market roads, health facilities and irrigation, plus DPWH money by district. Pairings are " +
+        "FY2027 House bill (House Bill 10858) against the NEP (the budget the President submits to Congress each " +
+        "August), project by project for DPWH, farm-to-market roads, health facilities and irrigation, plus DPWH " +
+        "money by district. Pairings are " +
         "candidates; versions are compared, never added. " + HGAB_BRIDGE_WORDING,
     },
   ],

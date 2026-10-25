@@ -369,7 +369,7 @@ export default function HgabProjects({
             className="select-input"
             value={filters.held}
             onChange={(e) => update({ held: e.target.value as ProjectFilters['held'] })}
-            title="House lines with a similar-looking line in the proposal, or several, that could not be confirmed. They are left out of the headline counts."
+            title="House lines with one or more similar-looking lines in the NEP that could not be confirmed. They are counted under ‘In the House bill only’ and left out of the ranked lists of largest changes."
           >
             <option value="all">Show all</option>
             <option value="hide">Hide unconfirmed</option>
@@ -448,7 +448,7 @@ export default function HgabProjects({
           <>
             <span><strong>{sum.n.toLocaleString()}</strong> {sum.n === 1 ? 'row' : 'rows'} shown</span>
             <ul className="hgab-ds-stage-sums" aria-label="Total of these rows in each version">
-              <li title={`${sum.nep_rows.toLocaleString()} rows have an amount in the President’s proposal`}>
+              <li title={`${sum.nep_rows.toLocaleString()} rows have an amount in the NEP`}>
                 <em>{STAGE_LABELS.nep.short}</em><strong><Amt v={sum.nep_php} /></strong>
               </li>
               {twoReadings && (
@@ -494,8 +494,8 @@ export default function HgabProjects({
               {head('nep', STAGE_LABELS.nep.short, 'num', STAGE_LABELS.nep.label)}
               {twoReadings && head('hgab2', STAGE_LABELS.hgab2.short, 'num', STAGE_LABELS.hgab2.label)}
               {head(houseKey, twoReadings ? STAGE_LABELS[houseKey].short : 'House', 'num',
-                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading print the same list')}
-              {head('delta', `Change vs ${STAGE_LABELS.nep.short}`, 'num', 'Latest House amount minus the President’s proposal, when both exist')}
+                twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading publish the same list')}
+              {head('delta', `Change from the ${STAGE_LABELS.nep.short}`, 'num', 'Latest House amount minus the NEP, when both exist')}
               <th>Pages</th>
             </tr>
           </thead>
@@ -583,13 +583,13 @@ export default function HgabProjects({
       </div>
 
       <p className="nep-hier-note">
-        Rows are lines in the documents, not unique projects. A House line and an unmatched proposal
-        line for the same project can both appear. Amounts are the pesos printed in each document, not
+        Rows are lines in the documents, not unique projects. A House line and an unmatched NEP
+        line for the same project can both appear. Amounts are the pesos published in each document, not
         money spent. A dash means that document has no such line; it is not zero. Region, office and
-        {pap ? ` ${pap.toLowerCase()}` : ' program'} are as each document prints them; a project’s own page shows both sides.{' '}
+        {pap ? ` ${pap.toLowerCase()}` : ' program'} are as each document lists them; a project’s own page shows both sides.{' '}
         {dataset.has_readings
-          ? '“Change” is the third reading minus the proposal, when both exist.'
-          : '“Change” is the House bill minus the proposal, when both exist.'}
+          ? '“Change” is the third reading minus the NEP, when both exist.'
+          : '“Change” is the House bill minus the NEP, when both exist.'}
       </p>
 
       <HgabDetails>

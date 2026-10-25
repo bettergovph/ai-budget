@@ -5,10 +5,11 @@
  * `lib/hgab.ts` so the data contract stays free of display concerns.
  *
  * The plain-language helpers at the bottom are the one place the pages read
- * the READER-FACING fields of `HgabDatasetMeta` (`summary`, `one_row`,
- * `caveats`). Until the data carries them they fall back to `grain`, so a
- * page never prints "undefined"; the TECHNICAL fields (`grain`, `scope`) are
- * only ever shown inside a "Details for analysts" block or on Methodology.
+ * the READER-FACING fields of `HgabDatasetMeta` (`summary`, `caveats`). Until
+ * the data carries them the summary falls back to `grain`, so a page never
+ * prints "undefined"; the TECHNICAL fields (`grain`, `scope`) are only ever
+ * shown inside a "Details for analysts" block (labelled "Each row") or on
+ * Methodology. `one_row` stays in the data but no page shows it.
  */
 import type { DatasetKey, HgabDatasetMeta, ReconciliationRow } from './hgab';
 
@@ -60,8 +61,8 @@ export const COMPARE_NOT_ADD = 'two versions of one budget — compare them, don
 
 /** Fixed plain phrases, so the same idea reads the same on every page. */
 export const PLAIN = {
-  nep: 'the President’s proposed budget (NEP)',
-  nepShort: 'the President’s proposal',
+  nep: 'the NEP',
+  nepShort: 'the NEP',
   house: 'the House bill (HB 10858)',
   houseShort: 'the House bill',
   unconfirmed: 'unconfirmed matches',
@@ -71,17 +72,11 @@ export const PLAIN = {
   candidateMeans: 'A candidate is a match or a gap found by comparing names, places and amounts. It is a lead for checking, not a confirmed change.',
 } as const;
 
-type Plainable = Pick<HgabDatasetMeta, 'grain'> & Partial<Pick<HgabDatasetMeta, 'summary' | 'one_row' | 'caveats'>>;
+type Plainable = Pick<HgabDatasetMeta, 'grain'> & Partial<Pick<HgabDatasetMeta, 'summary' | 'caveats'>>;
 
 /** READER-FACING one-sentence summary; falls back to the technical grain until the data carries one. */
 export function datasetSummary(d: Plainable): string {
   const s = typeof d.summary === 'string' ? d.summary.trim() : '';
-  return s || d.grain;
-}
-
-/** READER-FACING "what one row is"; falls back to the technical grain. */
-export function datasetOneRow(d: Plainable): string {
-  const s = typeof d.one_row === 'string' ? d.one_row.trim() : '';
   return s || d.grain;
 }
 

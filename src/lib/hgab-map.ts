@@ -199,12 +199,12 @@ export interface RegionValue {
   short: string;
   nep: number | null;
   house: number | null;
-  /** House − proposal; computed from the two sides when the data leaves it null but one side exists. */
+  /** House bill − NEP; computed from the two sides when the data leaves it null but one side exists. */
   delta: number | null;
   pct: number | null;
   nepRows: number;
   houseRows: number;
-  /** The labels each document prints for this region. */
+  /** The labels each document lists for this region. */
   sourceLabels: string[];
   /** True when the map data has an entry for the region at all. */
   listed: boolean;
@@ -295,7 +295,7 @@ export const NEAR_ZERO = 0.02;
  * every other region out.
  * The change scale is symmetric around zero (the same step widths on both
  * sides); the two amount scales share one maximum, so switching between
- * "President's proposal" and "House bill" compares like with like.
+ * "NEP" and "House bill" compares like with like.
  */
 export function regionScale(values: RegionValue[], measure: Measure): RegionScale {
   if (measure === 'delta') {

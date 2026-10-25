@@ -170,7 +170,7 @@ export default function HgabRecord() {
     {
       stage: 'nep',
       label: STAGE_LABELS.nep.short,
-      sub: STAGE_LABELS.nep.label,
+      sub: 'National Expenditure Program',
       amount: row.nep_php,
       page: row.nep_page,
       doc: row.nep_doc ?? datasetMeta.documents.nep[0] ?? null,
@@ -202,7 +202,7 @@ export default function HgabRecord() {
     cards.push({
       stage: 'hgab2',
       label: 'House bill',
-      sub: 'House Bill 10858 · the second and third reading print the same list',
+      sub: 'House Bill 10858 · the second and third reading publish the same list',
       amount: houseAmount(row),
       page: row.hgab2_page ?? row.hgab3_page,
       doc: row.hgab2_doc ?? row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 2, 'projects'),
@@ -307,7 +307,7 @@ export default function HgabRecord() {
           </div>
           {(info.help || api?.help) && (
             <p className="hgab-rec-help">
-              {info.help}{info.held && !/headline counts/i.test(info.help) ? ' This unconfirmed match is left out of the headline counts.' : ''}
+              {info.help}{info.held && !/ranked lists/i.test(info.help) ? ' This unconfirmed match is counted under ‘In the House bill only’ and left out of the ranked lists of largest changes.' : ''}
               {api?.help ? ` ${api.help}` : ''}
             </p>
           )}
@@ -318,17 +318,17 @@ export default function HgabRecord() {
           <div className={`hgab-rec-card is-delta ${delta == null ? 'is-empty' : ''}`.trim()}>
             <div className="hgab-rec-card-stage">
               Change
-              <small>{twoReadings ? 'Latest House reading minus the President’s proposal' : 'House bill minus the President’s proposal'}</small>
+              <small>{twoReadings ? 'Latest House reading minus the NEP' : 'House bill minus the NEP'}</small>
             </div>
             {delta == null ? (
               <>
                 <div className="hgab-rec-card-amt is-empty">—</div>
                 <p className="hgab-rec-card-title">
                   {row.nep_php == null && house == null
-                    ? 'Neither document prints an amount.'
+                    ? 'Neither document lists an amount.'
                     : row.nep_php == null
-                      ? 'No matching line was found in the President’s proposal, so there is no difference to show. A House-only line is an insertion candidate: a lead to check, not a confirmed addition.'
-                      : 'No matching line was found in the House bill, so there is no difference to show. A proposal-only line is a deletion candidate: a lead to check, not a confirmed removal.'}
+                      ? 'No matching line was found in the NEP, so there is no difference to show. A House-only line is an insertion candidate: a lead to check, not a confirmed addition.'
+                      : 'No matching line was found in the House bill, so there is no difference to show. An NEP-only line is a deletion candidate: a lead to check, not a confirmed removal.'}
                 </p>
               </>
             ) : (
@@ -339,7 +339,7 @@ export default function HgabRecord() {
                 <div className="hgab-rec-card-exact">
                   {delta === 0
                     ? 'Same amount in both versions'
-                    : `${delta > 0 ? '+' : '−'}${fmt.php(Math.abs(delta), { unit: 'full' })}${deltaPct != null ? ` · ${formatPct(deltaPct)}` : row.nep_php ? '' : ' · no proposal amount to compare'}`}
+                    : `${delta > 0 ? '+' : '−'}${fmt.php(Math.abs(delta), { unit: 'full' })}${deltaPct != null ? ` · ${formatPct(deltaPct)}` : row.nep_php ? '' : ' · no NEP amount to compare'}`}
                 </div>
                 {info.group === 'scope_review' && (
                   <p className="hgab-rec-card-title">A different stretch of the same road: this difference is not counted as an increase or a reduction.</p>
@@ -389,7 +389,7 @@ export default function HgabRecord() {
             <SectionHead
               size="sm"
               eyebrow="Not matched"
-              headline={`${suggestions.length} similar line${suggestions.length === 1 ? '' : 's'} in the President’s proposal`}
+              headline={`${suggestions.length} similar line${suggestions.length === 1 ? '' : 's'} in the NEP`}
               dek="Lines with a similar name that the rules did not accept as a match. They add nothing to any total. Check them for a renamed or re-scoped version before reading this line as new."
             />
             <div className="nep-table-wrap">
@@ -398,7 +398,7 @@ export default function HgabRecord() {
                   <tr>
                     <th className="num" title="How alike the names are, from 0 to 1. A text measure, not a probability.">Name similarity</th>
                     <th className="num" title="The matching rules' identity score, from 0 to 1">Match score</th>
-                    <th className="nep-th-name">Line in the proposal</th>
+                    <th className="nep-th-name">Line in the NEP</th>
                     <th className="num" title={STAGE_LABELS.nep.label}>{STAGE_LABELS.nep.short}</th>
                     <th>How it differs</th>
                     <th>Page</th>
@@ -441,7 +441,7 @@ export default function HgabRecord() {
 
         {paths.length > 0 && (
           <div className="hgab-rec-section">
-            <SectionHead size="sm" eyebrow="Where it sits" headline="Headings above this line" dek="The headings each document prints above this line, from the agency down." />
+            <SectionHead size="sm" eyebrow="Where it sits" headline="Headings above this line" dek="The headings each document shows above this line, from the agency down." />
             {paths.map((p) => (
               <div key={p.label}>
                 <p className="hgab-rec-path-stage">{p.label}</p>
@@ -505,7 +505,7 @@ function StageCard({
   put('Type of line', typeof s?.record_kind === 'string' ? s.record_kind.replace(/_/g, ' ') : null);
   const evidence = str(s?.evidence);
   if (evidence) kv.push(['Checked against the scan', EVIDENCE_LABELS[evidence] ?? evidence.replace(/_/g, ' ')]);
-  if (printed) kv.push(['Page number printed on the page', String(printed)]);
+  if (printed) kv.push(['Page number shown on the page', String(printed)]);
   const amounts = obj(s?.amounts_php);
   const members = arr(s?.records);
   const funding = obj(s?.funding_php);
@@ -525,7 +525,7 @@ function StageCard({
         </>
       )}
       {sideTitle && sideTitle !== row.title && (
-        <p className="hgab-rec-card-title" title="The name as this document prints it">“{sideTitle}”</p>
+        <p className="hgab-rec-card-title" title="The name as this document lists it">“{sideTitle}”</p>
       )}
       {kv.length > 0 && (
         <dl className="hgab-rec-kv">
@@ -548,7 +548,7 @@ function StageCard({
       )}
       {members && members.length > 1 && (
         <p className="hgab-rec-card-title">
-          Grouped: {members.length} printed lines share the same name and place
+          Grouped: {members.length} published lines share the same name and place
           {members.every((m) => num(obj(m)?.amount_php) != null)
             ? ` (${members.map((m) => fmt.shortPhp(num(obj(m)?.amount_php))).join(' + ')})`
             : ''}.
