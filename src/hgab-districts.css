@@ -5,7 +5,9 @@
    Congress and fiscal year, and the FY2027 House bill against the NEP for its
    rows. Builds on the section chrome (hgab.css), the hub's table/explorer
    vocabulary (hgab-dataset.css → nep2027.css) and the shared tokens. Scoped to:
-     .hgab-dx-*      grid page, its region sections and jump row, the overview call-out
+     .hgab-dx-*      both views: overview region table and call-outs; the list's
+                     frame, region sections and cards grid
+     .hgab-dsb-*     the regions → districts sidebar (and its phone dialog)
      .hgab-dc-*      one district card
      .hgab-hc-*      the inline-SVG history chart
      .hgab-keyrow-*  the one-line chart key
@@ -161,70 +163,374 @@
   cursor: help;
 }
 
-/* --- "Jump to region": one sticky chip row under the masthead ------------ */
+/* --- the list's frame: sidebar + cards ----------------------------------- */
 
-.hgab-dx-jump {
+/* One line above the cards: the share of DPWH money no card shows. */
+.hgab-dx-offcard {
+  margin: 0;
+  padding: 9px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hgab-dx-offcard strong { font-family: var(--font-hero); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hgab-dx-offcard a { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.hgab-dx-offcard a:hover { text-decoration: underline; }
+
+.hgab-dx-layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 0 36px;
+  margin-top: 20px;
+}
+.hgab-dx-content { min-width: 0; container: hgab-dx / inline-size; }
+.hgab-dx-content > .hgab-dx-controls:first-child { margin-top: 0; }
+.hgab-dd-content > .hgab-dd-rep:first-child { margin-top: 0; }
+.hgab-dx-lede {
+  max-width: 900px;
+  margin: 0 0 4px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.hgab-dx-hiddencard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--ink-3);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.hgab-dx-hiddencard .nep-more { margin-top: 0; }
+.hgab-dx-hiddencard a { color: var(--accent); }
+
+/* The sidebar's filter box is the search on a wide screen; the controls row
+   keeps it only where the sidebar folds into a button. */
+@media (min-width: 1024px) {
+  .hgab-dx-listmain .hgab-dx-search { display: none; }
+}
+
+/* --- the sidebar: regions → districts -------------------------------------- */
+
+.hgab-dsb { min-width: 0; }
+.hgab-dsb-panel {
   position: sticky;
-  top: var(--hgab-masthead-h, 0px);
-  z-index: 20;
+  top: calc(var(--hgab-masthead-h, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--hgab-masthead-h, 0px) - 32px);
+  border-top: 3px solid var(--ink);
+  background: var(--paper);
+}
+.hgab-dsb-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 12px 0 0;
-  padding: 7px 0;
-  background: var(--paper);
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--rule);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0 8px;
 }
-.hgab-dx-jump-label {
-  flex: none;
+.hgab-dsb-title {
+  margin: 0;
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-3);
 }
-.hgab-dx-jump ul {
-  display: flex;
-  gap: 6px;
-  min-width: 0;
-  margin: 0;
-  padding: 0 0 2px;
-  list-style: none;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-.hgab-dx-jump li { flex: none; }
-.hgab-dx-jump a {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
+.hgab-dsb-find { display: flex; flex-direction: column; gap: 4px; }
+.hgab-dsb-find > span {
   font-family: var(--font-body);
   font-size: 12px;
-  font-weight: 500;
-  line-height: 1.3;
-  white-space: nowrap;
+  font-weight: 600;
   color: var(--ink-2);
-  text-decoration: none;
 }
-.hgab-dx-jump a span {
+.hgab-dsb-find input { width: 100%; box-sizing: border-box; }
+.hgab-dsb-key {
+  margin: 8px 0 10px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.hgab-dsb-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--rule);
+  scrollbar-width: thin;
+}
+.hgab-dsb-regions,
+.hgab-dsb-ds { margin: 0; padding: 0; list-style: none; }
+.hgab-dsb-r { border-bottom: 1px solid var(--rule-soft); }
+.hgab-dsb-r-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 8px 7px 6px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  font-family: var(--font-hero);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-dsb-r-btn:hover { background: var(--paper-2); }
+.hgab-dsb-r.is-active > .hgab-dsb-r-btn { border-left-color: var(--accent); background: var(--accent-soft); }
+.hgab-dsb-chev {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 5px solid var(--ink-3);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.12s;
+}
+.hgab-dsb-r.is-open .hgab-dsb-chev { transform: rotate(90deg); }
+.hgab-dsb-r-name { flex: 1; min-width: 0; }
+.hgab-dsb-r-n {
+  flex: none;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--ink-mute);
 }
-.hgab-dx-jump a:hover { border-color: var(--accent); color: var(--accent-deep); }
-.hgab-dx-jump a[aria-current] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.hgab-dsb-r-n small { font-size: 10px; }
+.hgab-dsb-ds { padding: 0 0 6px 15px; }
+.hgab-dsb-d { display: flex; align-items: stretch; min-width: 0; }
+.hgab-dsb-d-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--rule-soft);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.hgab-dsb-d-go:hover { background: var(--paper-2); color: var(--ink); }
+.hgab-dsb-d.is-current .hgab-dsb-d-go { border-left-color: var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.hgab-dsb-d-name { overflow-wrap: anywhere; }
+.hgab-dsb-amt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.hgab-dsb-amt.is-none { color: var(--ink-mute); font-style: italic; }
+.hgab-dsb-shared {
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--hgab-tier-b) 45%, transparent);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hgab-tier-b);
+  cursor: help;
+}
+.hgab-dsb-d-open {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  color: var(--ink-mute);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-decoration: none;
+}
+.hgab-dsb-d-open:hover { background: var(--paper-2); color: var(--accent); }
+.hgab-dsb-d.is-go > a {
+  flex: 1;
+  padding: 6px 8px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+.hgab-dsb-d.is-go > a:hover { text-decoration: underline; }
+.hgab-dsb-empty {
+  margin: 12px 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.hgab-dsb-empty button {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.hgab-dsb-r-btn:focus-visible,
+.hgab-dsb-d-go:focus-visible,
+.hgab-dsb-d-open:focus-visible,
+.hgab-dsb-d.is-go > a:focus-visible,
+.hgab-dsb-empty button:focus-visible,
+.hgab-dsb-opener:focus-visible,
+.hgab-dsb-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Below 1024 px: a button above the cards, and the tree in a full-height dialog. */
+.hgab-dsb-opener {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--ink);
+  border-left: 4px solid var(--accent);
+  background: var(--paper);
+  cursor: pointer;
+  font-family: var(--font-hero);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.hgab-dsb-opener > span::after { content: ' ›'; color: var(--accent); }
+.hgab-dsb-opener small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.hgab-dsb-panel.is-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  max-height: none;
+  padding: 10px 16px 0;
+  border-top: 0;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.25);
+}
+.hgab-dsb-panel.is-dialog .hgab-dsb-head { padding: 4px 0 10px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-title {
+  font-family: var(--font-hero);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--ink);
+}
+.hgab-dsb-close {
+  all: unset;
+  box-sizing: border-box;
+  flex: none;
+  min-height: 36px;
+  padding: 7px 14px;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.hgab-dsb-panel.is-dialog .hgab-dsb-scroll { padding-bottom: 24px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-r-btn { min-height: 44px; font-size: 15px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-d-go { padding: 9px 8px; font-size: 14px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-d-open { width: 44px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-d.is-go > a { padding: 10px 8px; font-size: 13.5px; }
+
+@media (max-width: 1023.98px) {
+  .hgab-dx-layout { display: block; margin-top: 16px; }
+  .hgab-dsb { margin-bottom: 16px; }
+}
+
+/* A card picked in the sidebar: a short highlight; its heading takes focus. */
+.hgab-dc { scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 16px); }
+.hgab-dc.is-flash { animation: hgab-dc-flash 2s ease-out; }
+@keyframes hgab-dc-flash {
+  0%, 40% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-soft); }
+  100% { box-shadow: 0 0 0 3px transparent; background: var(--paper); }
+}
+.hgab-dc-district:focus { outline: none; }
+.hgab-dc-district:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* --- overview: the region table, how to read, the way to the list ---------- */
+
+.hgab-dx-rt .nep-td-name strong { font-weight: 600; }
+.hgab-dx-rt .nep-td-name .nep-code { display: block; }
+.hgab-dx-rt td.num { white-space: nowrap; }
+.hgab-dx-rt-change small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+.hgab-dx-rt-go a {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hgab-dx-rt-go a:hover { text-decoration: underline; }
+.hgab-dx-rt tfoot td {
+  border-top: 2px solid var(--ink);
+  background: var(--paper-2);
+  font-weight: 600;
+}
+.hgab-dx-rt tr.is-note td.hgab-dx-rt-note {
+  max-width: 640px;
+  white-space: normal;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.hgab-dx-howto { margin-top: 40px; }
+.hgab-dx-browse { margin-top: 28px; }
+.hgab-dx-browse h2 {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 8px;
+}
+.hgab-dx-browse .hgab-cta { white-space: nowrap; }
 
 /* --- one region section --------------------------------------------------- */
 
 .hgab-dx-region {
   margin-top: 30px;
-  /* clear the sticky masthead and the jump row when scrolled to by #region-… */
-  scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 56px);
+  /* clear the sticky masthead when scrolled to by #region-… */
+  scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 16px);
 }
 .hgab-dx-region-head {
   display: flex;
@@ -988,13 +1294,21 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hgab-hc rect, .hgab-hc line { transition: none; }
+  .hgab-dsb-chev { transition: none; }
+  /* The picked card is outlined for the same two seconds, without the fade. */
+  .hgab-dc.is-flash { animation: none; box-shadow: 0 0 0 3px var(--accent); }
 }
 
 /* --- responsive ----------------------------------------------------------- */
 
-@media (max-width: 1200px) {
+/* The cards and the detail page's table + chart sit in the column beside the
+   sidebar, so they size to that column, not to the viewport. */
+@container hgab-dx (max-width: 1000px) {
   .hgab-dx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hgab-dd-two { grid-template-columns: 1fr; }
+}
+@container hgab-dx (max-width: 600px) {
+  .hgab-dx-grid { grid-template-columns: 1fr; gap: 16px; }
 }
 @media (max-width: 900px) {
   .hgab-res-row { grid-template-columns: 120px minmax(0, 1fr); }
@@ -1002,7 +1316,6 @@
   .hgab-dx-callout { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
-  .hgab-dx-grid { grid-template-columns: 1fr; gap: 16px; }
   .hgab-dc { padding: 14px 14px 12px; }
   .hgab-dc-district { font-size: 18px; }
   .hgab-portrait { width: 60px; }
@@ -1013,11 +1326,8 @@
   .hgab-res-share { grid-column: 1; }
   .hgab-dc-figures .hgab-amt { font-size: 17px; }
   .hgab-dc-ambiguous-grid { grid-template-columns: 1fr; }
-  /* Phone: the jump row scrolls sideways at the top instead of sticking, so
-     the 135 px masthead is the only thing pinned. */
-  .hgab-dx-jump { position: static; }
-  .hgab-dx-jump-label { display: none; }
-  .hgab-dx-region { scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 12px); }
+  .hgab-dx-region,
+  .hgab-dc { scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 12px); }
   .hgab-dx-region-head { gap: 4px 12px; }
   /* Key row on a phone: chips and "How to read" on line one, the four bar
      styles on line two, in their short wording. */

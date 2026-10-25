@@ -140,3 +140,22 @@ export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasRea
   { key: 'hfep', label: 'Health Facilities', hasReadings: false },
   { key: 'nia', label: 'Irrigation', hasReadings: false },
 ];
+
+/**
+ * The Districts section has two views: an overview (the summary figures and
+ * the money no district card shows) and the list of districts. The list is
+ * `?view=list`; links that still carry list filters (q, region, tier, sort,
+ * group) without a view open the list too, so older shared URLs keep working.
+ */
+export const DISTRICT_VIEWS = [
+  { key: 'overview', label: 'Overview', to: '/hgab/2027/districts' },
+  { key: 'list', label: 'Districts', to: '/hgab/2027/districts?view=list' },
+] as const;
+
+export type DistrictView = (typeof DISTRICT_VIEWS)[number]['key'];
+
+export function districtsView(params: URLSearchParams): DistrictView {
+  const v = params.get('view');
+  if (v === 'list' || v === 'overview') return v;
+  return ['q', 'region', 'tier', 'sort', 'group'].some((k) => params.has(k)) ? 'list' : 'overview';
+}

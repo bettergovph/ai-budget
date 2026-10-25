@@ -24,7 +24,7 @@ import {
   BRIDGE_LABELS, BRIDGE_ORDER, DATASET_ORDER, DATA_BASE_OVERRIDE, HGAB_ROOT, STAGE_LABELS,
   datasetPath, traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
 } from '../lib/hgab';
-import { DATASET_SHORT, PLAIN, PROGRAM_NAV, hubViews } from '../lib/hgab-ui';
+import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import '../hgab.css';
 
 /** Section entries that are plain links (programs are dropdowns, see PROGRAM_NAV). */
@@ -34,7 +34,6 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
     label: 'Intro',
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/intro`,
   },
-  { to: `${HGAB_ROOT}/districts`, label: 'Districts' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
 ];
@@ -70,6 +69,11 @@ export function HgabHeader({
     </Link>
   );
   const [intro, ...rest] = SECTION_LINKS;
+  // Districts: an overview, the list, and each district's page (which counts as the list).
+  const districtsActive = path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
+  const districtsKey = !districtsActive ? null
+    : path !== `${HGAB_ROOT}/districts` ? 'list'
+    : districtsView(new URLSearchParams(search));
   return (
     <SiteHeader
       headerClassName={heroBlend ? 'masthead-hero-blend' : undefined}
@@ -79,13 +83,20 @@ export function HgabHeader({
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 House bill sections">
           {link(intro)}
           {PROGRAM_NAV.map((p) => (
-            <ProgramMenu
+            <SectionMenu
               key={p.key}
-              program={p}
+              label={p.label}
+              items={hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }))}
               active={programActive(p.key)}
-              currentView={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
+              currentKey={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
             />
           ))}
+          <SectionMenu
+            label="Districts"
+            items={DISTRICT_VIEWS.map((v) => ({ key: v.key, label: v.label, to: v.to }))}
+            active={districtsActive}
+            currentKey={districtsKey}
+          />
           {rest.map(link)}
         </nav>
       }
@@ -114,6 +125,18 @@ export function HgabHeader({
               </div>
             </div>
           ))}
+          <div className="hgab-drawer-group">
+            <Link to={`${HGAB_ROOT}/districts`} className={districtsActive ? 'active' : ''} aria-current={districtsKey === 'overview' ? 'page' : undefined}>
+              Districts
+            </Link>
+            <div className="hgab-drawer-sub">
+              {DISTRICT_VIEWS.filter((v) => v.key !== 'overview').map((v) => (
+                <Link key={v.key} to={v.to} className={districtsKey === v.key ? 'active' : ''} aria-current={districtsKey === v.key ? 'page' : undefined}>
+                  {v.label}
+                </Link>
+              ))}
+            </div>
+          </div>
           {rest.map(link)}
         </nav>
       }
@@ -122,7 +145,7 @@ export function HgabHeader({
 }
 
 /**
- * One program in the sub-nav: a button that opens a menu of its views.
+ * One sub-nav entry (a program, or Districts): a button that opens a menu of its views.
  *
  * The sub-nav scrolls sideways on phones, which would clip an absolutely
  * positioned menu, so the panel is fixed to the viewport at the button's
@@ -130,15 +153,17 @@ export function HgabHeader({
  * navigation (it is keyed to the location, so a route change closes it
  * without an effect). Pointers that can hover open it on hover as well.
  */
-function ProgramMenu({
-  program,
+function SectionMenu({
+  label,
+  items,
   active,
-  currentView,
+  currentKey,
 }: {
-  program: (typeof PROGRAM_NAV)[number];
+  label: string;
+  items: ReadonlyArray<{ key: string; label: string; to: string }>;
   active: boolean;
-  /** The hub view being shown when this program's hub is open, else null. */
-  currentView: string | null;
+  /** The item being shown when this section is open, else null. */
+  currentKey: string | null;
 }) {
   const location = useLocation();
   const [openAt, setOpenAt] = useState<string | null>(null);
@@ -191,7 +216,6 @@ function ProgramMenu({
     hoverTimer.current = window.setTimeout(hide, 180);
   };
 
-  const views = hubViews(program.hasReadings);
   return (
     <span className={`hgab-subnav-item ${open ? 'is-open' : ''}`.trim()} ref={wrapRef} onMouseEnter={onEnter} onMouseLeave={onLeave}>
       <button
@@ -203,7 +227,7 @@ function ProgramMenu({
         aria-current={active ? 'true' : undefined}
         onClick={() => (open ? hide() : show())}
       >
-        {program.label}
+        {label}
         <span className="hgab-subnav-caret" aria-hidden="true">▾</span>
       </button>
       <span
@@ -212,10 +236,10 @@ function ProgramMenu({
         hidden={!open}
         style={pos ? { top: pos.top, left: pos.left } : undefined}
       >
-        {views.map((v) => {
-          const on = currentView === v.key;
+        {items.map((v) => {
+          const on = currentKey === v.key;
           return (
-            <Link key={v.key} to={datasetPath(program.key, v.key)} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
+            <Link key={v.key} to={v.to} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
               {v.label}
             </Link>
           );

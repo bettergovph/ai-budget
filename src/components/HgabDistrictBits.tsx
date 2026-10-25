@@ -25,8 +25,8 @@ import {
 } from '../lib/hgab';
 import {
   ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
-  cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtLabel,
-  districtRegionKey, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
+  cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
+  districtLabel, districtRegionKey, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
   officeKindText, officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
   residualShare, residualUnattributed, residualWhere, slotLabel, type HistorySlot,
 } from '../lib/hgab-districts';
@@ -388,7 +388,7 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
           That is <strong>{fmt.pct(share, 1)}</strong> of the total. The Central Office holds{' '}
           <strong>{fmt.php(head.central_office_php)}</strong> and regional offices <strong>{fmt.php(head.regional_offices_php)}</strong>.
           {head.unmatched_php > 0 && <> Another <strong>{fmt.php(head.unmatched_php)}</strong> sits under offices we could not place on our office-to-district map.</>}
-          {' '}The district cards below carry the remaining <strong>{fmt.php(head.deo_php)}</strong> ({fmt.pct(1 - share, 1)}).
+          {' '}The district cards carry the remaining <strong>{fmt.php(head.deo_php)}</strong> ({fmt.pct(1 - share, 1)}).
           {residualMostlyOffCards(residual) && ' In every year shown, most DPWH money is not assigned to a district.'}
         </p>
       )}
@@ -613,7 +613,9 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
   const regionKey = districtRegionKey(card);
 
   return (
-    <article className="hgab-dc" data-attribution={card.attribution} aria-labelledby={hid}>
+    // `id` is the card's `#d-…` address: the sidebar scrolls here, and the
+    // heading takes focus (tabIndex −1) so a keyboard reader lands on it.
+    <article className="hgab-dc" id={districtAnchor(card.id)} data-attribution={card.attribution} aria-labelledby={hid}>
       <header className="hgab-dc-head">
         {!ambiguous && <Portrait rep={rep} />}
         <div className="hgab-dc-title">
@@ -621,7 +623,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
             <span title={card.region ?? undefined}>{regionKey === 'other' ? card.region ?? 'Region not recorded' : regionNames(regionKey).name}</span>
             <AttributionBadge attribution={card.attribution} />
           </p>
-          <Heading className="hgab-dc-district" id={hid}>
+          <Heading className="hgab-dc-district" id={hid} tabIndex={-1}>
             <Link to={districtPath(card.id)}>{card.label}</Link>
           </Heading>
           <RepresentativeBlock rep={rep} />
