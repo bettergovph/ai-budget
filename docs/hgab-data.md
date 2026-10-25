@@ -22,6 +22,10 @@ checks is `docs/dpwh-nep-hb-2027-review.md`; the section plan is
 
 ## Reader-facing vs technical copy
 
+Wording follows `docs/hgab-copy.md` ("NEP", "as published"). Of the document
+`volume` strings only the NEP farm-to-market roads one was reworded; nothing
+matches on NEP volumes, and House volumes are untouched.
+
 Every dataset meta (`HgabDatasetMeta`) carries two registers of text, and the
 UI must not mix them:
 
@@ -34,7 +38,7 @@ UI must not mix them:
   `bridge`, `MOOE`, `NEP Volume`, `I-B`, `I-C`, `II-A`, `II-B`, `OCR`. Two
   plain-English uses are allowed because DPWH literally builds them: "flood
   control" and the plural "bridges". The banned senses are the singular
-  "bridge" (the five-group bridge) and "control(s)" (printed controls).
+  "bridge" (the five-group bridge) and "control(s)" (published controls).
   Before the per-dataset checks, a self-test runs the filter on the wording
   Jason rejected (the old HFEP `grain` and `scope`) and fails unless every
   banned item is caught and "Roads, bridges and flood control projects."
@@ -63,12 +67,12 @@ builder emit for readers:
   `Farm-to-market roads`, `Health facilities: …`, `Irrigation program:`).
 - `controls_label`: "Program totals" (DPWH), "Regions", "Categories",
   "Sub-programs". HFEP control `group` headers read "Funding columns, as
-  printed" and "Categories, as printed".
+  published" and "Categories, as published".
 - Printed labels (`ControlRow.label`: PAP names, region names, category rows,
   funding columns) stay verbatim; only internal ids would be reworded, and
   none are emitted as labels. The one composed label is an HFEP category
-  printed differently in the two documents: "<House label> (President's
-  proposal: <NEP label>)", both halves verbatim.
+  printed differently in the two documents: "<House label> (NEP:
+  <NEP label>)", both halves verbatim.
 - Districts `scope_notes` and `OfficeHistory.notes`: plain sentences of at
   most 25 words each (the verifier enforces it). Their technical versions are
   recorded under "Scope notes (technical record)" below.
@@ -174,11 +178,11 @@ Per dataset, what each column is carried from:
   Totals, the bridge and the parquet sums are all on the facility ledgers
   (NEP ₱14,472,519,000, House ₱10,021,659,000) so the bridge identity holds on
   the compared population; the printed NEP annex control (₱14,472,659,000) is
-  kept in the controls table (the "Total" row under "Funding columns, as printed"), the scope sentence and
+  kept in the controls table (the "Total" row under "Funding columns, as published"), the scope sentence and
   an explained reconciliation row — the ₱140,000 gap is the documented Metro
   Manila medical-equipment printing defect (the workbench's
-  `metro_manila_med_overhang_140000`; the reader-facing note calls it a
-  printing error in a Metro Manila medical-equipment line).
+  `metro_manila_med_overhang_140000`; the reader-facing note calls it an
+  error in the published list for a Metro Manila medical-equipment line).
   `printed` carries the HFEP activity rows (CO + MOOE) from the agency tables.
   NEP rows cite `nep2027-hfep` (the 13-page Volume II-A excerpt; page k =
   Volume II-A PDF page 726 + k).
@@ -498,7 +502,7 @@ GAA year is before FY2026 and it has no FY2027 NEP row; otherwise "The budget
 also lists an undivided <office>".
 
 The plain notes print years without "FY" and name the stages as "enacted
-budget(s) <years>" (GAA), "2027 proposal" (NEP) and "2027 House bill" (HGAB
+budget(s) <years>" (GAA), "2027 NEP" (NEP) and "2027 House bill" (HGAB
 3R). The predecessor note gives one combined amount; the per-label
 breakdown (e.g. Compostela Valley DEO FY2020–2021 ₱6,690,874,000 plus the
 Davao de Oro label FY2022 ₱2,267,594,000 = ₱8,958,468,000) is in

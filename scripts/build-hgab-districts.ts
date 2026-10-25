@@ -599,8 +599,8 @@ async function main(): Promise<void> {
     if (missingGaa.length) notes.push(`Not listed under this name in the ${plainYears(missingGaa)} enacted budget${missingGaa.length > 1 ? "s" : ""}.`);
     const zeroGaa = years.filter((y) => y.stage === "gaa" && y.matched_label != null && y.php == null).map((y) => y.fy);
     if (zeroGaa.length) notes.push(`Listed with no money in ${plainYears(zeroGaa)}; shown as blank rather than zero.`);
-    if (years[7].php == null) notes.push("Not listed under this name in the President's 2027 proposal.");
-    if (!fy2027) notes.push(o.type === "regional_group" ? "A regional grouping, not an engineering office; it has no figures of its own, and its money is not assigned to any district." : "No projects under this office in the 2027 House bill or the President's proposal.");
+    if (years[7].php == null) notes.push("Not listed under this name in the 2027 NEP.");
+    if (!fy2027) notes.push(o.type === "regional_group" ? "A regional grouping, not an engineering office; it has no figures of its own, and its money is not assigned to any district." : "No projects under this office in the 2027 House bill or the NEP.");
     // Predecessor offices whose crosswalk legacy block names this office as a candidate successor: their money
     // stays in the residual (unmatched_labels), never split between successors.
     for (const [legacyId, lo] of Object.entries(crosswalk.offices)) {
@@ -712,15 +712,15 @@ async function main(): Promise<void> {
     // enforces it). The precise statements they stand for are in docs/hgab-data.md ("Scope notes (technical record)").
     scope_notes: [
       "Figures for 2020 to 2026 are the enacted budgets of each DPWH office: the whole department, every fund and every kind of spending.",
-      `The 2027 President's proposal figure uses the same whole-department basis (${peso(nep.total)} in all, including items released automatically).`,
+      `The 2027 NEP figure uses the same whole-department basis (${peso(nep.total)} in all, including items released automatically).`,
       `The 2027 House bill figure counts named projects only, not staff or running costs (${peso(hgab.totals.hgab3)} in all), so it is smaller than whole-department figures.`,
-      `The 2027 comparison sets the House bill against the President's proposal on that project-only basis (${peso(hgab.totals.nep)} proposed); never mix it with whole-department figures.`,
+      `The 2027 comparison sets the House bill against the NEP's ${peso(hgab.totals.nep)} on that project-only basis; never mix it with whole-department figures.`,
       "Every year's total is fully accounted for: office figures plus the Central Office, regional offices and unmatched names add up to the department total.",
       `Offices are matched by name across years, with ${ALIASES.length} known name changes. ${unmatchedByKind.legacy} names are former offices and ${unmatchedByKind.unmatched} match nothing; their money stays unassigned.`,
       "An office serving several districts shows its full figure on each; district headlines add those undivided figures, so read them as a range.",
       "Districts served only by the BARMM regional grouping have no office figures; their headlines are blank.",
-      "69 projects name a different office in the two 2027 documents; both amounts are shown under the office the House bill prints.",
-      "The table linking offices to districts is used only for those links; the amounts printed in it are not used.",
+      "69 projects name a different office in the two 2027 documents; both amounts are shown under the office the House bill lists.",
+      "The table linking offices to districts is used only for those links; the amounts listed in it are not used.",
     ],
   };
 
@@ -784,19 +784,19 @@ function describeSlots(keys: string[]): string {
   const parts: string[] = [];
   if (gaa.length) parts.push(`${describeYears(gaa)} GAA`);
   if (keys.includes("nep:2027")) parts.push("FY2027 NEP");
-  if (keys.includes("hgab3:2027")) parts.push("FY2027 HGAB 3R");
+  if (keys.includes("hgab3:2027")) parts.push("FY2027 House bill, third reading");
   return parts.join(", ");
 }
 /** Reader-facing year runs for office notes: "2020–2022", "2020, 2024". (`describeYears` keeps the FY form for the manifest.) */
 function plainYears(years: number[]): string {
   return describeYears(years).replace(/FY/g, "");
 }
-/** Reader-facing slot list for office notes: "enacted budgets 2020–2026, 2027 proposal". */
+/** Reader-facing slot list for office notes: "enacted budgets 2020–2026, 2027 NEP". */
 function plainSlots(keys: string[]): string {
   const gaa = keys.filter((k) => k.startsWith("gaa:")).map((k) => Number(k.slice(4)));
   const parts: string[] = [];
   if (gaa.length) parts.push(`enacted budget${gaa.length > 1 ? "s" : ""} ${plainYears(gaa)}`);
-  if (keys.includes("nep:2027")) parts.push("2027 proposal");
+  if (keys.includes("nep:2027")) parts.push("2027 NEP");
   if (keys.includes("hgab3:2027")) parts.push("2027 House bill");
   return parts.join(", ");
 }

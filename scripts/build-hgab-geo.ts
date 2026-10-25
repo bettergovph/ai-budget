@@ -535,8 +535,8 @@ function buildRegions(key: DatasetKey, dims: DimRow[] | undefined, rows: Row[], 
     return {
       regions: [], labelKeys,
       notOnMap: {
-        label: "No region printed", nep_php: nep, house_php: house, nep_rows: nepRows.length, house_rows: houseRows.length,
-        plain: readerSentence("The irrigation lists print no region, so every project is counted here.", `${key} not_on_map.plain`),
+        label: "No region listed", nep_php: nep, house_php: house, nep_rows: nepRows.length, house_rows: houseRows.length,
+        plain: readerSentence("The irrigation lists give no region, so every project is counted here.", `${key} not_on_map.plain`),
       },
     };
   }
@@ -728,33 +728,33 @@ function dpwhPoints(rows: Row[], gps: { hits: GpsHit[] }, stats: PointStats): { 
 function notes(key: DatasetKey, stats: PointStats, coverage: HgabDatasetMap["coverage"]): { points_note: string; note: string; placeable: boolean } {
   const n = coverage.rows_with_points;
   const dropped = stats.dropped_rows
-    ? `; ${count(stats.dropped_rows)} more ${stats.dropped_rows === 1 ? "prints a point" : "print points"} outside the country and ${stats.dropped_rows === 1 ? "is" : "are"} left off`
+    ? `; ${count(stats.dropped_rows)} more ${stats.dropped_rows === 1 ? "gives a point" : "give points"} outside the country and ${stats.dropped_rows === 1 ? "is" : "are"} left off`
     : "";
   switch (key) {
     case "dpwh": {
       const ratio = Math.round(coverage.rows_total / Math.max(n, 1));
       return {
         placeable: true,
-        points_note: `Dots show the ${n.toLocaleString("en-US")} projects whose titles print coordinates, about one in ${count(ratio)}${dropped}.`,
-        note: "Regional totals follow the region each document prints, so Metro Manila includes projects run from the DPWH head office but built elsewhere.",
+        points_note: `Dots show the ${n.toLocaleString("en-US")} projects whose titles give coordinates, about one in ${count(ratio)}${dropped}.`,
+        note: "Regional totals follow the region each document lists, so Metro Manila includes projects run from the DPWH head office but built elsewhere.",
       };
     }
     case "fmr": {
       const differ = stats.both_differ ? `; for ${stats.both_differ === 1 ? "the one road" : `the ${count(stats.both_differ)} roads`} where the two lists differ, the House bill's are used` : "";
-      const all = n === coverage.rows_total ? "Each dot is a road at its printed coordinates" : `Dots show the ${n.toLocaleString("en-US")} roads whose coordinates are printed`;
-      return { placeable: true, points_note: `${all}${differ}${dropped}.`, note: "Regional totals follow the region each list prints for each road." };
+      const all = n === coverage.rows_total ? "Each dot is a road at its published coordinates" : `Dots show the ${n.toLocaleString("en-US")} roads whose coordinates are published`;
+      return { placeable: true, points_note: `${all}${differ}${dropped}.`, note: "Regional totals follow the region each list gives for each road." };
     }
     case "hfep":
       return {
         placeable: true,
-        points_note: "The health facilities lists name each facility but print no coordinates, so facilities are shown by region only.",
-        note: "Regional totals follow the region each list prints for each facility.",
+        points_note: "The health facilities lists name each facility but give no coordinates, so facilities are shown by region only.",
+        note: "Regional totals follow the region each list gives for each facility.",
       };
     case "nia":
       return {
         placeable: false,
-        points_note: "No dots are shown because only one irrigation project prints coordinates.",
-        note: "The irrigation lists name each system but print no region, and only one project prints coordinates, so the projects cannot be mapped.",
+        points_note: "No dots are shown because only one irrigation project gives coordinates.",
+        note: "The irrigation lists name each system but give no region, and only one project gives coordinates, so the projects cannot be mapped.",
       };
   }
 }
