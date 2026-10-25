@@ -152,6 +152,8 @@ const STATIC_SITEMAP_PATHS = [
   "/hgab/2027/fmr",
   "/hgab/2027/hfep",
   "/hgab/2027/nia",
+  // The Districts lens grid; the ~250 district pages are linked from it.
+  "/hgab/2027/districts",
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

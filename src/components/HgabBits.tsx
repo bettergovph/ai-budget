@@ -28,6 +28,7 @@ const SECTION_NAV: Array<{ to: string; label: string; match?: (path: string) => 
   { to: `${HGAB_ROOT}/fmr`, label: 'Farm-to-Market Roads' },
   { to: `${HGAB_ROOT}/hfep`, label: 'Health Facilities' },
   { to: `${HGAB_ROOT}/nia`, label: 'Irrigation' },
+  { to: `${HGAB_ROOT}/districts`, label: 'Districts' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
 ];
@@ -38,7 +39,7 @@ const SECTION_NAV: Array<{ to: string; label: string; match?: (path: string) => 
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active (`aria-current="page"`). A
  * record page (`/hgab/2027/dpwh/p/…`) counts as its dataset's tab. On
- * desktop the seven tabs sit on one row inside the navy band; on mobile the
+ * desktop the eight tabs sit on one row inside the navy band; on mobile the
  * band scrolls horizontally (site-header.css) and the drawer repeats the
  * links under an "FY2027 HGAB" eyebrow.
  */

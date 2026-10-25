@@ -20,19 +20,26 @@ import {
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import {
-  DATASET_ORDER, HGAB_ROOT, STAGE_LABELS, datasetPath, formatPct, loadHgabOverview, pctChange, pdfUrl,
-  type HgabDatasetMeta, type HgabDocument, type HgabOverview as Overview,
+  DATASET_ORDER, HGAB_ROOT, STAGE_LABELS, datasetPath, districtPath, formatPct, loadHgabDistricts, loadHgabOverview,
+  pctChange, pdfUrl,
+  type HgabDatasetMeta, type HgabDistrictIndex, type HgabDocument, type HgabOverview as Overview,
 } from '../lib/hgab';
+import { headlineResidual, residualShare, residualUnattributed, slotLabel } from '../lib/hgab-districts';
 import { formatBytes, ordinal } from '../lib/hgab-ui';
 import '../nep2027.css';
+import '../hgab-districts.css';
 
 export default function HgabOverview() {
   const [ov, setOv] = useState<Overview | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The Districts call-out quotes the residual when the district index is
+  // available; the call-out itself does not depend on it.
+  const [districts, setDistricts] = useState<HgabDistrictIndex | null>(null);
 
   useEffect(() => {
     document.title = pageMeta(HGAB_ROOT).title;
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
+    loadHgabDistricts().then(setDistricts).catch(() => { /* call-out renders without the figure */ });
   }, []);
 
   if (err) return <HgabError message={err} />;
@@ -86,6 +93,7 @@ export default function HgabOverview() {
           <div className="hgab-cards">
             {datasets.map((d) => <DatasetCard key={d.key} d={d} />)}
           </div>
+          <DistrictsCallout index={districts} />
         </section>
 
         {/* ---- reconciliation ---- */}
@@ -151,6 +159,43 @@ export default function HgabOverview() {
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * Points at the DEO lens. The residual sentence is the lens's third condition
+ * — most DPWH money sits under Central Office and appears on no district card
+ * — so it is quoted here too, not left for the lens page alone.
+ */
+function DistrictsCallout({ index }: { index: HgabDistrictIndex | null }) {
+  const head = index ? headlineResidual(index.residual) : null;
+  const share = head ? residualShare(head) : null;
+  return (
+    <section className="hgab-dx-callout" aria-labelledby="hgab-districts-callout">
+      <div>
+        <p className="hgab-dx-callout-eyebrow">The DEO lens · DPWH only</p>
+        <h3 id="hgab-districts-callout">District engineering offices and the districts they serve</h3>
+        <p>
+          One card per legislative district: the representative in the 20th Congress, the DPWH district
+          engineering office(s) that serve it, that office’s budget by Congress and fiscal year
+          (FY2020–2026 GAA), and the FY2027 House bill against the NEP for its rows. Offices shared by
+          several districts are shown as one undivided total; nothing is split or inferred.
+        </p>
+        {head && share != null ? (
+          <p className="hgab-dx-callout-figure">
+            <strong>{fmt.php(residualUnattributed(head))}</strong> of <strong>{fmt.php(head.total_php)}</strong> in{' '}
+            {slotLabel(head)} ({fmt.pct(share, 1)}) sits under Central Office, regional offices or unmatched
+            units and appears on no district card.
+          </p>
+        ) : (
+          <p className="hgab-dx-callout-figure">
+            Most DPWH money sits under Central Office and regional offices and appears on no district card;
+            the lens publishes that residual for every year.
+          </p>
+        )}
+      </div>
+      <Link className="hgab-cta hgab-cta-primary" to={districtPath()}>Open districts →</Link>
+    </section>
+  );
+}
 
 function DatasetCard({ d }: { d: HgabDatasetMeta }) {
   const { totals, counts } = d;

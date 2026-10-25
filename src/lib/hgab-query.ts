@@ -6,7 +6,7 @@
  * they are tested. Every list query SELECTs by the names in `PROJECT_COLUMNS`;
  * `record_json` and `search_text` are never selected in a list.
  *
- * Filter state lives in the URL (`?view=projects&q=…&group=…`) so a finding is
+ * Filter state lives in the URL (`?view=projects&q=…&group=…&deo=…`) so a finding is
  * shareable. `filtersFromParams` / `paramsFromFilters` are the two ends of that
  * round-trip; only non-default values are written so links stay short.
  *
@@ -47,6 +47,8 @@ export interface ProjectFilters {
   officeKind: string;
   /** `local` | `fap` | ''. */
   zone: string;
+  /** Exact recorded `office` label — the Districts lens deep link (`deo=`). */
+  deo: string;
   /** DPWH `reading_status`. */
   reading: string;
   /** One review flag that must be present in the comma-separated `flags`. */
@@ -106,6 +108,7 @@ export function filtersFromParams(params: URLSearchParams, sortDefault: SortKey)
     program: params.get('program') ?? '',
     pap: params.get('pap') ?? '',
     officeKind: params.get('office') ?? '',
+    deo: params.get('deo') ?? '',
     zone: params.get('zone') === 'local' || params.get('zone') === 'fap' ? (params.get('zone') as string) : '',
     reading: params.get('reading') ?? '',
     flag: params.get('flag') ?? '',
@@ -130,6 +133,7 @@ export function paramsFromFilters(f: ProjectFilters, base: URLSearchParams, sort
   set('program', f.program);
   set('pap', f.pap);
   set('office', f.officeKind);
+  set('deo', f.deo);
   set('zone', f.zone);
   set('reading', f.reading);
   set('flag', f.flag);
@@ -144,7 +148,7 @@ export function paramsFromFilters(f: ProjectFilters, base: URLSearchParams, sort
 export function hasActiveFilters(f: ProjectFilters): boolean {
   return Boolean(
     f.q.trim() || f.groups.length || f.held !== 'all' || f.region || f.program || f.pap
-    || f.officeKind || f.zone || f.reading || f.flag,
+    || f.officeKind || f.deo || f.zone || f.reading || f.flag,
   );
 }
 
@@ -361,6 +365,7 @@ export function whereClauses(f: ProjectFilters): string[] {
   if (f.program) where.push(`program = ${sqlStr(f.program)}`);
   if (f.pap) where.push(`pap = ${sqlStr(f.pap)}`);
   if (f.officeKind) where.push(`office_kind = ${sqlStr(f.officeKind)}`);
+  if (f.deo) where.push(`office = ${sqlStr(f.deo)}`);
   if (f.zone) where.push(`zone = ${sqlStr(f.zone)}`);
   if (f.reading) where.push(`reading_status = ${sqlStr(f.reading)}`);
   if (f.flag) where.push(`(',' || flags || ',') LIKE ${sqlStr(`%,${likeNeedle(f.flag)},%`)} ESCAPE '\\'`);

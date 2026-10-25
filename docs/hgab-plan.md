@@ -230,13 +230,32 @@ second and third reading, insertion and deletion candidate, segment-scope
 review, DEO, chainage and FAP, and extended P/A/P; `/learn` gained a
 House-stage section between the cycle and the money flow.
 
+**Districts (added the same day).** `/hgab/2027/districts` and
+`/hgab/2027/districts/:id` are the DEO lens, rebuilt rather than copied: one
+card per legislative district with the serving office(s), that office's
+budget history grouped by Congress (18th: FY2020–2022, 19th: FY2023–2025,
+20th: FY2026 plus the FY2027 NEP and House bill) with year bars and
+per-Congress GAA subtotals, the office's FY2027 bridge, and the seat holder
+from our own directory at bills.juris.ph joined on the congress.gov.ph
+member code (253 of 254 seats; portraits are its Commons-mirrored, attributed
+images). `scripts/build-hgab-districts.ts` writes `districts.json` from the
+DEO2LEG crosswalk, `data/18/operating_units.json` (FY2020–2026 GAA),
+`data/2027/18/operating_units.json` (FY2027 NEP) and the DPWH parquet; the
+verifier grew to 154 checks. The four conditions are rendered, not footnoted:
+a tier badge on every figure, shared offices shown undivided with their
+co-served districts, the Central Office and regional residual published per
+year before any card (about 70% of the FY2027 House total), and the note that
+the representative shown holds the 20th Congress seat. Predecessor offices
+that were later split stay in the residual rather than being attributed to a
+successor; the one alias applied is the Surigao del Norte renumbering the GAA
+label itself records. The dev server no longer sends the cross-origin
+isolation headers production never had, which is what was blocking the
+portraits and the masthead logo locally.
+
 **Deferred.**
 
-- The map — FMR coordinates, the GPS inventory — and anything district-level.
-  The DEO-to-district crosswalk and its Tier A / Tier B rules wait until the
-  hearings need the angle; `has_map` is carried in the dataset metadata so the
-  hub can grow a lens without a schema change.
-- A districts lens on the DPWH hub, for the same reason.
+- The map — FMR coordinates, the GPS inventory. `has_map` is carried in the
+  dataset metadata so the hub can grow a map without a schema change.
 - Public API and MCP tools over the HGAB tree. The data is already shaped for
   it; a thin Worker layer over `overview.json` and the parquet is about a day
   when wanted.

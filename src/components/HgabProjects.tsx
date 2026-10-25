@@ -19,7 +19,7 @@ import { downloadCsv } from '../lib/csv';
 import * as fmt from '../lib/format';
 import {
   BRIDGE_LABELS, BRIDGE_ORDER, READING_LABELS, STAGE_LABELS,
-  formatPct, pdfUrl, projectsParquetUrl, recordPath, traceInfo,
+  districtPath, formatPct, pdfUrl, projectsParquetUrl, recordPath, traceInfo,
   type BridgeGroup, type HgabDatasetMeta, type HgabDocument, type ProjectRow,
 } from '../lib/hgab';
 import {
@@ -30,6 +30,7 @@ import {
 } from '../lib/hgab-query';
 import { StatusChip } from './HgabBits';
 import { SkeletonRows } from './Nep2027Bits';
+import '../hgab-districts.css';
 
 // ---------------------------------------------------------------------------
 // Small cells shared with the hub and the record page
@@ -358,6 +359,26 @@ export default function HgabProjects({
           </select>
         </label>
       </div>
+
+      {filters.deo && (
+        <div className="hgab-ds-chips" role="group" aria-label="Active office filter">
+          <span className="hgab-ds-chip">
+            <em>Office</em>
+            {filters.deo}
+            <button
+              type="button"
+              aria-label={`Remove the office filter ${filters.deo}`}
+              title="Remove this filter"
+              onClick={() => update({ deo: '' })}
+            >
+              ×
+            </button>
+          </span>
+          <Link className="hgab-ds-chip-link" to={districtPath()} title="The district engineering office lens">
+            Districts lens →
+          </Link>
+        </div>
+      )}
 
       <div className="nep-explore-controls hgab-ds-filters">
         <label>

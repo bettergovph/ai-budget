@@ -21,6 +21,8 @@ const HgabSources = lazy(() => import('./pages/HgabSources'));
 const HgabMethodology = lazy(() => import('./pages/HgabMethodology'));
 const HgabDataset = lazy(() => import('./pages/HgabDataset'));
 const HgabRecord = lazy(() => import('./pages/HgabRecord'));
+const HgabDistricts = lazy(() => import('./pages/HgabDistricts'));
+const HgabDistrict = lazy(() => import('./pages/HgabDistrict'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -82,12 +84,14 @@ export default function App() {
           <Route path="/hearings" element={<Hearings />} />
           <Route path="/hearings/:videoId" element={<HearingDetail />} />
           {/* FY2027 House General Appropriations Bill (HB 10858) vs the NEP.
-              The two static pages are declared before `:dataset` so they can
-              never be mistaken for a dataset key. */}
+              The static pages and the Districts lens are declared before
+              `:dataset` so they can never be mistaken for a dataset key. */}
           <Route path="/hgab" element={<Navigate to="/hgab/2027" replace />} />
           <Route path="/hgab/2027" element={<HgabOverview />} />
           <Route path="/hgab/2027/sources" element={<HgabSources />} />
           <Route path="/hgab/2027/methodology" element={<HgabMethodology />} />
+          <Route path="/hgab/2027/districts" element={<HgabDistricts />} />
+          <Route path="/hgab/2027/districts/:id" element={<HgabDistrict />} />
           <Route path="/hgab/2027/:dataset" element={<HgabDataset />} />
           <Route path="/hgab/2027/:dataset/p/:id" element={<HgabRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

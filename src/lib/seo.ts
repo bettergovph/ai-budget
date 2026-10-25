@@ -231,6 +231,25 @@ export function pageMeta(pathname: string): PageMeta {
         "data, the limits, and the full disclaimer.",
     };
   }
+  if (p === "/hgab/2027/districts") {
+    return {
+      title: `Districts — DPWH District Engineering Offices and the Districts They Serve, FY 2027 · ${SITE}`,
+      description:
+        "One card per Philippine legislative district: the representative in the 20th Congress, the " +
+        "DPWH district engineering office(s) serving it, that office's budget by Congress and fiscal " +
+        "year (FY 2020–2026 GAA), and the FY 2027 House bill against the NEP for its rows — with " +
+        "shared offices shown undivided and the Central Office residual published every year.",
+    };
+  }
+  if (/^\/hgab\/2027\/districts\/[^/]+$/.test(p)) {
+    return {
+      title: `District — DPWH Office Budget by Congress and the FY 2027 House Bill vs NEP · ${SITE}`,
+      description:
+        "One legislative district's DPWH district engineering office(s): attribution tier, budget by " +
+        "fiscal year and Congress (FY 2020–2026 GAA, FY 2027 NEP and House bill), the FY 2027 bridge, " +
+        "the largest projects, and the representative who holds the seat in the 20th Congress.",
+    };
+  }
   const hgabRecord = /^\/hgab\/2027\/([a-z]+)\/p\/[^/]+$/.exec(p);
   if (hgabRecord) {
     const ds = HGAB_DATASETS[hgabRecord[1]];
