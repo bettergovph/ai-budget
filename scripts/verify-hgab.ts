@@ -14,6 +14,9 @@
  *   - every document key a row or dataset cites exists in the registry (and on
  *     disk unless --no-pdf);
  *   - the reconciliation against our FY2027 NEP tree has no mismatch;
+ *   - every dataset's READER-FACING copy (`summary` ≤ 30 words, `one_row`,
+ *     `caveats[]`) is present and free of codes, volumes and pipeline jargon
+ *     (docs/hgab-data.md "Reader-facing vs technical copy");
  *   - the districts index (`npm run build:hgab-districts`): card/office
  *     referential integrity, tiers, the nine-slot year shape (null never 0),
  *     the residual identity deo + central + regional + unmatched = total per
@@ -63,7 +66,8 @@ const EXPECTED = {
 interface BridgeCell { rows: number; php: number; nep_php?: number | null; house_php?: number | null }
 interface Bridge extends Record<BridgeGroup, BridgeCell> { net_php: number; house_stage: "hgab2" | "hgab3" }
 interface Meta {
-  key: DatasetKey; dept_id: string; grain: string; scope: string; has_readings: boolean; has_map: boolean; controls_label: string;
+  key: DatasetKey; dept_id: string; summary: string; one_row: string; caveats: string[]; grain: string; scope: string;
+  has_readings: boolean; has_map: boolean; controls_label: string;
   totals: { nep_php: number; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null };
   counts: { nep: number; hgab2: number | null; hgab3: number | null; api: number | null };
   printed: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null;
@@ -121,6 +125,20 @@ interface MainWorkspace {
 
 let checks = 0, failures = 0;
 const peso = (n: number | null | undefined) => (n == null ? "—" : `₱${n.toLocaleString("en-US")}`);
+const words = (s: string | null | undefined) => String(s ?? "").trim().split(/\s+/).filter(Boolean).length;
+/**
+ * Words that must never reach a hero, card or KPI: 15-digit UACS codes and the pipeline's own vocabulary.
+ * Whole words, case-insensitive. "flood control" and the plural "bridges" are plain English (DPWH builds
+ * them) and are allowed; the banned senses are the singular "bridge" (the five-group bridge) and "control(s)".
+ */
+const BANNED_IN_READER_COPY: ReadonlyArray<[string, RegExp]> = [
+  ["15-digit code", /\b\d{15}\b/], ["PDF", /\bPDF\b/i], ["annex", /\bannex(es)?\b/i], ["ledger", /\bledgers?\b/i], ["control", /\bcontrols?\b/i],
+  ["bridge", /\bbridge\b/i], ["MOOE", /\bMOOE\b/i], ["NEP Volume", /NEP Volume/i], ["I-B/I-C/II-A/II-B", /\b(I-B|I-C|II-A|II-B)\b/i], ["OCR", /\bOCR\b/i],
+];
+const readerCopyHits = (text: string): string[] => {
+  const t = text.replace(/\bflood control\b/gi, "flood management");
+  return BANNED_IN_READER_COPY.filter(([, re]) => re.test(t)).map(([name]) => name);
+};
 function check(name: string, ok: boolean, detail = ""): void {
   checks++;
   if (ok) process.stdout.write(`  ✓ ${name}\n`);
@@ -165,7 +183,24 @@ async function main(): Promise<void> {
   check("source commit is pinned and matches the manifest", /^[0-9a-f]{40}$/.test(overview.source_commit) && overview.source_commit === manifest.source_commit, overview.source_commit);
   check("all four datasets present in order", overview.datasets.map((d) => d.key).join(",") === DATASETS.join(","), overview.datasets.map((d) => d.key).join(","));
   check("department ids are 18/05/13/35", overview.datasets.every((d) => EXPECTED[d.key].dept === d.dept_id));
-  check("readings only on DPWH, map flag only on FMR", overview.datasets.every((d) => d.has_readings === (d.key === "dpwh") && d.has_map === (d.key === "fmr")));
+  // has_map: the Map tab can draw regions (and, where printed, coordinates) for every program
+  // except NIA, whose lists print neither; its tab explains instead.
+  check("readings only on DPWH; a drawable map on every program but NIA", overview.datasets.every((d) => d.has_readings === (d.key === "dpwh") && d.has_map === (d.key !== "nia")));
+  // Reader-facing copy: what heroes, cards and KPIs show. Plain words only; the technical record stays in grain/scope.
+  // Self-test: the filter must catch the copy Jason rejected, and pass the plain uses it exempts.
+  const rejected = "One printed funding-column cell (Infrastructure, Medical equipment or Motor vehicle) of one facility; facility totals are controls … HFEP capital outlays (DOH activity 350202100002000) as printed in the NEP Volume II-A annex, the ledger, the bridge, MOOE, PDF pages, Volume I-B, I-C, II-B, OCR copy";
+  const caught = readerCopyHits(rejected);
+  check("reader-copy filter catches every banned item in the rejected wording and passes 'flood control' and 'bridges'",
+    caught.length === BANNED_IN_READER_COPY.length && readerCopyHits("Roads, bridges and flood control projects.").length === 0,
+    `caught ${caught.join(", ")}`);
+  for (const d of overview.datasets) {
+    const nonEmpty = (x: unknown) => typeof x === "string" && x.trim().length > 0;
+    check(`${d.key}: reader-facing summary (≤ 30 words), one_row and caveats[] present`,
+      nonEmpty(d.summary) && words(d.summary) <= 30 && nonEmpty(d.one_row) && Array.isArray(d.caveats) && d.caveats.length > 0 && d.caveats.every(nonEmpty),
+      `summary ${words(d.summary)} words · one_row ${nonEmpty(d.one_row) ? "present" : "missing"} · ${Array.isArray(d.caveats) ? d.caveats.length : 0} caveats`);
+    const hits = [d.summary, d.one_row, ...(Array.isArray(d.caveats) ? d.caveats : [])].flatMap((t) => readerCopyHits(String(t ?? "")).map((name) => `${name} in "${t}"`));
+    check(`${d.key}: reader-facing copy has no codes, volumes or jargon (${BANNED_IN_READER_COPY.map(([n]) => n).join(", ")})`, hits.length === 0, hits.join("; "));
+  }
   const docKeys = new Set(overview.documents.map((d) => d.key));
   check("document registry has the eight expected keys", docKeys.size === 8 && ["hb10858-2r-vol-ib", "hb10858-2r-vol-ic", "hb10858-3r-vol-ib", "hb10858-3r-vol-ic", "nep2027-vol-iib", "nep2027-fmr", "nep2027-nia", "nep2027-hfep"].every((k) => docKeys.has(k)), [...docKeys].join(","));
   check("every dataset document key is registered", overview.datasets.every((d) => [...d.documents.nep, ...d.documents.house].every((k) => docKeys.has(k))));
@@ -344,11 +379,11 @@ async function main(): Promise<void> {
   check("reconciliation rows exist for every dataset", DATASETS.every((d) => R.some((r) => r.dataset === d)));
   check("no reconciliation mismatch", mismatches.length === 0, mismatches.map((r) => `${r.dataset}: ${r.check} (${peso(r.ours_php)} vs ${peso(r.theirs_php)})`).join("\n      "));
   const pick = (dataset: DatasetKey, startsWith: string) => R.find((r) => r.dataset === dataset && r.check.startsWith(startsWith));
-  check("DPWH new appropriations reconcile exactly to ₱642,612,015,000", pick("dpwh", "DPWH new appropriations")?.status === "exact" && pick("dpwh", "DPWH new appropriations")?.theirs_php === EXPECTED.dpwh.printed_nep);
-  check("capital outlays and the six operations programs are exact", pick("dpwh", "Capital outlays")?.status === "exact" && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program:")).length === 6 && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program:")).every((r) => r.status === "exact"));
-  check("45 printed PAP controls each exact or explained", R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("PAP:")).length === 45 && R.filter((r) => r.check.startsWith("PAP:")).every((r) => r.status === "exact" || r.status === "explained"));
-  check("FMR activity, HFEP capital outlays and the six NIA sub-programs are exact", pick("fmr", "DA activity")?.status === "exact" && pick("hfep", "DOH activity 350202100002000, capital")?.status === "exact"
-    && R.filter((r) => r.dataset === "nia" && r.check.startsWith("NIA sub-program")).length === 6 && R.filter((r) => r.dataset === "nia").every((r) => r.status === "exact"));
+  check("DPWH new appropriations reconcile exactly to ₱642,612,015,000", pick("dpwh", "DPWH total")?.status === "exact" && pick("dpwh", "DPWH total")?.theirs_php === EXPECTED.dpwh.printed_nep);
+  check("capital outlays and the six operations programs are exact", pick("dpwh", "DPWH capital outlays")?.status === "exact" && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program total:")).length === 6 && R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program total:")).every((r) => r.status === "exact"));
+  check("45 printed PAP controls (program lines) each exact or explained", R.filter((r) => r.dataset === "dpwh" && r.check.startsWith("Program line:")).length === 45 && R.filter((r) => r.check.startsWith("Program line:")).every((r) => r.status === "exact" || r.status === "explained"));
+  check("FMR activity, HFEP capital outlays and the six NIA sub-programs are exact", pick("fmr", "Farm-to-market roads")?.status === "exact" && pick("hfep", "Health facilities: our construction and equipment budget against the total printed")?.status === "exact"
+    && R.filter((r) => r.dataset === "nia" && r.check.startsWith("Irrigation program:")).length === 6 && R.filter((r) => r.dataset === "nia").every((r) => r.status === "exact"));
   const t = { exact: 0, explained: 0, mismatch: 0, info: 0 } as Record<string, number>;
   for (const r of R) t[r.status] = (t[r.status] ?? 0) + 1;
   process.stdout.write(`  ${t.exact} exact · ${t.explained} explained · ${t.info} info · ${t.mismatch} mismatch\n`);
@@ -495,7 +530,10 @@ async function main(): Promise<void> {
     const jurisCache = resolve(OUT, "juris-authors.json");
     check("juris-authors.json cached with the fetched_at the index cites", existsSync(jurisCache) && readJson<{ fetched_at: string }>(jurisCache).fetched_at === D.representatives_source.fetched_at);
     check("representatives_source notice says no per-member page exists and names the directory URL", /no per-member page/i.test(D.representatives_source.notice) && D.representatives_source.url === "https://bills.juris.ph/api/authors" && D.representatives_source.congress === 20);
-    check("scope notes separate the whole-department GAA/NEP basis from the HGAB operations population", D.scope_notes.length >= 3 && D.scope_notes.some((s) => /whole department/i.test(s)) && D.scope_notes.some((s) => /operations population/i.test(s)));
+    check("scope notes separate the whole-department GAA/NEP basis from the project-only House bill figures, ≤ 25 words each", D.scope_notes.length >= 3 && D.scope_notes.some((s) => /whole department/i.test(s)) && D.scope_notes.some((s) => /named projects only/i.test(s)) && D.scope_notes.every((s) => words(s) <= 25),
+      D.scope_notes.filter((s) => words(s) > 25).map((s) => `${words(s)} words: ${s}`).join("; "));
+    const longNotes = offices.flatMap((o) => o.notes.filter((n) => words(n) > 25).map((n) => `${o.id}: ${n}`));
+    check("office notes are plain sentences of at most 25 words", longNotes.length === 0, longNotes.slice(0, 3).join("; "));
     for (const r of D.residual) process.stdout.write(`  ${r.stage.padEnd(5)} FY${r.fy}: residual ${((1 - r.deo_php / r.total_php) * 100).toFixed(1)}% · unmatched ${peso(r.unmatched_php)}${r.unmatched_labels.length ? ` (${r.unmatched_labels.length} labels)` : ""}\n`);
   }
 

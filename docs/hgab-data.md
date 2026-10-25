@@ -20,21 +20,74 @@ checks is `docs/dpwh-nep-hb-2027-review.md`; the section plan is
   workbench's PDF extraction on every import; any `mismatch` fails the
   verifier and nothing uploads.
 
+## Reader-facing vs technical copy
+
+Every dataset meta (`HgabDatasetMeta`) carries two registers of text, and the
+UI must not mix them:
+
+- **Reader-facing** — `summary` (one sentence, at most 30 words), `one_row`
+  and `caveats[]`. This is what heroes, cards, KPIs and the hub's small print
+  show. Plain words anyone can follow: no 15-digit UACS codes, no page or
+  volume references, none of the pipeline's own vocabulary. The verifier fails
+  the build if any of the three contains a 15-digit code or one of these
+  words (whole words, case-insensitive): `PDF`, `annex`, `ledger`, `control`,
+  `bridge`, `MOOE`, `NEP Volume`, `I-B`, `I-C`, `II-A`, `II-B`, `OCR`. Two
+  plain-English uses are allowed because DPWH literally builds them: "flood
+  control" and the plural "bridges". The banned senses are the singular
+  "bridge" (the five-group bridge) and "control(s)" (printed controls).
+  Before the per-dataset checks, a self-test runs the filter on the wording
+  Jason rejected (the old HFEP `grain` and `scope`) and fails unless every
+  banned item is caught and "Roads, bridges and flood control projects."
+  passes, so a broken pattern cannot pass silently.
+- **Technical** — `grain` and `scope`, which keep the codes, pages, ledgers
+  and reading notes. They belong on the Methodology page and behind a Details
+  disclosure, never on a hero, card or KPI. `scope` must still state
+  everything the caveats summarise (the verifier's HFEP check reads the
+  ₱14,472,659,000 / ₱140,000 figures from it).
+
+The same split applies to the other strings the importer and the districts
+builder emit for readers:
+
+- Document `title` and `notes`: plain names, with the volume and the reading
+  kept ("House Bill 10858, Volume I-C: DPWH project list, second reading").
+  `volume` is never reworded — `pickHouseDoc()` in `src/lib/hgab-query.ts`
+  selects documents on it.
+- Reconciliation `check` and `note` (the Methodology table): one plain
+  sentence each, numbers exact, fund and program codes in parentheses at the
+  end. "Our data" is this portal's FY2027 NEP import (the DBM CSV, `ours_php`);
+  "the source" is the workbench's extraction from the printed documents
+  (`theirs_php`). "Program total:" rows are the six operations programs
+  (PREXC prefixes); "Program line:" rows are the 45 printed PAP controls
+  (`PLAIN_TERMS.pap`). The verifier's pickers follow the wording (`DPWH total`,
+  `DPWH capital outlays`, `Program total:`, `Program line:`,
+  `Farm-to-market roads`, `Health facilities: …`, `Irrigation program:`).
+- `controls_label`: "Program totals" (DPWH), "Regions", "Categories",
+  "Sub-programs". HFEP control `group` headers read "Funding columns, as
+  printed" and "Categories, as printed".
+- Printed labels (`ControlRow.label`: PAP names, region names, category rows,
+  funding columns) stay verbatim; only internal ids would be reworded, and
+  none are emitted as labels. The one composed label is an HFEP category
+  printed differently in the two documents: "<House label> (President's
+  proposal: <NEP label>)", both halves verbatim.
+- Districts `scope_notes` and `OfficeHistory.notes`: plain sentences of at
+  most 25 words each (the verifier enforces it). Their technical versions are
+  recorded under "Scope notes (technical record)" below.
+
 ## Scripts
 
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run import:hgab` | `scripts/import-hgab.ts` | Reads the workbench payloads, writes `data/hgab/2027/`. Flags: `--src=<clone>` (default `/tmp/dpwh-nep-review/repo`), `--out=data/hgab/2027`, `--nep=data/2027`, `--dataset=dpwh[,fmr,…]`, `--no-pdf` |
-| `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys and reconciliation. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`. Exit 1 on failure |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys, reconciliation and the reader-facing copy rules above. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`. Exit 1 on failure |
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
 
 Type-check and lint:
 
 ```sh
-npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts
+npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts
 npx tsc --noEmit --ignoreConfig --strict --target es2023 --module esnext --moduleResolution bundler \
   --types node --skipLibCheck --verbatimModuleSyntax --noUnusedLocals --noUnusedParameters --erasableSyntaxOnly \
-  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts
+  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts
 ```
 
 ## Layout
@@ -120,9 +173,11 @@ Per dataset, what each column is carried from:
   Totals, the bridge and the parquet sums are all on the facility ledgers
   (NEP ₱14,472,519,000, House ₱10,021,659,000) so the bridge identity holds on
   the compared population; the printed NEP annex control (₱14,472,659,000) is
-  kept in the controls table ("Funding column: Total"), the scope sentence and
+  kept in the controls table (the "Total" row under "Funding columns, as printed"), the scope sentence and
   an explained reconciliation row — the ₱140,000 gap is the documented Metro
-  Manila medical-equipment printing defect.
+  Manila medical-equipment printing defect (the workbench's
+  `metro_manila_med_overhang_140000`; the reader-facing note calls it a
+  printing error in a Metro Manila medical-equipment line).
   `printed` carries the HFEP activity rows (CO + MOOE) from the agency tables.
   NEP rows cite `nep2027-hfep` (the 13-page Volume II-A excerpt; page k =
   Volume II-A PDF page 726 + k).
@@ -203,7 +258,7 @@ unmatched residual is published for every year and stage.
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run build:hgab-districts` | `scripts/build-hgab-districts.ts` | Writes `districts.json`, `districts-manifest.json` (inputs with sha256, coverage, aliases) and caches `juris-authors.json`. Flags: `--src=<clone>`, `--out=data/hgab/2027`, `--gaa=data/18`, `--nep=data/2027/18`, `--contract=src/lib/hgab.ts`, `--offline` (reuse the cached juris response) |
-| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "districts.json (DEO lens)" section: 34 checks listed below. `--gaa=data/18` for the GAA yearly totals |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "districts.json (DEO lens)" section: 35 checks listed below. `--gaa=data/18` for the GAA yearly totals |
 
 ### Inputs
 
@@ -377,7 +432,80 @@ every printed DEO on a card; headline, attribution and co-served recomputed;
 label format; ≥ 250 seats joined (exact number and unmatched names printed);
 resolved reps carry member code and profile, ambiguous seats choose none;
 portraits carry attribution and licence; juris cache `fetched_at` matches;
-notice and scope notes say what they must.
+notice says what it must; scope notes separate the whole-department basis
+from the project-only House bill figures and, like every office note, run to
+at most 25 words.
+
+### Scope notes (technical record)
+
+`scope_notes` in `districts.json` and each office's `notes` are the plain
+reader-facing versions (at most 25 words each). The precise statements they
+stand for:
+
+1. FY2020–2026 figures are enacted GAA appropriations summed by DPWH operating
+   unit from the GAA operating-unit listing: the whole department, all funds
+   and all expense classes (source files in thousands of pesos, converted to
+   pesos).
+2. The FY2027 `nep` slot is the DBM NEP operating-unit listing on the same
+   whole-department basis (department total ₱643,953,276,000, including
+   automatic appropriations).
+3. The FY2027 `hgab3` slot and the `fy2027` block are the House bill third
+   reading against the NEP for the DPWH operations population compared in the
+   HGAB section (NEP ₱572,924,074,000, HGAB 3R ₱587,075,661,000): named
+   projects only, excluding personnel services, MOOE and other non-project
+   items. `fy2027.nep_php` is therefore smaller than the `nep` slot for the
+   same office and the two must never be added or compared as like for like.
+4. GAA, NEP and HGAB totals are each reconciled per year and stage:
+   `deo_php + central_office_php + regional_offices_php + unmatched_php =
+   total_php`. "Central Office" is the label matching `/^central office$/i`;
+   regional offices match `/regional office/i` (including "… - Proper"); the
+   BARMM regional grouping counts as regional and never as an office.
+5. Offices are joined by normalised name only (DEO expansion, ordinal words,
+   accents, hyphens, the "Las Pi±as" mojibake, " - Proper"). The explicit
+   aliases are declared in `ALIASES` and recorded on each office's
+   `aliases_used`; labels matching crosswalk legacy (predecessor) offices
+   with no district, and labels matching nothing, are listed in
+   `residual.unmatched_labels` (names; their money is in
+   `districts-manifest.json` `coverage[].unmatched_labels`), never assigned
+   to a successor. The plain note calls the aliases "known name changes":
+   one is a renamed label qualifier (Surigao del Norte 1st DEO), the other a
+   province renamed by RA 11297 (Compostela Valley → Davao de Oro).
+6. A Tier B office's figures are undivided and shared by every district it
+   serves; card headlines sum the serving offices' undivided totals and must
+   be labelled as a range when attribution is B or mixed. Districts linked
+   only to the BARMM regional grouping have attribution `none` and null
+   headlines.
+7. 69 paired FY2027 rows print a different implementing office on the NEP and
+   House sides; as in the HGAB section, both amounts are booked to the office
+   printed on the House side (the parquet's `office` column). HGAB statuses
+   are carried verbatim through the per-office bridge (fuzzy and ambiguous
+   rows sit in `house_only` as the contract maps them).
+8. The crosswalk's scanned allocation table (undated) is used for structure
+   only; none of its amounts appear here.
+
+Office `notes` stand for, in order: no operating unit under the office's name
+in the listed GAA years; a zero appropriation in the listed years (`php` null,
+never 0); no operating unit under the name in the FY2027 NEP listing; no rows
+under the office in the FY2027 comparison population (or, for BARMM, a
+`regional_group` with no ledger in any year); and the predecessor rule — a
+crosswalk legacy office (`legacy.status` superseded_by_split /
+renamed_province, with its law when recorded, e.g. RA 11297 for Compostela
+Valley → Davao de Oro) that names this office among its `candidateSuccessors`
+and whose labels, years and amounts sit in the residual (table above), never
+split between successors. "Before <year>" is used when the predecessor's last
+GAA year is before FY2026 and it has no FY2027 NEP row; otherwise "The budget
+also lists an undivided <office>".
+
+The plain notes print years without "FY" and name the stages as "enacted
+budget(s) <years>" (GAA), "2027 proposal" (NEP) and "2027 House bill" (HGAB
+3R). The predecessor note gives one combined amount; the per-label
+breakdown (e.g. Compostela Valley DEO FY2020–2021 ₱6,690,874,000 plus the
+Davao de Oro label FY2022 ₱2,267,594,000 = ₱8,958,468,000) is in
+`districts-manifest.json` (`coverage[].unmatched_labels`: label, php, kind,
+office); `residual[].unmatched_labels` in `districts.json` lists the label
+names only; the legacy status and law are in the crosswalk.
+`aliases_used` and `districts-manifest.json` keep the technical FY / GAA /
+NEP / HGAB 3R forms.
 
 ### Refresh
 
