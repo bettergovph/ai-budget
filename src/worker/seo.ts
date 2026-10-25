@@ -73,6 +73,7 @@ function canonicalFor(pathname: string): string {
   let p = pathname.replace(/\/+$/, "") || "/";
   if (p === "/" || p === "/2027") p = "/2027/overview";
   if (p === "/2027/explore") p = "/2027/search";
+  if (p === "/hgab") p = "/hgab/2027";
   return p === "/" ? CANONICAL_HOST + "/" : CANONICAL_HOST + p;
 }
 
@@ -142,6 +143,15 @@ const STATIC_SITEMAP_PATHS = [
   "/docs",
   "/glossary",
   "/hearings",
+  // FY2027 House bill section: the three static pages and the four dataset
+  // hubs. Record pages are too many (≈19k) to list; the hubs link to them.
+  "/hgab/2027",
+  "/hgab/2027/sources",
+  "/hgab/2027/methodology",
+  "/hgab/2027/dpwh",
+  "/hgab/2027/fmr",
+  "/hgab/2027/hfep",
+  "/hgab/2027/nia",
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

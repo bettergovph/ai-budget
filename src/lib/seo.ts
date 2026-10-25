@@ -99,6 +99,18 @@ const DEFAULT_META: PageMeta = {
     "the FY 2027 NEP proposal, drillable from national totals down to individual line items.",
 };
 
+/**
+ * The four HGAB datasets, keyed by their URL segment. Kept here (not imported
+ * from lib/hgab.ts) so this module stays free of `import.meta.env` and runs
+ * unchanged inside the Worker.
+ */
+const HGAB_DATASETS: Record<string, { short: string; long: string }> = {
+  dpwh: { short: "DPWH", long: "Department of Public Works and Highways national infrastructure" },
+  fmr: { short: "Farm-to-Market Roads", long: "Department of Agriculture farm-to-market roads" },
+  hfep: { short: "Health Facilities", long: "DOH Health Facilities Enhancement Program" },
+  nia: { short: "Irrigation", long: "National Irrigation Administration irrigation projects" },
+};
+
 /** Portal sub-view names, keyed by the path segment after /d/:id/. */
 const PORTAL_VIEWS: Record<string, string> = {
   overview: "Overview",
@@ -187,6 +199,58 @@ export function pageMeta(pathname: string): PageMeta {
       description:
         "One department's FY 2027 proposal vs its FY 2026 GAA baseline: agencies, programs, " +
         "expense classes, regions, and the biggest movers.",
+    };
+  }
+
+  // --- FY2027 House General Appropriations Bill (HB 10858) ---------------
+  if (p === "/hgab" || p === "/hgab/2027") {
+    return {
+      title: `House Appropriations Bill 2027 — What the House Changed, Project by Project · ${SITE}`,
+      description:
+        "House Bill 10858, the FY 2027 General Appropriations Bill at second and third reading, " +
+        "compared project by project against the President's NEP for DPWH infrastructure, " +
+        "farm-to-market roads, health facilities and irrigation: insertions, deletions, increases " +
+        "and cuts, each traceable to a PDF page.",
+    };
+  }
+  if (p === "/hgab/2027/sources") {
+    return {
+      title: `HGAB 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,
+      description:
+        "The source documents behind the FY 2027 House bill comparison — HB 10858 volumes at both " +
+        "readings and the DBM NEP volumes — with SHA-256 checksums, page ranges, downloadable " +
+        "JSON and parquet files, and how to cite a figure.",
+    };
+  }
+  if (p === "/hgab/2027/methodology") {
+    return {
+      title: `HGAB 2027 Methodology — How the House Bill Was Matched to the NEP · ${SITE}`,
+      description:
+        "How FY 2027 House bill rows were extracted and paired with NEP rows, the five-group bridge " +
+        "that reconciles House to NEP, the status vocabulary, the checks against this portal's NEP " +
+        "data, the limits, and the full disclaimer.",
+    };
+  }
+  const hgabRecord = /^\/hgab\/2027\/([a-z]+)\/p\/[^/]+$/.exec(p);
+  if (hgabRecord) {
+    const ds = HGAB_DATASETS[hgabRecord[1]];
+    return {
+      title: `${ds ? `${ds.short} project` : "Project"} — House Bill vs NEP, FY 2027 · ${SITE}`,
+      description:
+        `One ${ds ? ds.long : "FY 2027"} record across budget stages — NEP, House second and ` +
+        "third reading — with its matching status and the PDF page each amount was read from.",
+    };
+  }
+  const hgabDataset = /^\/hgab\/2027\/([a-z]+)$/.exec(p);
+  if (hgabDataset) {
+    const ds = HGAB_DATASETS[hgabDataset[1]];
+    const short = ds?.short ?? hgabDataset[1].toUpperCase();
+    return {
+      title: `${short} · House Bill vs NEP, FY 2027 · ${SITE}`,
+      description:
+        `${ds ? ds.long : "FY 2027 program"} in House Bill 10858 against the NEP: printed controls, ` +
+        "every project with its matching status, the largest insertions, deletions, increases and " +
+        "cuts, and the PDF page behind each amount.",
     };
   }
 

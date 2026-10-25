@@ -8,7 +8,11 @@ export default function SiteFooter({ source }: SiteFooterProps = {}) {
   // Methodology lives here rather than in the navbar. Each half of the site
   // has its own methodology page; link the one for the section you are in.
   const { pathname } = useLocation();
-  const methodologyTo = pathname.startsWith('/2027') ? '/2027/methodology' : '/methodology';
+  const methodologyTo = pathname.startsWith('/hgab')
+    ? '/hgab/2027/methodology'
+    : pathname.startsWith('/2027')
+    ? '/2027/methodology'
+    : '/methodology';
 
   return (
     <footer className="site-footer">

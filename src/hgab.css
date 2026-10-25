@@ -1,0 +1,786 @@
+/* FY2027 House General Appropriations Bill section (/hgab).
+   A sibling of the /2027 microsite: same tokens (--ink, --rule, --accent,
+   --positive/--negative, --font-*), same hero band (.nep-dept-hero), same
+   tables (.nep-table) and section rhythm (.nep-section). Everything here is
+   scoped to .hgab-* so it cannot leak into the NEP or GAA views.
+
+   The hub (`/hgab/2027/:dataset`) and record pages add their own rules under
+   .hgab-ds-* / .hgab-rec-* in src/hgab-dataset.css, which imports this file. */
+
+:root {
+  /* One accent per bridge group. All but the violet are existing tokens or a
+     mix of them: insertions take the warm stage palette, deletions a muted
+     --negative, increases/decreases the portal's own up/down pair. */
+  --hgab-house-only: var(--stage-4);
+  --hgab-nep-only: color-mix(in srgb, var(--negative) 62%, var(--ink-3));
+  --hgab-unchanged: var(--ink-3);
+  --hgab-increased: var(--positive);
+  --hgab-decreased: var(--negative);
+  --hgab-scope-review: #5b4a9e;
+}
+
+/* Group → colour, read by tiles, chips and anything else that says
+   `is-<group>`. Set the custom property once; the components use it. */
+.is-house_only   { --hgab-group: var(--hgab-house-only); }
+.is-nep_only     { --hgab-group: var(--hgab-nep-only); }
+.is-unchanged    { --hgab-group: var(--hgab-unchanged); }
+.is-increased    { --hgab-group: var(--hgab-increased); }
+.is-decreased    { --hgab-group: var(--hgab-decreased); }
+.is-scope_review { --hgab-group: var(--hgab-scope-review); }
+
+/* --- hero ---------------------------------------------------------------- */
+
+/* Pages in this section reuse .nep-dept-hero; these only widen the dek for
+   the longer sentences the bill needs and style the breadcrumb eyebrow. */
+.hgab-hero .nep-dept-hero-dek { max-width: 840px; line-height: 1.55; }
+.hgab-hero .nep-dept-hero-title { max-width: 1100px; }
+.hgab-crumb { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+.hgab-crumb a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+}
+.hgab-crumb a:hover { border-bottom-color: #fff; color: #fff; }
+.hgab-crumb-sep { opacity: 0.5; }
+.hgab-crumb-here { color: #fff; }
+
+/* --- stage strip: where this document sits in the budget cycle ----------- */
+
+.hgab-stage-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  counter-reset: hgab-stage;
+}
+.hgab-stage-strip li {
+  position: relative;
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border-right: 1px solid var(--rule);
+  counter-increment: hgab-stage;
+}
+.hgab-stage-strip li:last-child { border-right: none; }
+.hgab-stage-strip li::before {
+  content: counter(hgab-stage, decimal-leading-zero);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+.hgab-stage-strip li.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+.hgab-stage-strip li.is-current::before { color: var(--accent); }
+.hgab-stage-strip li.is-future .hgab-stage-name,
+.hgab-stage-strip li.is-future .hgab-stage-meta { color: var(--ink-mute); }
+.hgab-stage-name {
+  display: block;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+a.hgab-stage-name { text-decoration: none; }
+a.hgab-stage-name:hover { color: var(--accent); }
+.hgab-stage-meta {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.hgab-stage-here {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* --- dataset cards (overview) ------------------------------------------- */
+
+.hgab-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 8px;
+}
+.hgab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 20px 22px 18px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--ink);
+}
+.hgab-card-agency {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+.hgab-card-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+.hgab-card-title a { color: var(--ink); text-decoration: none; }
+.hgab-card-title a:hover { color: var(--accent); }
+.hgab-card-grain {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-3);
+  margin: 6px 0 0;
+}
+.hgab-card-grain strong { color: var(--ink-2); font-weight: 600; }
+
+.hgab-card-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.hgab-card-stage {
+  min-width: 0;
+  padding: 12px 14px 12px 0;
+  margin-left: 14px;
+  border-right: 1px solid var(--rule-soft);
+}
+.hgab-card-stage:first-child { margin-left: 0; }
+.hgab-card-stage:last-child { border-right: none; }
+.hgab-card-stage dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+.hgab-card-stage dd { margin: 0; }
+.hgab-amt {
+  display: block;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 26px;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.hgab-amt.is-empty { color: var(--ink-mute); }
+.hgab-rows {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-delta {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+.hgab-delta.is-up { color: var(--positive); }
+.hgab-delta.is-down { color: var(--negative); }
+/* "+3.6B (+22.7% vs NEP)" on one line under a stage figure. */
+.hgab-delta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin-top: 4px;
+}
+.hgab-delta-line .hgab-delta { display: inline; margin-top: 0; }
+
+.hgab-card-scope {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin: 0;
+}
+.hgab-card-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.hgab-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.hgab-cta:hover { background: var(--ink); color: var(--paper); }
+.hgab-cta-primary { background: var(--ink); color: var(--paper); }
+.hgab-cta-primary:hover { background: var(--accent); border-color: var(--accent); }
+.hgab-cta-quiet { border-color: var(--rule); color: var(--ink-2); }
+.hgab-cta-quiet:hover { border-color: var(--ink); }
+
+/* --- the five-group bridge --------------------------------------------- */
+
+.hgab-bridge {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.hgab-bridge-cell {
+  --hgab-group: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px 11px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid var(--hgab-group);
+}
+.hgab-bridge-label {
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+/* Sub-label in the hero eyebrow's small caps. */
+.hgab-bridge-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hgab-bridge-value {
+  margin-top: 6px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hgab-group);
+}
+.hgab-bridge-rows {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.hgab-bridge-sides {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hgab-bridge-net {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-bridge-net strong {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.hgab-bridge-net .is-up { color: var(--positive); }
+.hgab-bridge-net .is-down { color: var(--negative); }
+.hgab-bridge-net .hgab-delta { display: inline; margin-top: 0; font-weight: 600; }
+/* Inside a half-width card six tiles crowd; two rows of three read better. */
+.hgab-card .hgab-bridge { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* --- status chips ------------------------------------------------------- */
+
+.hgab-chip {
+  --hgab-group: var(--ink-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--hgab-group) 45%, transparent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hgab-group) 9%, var(--paper));
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--hgab-group);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Held out of the headline counts: fuzzy and ambiguous rows. */
+.hgab-chip.is-held {
+  border-style: dashed;
+  background: transparent;
+}
+
+/* --- stage amounts for one row ----------------------------------------- */
+
+.hgab-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+}
+.hgab-stages > div { display: flex; flex-direction: column; min-width: 0; }
+.hgab-stages dt {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-stages dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.hgab-stages .is-empty dd { color: var(--ink-mute); }
+
+/* --- disclaimer: a quiet paper box -------------------------------------- */
+
+.hgab-disclaimer {
+  max-width: 900px;
+  margin-top: 44px;
+  padding: 16px 20px 18px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-3);
+}
+.hgab-disclaimer-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 6px;
+}
+.hgab-disclaimer p {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+}
+.hgab-disclaimer a { color: var(--accent); }
+.hgab-disclaimer.is-compact { margin-top: 20px; padding: 10px 14px; }
+.hgab-disclaimer.is-compact .hgab-disclaimer-eyebrow { display: none; }
+.hgab-disclaimer.is-compact p { font-size: 12px; }
+
+/* --- dataset switch: a pill row --------------------------------------- */
+
+.hgab-dataset-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hgab-dataset-switch a {
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.hgab-dataset-switch a:hover { border-color: var(--accent); color: var(--accent); }
+.hgab-dataset-switch a.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+/* --- mobile drawer: the section's links -------------------------------- */
+
+.hgab-drawer-nav .hgab-drawer-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 0 0 4px;
+}
+.hgab-drawer-nav a {
+  padding: 6px 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.hgab-drawer-nav a.active { color: var(--accent); font-weight: 600; }
+
+/* --- reconciliation (overview summary + methodology table) ------------- */
+
+.hgab-recon-note {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 760px;
+  margin: 0 0 8px;
+}
+/* The reconciliation section steps out of the 900px prose column to the
+   page's content width (1440 max, the same gutters as .nep-main). The extra
+   16px keeps the breakout inside the viewport when a scrollbar is present. */
+.hgab-prose .hgab-breakout {
+  width: min(calc(100vw - 80px), 1440px);
+  margin-left: calc(50% - min(50vw - 40px, 720px));
+}
+.hgab-prose .hgab-breakout > p { max-width: 900px; }
+@media (max-width: 720px) {
+  .hgab-prose .hgab-breakout {
+    width: calc(100vw - 44px);
+    margin-left: calc(50% - (50vw - 22px));
+  }
+}
+/* Seven columns, three of them full-peso figures: below its natural width the
+   table scrolls inside .nep-table-wrap rather than crushing the note column. */
+.hgab-recon-table { min-width: 1080px; }
+.hgab-recon-table td.num { white-space: nowrap; }
+.hgab-recon-table td:first-child,
+.hgab-recon-table td:nth-child(6) { white-space: nowrap; }
+.hgab-recon-table .nep-td-name { min-width: 200px; }
+/* The note carries the explanation, so it takes the width the figures leave. */
+.hgab-recon-table .hgab-td-note {
+  width: 38%;
+  min-width: 280px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.nep-recon-info {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+.nep-recon-explained {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--stage-5);
+  font-weight: 500;
+}
+
+/* --- documents (overview) ---------------------------------------------- */
+
+.hgab-docs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+}
+.hgab-docs h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 10px;
+}
+.hgab-doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+.hgab-doc-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgab-doc-title {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink);
+}
+.hgab-doc-meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+.hgab-doc-open {
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hgab-doc-open:hover { color: var(--accent-deep); }
+
+/* --- sources page ------------------------------------------------------ */
+
+.hgab-sha {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-copy {
+  all: unset;
+  cursor: pointer;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  transition: border-color 0.12s, color 0.12s;
+}
+.hgab-copy:hover { border-color: var(--accent); }
+.hgab-copy.is-done { color: var(--positive); border-color: var(--positive); }
+
+.hgab-downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px 32px;
+  margin-top: 8px;
+}
+.hgab-dl-group {
+  border-top: 2px solid var(--ink);
+  padding-top: 10px;
+  min-width: 0;
+}
+.hgab-dl-group h3 {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  margin: 0 0 2px;
+}
+.hgab-dl-group .hgab-dl-sub {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  margin: 0 0 8px;
+}
+.hgab-dl-group ul { list-style: none; margin: 0; padding: 0; }
+.hgab-dl-group li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+.hgab-dl-group li a {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+.hgab-dl-group li a:hover { text-decoration: underline; }
+.hgab-dl-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.hgab-cite {
+  max-width: 900px;
+  margin-top: 8px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.hgab-cite p {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 8px;
+}
+.hgab-cite pre {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  background: var(--paper-3);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hgab-cite ol { padding-left: 20px; margin: 0; }
+.hgab-cite ol li {
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+
+/* --- methodology page -------------------------------------------------- */
+
+/* The sticky masthead would hide an anchored heading; leave room for it. */
+.hgab-prose section[id] { scroll-margin-top: 190px; }
+.hgab-vocab-table td:first-child { white-space: nowrap; }
+/* Inside the 900px prose column the long codes and chips would squeeze the
+   meaning column to nothing: let chips wrap, give the meaning a floor, and
+   let the wrapper scroll sideways if it still does not fit. */
+.hgab-vocab-table .nep-td-dim { max-width: none; min-width: 240px; white-space: normal; }
+.hgab-vocab-table .hgab-chip { white-space: normal; text-align: left; line-height: 1.3; }
+.hgab-vocab-table code { white-space: nowrap; }
+.hgab-trace-table td:nth-child(3) { white-space: nowrap; }
+.hgab-trace-table td:nth-child(2) { min-width: 150px; }
+.hgab-identity {
+  margin: 14px 0;
+  padding: 14px 18px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink);
+  overflow-x: auto;
+}
+.hgab-identity .is-house_only,
+.hgab-identity .is-nep_only,
+.hgab-identity .is-increased,
+.hgab-identity .is-decreased,
+.hgab-identity .is-scope_review { color: var(--hgab-group); font-weight: 600; }
+.hgab-notice h3 {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  margin: 22px 0 6px;
+}
+.hgab-notice p + h3 { margin-top: 22px; }
+.hgab-notice-stamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+/* --- motion ------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .hgab-cta,
+  .hgab-copy,
+  .hgab-dataset-switch a { transition: none; }
+}
+
+/* --- responsive --------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .hgab-cards { grid-template-columns: 1fr; }
+  .hgab-docs { grid-template-columns: 1fr; gap: 24px; }
+  .hgab-card .hgab-bridge { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .hgab-bridge,
+  .hgab-card .hgab-bridge { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hgab-stage-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .hgab-stage-strip li { border-bottom: 1px solid var(--rule); }
+  .hgab-stage-strip li:nth-child(3n) { border-right: none; }
+  .hgab-stage-strip li:nth-last-child(-n + 3) { border-bottom: none; }
+}
+
+@media (max-width: 720px) {
+  .hgab-card { padding: 16px 14px 14px; }
+  .hgab-card-title { font-size: 20px; }
+  .hgab-amt { font-size: 20px; }
+  .hgab-card-stage { padding: 10px 8px 10px 0; margin-left: 8px; }
+  .hgab-card-stage dt { font-size: 9px; letter-spacing: 0.12em; }
+  .hgab-stage-strip li { padding: 10px 12px 12px; }
+  .hgab-stage-name { font-size: 13.5px; }
+  .hgab-stage-meta { font-size: 11px; }
+  .hgab-cta { padding: 7px 11px; font-size: 12px; }
+  .hgab-prose section[id] { scroll-margin-top: 120px; }
+}
+
+@media (max-width: 560px) {
+  .hgab-bridge,
+  .hgab-card .hgab-bridge { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgab-stage-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgab-stage-strip li:nth-child(3n) { border-right: 1px solid var(--rule); }
+  .hgab-stage-strip li:nth-child(2n) { border-right: none; }
+  .hgab-stage-strip li:nth-last-child(-n + 3) { border-bottom: 1px solid var(--rule); }
+  .hgab-stage-strip li:nth-last-child(-n + 2) { border-bottom: none; }
+  .hgab-card-stages { grid-template-columns: 1fr; }
+  .hgab-card-stage {
+    margin-left: 0;
+    padding: 8px 0;
+    border-right: none;
+    border-bottom: 1px solid var(--rule-soft);
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr);
+    align-items: center;
+  }
+  .hgab-card-stage:last-child { border-bottom: none; }
+  .hgab-card-stage dt { margin-bottom: 0; }
+  .hgab-amt { font-size: 18px; }
+}
