@@ -265,10 +265,33 @@ number in them; prose is capped at two sentences a chapter; every figure is
 computed at render time. The dense dashboard is kept at `/hgab/2027/overview`
 and linked from the finale as "Dashboard view".
 
+**Plain language, navigation, maps and regions (same day, after review).**
+
+- *Plain language.* Every program carries a reader-facing `summary`,
+  `one_row` and `caveats`; `grain` and `scope` stay as the technical record
+  and appear only inside "Details for analysts" or on Methodology. The status
+  vocabulary reads "In the House bill only", "Same amount in both", "Higher in
+  the House bill", "Different stretch of the same road". The verifier rejects
+  reader-facing copy containing codes, volume names or pipeline words.
+- *Navigation.* Each program in the section sub-nav is a dropdown of its views
+  (Overview, Projects, Changes, Map, Documents, and 2nd vs 3rd reading for
+  DPWH); the in-page tab row and the program pills under the hero are gone.
+- *Maps.* `scripts/build-hgab-geo.ts` writes province outlines (PSA boundaries
+  as of 31 December 2023 via philippines-json-maps, MIT; Negros Island Region
+  and Sulu reassigned as the lists print them) and a `map.json` per program.
+  The Map tab shades regions by the change or by either version and draws the
+  projects whose documents print coordinates: every farm-to-market road and
+  2,348 DPWH projects. Health facilities are shown by region only; irrigation
+  prints neither region nor coordinates, and its tab says so. Nothing is
+  geocoded from names, and region figures add back to each program's totals.
+- *Districts by region.* The district cards are grouped by region with jump
+  links and region subtotals (each office counted once), and the chart key is
+  one line.
+
 **Deferred.**
 
-- The map — FMR coordinates, the GPS inventory. `has_map` is carried in the
-  dataset metadata so the hub can grow a map without a schema change.
+- The GPS inventory map across every dataset, and flags for printed
+  coordinates that fall outside their printed region.
 - Public API and MCP tools over the HGAB tree. The data is already shaped for
   it; a thin Worker layer over `overview.json` and the parquet is about a day
   when wanted.
