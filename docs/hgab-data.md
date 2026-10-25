@@ -78,16 +78,17 @@ builder emit for readers:
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run import:hgab` | `scripts/import-hgab.ts` | Reads the workbench payloads, writes `data/hgab/2027/`. Flags: `--src=<clone>` (default `/tmp/dpwh-nep-review/repo`), `--out=data/hgab/2027`, `--nep=data/2027`, `--dataset=dpwh[,fmr,…]`, `--no-pdf` |
-| `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys, reconciliation and the reader-facing copy rules above. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`. Exit 1 on failure |
-| `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys, reconciliation and the reader-facing copy rules above. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`, `--d1=local` (also check the local D1, see "D1 layer"). Exit 1 on failure |
+| `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
+| `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
 
 ```sh
-npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts
+npx eslint scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts
 npx tsc --noEmit --ignoreConfig --strict --target es2023 --module esnext --moduleResolution bundler \
   --types node --skipLibCheck --verbatimModuleSyntax --noUnusedLocals --noUnusedParameters --erasableSyntaxOnly \
-  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts
+  scripts/import-hgab.ts scripts/verify-hgab.ts scripts/upload-hgab-to-r2.ts scripts/build-hgab-districts.ts scripts/build-hgab-d1.ts
 ```
 
 ## Layout
@@ -518,6 +519,86 @@ NEP / HGAB 3R forms.
 4. When adding an alias, add one `ALIASES` entry with its basis; when the
    crosswalk gains a legacy block or alias that resolves one of the labels
    above, the join picks it up without code changes.
+
+## D1 layer (public API and MCP)
+
+The pages read the static tree from R2; the Worker cannot read parquet, so
+`/api/v1/hgab/2027/…` and the MCP tools read `hgab_*` tables in D1. The
+contract (DDL, row counts, endpoint rules) is `docs/hgab-api.md`.
+
+- **In D1:** everything the API returns. That is the overview and dataset
+  meta (bridge, readings, not-on-map, map notes), documents with `pdf_url`,
+  controls, dims, the 18 regions per dataset, one `hgab_projects` row per
+  parquet row (the parquet columns plus `region_key`, `bridge_group`,
+  `held`, `house_php` and the printed `lon`/`lat`), each row's
+  `record_json` in `hgab_records`, reconciliation, district cards, offices
+  and the residual. Nothing is re-derived. Every value is a copy of the JSON
+  and parquet above.
+- **Only on R2:** the parquet and JSON the browser reads, the province
+  outlines (`geo/`), map dots with their road lines, the summaries' `top`
+  lists (the API ranks rows in SQL instead), and the PDFs. The API links to
+  the PDFs by `pdf_url`.
+- NIA's `map.json` lists no regions, so its 18 `hgab_regions` rows are empty
+  and its money is in `hgab_datasets.not_on_map_json`. The bridge in
+  `bridge_json` counts unconfirmed matches (`held = 1`, DPWH only: 389 rows,
+  ₱10,517,119,000) under `house_only`, as the pages do.
+
+```sh
+npm run build:hgab-d1                                                     # → data/hgab/2027/d1-import.sql (~88 MB, ~1,040 statements, ~2 s)
+npx wrangler d1 execute budget --local --file=data/hgab/2027/d1-import.sql  # ~65 s, ~1.2 GB RSS
+npm run verify:hgab -- --src=/tmp/dpwh-nep-review/repo --d1=local          # 52 D1 checks on top of the tree checks
+```
+
+Statement size: D1 rejects statements over 100,000 bytes. The builder cuts
+INSERT batches at 90,000 bytes and fails if any statement reaches 95,000. A
+single `record_json` is at most 26 KB, so each `hgab_records` batch holds a
+few dozen rows. Text literals double their single quotes and nothing else.
+The builder type-checks every value against its column's declared type and
+NOT NULL constraint, and refuses NUL characters, lone surrogates and the text
+`BEGIN TRANSACTION` (wrangler rewrites that text before splitting).
+
+The builder also asserts that its DDL equals the contract's SQL block word
+for word. It checks its replicas of `traceInfo` and `regionKeyOf` against
+the contract source, on probe labels and on every label in the data. It
+reads `PLAIN_TERMS` from the contract and the notice from `DisclaimerNotice`.
+
+The file drops and recreates only `hgab_*` tables, so reloading is
+idempotent and leaves the GAA, `nep_*`, `budget_cycle_*` and hearings tables
+alone. One file loads fine locally. If it ever does not, run
+`npm run build:hgab-d1 -- --split-mb=20`. That writes
+`d1-import-01.sql` (schema only) and numbered data files after it; load them
+in order and stop at the first failure:
+
+```sh
+for f in data/hgab/2027/d1-import-*.sql; do npx wrangler d1 execute budget --local --file="$f" || break; done
+```
+
+`.wrangler` is shared with the main checkout, so `--local` loads the same dev
+database `wrangler dev` uses. Production is `--remote` with the same file,
+run by hand after review (`docs/hgab-api.md` "Loading"). No script here
+touches the remote database, and `verify:hgab` accepts only `--d1=local`.
+`upload:hgab` skips `d1-import*.sql`: the export is never served from R2.
+
+`--d1=local` queries through `npx wrangler d1 execute budget --local --json`
+and checks:
+
+- the 12 tables, the 6 indexes, and the contract row counts in total and per
+  dataset;
+- meta, datasets, documents, reconciliation, controls, dims, regions,
+  districts, offices and the residual, row for row against the JSON;
+- all 20,431 project rows, column for column against the parquet. The
+  derived columns are checked against `map.json` and `TRACE_LABELS`;
+- stage totals per dataset;
+- the bridge recomputed from the rows, with unconfirmed matches in
+  `house_only`, against `bridge_json`;
+- unconfirmed rows only in `house_only`;
+- regions plus not-on-map adding back to the totals and record counts;
+- the residual identity, and Σ office slots = `deo_php`, in SQL;
+- that records and projects join both ways;
+- `record_json` byte-equal to the parquet for 20 random rows plus the
+  longest, one with a quote and one with non-ASCII text.
+
+Without the flag the verifier runs exactly as before.
 
 ## Known limits
 

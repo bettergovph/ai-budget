@@ -24,8 +24,17 @@
  *     yearly totals), per-office bridge identity and parquet tie-out,
  *     headline sums, and ≥ 250 of 254 representatives joined.
  *
+ *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
+ *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
+ *     `wrangler d1 execute budget --local --json`: contract row counts, every
+ *     project row column-for-column against the parquet, stage totals, the
+ *     bridge recomputed from the rows, regions + not_on_map = totals, the
+ *     districts/offices/residual, records ⇄ projects, and 20 random record_json
+ *     strings byte-equal to the parquet. Skipped (silently) without the flag.
+ *
  *   npm run verify:hgab
  *   npm run verify:hgab -- --out=data/hgab/2027 --src=/tmp/dpwh-nep-review/repo --no-pdf
+ *   npm run verify:hgab -- --d1=local
  *
  * Exit code is non-zero if any check fails. `--src` is optional: without the
  * workbench checkout the main_overview comparison is skipped and reported.
@@ -33,7 +42,8 @@
  * districts residual must reproduce (skipped and reported when absent).
  */
 
-import { DuckDBInstance } from "@duckdb/node-api";
+import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
@@ -48,6 +58,9 @@ const CHECK_PDF = !argv.includes("--no-pdf");
 const FULL_HASH = argv.includes("--hash-pdfs");
 /** Opt-in network probe: does the portrait host send the CORP/CORS header this site's COEP needs? Informational only. */
 const PROBE_PORTRAITS = argv.includes("--probe-portraits");
+/** `--d1=local`: also verify the hgab_* tables in the local D1. Only `local` exists; nothing here touches a remote database. */
+const D1_MODE = arg("d1", "");
+if (D1_MODE && D1_MODE !== "local") throw new Error(`--d1=${D1_MODE} is not supported; only --d1=local (the remote database is never queried here)`);
 
 type DatasetKey = "dpwh" | "fmr" | "hfep" | "nia";
 const DATASETS: readonly DatasetKey[] = ["dpwh", "fmr", "hfep", "nia"];
@@ -537,9 +550,397 @@ async function main(): Promise<void> {
     for (const r of D.residual) process.stdout.write(`  ${r.stage.padEnd(5)} FY${r.fy}: residual ${((1 - r.deo_php / r.total_php) * 100).toFixed(1)}% · unmatched ${peso(r.unmatched_php)}${r.unmatched_labels.length ? ` (${r.unmatched_labels.length} labels)` : ""}\n`);
   }
 
+  if (D1_MODE === "local") await verifyD1(overview, c);
+
   c.closeSync(); db.closeSync();
   process.stdout.write(`\n${checks - failures}/${checks} checks passed${failures ? ` — ${failures} FAILED` : ""}\n`);
   if (failures) process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// D1 layer (--d1=local): the hgab_* tables `npm run build:hgab-d1` writes
+// ---------------------------------------------------------------------------
+
+const EXPECTED_D1 = {
+  tables: ["hgab_controls", "hgab_datasets", "hgab_dims", "hgab_districts", "hgab_documents", "hgab_meta", "hgab_offices", "hgab_projects", "hgab_reconciliation", "hgab_records", "hgab_regions", "hgab_residual"],
+  indexes: ["hgab_districts_region", "hgab_projects_delta", "hgab_projects_group", "hgab_projects_house", "hgab_projects_office", "hgab_projects_region"],
+  /** docs/hgab-api.md "Expected row counts"; hgab_dims is checked against the summaries instead. */
+  rows: {
+    hgab_meta: 1, hgab_datasets: 4, hgab_documents: 8, hgab_controls: 80, hgab_regions: 72, hgab_projects: 20_431, hgab_records: 20_431,
+    hgab_reconciliation: 69, hgab_districts: 254, hgab_offices: 200, hgab_residual: 9,
+  } as Record<string, number>,
+  projects: { dpwh: 17_613, fmr: 1_059, hfep: 746, nia: 1_013 } as Record<DatasetKey, number>,
+  controls: { dpwh: 46, fmr: 16, hfep: 12, nia: 6 } as Record<DatasetKey, number>,
+  /** Unconfirmed matches (held = 1) sit inside house_only, as the pages count them: DPWH only. */
+  held: { dpwh: { rows: 389, php: 10_517_119_000 }, fmr: { rows: 0, php: 0 }, hfep: { rows: 0, php: 0 }, nia: { rows: 0, php: 0 } } as Record<DatasetKey, { rows: number; php: number }>,
+  pdfBase: "https://budget-assets.bettergov.ph/hgab/2027/pdf/",
+  sampleRecordsPerDataset: 5,
+};
+
+type D1Row = Record<string, unknown>;
+
+/** Run statements against the local D1 (one wrangler invocation) and return each statement's rows. */
+function d1Local(statements: string[]): D1Row[][] {
+  const sql = statements.map((s) => s.trim().replace(/;$/, "")).join(";\n");
+  let out: string;
+  try {
+    out = execFileSync("npx", ["wrangler", "d1", "execute", "budget", "--local", "--json", "--command", sql],
+      { encoding: "utf8", maxBuffer: 1 << 30, stdio: ["ignore", "pipe", "pipe"] });
+  } catch (e) {
+    const err = e as { stdout?: string; stderr?: string; message: string };
+    throw new Error(`wrangler d1 execute --local failed: ${(err.stdout || err.stderr || err.message).trim().slice(0, 600)}`, { cause: e });
+  }
+  const parsed = JSON.parse(out) as Array<{ results: D1Row[]; success: boolean }> | { error?: { text?: string } };
+  if (!Array.isArray(parsed)) throw new Error(`wrangler d1 execute --local: ${JSON.stringify(parsed).slice(0, 600)}`);
+  if (parsed.length !== statements.length || parsed.some((r) => !r.success)) throw new Error(`wrangler returned ${parsed.length} results for ${statements.length} statements`);
+  return parsed.map((r) => r.results);
+}
+
+/** Contract constants the D1 rows must agree with, read from src/lib/hgab.ts. */
+function contractD1(path: string): {
+  regionOrder: string[]; regionLabels: Record<string, { short: string; name: string }>;
+  traceGroups: Record<string, { group: string; held: boolean }>; plainTerms: Record<string, string>;
+} {
+  const src = readFileSync(path, "utf8");
+  const block = (re: RegExp, what: string) => {
+    const m = re.exec(src);
+    if (!m) throw new Error(`${what} not found in ${path}`);
+    return m[1];
+  };
+  const regionOrder = [...block(/export const REGION_ORDER[^=]*=\s*\[([\s\S]*?)\];/, "REGION_ORDER").matchAll(/'([A-Z-]+)'/g)].map((m) => m[1]);
+  const regionLabels: Record<string, { short: string; name: string }> = {};
+  for (const m of block(/export const REGION_LABELS[^=]*=\s*\{([\s\S]*?)\n\};/, "REGION_LABELS").matchAll(/^\s*'?([A-Z-]+)'?:\s*\{\s*short:\s*'([^']*)',\s*name:\s*'([^']*)'\s*\},?\s*$/gm)) {
+    regionLabels[m[1]] = { short: m[2], name: m[3] };
+  }
+  const traceGroups: Record<string, { group: string; held: boolean }> = {};
+  for (const m of block(/export const TRACE_LABELS[^=]*=\s*\{([\s\S]*?)\n\};/, "TRACE_LABELS").matchAll(/^\s*([a-z0-9_]+):\s*\{.*?\bgroup:\s*'([a-z_]+)'(?:,\s*held:\s*(true|false))?/gm)) {
+    traceGroups[m[1]] = { group: m[2], held: m[3] === "true" };
+  }
+  const plainTerms: Record<string, string> = {};
+  for (const m of block(/export const PLAIN_TERMS[^=]*=\s*\{([\s\S]*?)\n\};/, "PLAIN_TERMS").matchAll(/^\s*([a-z_]+):\s*\{\s*term:\s*'([^']*)'/gm)) plainTerms[m[1]] = m[2];
+  return { regionOrder, regionLabels, traceGroups, plainTerms };
+}
+
+const normVal = (v: unknown) => (typeof v === "bigint" ? Number(v) : v === undefined ? null : v);
+const shortVal = (v: unknown) => { const s = typeof v === "string" ? JSON.stringify(v) : String(normVal(v)); return s.length > 80 ? `${s.slice(0, 77)}…` : s; };
+/** Fields of `expected` that differ in `actual` (=== after bigint → number). */
+function rowDiff(actual: D1Row | undefined, expected: Record<string, unknown>): string[] {
+  if (!actual) return ["row missing"];
+  return Object.keys(expected).filter((k) => normVal(actual[k]) !== normVal(expected[k])).map((k) => `${k}: D1 ${shortVal(actual[k])} vs ${shortVal(expected[k])}`);
+}
+const json = (v: unknown) => JSON.stringify(v);
+const jsonOrNull = (v: unknown) => (v == null ? null : JSON.stringify(v));
+const firstFew = (xs: string[], n = 3) => (xs.length > n ? `${xs.slice(0, n).join("; ")} … (+${xs.length - n} more)` : xs.join("; "));
+
+interface MapJson {
+  dataset: DatasetKey; house_stage: string; points_note: string; placeable: boolean; note: string; points: Array<{ id: string; lon: number; lat: number }>;
+  regions: Array<{ key: string; label: string; nep_php: number | null; house_php: number | null; delta_php: number | null; nep_rows: number; house_rows: number; source_labels: string[] }>;
+  not_on_map: { label: string; nep_php: number | null; house_php: number | null; nep_rows: number; house_rows: number } | null;
+}
+interface SummaryD1 {
+  controls: Array<{
+    id: string; label: string; group: string | null; nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null;
+    delta_php: number | null; reading_delta_php: number | null; nep_page: number | null; house_pages: number[];
+  }>;
+  dims: Record<string, Array<{ label: string; nep_php: number; house_php: number; nep_records: number; house_records: number }>>;
+  readings: ({ third_only: Array<{ id: string }> } & Record<string, unknown>) | null;
+}
+interface RawOverview {
+  built_at: string; source_repo: string; source_commit: string; fiscal_year: number;
+  datasets: Array<Meta & { label: string; short: string; agency: string }>;
+  documents: Array<{ key: string; title: string; stage: string; reading: number | null; volume: string | null; pages: unknown; sha256: string; bytes: number; source_url: string | null; notes: string | null }>;
+  reconciliation: Recon[];
+}
+
+async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nD1 (local): hgab_* tables from npm run build:hgab-d1\n");
+  const t0 = performance.now();
+  const raw = readJson<RawOverview>(resolve(OUT, "overview.json"));
+  const summaries = Object.fromEntries(DATASETS.map((k) => [k, readJson<SummaryD1>(resolve(OUT, k, "summary.json"))])) as Record<DatasetKey, SummaryD1>;
+  const maps = Object.fromEntries(DATASETS.map((k) => [k, readJson<MapJson>(resolve(OUT, k, "map.json"))])) as Record<DatasetKey, MapJson>;
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  const K = contractD1(CONTRACT);
+  const reload = "run: npm run build:hgab-d1 && npx wrangler d1 execute budget --local --file=data/hgab/2027/d1-import.sql";
+
+  let tables: string[];
+  try {
+    tables = d1Local([`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'hgab%' ORDER BY name`])[0].map((r) => String(r.name));
+  } catch (e) {
+    check("local D1 reachable", false, `${(e as Error).message}\n      ${reload}`);
+    return;
+  }
+  check(`the 12 contract tables are loaded (${EXPECTED_D1.tables.length})`, tables.join(",") === EXPECTED_D1.tables.join(","), `${tables.join(", ") || "none"} — ${reload}`);
+  if (EXPECTED_D1.tables.some((t) => !tables.includes(t))) return;
+
+  const sumHouse = (stageCol: string) => `coalesce(sum(${stageCol}), 0)`;
+  const [
+    indexes, counts, perDataset, meta, datasets, documents, controls, dims, regions, recon,
+    sums, bridge, traceRows, orphans, districts, offices, residual, residualChecks, badOfficeRefs,
+  ] = d1Local([
+    `SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'hgab%' ORDER BY name`,
+    `SELECT ${[...Object.keys(EXPECTED_D1.rows), "hgab_dims"].map((t) => `(SELECT count(*) FROM ${t}) AS ${t}`).join(", ")}`,
+    `SELECT p.dataset, count(*) AS projects, (SELECT count(*) FROM hgab_records r WHERE r.dataset = p.dataset) AS records,
+            (SELECT count(*) FROM hgab_controls x WHERE x.dataset = p.dataset) AS controls, count(p.lon) AS with_lonlat
+       FROM hgab_projects p GROUP BY p.dataset ORDER BY p.dataset`,
+    `SELECT * FROM hgab_meta`,
+    `SELECT * FROM hgab_datasets ORDER BY sort`,
+    `SELECT * FROM hgab_documents ORDER BY sort`,
+    `SELECT * FROM hgab_controls ORDER BY dataset, sort`,
+    `SELECT * FROM hgab_dims ORDER BY dataset, dim, sort`,
+    `SELECT * FROM hgab_regions ORDER BY dataset, sort`,
+    `SELECT * FROM hgab_reconciliation ORDER BY sort`,
+    `SELECT dataset, ${sumHouse("nep_php")} AS nep, ${sumHouse("hgab2_php")} AS hgab2, ${sumHouse("hgab3_php")} AS hgab3, ${sumHouse("api_php")} AS api,
+            count(nep_php) AS nep_n, count(hgab2_php) AS hgab2_n, count(hgab3_php) AS hgab3_n
+       FROM hgab_projects GROUP BY dataset`,
+    // The bridge, recomputed from the rows: every row in its TRACE_LABELS group, unconfirmed matches included, as the pages count them.
+    `SELECT p.dataset, p.bridge_group, count(*) AS n,
+            coalesce(sum(iif(d.house_stage = 'hgab3', p.hgab3_php, p.hgab2_php)), 0) AS house, coalesce(sum(p.nep_php), 0) AS nep,
+            coalesce(sum(p.delta_php), 0) AS delta, coalesce(sum(p.held), 0) AS held_rows,
+            coalesce(sum(iif(p.held = 1, iif(d.house_stage = 'hgab3', p.hgab3_php, p.hgab2_php), 0)), 0) AS held_php
+       FROM hgab_projects p JOIN hgab_datasets d ON d.key = p.dataset GROUP BY p.dataset, p.bridge_group`,
+    `SELECT dataset, trace, bridge_group, held, count(*) AS n FROM hgab_projects GROUP BY dataset, trace, bridge_group, held`,
+    `SELECT (SELECT count(*) FROM hgab_records r WHERE NOT EXISTS (SELECT 1 FROM hgab_projects p WHERE p.dataset = r.dataset AND p.id = r.id)) AS records_without_project,
+            (SELECT count(*) FROM hgab_projects p WHERE NOT EXISTS (SELECT 1 FROM hgab_records r WHERE r.dataset = p.dataset AND r.id = p.id)) AS projects_without_record`,
+    `SELECT * FROM hgab_districts ORDER BY sort`,
+    `SELECT * FROM hgab_offices`,
+    `SELECT * FROM hgab_residual ORDER BY sort`,
+    `SELECT r.fy, r.stage, r.total_php - (r.deo_php + r.central_office_php + r.regional_offices_php + r.unmatched_php) AS gap, r.deo_php,
+            (SELECT coalesce(sum(json_extract(j.value, '$.php')), 0) FROM hgab_offices o, json_each(o.years_json) j
+              WHERE json_extract(j.value, '$.fy') = r.fy AND json_extract(j.value, '$.stage') = r.stage) AS offices_php
+       FROM hgab_residual r ORDER BY r.sort`,
+    `SELECT d.id, j.value AS office_id FROM hgab_districts d, json_each(d.office_ids_json) j WHERE NOT EXISTS (SELECT 1 FROM hgab_offices o WHERE o.id = j.value)`,
+  ]);
+
+  // Shape and counts.
+  check(`the 6 contract indexes exist`, EXPECTED_D1.indexes.every((i) => indexes.some((r) => r.name === i)), indexes.map((r) => String(r.name)).join(", "));
+  const n = counts[0];
+  const dimsExpected = DATASETS.reduce((a, k) => a + Object.values(summaries[k].dims).reduce((b, d) => b + d.length, 0), 0);
+  const countBad = Object.entries(EXPECTED_D1.rows).filter(([t, want]) => num(n[t]) !== want).map(([t, want]) => `${t} ${n[t]} (contract ${want})`);
+  check(`contract row counts: ${Object.entries(EXPECTED_D1.rows).map(([t, v]) => `${t.replace("hgab_", "")} ${v.toLocaleString("en-US")}`).join(", ")}`, countBad.length === 0, countBad.join("; "));
+  check(`hgab_dims holds every summary dimension row (${dimsExpected})`, num(n.hgab_dims) === dimsExpected, `${n.hgab_dims}`);
+  const perBad = DATASETS.filter((k) => {
+    const r = perDataset.find((x) => x.dataset === k);
+    return !r || num(r.projects) !== EXPECTED_D1.projects[k] || num(r.records) !== EXPECTED_D1.projects[k] || num(r.controls) !== EXPECTED_D1.controls[k];
+  });
+  check("projects, records and controls per dataset: 17,613/1,059/746/1,013 and 46/16/12/6", perBad.length === 0, perBad.map((k) => `${k}: ${JSON.stringify(perDataset.find((x) => x.dataset === k))}`).join("; "));
+  check("every hgab_records row has a hgab_projects row and vice versa", num(orphans[0].records_without_project) === 0 && num(orphans[0].projects_without_record) === 0, JSON.stringify(orphans[0]));
+
+  // hgab_meta.
+  const m = meta[0];
+  const terms = (() => { try { return JSON.parse(String(m?.terms_json)) as Record<string, { term: string; meaning: string }>; } catch { return null; } })();
+  check("hgab_meta: fiscal year, built_at, source repo and commit equal overview.json",
+    !!m && num(m.id) === 1 && num(m.fiscal_year) === raw.fiscal_year && m.built_at === raw.built_at && m.source_repo === raw.source_repo && m.source_commit === raw.source_commit,
+    JSON.stringify(m ?? {}).slice(0, 300));
+  check("hgab_meta.notice is the one-paragraph disclaimer (unofficial, candidates, no wrongdoing, printed amounts, link)",
+    typeof m?.notice === "string" && !/\n/.test(m.notice) && /Independent and unofficial/.test(m.notice) && /not an official record/.test(m.notice)
+    && /candidates/.test(m.notice) && /did anything wrong/.test(m.notice) && /not money spent/.test(m.notice) && m.notice.includes("https://budget.bettergov.ph/hgab/2027/methodology#disclaimer"),
+    String(m?.notice ?? "").slice(0, 200));
+  check(`hgab_meta.terms_json is PLAIN_TERMS (${Object.keys(K.plainTerms).length} terms, keys and terms as in the contract)`,
+    !!terms && Object.keys(terms).join(",") === Object.keys(K.plainTerms).join(",") && Object.entries(K.plainTerms).every(([k, t]) => terms[k]?.term === t && !!terms[k]?.meaning),
+    terms ? Object.keys(terms).join(",") : "unparseable");
+
+  // hgab_datasets: overview entry + summary readings + map.json.
+  for (const [i, d] of raw.datasets.entries()) {
+    const s = summaries[d.key], mp = maps[d.key];
+    const readings = s.readings ? json({ ...s.readings, third_only: s.readings.third_only.map((r) => r.id) }) : null;
+    const diff = rowDiff(datasets[i], {
+      key: d.key, sort: i, label: d.label, short: d.short, agency: d.agency, dept_id: d.dept_id, summary: d.summary, one_row: d.one_row,
+      caveats_json: json(d.caveats), grain: d.grain, scope: d.scope, controls_label: d.controls_label,
+      has_readings: d.has_readings ? 1 : 0, has_map: d.has_map ? 1 : 0, house_stage: d.bridge.house_stage,
+      nep_php: d.totals.nep_php, hgab2_php: d.totals.hgab2_php, hgab3_php: d.totals.hgab3_php, api_php: d.totals.api_php,
+      nep_count: d.counts.nep, hgab2_count: d.counts.hgab2, hgab3_count: d.counts.hgab3, api_count: d.counts.api,
+      printed_json: jsonOrNull(d.printed), bridge_json: json(d.bridge), documents_json: json(d.documents), readings_json: readings,
+      not_on_map_json: jsonOrNull(mp.not_on_map), map_note: mp.note, points_note: mp.points_note, placeable: mp.placeable ? 1 : 0,
+    });
+    check(`hgab_datasets ${d.key}: every column equals overview.json, the summary readings (third_only as ids) and map.json`, diff.length === 0, firstFew(diff));
+  }
+
+  // hgab_documents, hgab_reconciliation: row for row.
+  const docBad = raw.documents.flatMap((d, i) => rowDiff(documents[i], {
+    key: d.key, sort: i, title: d.title, stage: d.stage, reading: d.reading, volume: d.volume, pages_json: jsonOrNull(d.pages),
+    sha256: d.sha256, bytes: d.bytes, source_url: d.source_url, notes: d.notes, pdf_url: `${EXPECTED_D1.pdfBase}${d.key}.pdf`,
+  }).map((x) => `${d.key} ${x}`));
+  check(`hgab_documents equal the registry, pdf_url on ${EXPECTED_D1.pdfBase}<key>.pdf`, docBad.length === 0, firstFew(docBad));
+  const reconBad = raw.reconciliation.flatMap((r, i) => rowDiff(recon[i], {
+    sort: i, dataset: r.dataset, check_name: r.check, ours_php: r.ours_php, theirs_php: r.theirs_php, diff_php: r.diff_php, status: r.status, note: r.note,
+  }).map((x) => `#${i} ${x}`));
+  check("hgab_reconciliation equals overview.json reconciliation, row for row", reconBad.length === 0, firstFew(reconBad));
+
+  // hgab_controls, hgab_dims: row for row against the summaries.
+  const ctlBad: string[] = [], dimBad: string[] = [];
+  for (const k of DATASETS) {
+    const mine = controls.filter((r) => r.dataset === k);
+    summaries[k].controls.forEach((x, i) => ctlBad.push(...rowDiff(mine[i], {
+      dataset: k, id: x.id, sort: i, label: x.label, grp: x.group, nep_php: x.nep_php, hgab2_php: x.hgab2_php, hgab3_php: x.hgab3_php, api_php: x.api_php,
+      delta_php: x.delta_php, reading_delta_php: x.reading_delta_php, nep_page: x.nep_page, house_pages_json: json(x.house_pages ?? []),
+    }).map((d) => `${k}/${String(x.id)} ${d}`)));
+    for (const [dim, list] of Object.entries(summaries[k].dims)) {
+      const got = dims.filter((r) => r.dataset === k && r.dim === dim);
+      if (got.length !== list.length) dimBad.push(`${k}.${dim}: ${got.length} rows vs ${list.length}`);
+      list.forEach((x, i) => dimBad.push(...rowDiff(got[i], {
+        dataset: k, dim, sort: i, label: x.label, nep_php: x.nep_php, house_php: x.house_php, nep_records: x.nep_records, house_records: x.house_records,
+      }).map((d) => `${k}.${dim}#${i} ${d}`)));
+    }
+  }
+  check("hgab_controls equal summary.json controls, row for row", ctlBad.length === 0, firstFew(ctlBad));
+  check("hgab_dims equal summary.json dims, row for row", dimBad.length === 0, firstFew(dimBad));
+
+  // Stage totals over hgab_projects.
+  for (const d of overview.datasets) {
+    const s = sums.find((r) => r.dataset === d.key);
+    check(`${d.key}: Σ nep_php / hgab2_php / hgab3_php${d.key === "dpwh" ? " / api_php" : ""} over hgab_projects equal overview totals (${peso(d.totals.nep_php)} / ${peso(d.totals.hgab2_php)} / ${peso(d.totals.hgab3_php)})`,
+      !!s && num(s.nep) === d.totals.nep_php && num(s.hgab2) === (d.totals.hgab2_php ?? 0) && num(s.hgab3) === (d.totals.hgab3_php ?? 0) && num(s.api) === (d.totals.api_php ?? 0),
+      JSON.stringify(s ?? {}));
+  }
+
+  // Bridge recomputed from hgab_projects (unconfirmed matches counted in house_only, exactly as the pages and the workbench do).
+  for (const d of overview.datasets) {
+    const b = JSON.parse(String(datasets.find((r) => r.key === d.key)?.bridge_json ?? "null")) as Bridge | null;
+    const cell = (g: BridgeGroup) => {
+      const r = bridge.find((x) => x.dataset === d.key && x.bridge_group === g);
+      const rows = r ? num(r.n) : 0, house = r ? num(r.house) : 0, nep = r ? num(r.nep) : 0, delta = r ? num(r.delta) : 0;
+      switch (g) {
+        case "house_only": return { rows, php: house, nep_php: null, house_php: house };
+        case "nep_only": return { rows, php: nep, nep_php: nep, house_php: null };
+        case "unchanged": return { rows, php: house, nep_php: nep, house_php: house };
+        case "increased": return { rows, php: delta, nep_php: nep, house_php: house };
+        case "decreased": return { rows, php: -delta, nep_php: nep, house_php: house };
+        case "scope_review": return { rows, php: delta, nep_php: nep, house_php: house };
+      }
+    };
+    const bad = b ? GROUPS.flatMap((g) => {
+      const want = cell(g), got = b[g];
+      return (["rows", "php", "nep_php", "house_php"] as const).filter((f) => normVal(got[f]) !== normVal(want[f])).map((f) => `${g}.${f} stored ${got[f]} vs rows ${want[f]}`);
+    }) : ["bridge_json unparseable"];
+    const ungrouped = bridge.filter((x) => x.dataset === d.key && x.bridge_group == null).reduce((a, x) => a + num(x.n), 0);
+    const houseAll = bridge.filter((x) => x.dataset === d.key).reduce((a, x) => a + num(x.house), 0), nepAll = bridge.filter((x) => x.dataset === d.key).reduce((a, x) => a + num(x.nep), 0);
+    check(`${d.key}: bridge recomputed from hgab_projects (rows and pesos per group, unconfirmed included) equals hgab_datasets.bridge_json, net ${peso(d.bridge.net_php)}`,
+      bad.length === 0 && ungrouped === 0 && !!b && b.net_php === houseAll - nepAll && JSON.stringify(b) === JSON.stringify(d.bridge),
+      `${firstFew(bad)}${ungrouped ? `; ${ungrouped} rows without a group` : ""}${b && b.net_php !== houseAll - nepAll ? `; net ${b.net_php} vs ${houseAll - nepAll}` : ""}`);
+    const held = bridge.filter((x) => x.dataset === d.key).reduce<{ rows: number; php: number }>((a, x) => ({ rows: a.rows + num(x.held_rows), php: a.php + num(x.held_php) }), { rows: 0, php: 0 });
+    const heldOutside = bridge.filter((x) => x.dataset === d.key && x.bridge_group !== "house_only").reduce((a, x) => a + num(x.held_rows), 0);
+    const E = EXPECTED_D1.held[d.key];
+    const ho = d.bridge.house_only;
+    check(`${d.key}: unconfirmed matches (held = 1) all sit in house_only: ${held.rows.toLocaleString("en-US")} rows, ${peso(held.php)}${held.rows ? ` (house_only without them: ${(ho.rows - held.rows).toLocaleString("en-US")} rows, ${peso(ho.php - held.php)})` : ""}`,
+      held.rows === E.rows && held.php === E.php && heldOutside === 0, `expected ${E.rows} rows ${peso(E.php)}; ${heldOutside} held rows outside house_only`);
+  }
+  const traceBad = traceRows.filter((r) => {
+    const t = K.traceGroups[String(r.trace)];
+    return !t || r.bridge_group !== t.group || num(r.held) !== (t.held ? 1 : 0);
+  }).map((r) => `${r.dataset} ${r.trace} → ${r.bridge_group}/${r.held}`);
+  check(`bridge_group and held equal the contract's TRACE_LABELS for every trace (${new Set(traceRows.map((r) => r.trace)).size} traces)`, traceBad.length === 0, firstFew(traceBad));
+
+  // Regions: 18 per dataset in REGION_ORDER, equal to map.json, and regions + not_on_map = totals.
+  for (const d of overview.datasets) {
+    const mp = maps[d.key];
+    const got = regions.filter((r) => r.dataset === d.key);
+    const bad = K.regionOrder.flatMap((k, i) => {
+      const r = mp.regions.find((x) => x.key === k);
+      return rowDiff(got[i], {
+        dataset: d.key, region_key: k, sort: i, label: K.regionLabels[k]?.short, name: K.regionLabels[k]?.name,
+        nep_php: r?.nep_php ?? null, house_php: r?.house_php ?? null, delta_php: r?.delta_php ?? null,
+        nep_rows: r?.nep_rows ?? 0, house_rows: r?.house_rows ?? 0, source_labels_json: json(r?.source_labels ?? []),
+      }).map((x) => `${k} ${x}`);
+    });
+    check(`${d.key}: hgab_regions holds the 18 keys in REGION_ORDER with REGION_LABELS names, equal to map.json${mp.regions.length ? "" : " (map.json lists none: all empty)"}`,
+      got.length === K.regionOrder.length && bad.length === 0, `${got.length} rows; ${firstFew(bad)}`);
+    const stage = d.bridge.house_stage;
+    const nom = mp.not_on_map;
+    const sNep = got.reduce((a, r) => a + num(r.nep_php ?? 0), 0) + (nom?.nep_php ?? 0);
+    const sHouse = got.reduce((a, r) => a + num(r.house_php ?? 0), 0) + (nom?.house_php ?? 0);
+    const rNep = got.reduce((a, r) => a + num(r.nep_rows), 0) + (nom?.nep_rows ?? 0);
+    const rHouse = got.reduce((a, r) => a + num(r.house_rows), 0) + (nom?.house_rows ?? 0);
+    check(`${d.key}: Σ hgab_regions + not_on_map = NEP ${peso(d.totals.nep_php)} and House ${peso(d.totals[`${stage}_php`])}, records ${d.counts.nep.toLocaleString("en-US")} / ${(d.counts[stage] ?? 0).toLocaleString("en-US")}`,
+      sNep === d.totals.nep_php && sHouse === d.totals[`${stage}_php`] && rNep === d.counts.nep && rHouse === d.counts[stage],
+      `${peso(sNep)} / ${peso(sHouse)}; records ${rNep} / ${rHouse}`);
+  }
+
+  // hgab_projects: every row, column for column, against the parquet; derived columns against map.json and the contract.
+  const projRows = d1Local([`SELECT * FROM hgab_projects`])[0];
+  const byKey = new Map(projRows.map((r) => [`${String(r.dataset)}\u0000${String(r.id)}`, r]));
+  const cols = contractColumns(CONTRACT).filter((col) => col !== "record_json");
+  for (const k of DATASETS) {
+    const mp = maps[k];
+    const points = new Map(mp.points.map((p) => [p.id, p]));
+    const labelKey = new Map<string, string>();
+    for (const r of mp.regions) for (const l of r.source_labels) labelKey.set(l, r.key);
+    const pq = (await c.runAndReadAll(`SELECT ${cols.join(", ")} FROM read_parquet('${q(resolve(OUT, k, "projects.parquet"))}')`)).getRowObjects();
+    const colBad: string[] = [], derivedBad: string[] = [];
+    let missing = 0;
+    for (const p of pq) {
+      const got = byKey.get(`${k}\u0000${String(p.id)}`);
+      if (!got) { missing++; continue; }
+      colBad.push(...rowDiff(got, Object.fromEntries(cols.map((col) => [col, p[col]]))).map((x) => `${String(p.id)} ${x}`));
+      const pt = points.get(String(p.id));
+      const t = K.traceGroups[String(p.trace)];
+      derivedBad.push(...rowDiff(got, {
+        house_php: normVal(p.hgab3_php) ?? normVal(p.hgab2_php), bridge_group: t?.group ?? null, held: t?.held ? 1 : 0,
+        lon: pt?.lon ?? null, lat: pt?.lat ?? null, region_key: p.region == null ? null : labelKey.get(String(p.region)) ?? null,
+      }).map((x) => `${String(p.id)} ${x}`));
+    }
+    const lonlat = projRows.filter((r) => r.dataset === k && r.lon != null).length;
+    check(`${k}: all ${pq.length.toLocaleString("en-US")} hgab_projects rows equal the parquet in every column (${cols.length} columns, record_json aside)`,
+      missing === 0 && colBad.length === 0 && pq.length === projRows.filter((r) => r.dataset === k).length, `${missing} missing; ${firstFew(colBad)}`);
+    check(`${k}: house_php = hgab3 ?? hgab2, bridge_group/held from TRACE_LABELS, region_key from map.json labels, lon/lat on the ${mp.points.length.toLocaleString("en-US")} printed points`,
+      derivedBad.length === 0 && lonlat === mp.points.length, `${lonlat} rows with lon/lat; ${firstFew(derivedBad)}`);
+  }
+
+  // Districts, offices, residual.
+  const distBad = D.districts.flatMap((d, i) => {
+    const got = districts[i];
+    const diff = rowDiff(got, {
+      id: d.id, sort: i, label: d.label, jurisdiction: d.jurisdiction, district_label: d.district_label, region: d.region, attribution: d.attribution,
+      rep_name: d.representative?.name ?? null, rep_status: d.representative?.status ?? null, rep_json: jsonOrNull(d.representative),
+      office_ids_json: json(d.office_ids), co_served_json: json(d.co_served_district_ids),
+      fy2026_gaa_php: d.headline.fy2026_gaa_php, fy2027_nep_php: d.headline.fy2027_nep_php, fy2027_hgab3_php: d.headline.fy2027_hgab3_php,
+    });
+    const st = String(got?.search_text ?? "");
+    const names = [d.label, d.representative?.name, ...(d.representative?.candidates ?? []).map((x) => x.name), ...d.office_ids.map((o) => D.offices[o]?.name)];
+    if (!names.every((x) => !x || st.includes(x.toLowerCase().replace(/\s+/g, " ").trim()))) diff.push("search_text misses the label, a representative or an office name");
+    if (st !== st.toLowerCase()) diff.push("search_text not lower-cased");
+    if (d.region && K.regionLabels[String(got?.region_key)]?.short !== d.region) diff.push(`region_key ${String(got?.region_key)} for ${d.region}`);
+    return diff.map((x) => `${d.id} ${x}`);
+  });
+  check(`hgab_districts equal districts.json cards (${D.districts.length}); search_text carries label, representatives incl. candidates, office names`, distBad.length === 0, firstFew(distBad));
+  const officeById = new Map(offices.map((r) => [String(r.id), r]));
+  const offBad = Object.values(D.offices).flatMap((o) => {
+    const got = officeById.get(o.id);
+    const diff = rowDiff(got, {
+      id: o.id, name: o.name, kind: o.kind, region: o.region, tier: o.tier, district_ids_json: json(o.district_ids), years_json: json(o.years),
+      by_congress_json: json(o.by_congress), fy2027_json: jsonOrNull(o.fy2027), notes_json: json(o.notes), aliases_json: json(o.aliases_used),
+    });
+    if (o.region && K.regionLabels[String(got?.region_key)]?.short !== o.region) diff.push(`region_key ${String(got?.region_key)} for ${o.region}`);
+    return diff.map((x) => `${o.id} ${x}`);
+  });
+  check(`hgab_offices equal districts.json offices (${Object.keys(D.offices).length})`, offBad.length === 0 && offices.length === Object.keys(D.offices).length, firstFew(offBad));
+  check("every hgab_districts office id exists in hgab_offices", badOfficeRefs.length === 0, firstFew(badOfficeRefs.map((r) => `${r.id}→${r.office_id}`)));
+  const resBad = D.residual.flatMap((r, i) => rowDiff(residual[i], {
+    fy: r.fy, stage: r.stage, sort: i, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php,
+    regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php, unmatched_labels_json: json(r.unmatched_labels),
+  }).map((x) => `${r.stage} ${r.fy} ${x}`));
+  check(`hgab_residual equals districts.json residual (${D.residual.length} slots)`, resBad.length === 0, firstFew(resBad));
+  const idBad = residualChecks.filter((r) => num(r.gap) !== 0 || num(r.offices_php) !== num(r.deo_php)).map((r) => `${r.stage} ${r.fy}: gap ${r.gap}, Σ offices ${r.offices_php} vs deo ${r.deo_php}`);
+  check("residual identity in D1: deo + central + regional + unmatched = total, and Σ hgab_offices years php = deo_php, every slot", idBad.length === 0, firstFew(idBad));
+
+  // record_json: 20 random rows (5 per dataset) byte-equal to the parquet, plus the longest, one with a quote and one with non-ASCII text.
+  const P = (k: string) => `read_parquet('${q(resolve(OUT, k, "projects.parquet"))}')`;
+  const picks = (await c.runAndReadAll(`
+    SELECT * FROM (${DATASETS.map((k) => `(SELECT dataset, id, record_json, 'random' AS why FROM ${P(k)} ORDER BY random() LIMIT ${EXPECTED_D1.sampleRecordsPerDataset})`).join(" UNION ALL ")})
+    UNION ALL (SELECT dataset, id, record_json, 'longest' FROM (${DATASETS.map((k) => `SELECT dataset, id, record_json FROM ${P(k)}`).join(" UNION ALL ")}) ORDER BY strlen(record_json) DESC LIMIT 1)
+    UNION ALL (SELECT dataset, id, record_json, 'single quote' FROM (${DATASETS.map((k) => `SELECT dataset, id, record_json FROM ${P(k)}`).join(" UNION ALL ")}) WHERE contains(record_json, '''') ORDER BY id LIMIT 1)
+    UNION ALL (SELECT dataset, id, record_json, 'non-ASCII' FROM (${DATASETS.map((k) => `SELECT dataset, id, record_json FROM ${P(k)}`).join(" UNION ALL ")}) WHERE strlen(record_json) <> length(record_json) ORDER BY id LIMIT 1)
+  `)).getRowObjects().map((r) => ({ dataset: String(r.dataset), id: String(r.id), json: String(r.record_json), why: String(r.why) }));
+  const fetched = d1Local([`SELECT dataset, id, record_json FROM hgab_records WHERE ${picks.map((p) => `(dataset = '${q(p.dataset)}' AND id = '${q(p.id)}')`).join(" OR ")}`])[0];
+  const fetchedBy = new Map(fetched.map((r) => [`${String(r.dataset)}\u0000${String(r.id)}`, String(r.record_json)]));
+  const recBad = picks.filter((p) => {
+    const got = fetchedBy.get(`${p.dataset}\u0000${p.id}`);
+    return got == null || !Buffer.from(got, "utf8").equals(Buffer.from(p.json, "utf8"));
+  }).map((p) => `${p.dataset}/${p.id} (${p.why})`);
+  const random = picks.filter((p) => p.why === "random").length;
+  const extra = picks.filter((p) => p.why !== "random").map((p) => `${p.why} ${p.dataset}/${p.id}, ${Buffer.byteLength(p.json).toLocaleString("en-US")} bytes`);
+  check(`record_json byte-equal to the parquet: ${random} random rows (${EXPECTED_D1.sampleRecordsPerDataset} per dataset) + ${extra.join("; ")}`,
+    random === EXPECTED_D1.sampleRecordsPerDataset * DATASETS.length && recBad.length === 0, firstFew(recBad));
+  process.stdout.write(`  · D1 checks ran in ${((performance.now() - t0) / 1000).toFixed(1)}s\n`);
 }
 
 main().catch((e) => {
