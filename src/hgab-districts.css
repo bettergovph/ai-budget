@@ -1,16 +1,17 @@
-/* FY2027 HGAB Districts — the DEO lens (/hgab/2027/districts and /…/districts/:id).
+/* FY2027 HGAB Districts (/hgab/2027/districts and /…/districts/:id).
 
-   One card per legislative district: the representative, the district
-   engineering office(s) that serve it, the office's budget by Congress and
-   fiscal year, and the FY2027 House bill against the NEP for its rows. Builds
-   on the section chrome (hgab.css), the hub's table/explorer vocabulary
-   (hgab-dataset.css → nep2027.css) and the shared tokens. Scoped to:
-     .hgab-dx-*   grid page and the overview call-out
-     .hgab-dc-*   one district card
-     .hgab-hc-*   the inline-SVG history chart
-     .hgab-res-*  the residual panel
-     .hgab-dd-*   the district detail page
-     .hgab-tier, .hgab-portrait, .hgab-congress-* shared pieces */
+   One card per legislative district, grouped by region: the representative,
+   the district engineering office(s) that serve it, the office's budget by
+   Congress and fiscal year, and the FY2027 House bill against the NEP for its
+   rows. Builds on the section chrome (hgab.css), the hub's table/explorer
+   vocabulary (hgab-dataset.css → nep2027.css) and the shared tokens. Scoped to:
+     .hgab-dx-*      grid page, its region sections and jump row, the overview call-out
+     .hgab-dc-*      one district card
+     .hgab-hc-*      the inline-SVG history chart
+     .hgab-keyrow-*  the one-line chart key
+     .hgab-res-*     the "not assigned to a district" panel
+     .hgab-dd-*      the district detail page
+     .hgab-tier, .hgab-portrait, .hgab-congress-caveat shared pieces */
 @import './hgab-dataset.css';
 
 :root {
@@ -135,6 +136,153 @@
   color: var(--accent);
 }
 .hgab-dx-count button:hover { color: var(--accent-deep); }
+
+/* "Group by region": a checkbox that sits on the controls' baseline. */
+.hgab-dx-controls label.hgab-dx-toggle {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 8px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.hgab-dx-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.hgab-dx-controls label.hgab-dx-toggle > span {
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+
+/* A term with its plain meaning as a tooltip ("insertion candidate"). */
+.hgab-dx-term {
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+/* --- "Jump to region": one sticky chip row under the masthead ------------ */
+
+.hgab-dx-jump {
+  position: sticky;
+  top: var(--hgab-masthead-h, 0px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 7px 0;
+  background: var(--paper);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+.hgab-dx-jump-label {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-dx-jump ul {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 2px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.hgab-dx-jump li { flex: none; }
+.hgab-dx-jump a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.hgab-dx-jump a span {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-mute);
+}
+.hgab-dx-jump a:hover { border-color: var(--accent); color: var(--accent-deep); }
+.hgab-dx-jump a[aria-current] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+
+/* --- one region section --------------------------------------------------- */
+
+.hgab-dx-region {
+  margin-top: 30px;
+  /* clear the sticky masthead and the jump row when scrolled to by #region-… */
+  scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 56px);
+}
+.hgab-dx-region-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.hgab-dx-region-head h3 {
+  margin: 0;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: clamp(19px, 1.6vw, 23px);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.hgab-dx-region-short { color: var(--ink-3); }
+.hgab-dx-region-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-dx-region-sum strong {
+  font-family: var(--font-hero);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.hgab-dx-region-sum > span + span::before { content: '·'; margin-right: 12px; color: var(--rule); }
+.hgab-dx-region-basis { font-family: var(--font-body); font-size: 11.5px; color: var(--ink-mute); }
+.hgab-dx-region-aside {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.hgab-dx-region-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.hgab-dx-region-more .nep-more { margin-top: 0; }
 
 .hgab-dx-grid {
   display: grid;
@@ -532,7 +680,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-mute);
-  margin-right: 4px;
 }
 .hgab-dc-bridge .hgab-dc-bridge-cell {
   --hgab-group: var(--ink-3);
@@ -586,68 +733,83 @@
 .hgab-hc rect, .hgab-hc line { transition: opacity 0.12s; }
 .hgab-hc g:hover rect.hgab-hc-bar { opacity: 0.8; }
 
-.hgab-hc-key {
+/* --- the one-line chart key ---------------------------------------------- */
+
+/* Congress chips, the four bar styles and "How to read the chart": one line
+   on desktop, two on a phone (chips, then bars and the disclosure). */
+.hgab-keyrow {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 4px 0 0;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule-soft);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--ink-3);
 }
-.hgab-hc-key li { display: inline-flex; align-items: center; gap: 5px; }
-.hgab-hc-key i { display: inline-block; width: 10px; height: 10px; border-radius: 1px; }
-.hgab-hc-key i.is-gaa { background: var(--hgab-gaa); }
-.hgab-hc-key i.is-nep { background: repeating-linear-gradient(135deg, var(--hgab-nep) 0 1px, transparent 1px 3px); border: 1px solid var(--hgab-nep); }
-.hgab-hc-key i.is-hgab3 { background: var(--hgab-house); }
-.hgab-hc-key i.is-mark { height: 2px; background: var(--ink); border-radius: 0; }
-.hgab-hc-key i.is-empty { border: 1px dashed var(--ink-mute); }
-
-/* --- congress legend ------------------------------------------------------ */
-
-.hgab-congress { margin-top: 28px; }
-.hgab-congress-terms {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.hgab-keyrow ol,
+.hgab-keyrow ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
 }
-.hgab-congress-terms li {
-  min-width: 0;
-  padding: 12px 16px 14px;
-  border-right: 1px solid var(--rule);
+.hgab-keyrow-terms { gap: 4px 6px !important; }
+.hgab-keyrow-terms li {
+  padding: 2px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  white-space: nowrap;
+  cursor: default;
 }
-.hgab-congress-terms li:last-child { border-right: none; }
-.hgab-congress-terms li.is-current { background: var(--accent-soft); box-shadow: inset 0 3px 0 var(--accent); }
-.hgab-congress-label {
-  display: block;
-  font-family: var(--font-hero);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-.hgab-congress-years {
-  display: block;
-  margin-top: 3px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-}
-.hgab-congress-note {
-  display: block;
-  margin-top: 6px;
+.hgab-keyrow-terms li strong { font-weight: 600; color: var(--ink-2); }
+.hgab-keyrow-terms li.is-current { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+.hgab-keyrow-bars li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.hgab-keyrow-bars i { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 1px; }
+.hgab-keyrow-bars i.is-gaa { background: var(--hgab-gaa); }
+.hgab-keyrow-bars i.is-nep { background: repeating-linear-gradient(135deg, var(--hgab-nep) 0 1px, transparent 1px 3px); border: 1px solid var(--hgab-nep); }
+.hgab-keyrow-bars i.is-hgab3 { background: var(--hgab-house); }
+.hgab-keyrow-bars i.is-empty { border: 1px dashed var(--ink-mute); }
+.hgab-keyrow-help { position: relative; margin-left: auto; }
+.hgab-keyrow-help > summary {
+  cursor: pointer;
+  list-style: none;
+  white-space: nowrap;
+  color: var(--accent);
   font-family: var(--font-body);
   font-size: 12px;
-  line-height: 1.45;
-  color: var(--ink-3);
+  font-weight: 600;
 }
+.hgab-keyrow-help > summary::-webkit-details-marker { display: none; }
+.hgab-keyrow-help > summary::after { content: ' +'; font-family: var(--font-mono); }
+.hgab-keyrow-help[open] > summary::after { content: ' −'; }
+.hgab-keyrow-help > summary:hover { color: var(--accent-deep); }
+.hgab-keyrow-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.hgab-keyrow-short { display: none; }
+.hgab-keyrow-pop p { margin: 0 0 6px; }
+.hgab-keyrow-pop p:last-child { margin-bottom: 0; }
+
+/* --- the seat-holder caveat ----------------------------------------------- */
+
 .hgab-congress-caveat {
   margin: 12px 0 0;
   font-family: var(--font-body);
@@ -692,7 +854,25 @@
   max-width: 760px;
 }
 
+.hgab-dd-backlink { margin: 14px 0 0; font-family: var(--font-body); font-size: 13px; }
+.hgab-dd-backlink a { color: inherit; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.hgab-dd-backlink a:hover { text-decoration-thickness: 2px; }
+
 .hgab-dd-office { margin-top: 48px; padding-top: 14px; border-top: 2px solid var(--ink); }
+.hgab-dd-office-eyebrow {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-dd-office .hgab-keyrow { margin-top: 16px; }
+.hgab-dd-office .hgab-details,
+.hgab-dd-projects-busy + .hgab-details { margin-top: 18px; }
+.hgab-details-body ul { margin: 0; padding-left: 16px; }
+.hgab-details-body li { margin-bottom: 4px; }
+.hgab-details-body pre { white-space: pre-wrap; font-size: 11px; }
 .hgab-dd-office-head {
   display: flex;
   flex-wrap: wrap;
@@ -760,14 +940,6 @@
 .hgab-dd-history .hgab-dd-stage.is-gaa { color: var(--hgab-gaa); }
 .hgab-dd-history .hgab-dd-stage.is-nep { color: var(--hgab-nep); }
 .hgab-dd-history .hgab-dd-stage.is-hgab3 { color: var(--hgab-house); }
-.hgab-dd-matched {
-  display: block;
-  margin-top: 2px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-mute);
-  white-space: normal;
-}
 
 .hgab-dd-fy27 { margin-top: 32px; }
 .hgab-dd-fy27 .kpi-strip { margin-top: 12px; }
@@ -784,21 +956,6 @@
   color: var(--ink-3);
 }
 
-.hgab-dd-small {
-  margin: 14px 0 0;
-  font-family: var(--font-body);
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--ink-mute);
-}
-.hgab-dd-small code {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  background: var(--paper-3);
-  padding: 1px 4px;
-  border-radius: 2px;
-}
-.hgab-dd-small ul { margin: 4px 0 0; padding-left: 16px; }
 
 .hgab-dd-howto {
   max-width: 900px;
@@ -824,7 +981,8 @@
 }
 .hgab-dd-howto ol li { margin-bottom: 8px; }
 .hgab-dd-howto ol li strong { color: var(--ink); font-weight: 600; }
-.hgab-dd-howto .hgab-congress-caveat { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule-soft); }
+.hgab-dd-howto ol li a { color: var(--accent); }
+.hgab-dd-rep .hgab-congress-caveat { font-size: 12.5px; margin-top: 8px; }
 
 /* --- motion --------------------------------------------------------------- */
 
@@ -842,9 +1000,6 @@
   .hgab-res-row { grid-template-columns: 120px minmax(0, 1fr); }
   .hgab-res-share { grid-column: 2; text-align: left; margin-top: 2px; }
   .hgab-dx-callout { grid-template-columns: 1fr; }
-  .hgab-congress-terms { grid-template-columns: 1fr; }
-  .hgab-congress-terms li { border-right: none; border-bottom: 1px solid var(--rule); }
-  .hgab-congress-terms li:last-child { border-bottom: none; }
 }
 @media (max-width: 760px) {
   .hgab-dx-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -858,6 +1013,24 @@
   .hgab-res-share { grid-column: 1; }
   .hgab-dc-figures .hgab-amt { font-size: 17px; }
   .hgab-dc-ambiguous-grid { grid-template-columns: 1fr; }
+  /* Phone: the jump row scrolls sideways at the top instead of sticking, so
+     the 135 px masthead is the only thing pinned. */
+  .hgab-dx-jump { position: static; }
+  .hgab-dx-jump-label { display: none; }
+  .hgab-dx-region { scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 12px); }
+  .hgab-dx-region-head { gap: 4px 12px; }
+  /* Key row on a phone: chips and "How to read" on line one, the four bar
+     styles on line two, in their short wording. */
+  .hgab-keyrow { gap: 6px 10px; font-size: 10px; }
+  .hgab-keyrow-long { display: none; }
+  .hgab-keyrow-short { display: inline; }
+  .hgab-keyrow-terms { gap: 4px !important; }
+  .hgab-keyrow-terms li { padding: 1px 5px; }
+  .hgab-keyrow-help { order: 2; }
+  .hgab-keyrow-help > summary { font-size: 11.5px; }
+  .hgab-keyrow-bars { order: 3; flex-basis: 100%; gap: 4px 10px !important; }
+  .hgab-dx-region-sum { gap: 2px 14px; }
+  .hgab-dx-region-sum > span + span::before { display: none; }
 }
 
 /* --- Projects tab: the active office chip (`deo=`) ----------------------- */

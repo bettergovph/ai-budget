@@ -1,0 +1,591 @@
+/* The Map tab of a dataset hub (/hgab/2027/:dataset?view=map).
+   Scoped to .hgab-map-*; reads the section's tokens (--hgab-* group colours in
+   hgab.css, --accent as the House accent, --negative for reductions).
+
+   Region fills are set by one custom property per class (--f) so the same
+   class colours a province, a legend swatch and a table swatch alike.
+   Strokes use vector-effect: non-scaling-stroke so outlines and dots keep
+   their screen size while the viewBox zooms. */
+
+.hgab-map {
+  --hgab-map-up: var(--accent);
+  --hgab-map-down: var(--negative);
+  --hgab-map-mid: var(--paper-3);
+  --hgab-map-seq: var(--accent);
+  --hgab-map-sea: transparent;
+  --hgab-map-border: color-mix(in srgb, var(--ink-3) 70%, var(--paper));
+  min-width: 0;
+}
+
+/* --- colour classes ------------------------------------------------------- */
+
+.hgab-map .is-d4 { --f: color-mix(in oklab, var(--hgab-map-down) 92%, var(--hgab-map-mid)); }
+.hgab-map .is-d3 { --f: color-mix(in oklab, var(--hgab-map-down) 68%, var(--hgab-map-mid)); }
+.hgab-map .is-d2 { --f: color-mix(in oklab, var(--hgab-map-down) 45%, var(--hgab-map-mid)); }
+.hgab-map .is-d1 { --f: color-mix(in oklab, var(--hgab-map-down) 24%, var(--hgab-map-mid)); }
+.hgab-map .is-mid { --f: var(--hgab-map-mid); }
+.hgab-map .is-u1 { --f: color-mix(in oklab, var(--hgab-map-up) 24%, var(--hgab-map-mid)); }
+.hgab-map .is-u2 { --f: color-mix(in oklab, var(--hgab-map-up) 45%, var(--hgab-map-mid)); }
+.hgab-map .is-u3 { --f: color-mix(in oklab, var(--hgab-map-up) 68%, var(--hgab-map-mid)); }
+.hgab-map .is-u4 { --f: color-mix(in oklab, var(--hgab-map-up) 92%, var(--hgab-map-mid)); }
+.hgab-map .is-s0 { --f: var(--paper-2); }
+.hgab-map .is-s1 { --f: color-mix(in oklab, var(--hgab-map-seq) 14%, var(--paper-2)); }
+.hgab-map .is-s2 { --f: color-mix(in oklab, var(--hgab-map-seq) 32%, var(--paper-2)); }
+.hgab-map .is-s3 { --f: color-mix(in oklab, var(--hgab-map-seq) 52%, var(--paper-2)); }
+.hgab-map .is-s4 { --f: color-mix(in oklab, var(--hgab-map-seq) 74%, var(--paper-2)); }
+.hgab-map .is-s5 { --f: color-mix(in oklab, var(--hgab-map-seq) 96%, var(--ink)); }
+.hgab-map .is-empty { --f: var(--paper-2); }
+
+/* --- controls ------------------------------------------------------------- */
+
+.hgab-map-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 0 0 16px;
+}
+.hgab-map-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hgab-map-seg button {
+  all: unset;
+  cursor: pointer;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+.hgab-map-seg button:hover { color: var(--ink); border-color: var(--ink-3); }
+.hgab-map-seg button[aria-pressed="true"] {
+  color: var(--accent-deep);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.hgab-map-select,
+.hgab-map-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.hgab-map-select select {
+  font: inherit;
+  color: var(--ink);
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  max-width: 100%;
+}
+.hgab-map-check input { accent-color: var(--accent); margin: 0; }
+
+.hgab-map :is(button, select, a, input):focus-visible,
+.hgab-map-seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- layout --------------------------------------------------------------- */
+
+.hgab-map-body {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 28px 36px;
+  align-items: start;
+}
+.hgab-map-figure {
+  margin: 0;
+  min-width: 0;
+}
+/* --hgab-map-top is the sticky site masthead's height, set by the component. */
+.hgab-map-anchor { scroll-margin-top: calc(var(--hgab-map-top, 0px) + 12px); }
+.hgab-map-side { min-width: 0; }
+
+/* --- the map --------------------------------------------------------------- */
+
+.hgab-map-frame {
+  position: relative;
+  aspect-ratio: var(--hgab-map-ar);
+  /* The whole country fits under the masthead when scrolled to. */
+  width: min(100%, calc((100vh - var(--hgab-map-top, 0px) - 28px) * var(--hgab-map-ar-n)));
+  min-width: min(100%, 280px);
+  margin: 0 auto;
+  background: var(--hgab-map-sea);
+  border: 1px solid var(--rule-soft);
+  overflow: hidden;
+}
+.hgab-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.hgab-map-svg path { vector-effect: non-scaling-stroke; }
+
+.hgab-map-region { cursor: pointer; }
+.hgab-map-rb {
+  fill: none;
+  stroke: var(--hgab-map-border);
+  stroke-width: 1.4px;
+  stroke-linejoin: round;
+}
+.hgab-map-rf {
+  fill: var(--f);
+  fill-rule: evenodd;
+  stroke: var(--paper);
+  stroke-width: 0.35px;
+  stroke-opacity: 0.85;
+  stroke-linejoin: round;
+}
+.hgab-map .is-empty .hgab-map-rf { fill: var(--hgab-map-hatch, var(--paper-2)); }
+.hgab-map-hatch-bg { fill: var(--paper-2); }
+.hgab-map-hatch-line { stroke: var(--rule); stroke-width: 1.4; }
+
+/* With dots on, the region shading steps back (opaque mix, so the border
+   trick above still covers what it should). */
+.hgab-map-svg.has-dots .hgab-map-rf { fill: color-mix(in oklab, var(--f) 62%, var(--paper)); }
+.hgab-map-svg.has-dots .is-empty .hgab-map-rf { fill: var(--hgab-map-hatch, var(--paper-2)); }
+.hgab-map-svg .hgab-map-region.is-dim .hgab-map-rf { fill: color-mix(in oklab, var(--f) 40%, var(--paper)); }
+.hgab-map-svg .hgab-map-region.is-dim .hgab-map-rb { stroke: var(--rule); }
+
+.hgab-map-overlay { pointer-events: none; }
+.hgab-map-ob {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.hgab-map-overlay.is-selected .hgab-map-ob { stroke: var(--ink-2); stroke-width: 2.4px; }
+
+.hgab-map-dots,
+.hgab-map-lines,
+.hgab-map-dot-hi { pointer-events: none; }
+
+/* Dots: zero-length subpaths with round caps, so stroke-width is the
+   diameter in screen pixels at any zoom. */
+.hgab-map-dot,
+.hgab-map-dot-halo,
+.hgab-map-dot-hole,
+.hgab-map-dot-hi path {
+  fill: none;
+  stroke-linecap: round;
+}
+.hgab-map-dotset { --dot: 4px; }
+.hgab-map-dotset.is-unchanged,
+.hgab-map-dotset.is-other { --dot: 3.5px; }
+.hgab-map-svg.is-zoomed .hgab-map-dotset { --dot: 8px; }
+.hgab-map-svg.is-zoomed .hgab-map-dotset.is-unchanged,
+.hgab-map-svg.is-zoomed .hgab-map-dotset.is-other { --dot: 6px; }
+.hgab-map-dot-halo { stroke: var(--paper); stroke-width: calc(var(--dot) + 1.5px); stroke-opacity: 0.9; }
+.hgab-map-dot { stroke: var(--hgab-group, var(--ink-3)); stroke-width: var(--dot); }
+.hgab-map-dotset.is-unchanged .hgab-map-dot { stroke-opacity: 0.7; }
+.hgab-map-dot-hole { stroke: var(--paper); stroke-width: calc(var(--dot) * 0.45); }
+
+.hgab-map-line {
+  fill: none;
+  stroke: var(--hgab-group, var(--ink-3));
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-opacity: 0.85;
+}
+
+.hgab-map-dot-hi-ring { stroke: var(--ink); stroke-width: 14px; }
+.hgab-map-dot-hi-core { stroke: var(--hgab-group, var(--ink-3)); stroke-width: 9px; }
+.hgab-map-dot-hi-core.is-hollow { stroke: var(--paper); stroke-width: 9px; }
+
+.is-other { --hgab-group: var(--ink-mute); }
+
+/* Reset button floats on the map once zoomed in. */
+.hgab-map-reset {
+  all: unset;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  cursor: pointer;
+  padding: 6px 11px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--ink-3);
+  border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(17, 21, 28, 0.12);
+}
+.hgab-map-reset:hover { border-color: var(--ink); }
+.hgab-map-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- tooltip ---------------------------------------------------------------- */
+
+.hgab-map-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(300px, calc(100% - 8px));
+  padding: 9px 11px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border-radius: 2px;
+}
+.hgab-map-tip p { margin: 0; }
+.hgab-map-tip-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.3;
+  padding-bottom: 6px;
+  margin-bottom: 6px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+.hgab-map-tip-title small {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+.hgab-map-tip-rows { margin: 0; display: grid; gap: 2px; }
+.hgab-map-tip-rows > div { display: flex; justify-content: space-between; gap: 14px; }
+.hgab-map-tip-rows dt { opacity: 0.72; }
+.hgab-map-tip-rows dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+.hgab-map-tip-rows dd small { font-weight: 400; opacity: 0.7; }
+.hgab-map-tip-what {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  margin-top: 7px !important;
+}
+.hgab-map-tip-what i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--hgab-group, var(--ink-mute));
+  box-shadow: 0 0 0 1.5px var(--paper);
+  transform: translateY(1px);
+}
+.hgab-map-tip-what i.is-hollow { background: var(--ink); box-shadow: inset 0 0 0 2px var(--hgab-group, var(--ink-mute)), 0 0 0 1.5px var(--paper); }
+.hgab-map-tip-what strong { font-weight: 600; }
+.hgab-map-tip-none { opacity: 0.8; }
+.hgab-map-tip-hint {
+  margin-top: 6px !important;
+  font-size: 11px;
+  opacity: 0.62;
+}
+
+/* --- keys ------------------------------------------------------------------- */
+
+.hgab-map-key,
+.hgab-map-dotkey {
+  margin: 14px 0 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.hgab-map-key-title {
+  margin: 0 0 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.hgab-map-key-title span { font-weight: 400; color: var(--ink-mute); }
+.hgab-map-ramp {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  max-width: 420px;
+}
+.hgab-map-ramp .hgab-map-sw { width: auto; height: 12px; border-radius: 0; }
+.hgab-map-ramp .hgab-map-sw:first-child { border-radius: 2px 0 0 2px; }
+.hgab-map-ramp .hgab-map-sw:last-child { border-radius: 0 2px 2px 0; }
+.hgab-map-ramp-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  max-width: 420px;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.hgab-map-ramp-labels b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.hgab-map-ramp-labels .is-mid { color: var(--ink-mute); }
+.hgab-map-ramp-words {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  max-width: 420px;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.hgab-map-key-note { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-3); max-width: 520px; }
+.hgab-map-key-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+}
+
+.hgab-map-sw {
+  display: inline-block;
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--f, var(--paper-2));
+  box-shadow: inset 0 0 0 1px rgba(17, 21, 28, 0.08);
+}
+.hgab-map-sw.is-empty {
+  background: repeating-linear-gradient(45deg, var(--paper-2) 0 3px, var(--rule) 3px 4.4px);
+}
+
+.hgab-map-dotkey-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hgab-map-dotkey-item {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 7px;
+  max-width: 100%;
+  padding: 5px 9px 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--ink-2);
+}
+.hgab-map-dotkey-item:hover { border-color: var(--ink-3); }
+.hgab-map-dotkey-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-map-dotkey-item small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.hgab-map-dotkey-item i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: var(--hgab-group, var(--ink-mute));
+}
+.hgab-map-dotkey-item.is-held i {
+  background: var(--paper);
+  box-shadow: inset 0 0 0 2.5px var(--ink-3);
+}
+.hgab-map-dotkey-item[aria-pressed="false"] { color: var(--ink-mute); background: var(--paper-2); border-style: dashed; }
+.hgab-map-dotkey-item[aria-pressed="false"] i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--hgab-group, var(--ink-mute)); }
+.hgab-map-dotkey-item[aria-pressed="false"] span { text-decoration: line-through; text-decoration-color: var(--ink-mute); }
+.hgab-map-dotkey.is-off .hgab-map-dotkey-items { opacity: 0.5; }
+.hgab-map-dotkey-item:disabled { cursor: default; }
+.hgab-map-dotkey-note { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-mute); }
+
+.hgab-map-caption {
+  margin-top: 14px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.hgab-map-caption p { margin: 0 0 6px; max-width: 640px; }
+.hgab-map-coverage strong { color: var(--ink-2); font-weight: 600; }
+.hgab-map-credit { font-size: 11.5px; color: var(--ink-mute); }
+
+/* --- region table ------------------------------------------------------------ */
+
+.hgab-map-h {
+  margin: 0 0 4px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+.hgab-map-tablenote {
+  margin: 0 0 10px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+/* Safety net only: the columns are sized to fit 360 px without scrolling. */
+.hgab-map-tablescroll { overflow-x: auto; }
+.hgab-map-table { border-top: 1px solid var(--rule); }
+.hgab-map-table th[scope="row"] { white-space: normal; }
+.hgab-map-table thead th { white-space: normal; line-height: 1.25; vertical-align: bottom; }
+.hgab-map-table thead th button { display: inline; white-space: normal; }
+.hgab-map-table thead th.num { text-align: right; }
+.hgab-map-table th[scope="row"] { font-weight: 400; text-align: left; }
+.hgab-map-table tbody tr.is-selected { background: var(--accent-soft); }
+.hgab-map-table tbody tr.is-selected:hover { background: color-mix(in srgb, var(--accent-soft) 70%, var(--paper-2)); }
+.hgab-map-table tbody tr.is-unlisted { color: var(--ink-mute); }
+.hgab-map-table td small.hgab-map-rows {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+.hgab-map-table .nep-delta { display: inline-flex; flex-direction: column; align-items: flex-end; }
+.hgab-map-table .nep-delta-pct { font-size: 10.5px; opacity: 0.85; }
+.hgab-map-th-name { min-width: 0; }
+.hgab-map-rowbtn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.hgab-map-rowbtn .hgab-map-sw { margin-top: 3px; }
+.hgab-map-rowbtn:hover .hgab-map-rowname { color: var(--accent); }
+.hgab-map-rowbtn[aria-pressed="true"] .hgab-map-rowname { color: var(--accent-deep); }
+.hgab-map-rowbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-map-rowname small {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+.hgab-map-rowlink {
+  display: table;
+  margin: 3px 0 0 19px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.hgab-map-rowlink:hover { border-bottom-color: var(--accent); }
+
+.hgab-map-noregion {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--rule);
+  background: var(--paper-2);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.hgab-map-noregion p { margin: 0; }
+.hgab-map-noregion strong { color: var(--ink); font-weight: 600; }
+.hgab-map-noregion .hgab-delta { display: inline; margin: 0; }
+.hgab-map-noregion-plain { margin-top: 4px !important; color: var(--ink-3); }
+
+/* --- panels (no map / error) ------------------------------------------------- */
+
+.hgab-map-panel {
+  max-width: 720px;
+  padding: 18px 20px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-3);
+  background: var(--paper-2);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.hgab-map-panel p { margin: 0 0 8px; }
+.hgab-map-panel p:last-child { margin-bottom: 0; }
+.hgab-map-panel .hgab-map-noregion { margin: 4px 0 12px; background: var(--paper); }
+.hgab-map-panel a { color: var(--accent); }
+.hgab-map-panel-title {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+.hgab-map-panel.is-error { border-left-color: var(--negative); }
+.hgab-map-maint { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
+.hgab-map-maint summary { cursor: pointer; color: var(--ink-2); }
+.hgab-map-maint code {
+  background: var(--paper-3);
+  padding: 1px 5px;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+.hgab-map-maint p { margin: 8px 0 0; }
+
+/* --- narrow screens ----------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .hgab-map-body { grid-template-columns: minmax(0, 1fr); }
+  .hgab-map-frame { width: min(100%, 560px); }
+}
+
+@media (max-width: 560px) {
+  .hgab-map-controls { gap: 10px; }
+  .hgab-map-seg button { padding: 6px 9px; font-size: 12px; }
+  .hgab-map-select { width: 100%; }
+  .hgab-map-select select { flex: 1; min-width: 0; }
+  .hgab-map-frame { width: 100%; }
+  .hgab-map-table th,
+  .hgab-map-table td { padding: 7px 5px; }
+  .hgab-map-table th:first-child,
+  .hgab-map-table td:first-child { padding-left: 0; }
+  .hgab-map-table th:last-child,
+  .hgab-map-table td:last-child { padding-right: 0; }
+  .hgab-map-table thead th { font-size: 9.5px; letter-spacing: 0.03em; }
+  .hgab-map-table .num { font-size: 12px; }
+  .hgab-map-rowbtn { font-size: 12.5px; gap: 6px; }
+  .hgab-map-rowlink { margin-left: 17px; }
+  .hgab-map-tip { font-size: 11.5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hgab-map * { transition: none !important; animation: none !important; }
+}
+
+@media (forced-colors: active) {
+  .hgab-map-rf { stroke: CanvasText; }
+  .hgab-map-dot { stroke: CanvasText; }
+  .hgab-map-sw { forced-color-adjust: none; }
+}

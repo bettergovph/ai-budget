@@ -8,8 +8,6 @@
 
 /* --- hub ---------------------------------------------------------------- */
 
-.hgab-ds-switch { margin: 18px 0 0; }
-
 .hgab-ds-kpi-text {
   display: block;
   font-family: var(--font-body);
@@ -617,7 +615,8 @@
 }
 
 .hgab-rec-json { margin-top: 0; }
-.hgab-rec-json pre { max-height: 60vh; overflow: auto; white-space: pre; word-break: normal; }
+.hgab-rec-json pre,
+pre.hgab-rec-json { max-height: 60vh; overflow: auto; white-space: pre; word-break: normal; }
 
 /* --- responsive --------------------------------------------------------- */
 

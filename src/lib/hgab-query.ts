@@ -60,12 +60,13 @@ export interface ProjectFilters {
   size: number;
 }
 
+/** Plain names for the sort keys, as the Projects tab's Sort menu prints them. */
 export const SORT_LABELS: Record<SortKey, string> = {
-  title: 'Title',
-  nep: 'NEP amount',
-  hgab2: 'HGAB 2R amount',
-  hgab3: 'HGAB 3R amount',
-  delta: 'Δ House − NEP',
+  title: 'Project name',
+  nep: 'Amount in the proposal (NEP)',
+  hgab2: 'House amount, 2nd reading',
+  hgab3: 'House amount, 3rd reading',
+  delta: 'Change, House minus proposal',
 };
 
 const SORT_COLUMN: Record<SortKey, string> = {
@@ -174,44 +175,45 @@ export function tracesFor(groups: readonly BridgeGroup[], held: HeldMode): strin
 
 /**
  * Plain labels for the comma-separated review `flags`, as the importer writes
- * them (DPWH, then the FMR / NIA / HFEP annex vocabularies). Unknown flags are
- * humanised rather than hidden.
+ * them (DPWH, then the FMR / NIA / HFEP vocabularies). Unknown flags are
+ * humanised rather than hidden. The raw code stays visible beside the label
+ * on the record page, so an analyst can still search for it.
  */
 export const FLAG_LABELS: Record<string, string> = {
   // DPWH
-  house_only: 'House only · no NEP record attached',
-  nep_only: 'NEP only · no House record attached',
-  region_difference: 'Region differs between sources',
-  office_difference: 'Office differs between sources',
-  no_office: 'No recorded office',
-  repeated_key: 'Repeated key · grouped House rows',
-  uncertain_match: 'Paired by a non-exact rule (chainage, location, scope, soft or segment-scope)',
-  nep_evidence_review: 'NEP amount evidence under review',
-  length_review: 'Chainage length repaired or implausible',
-  twin_review: 'Identical-title twin under another PAP',
-  nep_twin: 'NEP side of an identical-title twin',
-  segment_scope: 'Same road, non-overlapping segment',
-  transparency_gap: 'NEP row absent from the Transparency listing',
-  outside_api: 'Outside the Transparency listing scope',
-  group_exhausted: 'Grouping · House rows with no NEP counterpart in their shell',
-  group_nep_leftover: 'Grouping · NEP rows never funded in their shell',
+  house_only: 'House bill only · no match in the proposal',
+  nep_only: 'Proposal only · no match in the House bill',
+  region_difference: 'Region differs between the two documents',
+  office_difference: 'Office differs between the two documents',
+  no_office: 'No office recorded',
+  repeated_key: 'Repeated line · House lines grouped together',
+  uncertain_match: 'Matched by a looser rule (road markers, place, scope or a close name)',
+  nep_evidence_review: 'Proposal amount still being checked against the scan',
+  length_review: 'Road length was fixed or looks wrong',
+  twin_review: 'Same name appears under another program line',
+  nep_twin: 'Proposal side of a same-name pair',
+  segment_scope: 'Same road, a different stretch',
+  transparency_gap: 'Proposal line missing from the DPWH transparency website',
+  outside_api: 'Not covered by the DPWH transparency website',
+  group_exhausted: 'Grouped road · House lines with no proposal match in the group',
+  group_nep_leftover: 'Grouped road · proposal lines left unmatched in the group',
   // FMR
-  'method:title_and_coordinates': 'Paired on title and coordinates',
-  'method:title': 'Paired on title only',
-  'method:coordinates': 'Paired on coordinates only',
-  ambiguous_title: 'Title appears more than once',
-  coordinate_review: 'Printed coordinates need review',
+  'method:title_and_coordinates': 'Matched on name and map coordinates',
+  'method:title': 'Matched on name only',
+  'method:coordinates': 'Matched on map coordinates only',
+  ambiguous_title: 'Name appears more than once',
+  coordinate_review: 'Printed map coordinates need checking',
   // NIA
-  'method:ai_corrected': 'Paired after AI-assisted spelling correction',
-  'strict:split_pair': 'Pair exists only under the corrected method',
-  'near_miss:spelling_variant': 'Near miss · spelling variant',
-  'near_miss:repeated_title': 'Near miss · repeated title',
-  'near_miss:location_variant': 'Near miss · location variant',
-  'near_miss:exact_variant': 'Near miss · exact variant',
-  unresolved: 'Unmatched, with a near-miss mark',
+  'method:ai_corrected': 'Matched after an AI-assisted spelling fix',
+  'strict:split_pair': 'Match holds only after the spelling fix',
+  'near_miss:spelling_variant': 'Near miss · spelling differs',
+  'near_miss:repeated_title': 'Near miss · name repeated',
+  'near_miss:location_variant': 'Near miss · place differs',
+  'near_miss:exact_variant': 'Near miss · same name, details differ',
+  unresolved: 'No match, near miss noted',
   // HFEP
-  column_added: 'NEP prints a cell the House leaves blank',
-  column_dropped: 'House prints a cell the NEP leaves blank',
+  column_added: 'Amount in the proposal, blank in the House bill',
+  column_dropped: 'Amount in the House bill, blank in the proposal',
 };
 
 export function flagLabel(flag: string): string {
@@ -226,11 +228,11 @@ export function flagLabel(flag: string): string {
  * shown humanised.
  */
 export const ANNEX_MATCH_LABELS: Record<string, string> = {
-  title_and_coordinates: 'Paired on title and coordinates',
-  title: 'Paired on title',
-  coordinates: 'Paired on coordinates',
-  ai_corrected: 'Paired after spelling correction',
-  title_similarity: 'Paired on title similarity',
+  title_and_coordinates: 'Matched on name and map coordinates',
+  title: 'Matched on name',
+  coordinates: 'Matched on map coordinates',
+  ai_corrected: 'Matched after a spelling fix',
+  title_similarity: 'Matched on a similar name',
 };
 
 /** `house_match` → plain label, DPWH vocabulary first, then the annex methods. */
@@ -239,12 +241,16 @@ export function matchLabel(v: string | null | undefined): string | null {
   return MATCH_LABELS[v] ?? ANNEX_MATCH_LABELS[v] ?? v.replace(/[_:]/g, ' ');
 }
 
-/** What the `pap` column means per dataset; null when the dataset has none. */
+/**
+ * What the `pap` column means per dataset, in plain words; null when the
+ * dataset has none. DPWH's PAP (program, activity or project) is a "program
+ * line"; HFEP's funding column is what the money pays for.
+ */
 export function papLabel(key: DatasetKey): string | null {
   switch (key) {
-    case 'dpwh': return 'PAP';
+    case 'dpwh': return 'Program line';
     case 'nia': return 'Sub-program';
-    case 'hfep': return 'Funding column';
+    case 'hfep': return 'What it pays for';
     default: return null;
   }
 }
@@ -253,7 +259,7 @@ export function papLabel(key: DatasetKey): string | null {
 export function zoneLabel(v: string | null | undefined): string | null {
   if (!v) return null;
   if (v === 'local') return 'Locally funded';
-  if (v === 'fap') return 'Foreign-assisted (FAP)';
+  if (v === 'fap') return 'Foreign-assisted project';
   return v;
 }
 
@@ -263,10 +269,10 @@ export function splitFlags(flags: string | null | undefined): string[] {
 
 /** `api_presence` on DPWH rows: Transparency-listing coverage of the NEP side. */
 export const API_PRESENCE_LABELS: Record<string, { label: string; help: string }> = {
-  paired: { label: 'In Transparency listing', help: 'The NEP row has a counterpart in the DPWH Transparency NEP listing.' },
-  nep_not_in_transparency: { label: 'Not in Transparency listing', help: 'The printed NEP row has no counterpart in the Transparency listing. A listing-gap observation, not a finding of concealment.' },
-  outside_api_scope: { label: 'Outside Transparency scope', help: 'The Transparency listing does not cover this row (mostly foreign-assisted projects).' },
-  no_nep_anchor: { label: 'No NEP side to check', help: 'House-only rows have no NEP record to look up in the Transparency listing.' },
+  paired: { label: 'On the DPWH website', help: "The proposal line also appears on the DPWH transparency website's list." },
+  nep_not_in_transparency: { label: 'Not on the DPWH website', help: "The proposal line is missing from the DPWH transparency website's list. That is a gap in the list, not proof that anything was hidden." },
+  outside_api_scope: { label: 'Not covered by the DPWH website', help: 'The DPWH transparency website does not list this kind of project (mostly foreign-assisted ones).' },
+  no_nep_anchor: { label: 'Nothing to check on the DPWH website', help: 'This line is only in the House bill, so there is no proposal line to look up on the DPWH website.' },
 };
 
 export function apiPresenceInfo(v: string | null | undefined): { label: string; help: string } | null {
@@ -361,7 +367,12 @@ export function whereClauses(f: ProjectFilters): string[] {
   } else if (f.held === 'only') {
     where.push(`trace IN (${heldTraces().map(sqlStr).join(', ')})`);
   }
-  if (f.region) where.push(`region = ${sqlStr(f.region)}`);
+  if (f.region) {
+    // A region can be printed more than one way (the farm-to-market lists use
+    // upper and title case); the map links pass every spelling, "|"-separated.
+    const labels = regionLabels(f.region);
+    where.push(labels.length > 1 ? `region IN (${labels.map(sqlStr).join(', ')})` : `region = ${sqlStr(labels[0])}`);
+  }
   if (f.program) where.push(`program = ${sqlStr(f.program)}`);
   if (f.pap) where.push(`pap = ${sqlStr(f.pap)}`);
   if (f.officeKind) where.push(`office_kind = ${sqlStr(f.officeKind)}`);
@@ -554,4 +565,15 @@ export function projectsCsv(rows: readonly ProjectRow[], dataset: DatasetKey): s
   const head = CSV_COLUMNS.map((c) => c.key).join(',');
   const body = rows.map((r) => CSV_COLUMNS.map((c) => csvCell(c.pick(r, dataset))).join(','));
   return [head, ...body].join('\n');
+}
+
+/** The printed region labels a `region=` filter value stands for ("A|B" → ["A", "B"]). */
+export function regionLabels(value: string): string[] {
+  return value.split('|').map((x) => x.trim()).filter(Boolean);
+}
+
+/** How a `region=` value reads in the select: one label as printed, or the first with "(all spellings)". */
+export function regionFilterName(value: string): string {
+  const labels = regionLabels(value);
+  return labels.length > 1 ? `${labels[0]} (all spellings)` : value;
 }

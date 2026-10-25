@@ -1,24 +1,30 @@
 /**
- * Pure helpers for the Districts lens (`/hgab/2027/districts`): URL state,
+ * Pure helpers for the Districts pages (`/hgab/2027/districts`): URL state,
  * the nine-slot fiscal history every chart and table draws, the metrics the
- * grid sorts on, and the filters. No React and no DOM, so the pages and the
- * presentational bits share one definition of every derived figure.
+ * grid sorts on, the filters, and every reader-facing label the pages share.
+ * No React and no DOM, so the pages and the presentational bits share one
+ * definition of every derived figure and one wording for every idea.
  *
- * Rules enforced here, matching the DEO2LEG lens conditions:
+ * Rules enforced here, matching the DEO2LEG conditions:
  *   - an office's money is never divided among the districts it serves; card
  *     metrics sum UNDIVIDED office totals and callers must label them so;
  *   - null stays null (an office not found in a year's data), never 0;
- *   - stages are compared, never added: a GAA subtotal counts GAA years only,
- *     and FY2027 NEP / HGAB 3R are proposals listed beside it.
+ *   - documents are compared, never added: an enacted subtotal counts GAA
+ *     years only, and the FY2027 NEP / House 3R are proposals listed beside it.
+ *
+ * Wording: labels here are what a reader sees. Technical terms (residual,
+ * crosswalk, ledger, stage, matched label) stay in identifiers and comments;
+ * the reader gets "not assigned to a district", "office-to-district map",
+ * "list", "document" and nothing about matching outside a Details block.
  */
 import {
-  CONGRESS_TERMS, datasetPath, pctChange,
-  type CongressTerm, type DistrictCard, type DistrictRepresentative, type FiscalStage,
-  type HgabDistrictIndex, type OfficeHistory, type ResidualYear,
+  BRIDGE_LABELS, CONGRESS_TERMS, PLAIN_TERMS, REGION_LABELS, REGION_ORDER, datasetPath, pctChange, regionKeyOf,
+  type BridgeGroup, type CongressTerm, type DistrictCard, type DistrictRepresentative, type FiscalStage,
+  type HgabDistrictIndex, type OfficeHistory, type RegionKey, type ResidualYear,
 } from './hgab';
 
 // ---------------------------------------------------------------------------
-// URL state (`?q=…&region=…&tier=…&sort=…`)
+// URL state (`?q=…&region=…&tier=…&sort=…&group=none`)
 // ---------------------------------------------------------------------------
 
 export type DistrictSortKey = 'hgab3' | 'gaa2026' | 'change' | 'growth' | 'name';
@@ -27,18 +33,26 @@ export type TierFilter = '' | 'A' | 'B' | 'none';
 
 export const DEFAULT_DISTRICT_SORT: DistrictSortKey = 'hgab3';
 
+/** Sort options, in the reader's words. */
 export const DISTRICT_SORT_LABELS: Record<DistrictSortKey, string> = {
-  hgab3: 'FY2027 HGAB 3R · largest first',
-  gaa2026: 'FY2026 GAA · largest first',
-  change: 'FY2027 change vs NEP · largest first',
-  growth: 'Growth, 18th → 20th Congress · largest first',
-  name: 'District · A → Z',
+  hgab3: 'Largest House bill amount',
+  gaa2026: 'Largest 2026 budget',
+  change: 'Biggest change from the proposal',
+  growth: 'Fastest growth across Congresses',
+  name: 'Name',
 };
 
+/** The sort label inside a sentence ("sorted by largest House bill amount"): only the first letter is lower-cased. */
+export function sortPhrase(key: DistrictSortKey): string {
+  const l = DISTRICT_SORT_LABELS[key];
+  return l.charAt(0).toLowerCase() + l.slice(1);
+}
+
+/** The "Whose budget?" filter. */
 export const TIER_FILTER_LABELS: Record<Exclude<TierFilter, ''>, string> = {
-  A: 'Tier A · attributable to one district',
-  B: 'Tier B or mixed · undivided office totals',
-  none: 'No office ledger',
+  A: 'Tier A · the office serves only this district',
+  B: 'Tier B or mixed · the office is shared; figures not split',
+  none: 'No office found',
 };
 
 export interface DistrictFilters {
@@ -47,6 +61,8 @@ export interface DistrictFilters {
   region: string;
   tier: TierFilter;
   sort: DistrictSortKey;
+  /** Cards grouped under region headings (the default); `group=none` in the URL gives the flat sorted list. */
+  group: boolean;
 }
 
 function isSortKey(v: string | null): v is DistrictSortKey {
@@ -62,6 +78,7 @@ export function districtFiltersFromParams(params: URLSearchParams): DistrictFilt
     region: params.get('region') ?? '',
     tier: tier === 'A' || tier === 'B' || tier === 'none' ? tier : '',
     sort: isSortKey(sort) ? sort : DEFAULT_DISTRICT_SORT,
+    group: params.get('group') !== 'none',
   };
 }
 
@@ -72,22 +89,34 @@ export function paramsFromDistrictFilters(f: DistrictFilters): URLSearchParams {
   if (f.region) p.set('region', f.region);
   if (f.tier) p.set('tier', f.tier);
   if (f.sort !== DEFAULT_DISTRICT_SORT) p.set('sort', f.sort);
+  if (!f.group) p.set('group', 'none');
   return p;
 }
 
+/** True when search, region or tier narrows the list. Sort and grouping are views, not filters. */
 export function hasDistrictFilters(f: DistrictFilters): boolean {
   return Boolean(f.q.trim() || f.region || f.tier);
 }
 
 // ---------------------------------------------------------------------------
-// Fiscal stages and the nine history slots
+// Fiscal stages (the three documents) and the nine history slots
 // ---------------------------------------------------------------------------
 
-export const FISCAL_STAGE_SHORT: Record<FiscalStage, string> = { gaa: 'GAA', nep: 'NEP', hgab3: 'HGAB 3R' };
+/** Table-cell label of the document a figure comes from. Acronyms are expanded in every page's hero first. */
+export const FISCAL_STAGE_SHORT: Record<FiscalStage, string> = { gaa: 'Enacted (GAA)', nep: 'Proposal (NEP)', hgab3: 'House bill' };
+/** One-word form for chart ticks, residual rows and sentences: "2026 enacted budget", "2027 House bill". */
+export const FISCAL_STAGE_WORD: Record<FiscalStage, string> = { gaa: 'enacted budget', nep: 'proposal', hgab3: 'House bill' };
+/** Tooltip form: what the document is, in one plain sentence. */
 export const FISCAL_STAGE_LONG: Record<FiscalStage, string> = {
-  gaa: 'General Appropriations Act — enacted',
-  nep: 'National Expenditure Program — the President’s proposal',
-  hgab3: 'House Bill 10858, third reading — the House’s proposal, not yet enacted',
+  gaa: 'The enacted budget (GAA): the law Congress passed and the President signed for that year.',
+  nep: 'The President’s proposed budget (NEP), sent to Congress in August.',
+  hgab3: 'The House bill (third reading): the House of Representatives’ version of the 2027 budget, not yet law.',
+};
+/** What each document's figure covers for one office. */
+export const FISCAL_STAGE_SCOPE: Record<FiscalStage, string> = {
+  gaa: 'the whole office',
+  nep: 'the whole office',
+  hgab3: 'named projects only',
 };
 
 export interface HistorySlot {
@@ -101,9 +130,34 @@ export interface HistorySlot {
   listed: boolean;
 }
 
-/** "FY2026 GAA", "FY2027 HGAB 3R". */
+/** "2026 enacted budget", "2027 proposal", "2027 House bill". */
 export function slotLabel(s: { fy: number; stage: FiscalStage }): string {
-  return `FY${s.fy} ${FISCAL_STAGE_SHORT[s.stage]}`;
+  return `${s.fy} ${FISCAL_STAGE_WORD[s.stage]}`;
+}
+
+/** "2020–2022" (or "2020–22" when `short`): the budget years a Congress handled, as the key row's chips print them. */
+export function congressBudgetYears(term: Pick<CongressTerm, 'years'>, short = false): string {
+  const lo = Math.min(...term.years);
+  const hi = Math.max(...term.years);
+  if (lo === hi) return String(lo);
+  return `${lo}–${short && Math.floor(lo / 100) === Math.floor(hi / 100) ? String(hi).slice(2) : hi}`;
+}
+
+/** "18th": the ordinal alone, for the second and third key-row chips. */
+export function congressOrdinal(term: Pick<CongressTerm, 'congress'>): string {
+  const n = term.congress;
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${tail}`;
+}
+
+/** "passed the 2020, 2021 and 2022 budgets" / "passed the 2026 budget; the 2027 budget is still before it". */
+export function congressPlain(term: Pick<CongressTerm, 'years' | 'label'>): string {
+  const enacted = term.years.filter((fy) => fy !== 2027);
+  const list = enacted.length <= 1
+    ? enacted.join('')
+    : `${enacted.slice(0, -1).join(', ')} and ${enacted[enacted.length - 1]}`;
+  const head = enacted.length ? `passed the ${list} ${enacted.length === 1 ? 'budget' : 'budgets'}` : 'passed no budget yet';
+  return term.years.includes(2027) ? `${head}. The 2027 budget is still before it: the proposal and the House bill.` : `${head}.`;
 }
 
 export function congressOf(fy: number): CongressTerm | undefined {
@@ -189,32 +243,71 @@ export function isOfficeLedger(office: Pick<OfficeHistory, 'kind'>): boolean {
 // Cards
 // ---------------------------------------------------------------------------
 
-export const ATTRIBUTION_LABELS: Record<DistrictCard['attribution'], { short: string; label: string; help: string }> = {
+/** The plain meaning of the two tiers, said once per page right after the first "Tier" badge. */
+export const TIER_MEANING =
+  'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.';
+
+/**
+ * A card's overall answer to "Whose budget is this?". `short` is the badge,
+ * `badge` the small print beside it, `label` the heading, `help` one or two
+ * plain sentences.
+ */
+export const ATTRIBUTION_LABELS: Record<DistrictCard['attribution'], { short: string; badge: string; label: string; help: string }> = {
   A: {
     short: 'Tier A',
-    label: 'Tier A · attributable',
-    help: 'Every office serving this district serves it alone, so its totals are attributable to this district.',
+    badge: 'only this district',
+    label: 'Tier A · the office serves only this district',
+    help: 'Every office that builds here serves only this district. Its figures can be read as this district’s.',
   },
   B: {
     short: 'Tier B',
-    label: 'Tier B · undivided office total',
-    help: 'Every office serving this district also serves others. Figures are undivided office totals shared with the named co-served districts; nothing is split.',
+    badge: 'shared, not split',
+    label: 'Tier B · shared office total, not split',
+    help: 'Every office that builds here also serves other districts. The figures are the whole office’s. They are shared, not split.',
   },
   mixed: {
     short: 'Mixed',
-    label: 'Mixed · undivided office total',
-    help: 'Some serving offices are shared with other districts. Figures add Tier A totals to undivided Tier B totals; nothing is split.',
+    badge: 'one office shared',
+    label: 'Mixed · one office is shared, not split',
+    help: 'Some offices here serve only this district; at least one is shared with others. A shared figure is the whole office’s, not split.',
   },
   none: {
-    short: 'No ledger',
-    label: 'No office ledger',
-    help: 'No district engineering office ledger could be joined to this district, so there is no figure to show. The absence of a figure is not evidence of no funding.',
+    short: 'No office',
+    badge: 'no figure',
+    label: 'No office found',
+    help: 'We could not find a district engineering office (DEO) for this district, so there is no figure to show. That is not evidence of no funding.',
   },
 };
 
-/** "Tier A · attributable" or "Tier B · shared with 2". */
+/** "Tier A · serves only this district" or "Tier B · shared with 2 other districts, not split". */
 export function officeTierText(tier: 'A' | 'B', sharedWith: number): string {
-  return tier === 'A' ? 'Tier A · attributable' : `Tier B · shared with ${sharedWith}`;
+  return tier === 'A'
+    ? 'Tier A · serves only this district'
+    : `Tier B · shared with ${sharedWith} other ${sharedWith === 1 ? 'district' : 'districts'}, not split`;
+}
+
+/** The short form on a badge: "serves only this district" / "shared with 2 · not split". */
+export function officeTierBadgeText(tier: 'A' | 'B', sharedWith: number): string {
+  return tier === 'A' ? 'serves only this district' : `shared with ${sharedWith} · not split`;
+}
+
+/** "District engineering office (DEO)" / "Sub-district engineering office" / "Regional grouping". */
+export function officeKindText(office: Pick<OfficeHistory, 'kind'>): string {
+  switch (office.kind) {
+    case 'district_engineering_office': return 'District engineering office (DEO)';
+    case 'sub_district_engineering_office': return 'Sub-district engineering office';
+    default: return 'Regional grouping, not a district office';
+  }
+}
+
+/** Tooltip of a group: insertion and deletion candidates get the plain meaning of "candidate"; the rest their own help. */
+export function bridgeGroupTitle(group: BridgeGroup): string {
+  const label = BRIDGE_LABELS[group];
+  if (group === 'house_only' || group === 'nep_only') {
+    const kind = group === 'house_only' ? 'Insertion candidate' : 'Deletion candidate';
+    return `${label.label}: ${kind.toLowerCase()}s. ${PLAIN_TERMS.candidate.meaning}`;
+  }
+  return `${label.label}. ${label.help}`;
 }
 
 export function findDistrict(index: HgabDistrictIndex, id: string | undefined): DistrictCard | undefined {
@@ -317,9 +410,9 @@ export function cardMetric(card: DistrictCard, index: HgabDistrictIndex, key: Di
   }
 }
 
-/** Display name of a seat's holder; ambiguous seats list every candidate. */
+/** Display name of a seat's holder; ambiguous seats list every member named. */
 export function repName(rep: DistrictRepresentative | null | undefined): string {
-  if (!rep) return 'Representative not resolved';
+  if (!rep) return 'Representative not found';
   if (rep.status === 'ambiguous') {
     if (rep.name) return rep.name;
     const names = (rep.candidates ?? []).map((c) => c.name).filter(Boolean);
@@ -368,25 +461,138 @@ export function sortDistricts(cards: readonly DistrictCard[], index: HgabDistric
   });
 }
 
-/** Distinct regions on the cards, sorted; the region select's options. */
+/** Distinct region labels on the cards, north to south (`REGION_ORDER`), unrecognised ones last; the region select's options. */
 export function regionsOf(index: HgabDistrictIndex): string[] {
-  return [...new Set(index.districts.map((d) => d.region).filter((r): r is string => Boolean(r)))].sort((a, b) =>
-    a.localeCompare(b, 'en', { numeric: true }),
+  const rank = (r: string) => {
+    const k = regionKeyOf(r);
+    return k ? REGION_ORDER.indexOf(k) : REGION_ORDER.length;
+  };
+  return [...new Set(index.districts.map((d) => d.region).filter((r): r is string => Boolean(r)))].sort(
+    (a, b) => rank(a) - rank(b) || a.localeCompare(b, 'en', { numeric: true }),
   );
 }
 
 // ---------------------------------------------------------------------------
-// Residual
+// Regions: the grid's sections
 // ---------------------------------------------------------------------------
 
-/** Money under Central Office, regional offices and unmatched units — on no district card. */
+/** A region section: one of the 18 regions, or "other" for a label `regionKeyOf` does not recognise. */
+export type RegionSectionKey = RegionKey | 'other';
+
+/** The section a card sits in, from the region label the office-to-district map gives the district. */
+export function districtRegionKey(card: Pick<DistrictCard, 'region'>): RegionSectionKey {
+  return regionKeyOf(card.region) ?? 'other';
+}
+
+/** Element id of a region section, and the `#hash` that links to it: `region-III`, `region-IV-A`, `region-other`. */
+export function regionAnchor(key: RegionSectionKey): string {
+  return `region-${key}`;
+}
+
+/** `#region-III` → `III`; null for any other hash. */
+export function regionFromHash(hash: string): RegionSectionKey | null {
+  const m = /^#region-(.+)$/.exec(hash);
+  if (!m) return null;
+  const k = decodeURIComponent(m[1]);
+  return k === 'other' || (REGION_ORDER as readonly string[]).includes(k) ? (k as RegionSectionKey) : null;
+}
+
+/** "Region III", "Central Luzon", "Region III · Central Luzon". */
+export function regionNames(key: RegionSectionKey): { short: string; name: string; full: string } {
+  if (key === 'other') return { short: 'Other', name: 'Region not recorded', full: 'Other · region not recorded' };
+  const l = REGION_LABELS[key];
+  return { ...l, full: `${l.short} · ${l.name}` };
+}
+
+/** The region select's option text for a label as the data prints it: "Region III · Central Luzon". */
+export function regionOptionLabel(raw: string): string {
+  const k = regionKeyOf(raw);
+  return k ? regionNames(k).full : raw;
+}
+
+export interface RegionGroup {
+  key: RegionSectionKey;
+  /** In the caller's order, so a sort applies within each region. */
+  cards: DistrictCard[];
+}
+
+/** Cards by region, in `REGION_ORDER` with "other" last. Empty regions are left out, so a filter hides them. */
+export function groupDistrictsByRegion(cards: readonly DistrictCard[]): RegionGroup[] {
+  const by = new Map<RegionSectionKey, DistrictCard[]>();
+  for (const c of cards) {
+    const k = districtRegionKey(c);
+    const list = by.get(k);
+    if (list) list.push(c);
+    else by.set(k, [c]);
+  }
+  const order: RegionSectionKey[] = [...REGION_ORDER, 'other'];
+  return order.filter((k) => by.has(k)).map((k) => ({ key: k, cards: by.get(k)! }));
+}
+
+export interface RegionTotals {
+  districts: number;
+  /** District engineering offices serving these districts, each counted once. */
+  offices: number;
+  /** Sum of those offices' 2026 enacted figures; null when none has one. */
+  gaa2026_php: number | null;
+  /** Sum of those offices' 2027 House bill figures (named projects only); null when none has one. */
+  hgab3_php: number | null;
+}
+
+/**
+ * A region's summary line. Every office serving the given districts is summed
+ * ONCE, so a shared (Tier B) office is never double-counted; an office's
+ * districts all sit in its own region, so regions never overlap either.
+ */
+export function regionTotals(cards: readonly DistrictCard[], index: HgabDistrictIndex): RegionTotals {
+  const offices = new Map<string, OfficeHistory>();
+  for (const c of cards) for (const o of cardOffices(c, index)) offices.set(o.id, o);
+  let gaa: number | null = null;
+  let h3: number | null = null;
+  for (const o of offices.values()) {
+    const g = yearAmount(o, 2026, 'gaa');
+    if (g != null) gaa = (gaa ?? 0) + g;
+    const h = yearAmount(o, 2027, 'hgab3');
+    if (h != null) h3 = (h3 ?? 0) + h;
+  }
+  return { districts: cards.length, offices: offices.size, gaa2026_php: gaa, hgab3_php: h3 };
+}
+
+/**
+ * Districts served by the Bangsamoro (BARMM) regional grouping that the
+ * office-to-district map files under another region. Named on that region's
+ * heading so a reader looking for Bangsamoro can find them.
+ */
+export function bangsamoroDistricts(cards: readonly DistrictCard[], index: HgabDistrictIndex): DistrictCard[] {
+  return cards.filter(
+    (c) => districtRegionKey(c) !== 'BARMM' && cardRegionalGroups(c, index).some((g) => regionKeyOf(g.name) === 'BARMM'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Residual: the money that appears on no district card
+// ---------------------------------------------------------------------------
+
+/** Money under Central Office, regional offices and offices we could not place — on no district card. */
 export function residualUnattributed(y: ResidualYear): number {
   return y.central_office_php + y.regional_offices_php + y.unmatched_php;
+}
+
+/** "the DPWH Central Office or a regional office", adding the unplaced offices only when that year has any. */
+export function residualWhere(y: ResidualYear): string {
+  return y.unmatched_php > 0
+    ? 'the DPWH Central Office, a regional office or an office we could not place'
+    : 'the DPWH Central Office or a regional office';
 }
 
 /** Share of the year's total that no district card shows (0–1), null when the total is 0. */
 export function residualShare(y: ResidualYear): number | null {
   return y.total_php ? residualUnattributed(y) / y.total_php : null;
+}
+
+/** True when, in every listed year, more than half of DPWH money appears on no district card. */
+export function residualMostlyOffCards(residual: readonly ResidualYear[]): boolean {
+  return residual.length > 0 && residual.every((y) => (residualShare(y) ?? 0) > 0.5);
 }
 
 /** The residual row the headline sentence quotes: FY2027 HGAB 3R, else the last listed year. */

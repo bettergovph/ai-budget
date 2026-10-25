@@ -1,6 +1,7 @@
 {
   "name": "ai-reports",
   "private": true,
+  "license": "MIT",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -11,6 +12,7 @@
     "verify:hgab": "tsx scripts/verify-hgab.ts",
     "upload:hgab": "tsx scripts/upload-hgab-to-r2.ts",
     "build:hgab-districts": "tsx scripts/build-hgab-districts.ts",
+    "build:hgab-geo": "tsx scripts/build-hgab-geo.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",

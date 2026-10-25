@@ -592,26 +592,27 @@ async function main(): Promise<void> {
       aliasUses.push({ office: id, label, via: m.via ?? "", slots: keys, basis: m.alias?.basis ?? null, provisional: Boolean(m.alias?.provisional) });
     }
 
+    // Reader-facing small print: plain sentences of at most 25 words (the verifier enforces it). The technical
+    // record of what each note stands for is in docs/hgab-data.md ("Scope notes (technical record)").
     const notes: string[] = [];
     const missingGaa = years.filter((y) => y.stage === "gaa" && y.matched_label == null).map((y) => y.fy);
-    if (missingGaa.length) notes.push(`No operating unit under this office's name in the ${describeYears(missingGaa)} GAA listing.`);
+    if (missingGaa.length) notes.push(`Not listed under this name in the ${plainYears(missingGaa)} enacted budget${missingGaa.length > 1 ? "s" : ""}.`);
     const zeroGaa = years.filter((y) => y.stage === "gaa" && y.matched_label != null && y.php == null).map((y) => y.fy);
-    if (zeroGaa.length) notes.push(`Listed with a zero appropriation in ${describeYears(zeroGaa)} (shown as null, never 0).`);
-    if (years[7].php == null) notes.push("No operating unit under this office's name in the FY2027 NEP listing.");
-    if (!fy2027) notes.push(o.type === "regional_group" ? "A regional grouping, not an engineering office: no office ledger exists in any year, and its money stays in the residual." : "No rows under this office in the FY2027 House bill / NEP comparison population.");
-    // Predecessor offices whose crosswalk legacy block names this office as a candidate successor.
+    if (zeroGaa.length) notes.push(`Listed with no money in ${plainYears(zeroGaa)}; shown as blank rather than zero.`);
+    if (years[7].php == null) notes.push("Not listed under this name in the President's 2027 proposal.");
+    if (!fy2027) notes.push(o.type === "regional_group" ? "A regional grouping, not an engineering office; it has no figures of its own, and its money is not assigned to any district." : "No projects under this office in the 2027 House bill or the President's proposal.");
+    // Predecessor offices whose crosswalk legacy block names this office as a candidate successor: their money
+    // stays in the residual (unmatched_labels), never split between successors.
     for (const [legacyId, lo] of Object.entries(crosswalk.offices)) {
       if (!lo.legacy || !lo.legacy.candidateSuccessors.some((n) => officeIdByName.get(n) === id)) continue;
       const uses = legacyUse.get(legacyId) ?? [];
       if (!uses.length) continue;
-      const byLabel = new Map<string, Array<{ key: string; php: number }>>();
-      for (const u of uses) byLabel.set(u.label, [...(byLabel.get(u.label) ?? []), { key: u.key, php: u.php }]);
-      const parts = [...byLabel].map(([label, xs]) => `'${label}' (${describeSlots(xs.map((x) => x.key))}, ${peso(xs.reduce((a, x) => a + x.php, 0))})`);
+      const total = uses.reduce((a, u) => a + u.php, 0);
       const lastGaa = Math.max(...uses.filter((u) => u.key.startsWith("gaa:")).map((u) => Number(u.key.slice(4))), 0);
       const lead = lastGaa && lastGaa < 2026 && !uses.some((u) => u.key === "nep:2027")
-        ? `Before FY${lastGaa + 1} this area was served by ${lo.name}`
-        : `The DBM listing also prints the undivided ${lo.name}`;
-      notes.push(`${lead} (crosswalk legacy status ${lo.legacy.status}${lo.legacy.law ? `, ${lo.legacy.law}` : ""}; successors ${lo.legacy.candidateSuccessors.join(" / ")}). Its amounts are listed under the residual, never split here: ${parts.join("; ")}.`);
+        ? `Before ${lastGaa + 1} this area was served by ${lo.name}`
+        : `The budget also lists an undivided ${lo.name}`;
+      notes.push(`${lead}; its ${peso(total)} (${plainSlots(uses.map((u) => u.key))}) is left unassigned, not split among its ${lo.legacy.candidateSuccessors.length} successors.`);
     }
     offices[id] = {
       id, name: o.name, kind: o.type, region: o.region ?? null, district_ids: [...o.legislativeDistrictIds].sort(),
@@ -707,15 +708,19 @@ async function main(): Promise<void> {
     },
     terms: CONGRESS_TERMS.map((t) => ({ ...t, years: [...t.years] })),
     districts, offices, residual,
+    // Reader-facing small print on the districts pages: plain sentences of at most 25 words each (the verifier
+    // enforces it). The precise statements they stand for are in docs/hgab-data.md ("Scope notes (technical record)").
     scope_notes: [
-      "FY2020–2026 figures are enacted GAA appropriations summed by DPWH operating unit from the GAA operating-unit listing: the whole department, all funds and all expense classes (source files in thousands of pesos, converted to pesos).",
-      `The FY2027 'nep' slot is the DBM NEP operating-unit listing on the same whole-department basis (department total ${peso(nep.total)}, including automatic appropriations).`,
-      `The FY2027 'hgab3' slot and the fy2027 block are the House bill third reading against the NEP for the DPWH operations population compared in the HGAB section (NEP ${peso(hgab.totals.nep)}, HGAB 3R ${peso(hgab.totals.hgab3)}): named projects only, excluding personnel services, MOOE and other non-project items. fy2027.nep_php is therefore smaller than the 'nep' slot for the same office and the two must never be added or compared as like for like.`,
-      "GAA, NEP and HGAB totals are each reconciled per year and stage: deo_php + central_office_php + regional_offices_php + unmatched_php = total_php. 'Central Office' is the label matching /^central office$/i; regional offices match /regional office/i (including '… - Proper'); the BARMM regional grouping counts as regional and never as an office.",
-      `Offices are joined by normalised name only (DEO expansion, ordinal words, accents, hyphens, the 'Las Pi±as' mojibake, ' - Proper'). ${ALIASES.length} explicit aliases are declared in the builder and recorded on each office's aliases_used; ${unmatchedByKind.legacy} labels match crosswalk legacy (predecessor) offices with no district and ${unmatchedByKind.unmatched} match nothing — all are listed in residual.unmatched_labels with their money, never assigned to a successor.`,
-      "A Tier B office's figures are undivided and shared by every district it serves; card headlines sum the serving offices' undivided totals and must be labelled as a range when attribution is B or mixed. Districts linked only to the BARMM regional grouping have attribution 'none' and null headlines.",
-      "69 paired FY2027 rows print a different implementing office on the NEP and House sides; as in the HGAB section, both amounts are booked to the office printed on the House side (the parquet's office column). HGAB statuses are carried verbatim through the per-office bridge (fuzzy and ambiguous rows sit in house_only as the contract maps them).",
-      "The crosswalk's scanned allocation table (undated) is used for structure only; none of its amounts appear here.",
+      "Figures for 2020 to 2026 are the enacted budgets of each DPWH office: the whole department, every fund and every kind of spending.",
+      `The 2027 President's proposal figure uses the same whole-department basis (${peso(nep.total)} in all, including items released automatically).`,
+      `The 2027 House bill figure counts named projects only, not staff or running costs (${peso(hgab.totals.hgab3)} in all), so it is smaller than whole-department figures.`,
+      `The 2027 comparison sets the House bill against the President's proposal on that project-only basis (${peso(hgab.totals.nep)} proposed); never mix it with whole-department figures.`,
+      "Every year's total is fully accounted for: office figures plus the Central Office, regional offices and unmatched names add up to the department total.",
+      `Offices are matched by name across years, with ${ALIASES.length} known name changes. ${unmatchedByKind.legacy} names are former offices and ${unmatchedByKind.unmatched} match nothing; their money stays unassigned.`,
+      "An office serving several districts shows its full figure on each; district headlines add those undivided figures, so read them as a range.",
+      "Districts served only by the BARMM regional grouping have no office figures; their headlines are blank.",
+      "69 projects name a different office in the two 2027 documents; both amounts are shown under the office the House bill prints.",
+      "The table linking offices to districts is used only for those links; the amounts printed in it are not used.",
     ],
   };
 
@@ -780,6 +785,19 @@ function describeSlots(keys: string[]): string {
   if (gaa.length) parts.push(`${describeYears(gaa)} GAA`);
   if (keys.includes("nep:2027")) parts.push("FY2027 NEP");
   if (keys.includes("hgab3:2027")) parts.push("FY2027 HGAB 3R");
+  return parts.join(", ");
+}
+/** Reader-facing year runs for office notes: "2020–2022", "2020, 2024". (`describeYears` keeps the FY form for the manifest.) */
+function plainYears(years: number[]): string {
+  return describeYears(years).replace(/FY/g, "");
+}
+/** Reader-facing slot list for office notes: "enacted budgets 2020–2026, 2027 proposal". */
+function plainSlots(keys: string[]): string {
+  const gaa = keys.filter((k) => k.startsWith("gaa:")).map((k) => Number(k.slice(4)));
+  const parts: string[] = [];
+  if (gaa.length) parts.push(`enacted budget${gaa.length > 1 ? "s" : ""} ${plainYears(gaa)}`);
+  if (keys.includes("nep:2027")) parts.push("2027 proposal");
+  if (keys.includes("hgab3:2027")) parts.push("2027 House bill");
   return parts.join(", ");
 }
 

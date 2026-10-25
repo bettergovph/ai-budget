@@ -52,11 +52,29 @@ export function isDatasetKey(v: string | undefined): v is DatasetKey {
  */
 export type StageKey = 'nep' | 'hgab2' | 'hgab3' | 'api';
 export const STAGE_ORDER: readonly StageKey[] = ['nep', 'hgab2', 'hgab3', 'api'];
-export const STAGE_LABELS: Record<StageKey, { short: string; label: string }> = {
-  nep: { short: 'NEP', label: 'DBM National Expenditure Program' },
-  hgab2: { short: 'HGAB 2R', label: 'House bill, second reading' },
-  hgab3: { short: 'HGAB 3R', label: 'House bill, third reading' },
-  api: { short: 'Transparency', label: 'DPWH Transparency NEP listing' },
+export const STAGE_LABELS: Record<StageKey, { short: string; label: string; plain: string }> = {
+  nep: { short: 'NEP', label: "President's proposed budget (NEP)", plain: "the President's proposal" },
+  hgab2: { short: 'House 2R', label: 'House bill, second reading', plain: 'the House bill at second reading' },
+  hgab3: { short: 'House 3R', label: 'House bill, third reading', plain: 'the House bill at third reading' },
+  api: { short: 'DPWH site', label: 'DPWH transparency website listing', plain: "the DPWH transparency website's list" },
+};
+
+/**
+ * Plain-language meanings for the terms the section cannot avoid. Pages show
+ * these as tooltips or "What this means" notes the first time a term appears;
+ * nothing technical should appear on a reader-facing surface without one.
+ */
+export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
+  nep: { term: 'NEP', meaning: "National Expenditure Program: the President's proposed budget, sent to Congress every August." },
+  hgab: { term: 'House bill', meaning: "The House of Representatives' version of the budget, House Bill 10858 for 2027. It goes to the Senate next." },
+  reading: { term: 'Second and third reading', meaning: 'The House votes on a bill twice. The third-reading text is the version it sends to the Senate.' },
+  pap: { term: 'Program line', meaning: "A heading in the budget under which projects are listed, for example 'Preventive Maintenance - Primary Roads'." },
+  deo: { term: 'District engineering office', meaning: 'The DPWH field office that carries out projects in an area. One office can serve more than one congressional district.' },
+  fap: { term: 'Foreign-assisted project', meaning: 'A project paid for partly with a loan or grant from abroad.' },
+  candidate: { term: 'Candidate', meaning: 'A match or a gap found by comparing project names, places and amounts. It is a lead for checking, not a confirmed change.' },
+  tier: { term: 'Tier A and Tier B', meaning: 'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.' },
+  residual: { term: 'Not assigned to a district', meaning: 'Money listed under the DPWH Central Office or a regional office. It does not appear on any district card.' },
+  stages: { term: 'Two versions, not two budgets', meaning: "The President's proposal and the House bill are two versions of the same budget. Compare them; never add them together." },
 };
 
 // ---------------------------------------------------------------------------
@@ -82,34 +100,34 @@ export const BRIDGE_ORDER: readonly BridgeGroup[] = [
 
 export const BRIDGE_LABELS: Record<BridgeGroup, { label: string; sub: string; help: string }> = {
   house_only: {
-    label: 'Insertion candidates',
-    sub: 'House-only records',
-    help: 'Rows printed in the House bill with no attached NEP record. A candidate is a matching observation, not a confirmed insertion.',
+    label: 'In the House bill only',
+    sub: 'insertion candidates',
+    help: "Projects listed in the House bill that we could not find in the President's proposal. Some may be new; others may be renamed or re-scoped lines. That is why they are called candidates.",
   },
   nep_only: {
-    label: 'Deletion candidates',
-    sub: 'NEP-only records',
-    help: 'Rows printed in the NEP with no attached House record. Not confirmed deletions; a re-titled or re-scoped replacement may exist.',
+    label: "In the President's proposal only",
+    sub: 'deletion candidates',
+    help: "Projects in the President's proposal that we could not find in the House bill. They may have been dropped, renamed or merged, so they are called candidates.",
   },
   unchanged: {
-    label: 'Unchanged',
-    sub: 'Same title, same amount',
-    help: 'Paired rows whose recorded allocation is equal on both stages.',
+    label: 'Same amount in both',
+    sub: 'matched, no change',
+    help: 'Projects found in both documents with the same amount.',
   },
   increased: {
-    label: 'Increased',
-    sub: 'Same title, higher House amount',
-    help: 'Paired rows where the House amount exceeds the NEP amount. Reported as the signed movement.',
+    label: 'Higher in the House bill',
+    sub: 'matched, amount raised',
+    help: 'Projects found in both documents where the House bill carries a larger amount than the proposal.',
   },
   decreased: {
-    label: 'Decreased',
-    sub: 'Same title, lower House amount',
-    help: 'Paired rows where the House amount is below the NEP amount.',
+    label: 'Lower in the House bill',
+    sub: 'matched, amount reduced',
+    help: 'Projects found in both documents where the House bill carries a smaller amount than the proposal.',
   },
   scope_review: {
-    label: 'Segment-scope review',
-    sub: 'Same road, different segment',
-    help: 'Same-road pairs whose station spans do not overlap. Their deltas are deliberately not booked as adjustments.',
+    label: 'Different stretch of the same road',
+    sub: 'not counted as a change',
+    help: 'The same road appears in both documents, but each covers a different stretch of it. The amounts are not comparable, so they are left out of the increases and reductions.',
   },
 };
 
@@ -153,22 +171,22 @@ export interface Bridge {
  * five plain values. Unknown values must still render (label = the raw key).
  */
 export const TRACE_LABELS: Record<string, { label: string; group: BridgeGroup; held?: boolean; help: string }> = {
-  amount_same: { label: 'Same amount', group: 'unchanged', help: 'Paired on both stages at the same amount.' },
-  house_only_candidate: { label: 'House only', group: 'house_only', help: 'No NEP record attached. Insertion candidate, not a confirmed insertion.' },
-  nep_only_candidate: { label: 'NEP only', group: 'nep_only', help: 'No House record attached. Deletion candidate, not a confirmed removal.' },
-  candidate_increase: { label: 'Increased', group: 'increased', help: 'Paired; House amount above NEP.' },
-  candidate_decrease: { label: 'Decreased', group: 'decreased', help: 'Paired; House amount below NEP.' },
-  fuzzy_candidate: { label: 'Unresolved · fuzzy', group: 'house_only', held: true, help: 'House row with similar-title NEP suggestions that were not accepted. Held out of headline insertion counts.' },
-  ambiguous: { label: 'Ambiguous', group: 'house_only', held: true, help: 'More than one NEP row shares the exact key. No pairing chosen.' },
-  segment_scope_review: { label: 'Segment-scope review', group: 'scope_review', help: 'Same road, non-overlapping chainage. Delta not booked as an adjustment.' },
-  transparency_gap_then_amount_same: { label: 'Same amount · not in Transparency', group: 'unchanged', help: 'Paired at the same amount; the NEP row is absent from the Transparency listing.' },
-  transparency_gap_then_candidate_increase: { label: 'Increased · not in Transparency', group: 'increased', help: 'Paired, House above NEP; the NEP row is absent from the Transparency listing.' },
-  transparency_gap_then_candidate_decrease: { label: 'Decreased · not in Transparency', group: 'decreased', help: 'Paired, House below NEP; the NEP row is absent from the Transparency listing.' },
-  transparency_gap_then_segment_scope_review: { label: 'Segment-scope review · not in Transparency', group: 'scope_review', help: 'Same road, non-overlapping chainage; NEP row absent from the Transparency listing.' },
-  outside_api_then_amount_same: { label: 'Same amount · outside Transparency scope', group: 'unchanged', help: 'Paired at the same amount; the row is outside the Transparency listing scope (mostly FAP).' },
-  outside_api_then_candidate_increase: { label: 'Increased · outside Transparency scope', group: 'increased', help: 'Paired, House above NEP; outside the Transparency listing scope.' },
-  outside_api_then_candidate_decrease: { label: 'Decreased · outside Transparency scope', group: 'decreased', help: 'Paired, House below NEP; outside the Transparency listing scope (the large FAP reductions sit here).' },
-  outside_api_then_segment_scope_review: { label: 'Segment-scope review · outside Transparency scope', group: 'scope_review', help: 'Same road, non-overlapping chainage; outside the Transparency listing scope.' },
+  amount_same: { label: 'Same amount in both', group: 'unchanged', help: 'Found in both documents with the same amount.' },
+  house_only_candidate: { label: 'House bill only', group: 'house_only', help: "Listed in the House bill; no matching line found in the President's proposal. A candidate, not a confirmed addition." },
+  nep_only_candidate: { label: "President's proposal only", group: 'nep_only', help: "Listed in the President's proposal; no matching line found in the House bill. A candidate, not a confirmed removal." },
+  candidate_increase: { label: 'Higher in the House bill', group: 'increased', help: 'Found in both documents; the House bill carries a larger amount.' },
+  candidate_decrease: { label: 'Lower in the House bill', group: 'decreased', help: 'Found in both documents; the House bill carries a smaller amount.' },
+  fuzzy_candidate: { label: 'Possible match, unconfirmed', group: 'house_only', held: true, help: "A House line with a similar-looking line in the President's proposal that could not be confirmed as the same project. Left out of the headline counts." },
+  ambiguous: { label: 'Several possible matches', group: 'house_only', held: true, help: "More than one line in the President's proposal could be this project, so none was chosen." },
+  segment_scope_review: { label: 'Different stretch of the same road', group: 'scope_review', help: 'Same road in both documents, but a different stretch of it. Not counted as an increase or a reduction.' },
+  transparency_gap_then_amount_same: { label: 'Same amount in both · not on the DPWH site', group: 'unchanged', help: "Same amount in both documents. The project is missing from the DPWH transparency website's list." },
+  transparency_gap_then_candidate_increase: { label: 'Higher in the House bill · not on the DPWH site', group: 'increased', help: "Larger amount in the House bill. The project is missing from the DPWH transparency website's list." },
+  transparency_gap_then_candidate_decrease: { label: 'Lower in the House bill · not on the DPWH site', group: 'decreased', help: "Smaller amount in the House bill. The project is missing from the DPWH transparency website's list." },
+  transparency_gap_then_segment_scope_review: { label: 'Different stretch of the same road · not on the DPWH site', group: 'scope_review', help: "A different stretch of the same road. The project is missing from the DPWH transparency website's list." },
+  outside_api_then_amount_same: { label: 'Same amount in both · not covered by the DPWH site', group: 'unchanged', help: 'Same amount in both documents. The DPWH transparency website does not list this kind of project (mostly foreign-assisted ones).' },
+  outside_api_then_candidate_increase: { label: 'Higher in the House bill · not covered by the DPWH site', group: 'increased', help: 'Larger amount in the House bill. The DPWH transparency website does not list this kind of project.' },
+  outside_api_then_candidate_decrease: { label: 'Lower in the House bill · not covered by the DPWH site', group: 'decreased', help: 'Smaller amount in the House bill. The DPWH transparency website does not list this kind of project; the large foreign-assisted reductions are here.' },
+  outside_api_then_segment_scope_review: { label: 'Different stretch of the same road · not covered by the DPWH site', group: 'scope_review', help: 'A different stretch of the same road. The DPWH transparency website does not list this kind of project.' },
 };
 
 export function traceInfo(trace: string | null | undefined): { label: string; group: BridgeGroup | null; held: boolean; help: string } {
@@ -180,32 +198,32 @@ export function traceInfo(trace: string | null | undefined): { label: string; gr
 
 /** `house_match` on DPWH rows: how the pairing was made. */
 export const MATCH_LABELS: Record<string, string> = {
-  exact_candidate: 'Exact title, region and PAP',
-  chainage_candidate: 'Same road, chainage differs',
-  segment_scope_candidate: 'Same road, disjoint segment',
-  location_amendment_candidate: 'Same title, location amended',
-  scope_amendment_candidate: 'Same title, scope amended',
-  soft_match_candidate: 'Soft match',
-  fuzzy_candidate: 'Fuzzy suggestion only',
-  ambiguous: 'Ambiguous key',
-  house_unmatched: 'No NEP counterpart',
-  nep_unmatched: 'No House counterpart',
+  exact_candidate: 'Same name, region and program line',
+  chainage_candidate: 'Same road, different kilometre markers',
+  segment_scope_candidate: 'Same road, different stretch',
+  location_amendment_candidate: 'Same name, location changed',
+  scope_amendment_candidate: 'Same name, scope changed',
+  soft_match_candidate: 'Close match',
+  fuzzy_candidate: 'Similar name only',
+  ambiguous: 'Several possible matches',
+  house_unmatched: "No match in the President's proposal",
+  nep_unmatched: 'No match in the House bill',
   // Annex pairing methods (FMR, NIA, HFEP), carried from their workbenches.
-  title_and_coordinates: 'Same title and coordinates',
-  title: 'Same title within region',
-  coordinates: 'Same coordinates, title differs',
-  ai_corrected: 'Same title after verified OCR correction',
-  title_similarity: 'Title similarity within region and province',
+  title_and_coordinates: 'Same name and map coordinates',
+  title: 'Same name in the same region',
+  coordinates: 'Same map coordinates, name differs',
+  ai_corrected: 'Same name after fixing a scanning error',
+  title_similarity: 'Similar name in the same province',
 };
 
 /** `reading_status` on DPWH rows: second vs third reading. */
 export const READING_LABELS: Record<string, string> = {
-  same_amount: 'Same in both readings',
-  third_only: 'New at third reading',
+  same_amount: 'Same in both House readings',
+  third_only: 'Added at third reading',
   second_only: 'Dropped at third reading',
   amount_changed: 'Amount changed between readings',
-  repeated_key: 'Repeated key (grouped)',
-  no_house_record: 'No House record',
+  repeated_key: 'Repeated line (grouped)',
+  no_house_record: 'Not in the House bill',
 };
 
 // ---------------------------------------------------------------------------
@@ -238,9 +256,23 @@ export interface HgabDatasetMeta {
   agency: string;
   /** Our `/2027/d/:deptId` group this dataset belongs to (18, 05, 13, 35). */
   dept_id: string;
-  /** What one row is: "Named project with chainage, region and implementing office". */
+  /**
+   * READER-FACING. One plain sentence anyone can follow: what the program
+   * pays for and what the two documents list. No acronyms, no codes, no
+   * page numbers; at most 30 words. This is what heroes, cards and KPIs show.
+   */
+  summary: string;
+  /** READER-FACING. What one row in the tables is, in plain words: "One named road or bridge project". */
+  one_row: string;
+  /**
+   * READER-FACING. Short caveats a reader needs before comparing the numbers,
+   * one plain sentence each ("Operating costs are not in these lists."). Shown
+   * as a small note; the technical version lives in `scope`.
+   */
+  caveats: string[];
+  /** TECHNICAL. What one row is, precisely, for the Methodology page and the Details disclosure. */
   grain: string;
-  /** What the compared population covers and excludes, in one sentence. */
+  /** TECHNICAL. What the compared population covers and excludes, with pages, codes and ledger notes. Never shown on a hero, card or KPI. */
   scope: string;
   /** Printed stage totals of the compared population. */
   totals: { nep_php: number; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null };
@@ -543,6 +575,156 @@ export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
 
 export function districtPath(id?: string): string {
   return id ? `${HGAB_ROOT}/districts/${encodeURIComponent(id)}` : `${HGAB_ROOT}/districts`;
+}
+
+// ---------------------------------------------------------------------------
+// Maps (`?view=map` on each dataset hub)
+// ---------------------------------------------------------------------------
+//
+// Province outlines come from the PSA boundaries as of 31 December 2023
+// (philippines-json-maps, MIT, simplified), each tagged with the region it
+// belongs to today: Negros Occidental, Negros Oriental and Siquijor carry the
+// Negros Island Region (2024) key, and Sulu is drawn in Region IX after the
+// 2024 Supreme Court ruling, matching how every list prints it. Amounts are
+// tallied under the region each document prints, normalised to one key per
+// region; `regions` always lists all 18 keys (nulls where a document lists
+// nothing), and anything printed as nationwide or with no region — all of
+// NIA — sits in `not_on_map`. Points are drawn only where a document prints
+// coordinates: every farm-to-market road, and the DPWH projects whose titles
+// carry them. Nothing is geocoded from place names. DPWH's Metro Manila
+// figure includes head-office projects built elsewhere; the map note says so.
+
+export type RegionKey =
+  | 'NCR' | 'CAR' | 'I' | 'II' | 'III' | 'IV-A' | 'MIMAROPA' | 'V' | 'VI' | 'VII' | 'VIII'
+  | 'IX' | 'X' | 'XI' | 'XII' | 'XIII' | 'BARMM' | 'NIR';
+
+/** North to south, the order regions are listed in on maps and the districts page. */
+export const REGION_ORDER: readonly RegionKey[] = [
+  'NCR', 'CAR', 'I', 'II', 'III', 'IV-A', 'MIMAROPA', 'V', 'VI', 'NIR', 'VII', 'VIII',
+  'IX', 'X', 'XI', 'XII', 'XIII', 'BARMM',
+];
+
+/** Short label and the plain name readers know. */
+export const REGION_LABELS: Record<RegionKey, { short: string; name: string }> = {
+  NCR: { short: 'NCR', name: 'Metro Manila' },
+  CAR: { short: 'CAR', name: 'Cordillera' },
+  I: { short: 'Region I', name: 'Ilocos' },
+  II: { short: 'Region II', name: 'Cagayan Valley' },
+  III: { short: 'Region III', name: 'Central Luzon' },
+  'IV-A': { short: 'Region IV-A', name: 'Calabarzon' },
+  MIMAROPA: { short: 'MIMAROPA', name: 'Mimaropa' },
+  V: { short: 'Region V', name: 'Bicol' },
+  VI: { short: 'Region VI', name: 'Western Visayas' },
+  NIR: { short: 'NIR', name: 'Negros Island' },
+  VII: { short: 'Region VII', name: 'Central Visayas' },
+  VIII: { short: 'Region VIII', name: 'Eastern Visayas' },
+  IX: { short: 'Region IX', name: 'Zamboanga Peninsula' },
+  X: { short: 'Region X', name: 'Northern Mindanao' },
+  XI: { short: 'Region XI', name: 'Davao' },
+  XII: { short: 'Region XII', name: 'Soccsksargen' },
+  XIII: { short: 'Region XIII', name: 'Caraga' },
+  BARMM: { short: 'BARMM', name: 'Bangsamoro' },
+};
+
+const ROMAN: Record<string, RegionKey> = {
+  I: 'I', II: 'II', III: 'III', V: 'V', VI: 'VI', VII: 'VII', VIII: 'VIII', IX: 'IX', X: 'X', XI: 'XI', XII: 'XII', XIII: 'XIII',
+};
+
+/**
+ * One key for every way the documents print a region ("Region IVA - CALABARZON",
+ * "REGION IVB - MIMAROPA", "CALABARZON", "Region IV-A", "NEGROS ISLAND REGION (NIR)").
+ * Null for "Nationwide", blanks and anything unrecognised — those are shown
+ * beside the map, never guessed onto it.
+ */
+export function regionKeyOf(label: string | null | undefined): RegionKey | null {
+  if (!label) return null;
+  const s = label.toUpperCase().replace(/[‐-―]/g, '-');
+  if (/\bNCR\b|NATIONAL CAPITAL|METRO MANILA/.test(s)) return 'NCR';
+  if (/\bCAR\b|CORDILLERA/.test(s)) return 'CAR';
+  if (/\bBARMM\b|BANGSAMORO|\bARMM\b/.test(s)) return 'BARMM';
+  if (/\bNIR\b|NEGROS ISLAND/.test(s)) return 'NIR';
+  if (/MIMAROPA|\bIV-?B\b/.test(s)) return 'MIMAROPA';
+  if (/CALABARZON|\bIV-?A\b/.test(s)) return 'IV-A';
+  if (/CARAGA/.test(s)) return 'XIII';
+  const m = /\bREGION\s+([IVX]+)\b/.exec(s);
+  return m ? ROMAN[m[1]] ?? null : null;
+}
+
+export interface HgabGeo {
+  /** PSA boundary release the outlines come from. */
+  source: string;
+  /** [minLon, minLat, maxLon, maxLat] of every outline. */
+  bbox: [number, number, number, number];
+  regions: Array<{ key: RegionKey; label: string; plain: string }>;
+  provinces: Array<{
+    psgc: number;
+    name: string;
+    region: RegionKey;
+    /** Polygons as rings of [lon, lat], 4 decimals. */
+    polygons: number[][][][];
+  }>;
+}
+
+export interface MapRegion {
+  key: RegionKey;
+  label: string;
+  /** Integer pesos per document; null when the document lists nothing there. */
+  nep_php: number | null;
+  house_php: number | null;
+  delta_php: number | null;
+  nep_rows: number;
+  house_rows: number;
+  /**
+   * The region labels exactly as the documents print them, most-used first.
+   * The map's "See projects" link passes all of them to the Projects filter,
+   * "|"-separated, because one region can be printed more than one way.
+   */
+  source_labels: string[];
+}
+
+export interface MapPoint {
+  /** Project id in `<dataset>/projects.parquet`; links to the record page. */
+  id: string;
+  /** Representative point (first printed coordinate, or a segment midpoint). */
+  lon: number;
+  lat: number;
+  /** Road segments as [lon, lat] lines, when the document prints start and end points. */
+  lines?: number[][][];
+  title: string;
+  trace: string;
+  group: BridgeGroup | null;
+  held: boolean;
+  nep_php: number | null;
+  house_php: number | null;
+  /** Whose coordinates these are. */
+  printed_by: 'house' | 'nep' | 'both';
+}
+
+export interface HgabDatasetMap {
+  dataset: DatasetKey;
+  /** Which House reading the house figures are. */
+  house_stage: 'hgab2' | 'hgab3';
+  regions: MapRegion[];
+  /** Amounts the documents list as nationwide or with no region; shown beside the map, never on it. */
+  not_on_map: { label: string; nep_php: number | null; house_php: number | null; nep_rows: number; house_rows: number; plain: string } | null;
+  points: MapPoint[];
+  /** READER-FACING. One plain sentence on what the dots are, or why there are none. */
+  points_note: string;
+  /** False when the documents print no location at all (NIA). The tab then explains instead of drawing. */
+  placeable: boolean;
+  /** READER-FACING. Shown when placeable is false, or as a caveat under the map. */
+  note: string;
+  coverage: { rows_total: number; rows_with_points: number; rows_with_region: number };
+}
+
+export function loadHgabGeo(): Promise<HgabGeo> {
+  return cached('geo', () => getJson<HgabGeo>(dataUrl(`${HGAB_BASE}/geo/provinces.json`), 'Failed to load the map outlines'));
+}
+
+export function loadHgabMap(key: DatasetKey): Promise<HgabDatasetMap> {
+  return cached(`map:${key}`, () =>
+    getJson<HgabDatasetMap>(dataUrl(`${HGAB_BASE}/${key}/map.json`), `Failed to load the ${key.toUpperCase()} map`),
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -90,7 +90,11 @@ interface HgabDocument {
   pages: { from: number; to: number } | null; sha256: string; bytes: number; source_url: string | null; notes: string | null;
 }
 interface HgabDatasetMeta {
-  key: DatasetKey; label: string; short: string; agency: string; dept_id: string; grain: string; scope: string;
+  key: DatasetKey; label: string; short: string; agency: string; dept_id: string;
+  /** READER-FACING (heroes, cards, KPIs): plain sentence, plain row description, plain caveats. No codes, volumes or jargon. */
+  summary: string; one_row: string; caveats: string[];
+  /** TECHNICAL (Methodology page, Details disclosure): the precise record, with pages, codes and ledger notes. */
+  grain: string; scope: string;
   totals: { nep_php: number; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null };
   counts: { nep: number; hgab2: number | null; hgab3: number | null; api: number | null };
   printed: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null;
@@ -517,10 +521,16 @@ function buildDpwh(src: string, mainWs: MainWorkspace): { meta: HgabDatasetMeta;
 
   const meta: HgabDatasetMeta = {
     key: "dpwh", label: "DPWH national infrastructure", short: "DPWH", agency: "Department of Public Works and Highways", dept_id: "18",
+    summary: "Roads, bridges, flood control and public buildings that DPWH would build or repair in 2027, listed project by project in the President's proposal and in the House bill.",
+    one_row: "One named project, as each document prints it.",
+    caveats: [
+      "Only the project lists are compared. DPWH's staff costs, office running costs and a few non-project items are not included.",
+      "Foreign-assisted projects are compared as one group.",
+    ],
     grain: "Named project allocation with chainage, region and implementing office (grouped repeated House keys stay one row and count their members)",
-    scope: "DPWH operations allocations printed in NEP Volume II-B and House Bill 10858 Volume I-C, local and foreign-assisted, compared at the third reading; GAS, support to operations and automatic appropriations sit outside the compared population, so agency new appropriations are broader.",
+    scope: "DPWH operations allocations printed in NEP Volume II-B and House Bill 10858 Volume I-C, local and foreign-assisted, compared at the third reading; GAS, support to operations (personnel services and MOOE) and automatic appropriations sit outside the compared population, so agency new appropriations are broader. Foreign-assisted projects are carried under a single PAP control and program group.",
     totals, counts, printed, bridge, documents: { nep: [DOC.nepIIB], house: [DOC.ic3, DOC.ic2, DOC.ib3, DOC.ib2] },
-    controls_label: "PAP controls", has_readings: true, has_map: false,
+    controls_label: "Program totals", has_readings: true, has_map: true,
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
   for (const g of BRIDGE_ORDER) top[g] = topBy(built, g);
@@ -653,12 +663,25 @@ function buildAnnex(key: "fmr" | "nia", data: AnnexWorkbench, nepDoc: string, ma
   const meta: HgabDatasetMeta = {
     key, label: key === "fmr" ? "DA farm-to-market roads" : "NIA irrigation", short: key.toUpperCase(),
     agency: key === "fmr" ? "Department of Agriculture" : "National Irrigation Administration", dept_id: key === "fmr" ? "05" : "35",
+    summary: key === "fmr"
+      ? "Farm-to-market roads that the Department of Agriculture would fund in 2027, listed road by road in both documents."
+      : "Irrigation projects that the National Irrigation Administration would build or repair in 2027, listed under six programs in both documents.",
+    one_row: key === "fmr" ? "One farm-to-market road project." : "One irrigation project.",
+    caveats: key === "fmr"
+      ? [
+        "Road planning and the bridges program are listed elsewhere in the budget and are not included here.",
+        "The House list is identical at second and third reading.",
+      ]
+      : [
+        "Only the six project programs are listed; NIA's wider budget is not included.",
+        "The House list is identical at second and third reading.",
+      ],
     grain: key === "fmr" ? "One printed FMR project allocation, counted once across its coordinate segments" : "One printed irrigation project allocation under one of six sub-programs",
     scope: `${scopeBase} The House side is the second-reading Volume I-B annex (PDF pages ${housePages?.[0]}–${housePages?.[1]}), verified text-identical to the third-reading printing across all ${identicalPages} pages, so HGAB 2R and 3R carry the same amounts.`,
     totals: { nep_php: nepTotal, hgab2_php: houseTotal, hgab3_php: houseTotal, api_php: null },
     counts: { nep: data.stages.nep.projects.length, hgab2: data.stages.house.projects.length, hgab3: data.stages.house.projects.length, api: null },
     printed: null, bridge, documents: { nep: [nepDoc], house: [DOC.ib2] },
-    controls_label: key === "fmr" ? "Regions" : "Sub-programs", has_readings: false, has_map: key === "fmr",
+    controls_label: key === "fmr" ? "Regions" : "Sub-programs", has_readings: false, has_map: key === "fmr",  // NIA prints no region or coordinates; its Map tab says so
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
   for (const g of BRIDGE_ORDER) top[g] = topBy(built, g);
@@ -830,7 +853,7 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
   for (const col of ["infrastructure", "medical_equipment", "motor_vehicle", "total"] as const) {
     const t = data.comparison.column_totals[col];
     controls.push({
-      id: `column:${col}`, label: COLUMN_LABELS[col], group: "Funding column (printed annex control)", nep_php: t.nep_php, hgab2_php: t.house_php, hgab3_php: t.house_php,
+      id: `column:${col}`, label: COLUMN_LABELS[col], group: "Funding columns, as printed", nep_php: t.nep_php, hgab2_php: t.house_php, hgab3_php: t.house_php,
       api_php: null, delta_php: t.house_php - t.nep_php, reading_delta_php: null, nep_page: hfepNepPage(N.grand_total), house_pages: H.grand_total.source?.pdf_page ? [H.grand_total.source.pdf_page] : [],
     });
   }
@@ -842,7 +865,7 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
     if (n) seen.add(catNo(c.label));
     const nepTotal = n?.amounts_php.total ?? null, houseTotal = c.amounts_php.total ?? null;
     controls.push({
-      id: `category:${catNo(c.label)}`, label: n && n.label !== c.label ? `${c.label} (NEP: ${n.label})` : c.label, group: "Category (printed)",
+      id: `category:${catNo(c.label)}`, label: n && n.label !== c.label ? `${c.label} (President's proposal: ${n.label})` : c.label, group: "Categories, as printed",
       nep_php: nepTotal, hgab2_php: houseTotal, hgab3_php: houseTotal, api_php: null,
       delta_php: nepTotal != null && houseTotal != null ? houseTotal - nepTotal : null, reading_delta_php: null,
       nep_page: n ? hfepNepPage(n) : null, house_pages: c.source?.pdf_page ? [c.source.pdf_page] : [],
@@ -851,7 +874,7 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
   for (const n of N.categories) {
     if (seen.has(catNo(n.label))) continue;
     controls.push({
-      id: `category:${catNo(n.label)}`, label: n.label, group: "Category (printed)", nep_php: n.amounts_php.total ?? null, hgab2_php: null, hgab3_php: null,
+      id: `category:${catNo(n.label)}`, label: n.label, group: "Categories, as printed", nep_php: n.amounts_php.total ?? null, hgab2_php: null, hgab3_php: null,
       api_php: null, delta_php: null, reading_delta_php: null, nep_page: hfepNepPage(n), house_pages: [],
     });
   }
@@ -884,12 +907,19 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
 
   const meta: HgabDatasetMeta = {
     key: "hfep", label: "DOH Health Facilities Enhancement Program", short: "HFEP", agency: "Department of Health", dept_id: "13",
+    summary: "Hospitals, health centres and other facilities that the Department of Health would build, repair or equip in 2027 under its Health Facilities Enhancement Program.",
+    one_row: "One facility's budget line for building works, medical equipment or vehicles. A facility can have up to three lines.",
+    caveats: [
+      "Only construction, equipment and vehicle budgets are listed. ₱67.2M for running costs is not included.",
+      "The President's list adds up to ₱140,000 less than the total printed on it, a printing error noted by the source. These pages use the sum of the lines.",
+      "The House list is identical at second and third reading.",
+    ],
     grain: "One printed funding-column cell (Infrastructure, Medical equipment or Motor vehicle) of one facility; facility totals are controls, so a facility can appear as up to three rows",
     scope: `HFEP capital outlays (DOH activity 350202100002000) as printed in the NEP Volume II-A annex and House Bill 10858 Volume I-B; both schedules include national and LGU facilities, and the ₱67,173,000 MOOE of the activity sits outside the annex. Totals are the facility ledgers the bridge is measured on: the NEP ledger is ₱14,472,519,000 while the printed NEP annex control is ₱14,472,659,000, ₱140,000 higher because of a documented Metro Manila medical-equipment printing defect (the printed control is kept in the controls table); the House ledger and printed control agree at ₱10,021,659,000. The House side is the second-reading Volume I-B annex (PDF pages 877–893), verified text-identical to the third-reading printing across all ${identicalPages} pages.`,
     totals: { nep_php: N.facility_ledger.total, hgab2_php: H.facility_ledger.total, hgab3_php: H.facility_ledger.total, api_php: null },
     counts: { nep: mw.sources.nep.count, hgab2: mw.sources.house.count, hgab3: mw.sources.house.count, api: null },
     printed: { nep_new_appropriations_php: N.agency_check?.total_php ?? null, house_new_appropriations_php: H.agency_check?.total_php ?? null },
-    bridge, documents: { nep: [DOC.nepHfep], house: [DOC.ib2] }, controls_label: "Categories", has_readings: false, has_map: false,
+    bridge, documents: { nep: [DOC.nepHfep], house: [DOC.ib2] }, controls_label: "Categories", has_readings: false, has_map: true,
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
   for (const g of BRIDGE_ORDER) top[g] = topBy(built, g);
@@ -929,16 +959,16 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
     const srcProjects = readJson<{ pap_controls: Record<string, { id: string; page: number; amount_php: number }> }>(resolve(src, "analysis/data/nep_2027_source_projects.json"));
     const fund = (code: string) => ours.fund_subcategories.find((f) => f.code === code)?.amount ?? 0;
     const rlip = fund("10401102"), nbcdf = fund("10403389");
-    add("dpwh", "DPWH new appropriations: our department total minus automatic appropriations (funds 10401102 RLIP, 10403389 NBCDF)",
+    add("dpwh", "DPWH total, without the two items released automatically (retirement premiums and the building-code fund)",
       ours.department.amount - rlip - nbcdf, tree.summary.total_php, null,
-      `Our total ${peso(ours.department.amount)} includes ${peso(rlip + nbcdf)} of automatic appropriations; their tree is new appropriations only (NEP II-B p.8).`);
+      `Our department total is ${peso(ours.department.amount)}; taking out the ${peso(rlip + nbcdf)} released automatically, without a vote, gives the source's figure (funds 10401102, 10403389).`);
     const cls = (code: string) => ours.expense_classes.find((e) => e.code === code)?.amount ?? null;
     const T = tree.summary.expense_classes;
-    add("dpwh", "Capital outlays", cls("6"), T["CAPITAL OUTLAYS"] ?? null, null, "Expense class 6 vs their NEP tree.");
+    add("dpwh", "DPWH capital outlays (construction and equipment)", cls("6"), T["CAPITAL OUTLAYS"] ?? null, null, "Our construction and equipment budget against the source's total for the same (expense class 6).");
     const psDiff = (cls("1") ?? 0) - (T["Personnel Services"] ?? 0);
-    add("dpwh", "Personnel services", cls("1"), T["Personnel Services"] ?? null, psDiff === rlip ? "explained" : "mismatch", `Difference is the Retirement and Life Insurance Premiums fund 10401102 (${peso(rlip)}).`);
+    add("dpwh", "DPWH staff costs (personnel services)", cls("1"), T["Personnel Services"] ?? null, psDiff === rlip ? "explained" : "mismatch", `Ours is higher by ${peso(rlip)}: the retirement and life insurance premiums, which are released automatically (fund 10401102).`);
     const mooeDiff = (cls("2") ?? 0) - (T["MAINTENANCE AND OTHER OPERATING EXPENSES"] ?? 0);
-    add("dpwh", "Maintenance and other operating expenses", cls("2"), T["MAINTENANCE AND OTHER OPERATING EXPENSES"] ?? null, mooeDiff === nbcdf ? "explained" : "mismatch", `Difference is the National Building Code Development Fund 10403389 (${peso(nbcdf)}).`);
+    add("dpwh", "DPWH office running costs (maintenance and other operating expenses)", cls("2"), T["MAINTENANCE AND OTHER OPERATING EXPENSES"] ?? null, mooeDiff === nbcdf ? "explained" : "mismatch", `Ours is higher by ${peso(nbcdf)}: the National Building Code Development Fund, which is released automatically (fund 10403389).`);
 
     const leaf = leaves("18").filter((r) => r.prexc_level === 7);
     const byPrefix = (prefixes: string[]) => toPesos(sum(leaf.filter((r) => prefixes.some((p) => r.fpap_code.startsWith(p))), (r) => r.years["2027"]?.amount));
@@ -947,13 +977,13 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
       ["Asset Preservation Program", ["3101"], "PREXC 3101"], ["Network Development Program", ["3102"], "PREXC 3102"], ["Bridge Program", ["3103"], "PREXC 3103"],
       ["Flood Management Program", ["3201", "3202"], "PREXC 3201 + 3202"], ["Convergence and Special Support Program", ["3002"], "PREXC 3002"], ["Local Program", ["3001"], "PREXC 3001"],
     ];
-    for (const [label, prefixes, note] of programs) add("dpwh", `Program: ${label}`, byPrefix(prefixes), P[label] ?? null, null, `${note} leaf activities summed from our CSV vs their program total.`);
+    for (const [label, prefixes, note] of programs) add("dpwh", `Program total: ${label}`, byPrefix(prefixes), P[label] ?? null, null, `Our activities under this program, added up, against the source's program total (${note}).`);
     const gasDiff = byPrefix(["1"]) - (P["General Administration and Support"] ?? 0), stoDiff = byPrefix(["2"]) - (P["Support to Operations"] ?? 0);
     const autoOk = gasDiff + stoDiff === rlip + nbcdf;
-    add("dpwh", "General Administration and Support", byPrefix(["1"]), P["General Administration and Support"] ?? null, autoOk ? "explained" : "mismatch",
-      `GAS and STO together differ by ${peso(gasDiff + stoDiff)}, the automatic appropriations (RLIP + NBCDF) our CSV folds into these programs.`);
-    add("dpwh", "Support to Operations", byPrefix(["2"]), P["Support to Operations"] ?? null, autoOk ? "explained" : "mismatch",
-      `See GAS: the two automatic-appropriation funds are spread across GAS and STO; combined difference ${peso(gasDiff + stoDiff)}.`);
+    add("dpwh", "DPWH general administration and support", byPrefix(["1"]), P["General Administration and Support"] ?? null, autoOk ? "explained" : "mismatch",
+      `Together with support to operations, ours is higher by ${peso(gasDiff + stoDiff)}: the two items released automatically, which our data counts under these two programs (funds 10401102, 10403389).`);
+    add("dpwh", "DPWH support to operations", byPrefix(["2"]), P["Support to Operations"] ?? null, autoOk ? "explained" : "mismatch",
+      `See general administration and support: the two items released automatically are spread across both programs, which together differ by ${peso(gasDiff + stoDiff)}.`);
 
     // 45 printed PAP controls vs our program groups (level-7 leaves grouped by program_code).
     const groups = new Map<string, { label: string; total: number; fap: number }>();
@@ -973,9 +1003,9 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
       const codes = (ourByLabel.get(norm(label)) ?? []).filter((c) => !usedOurs.has(c));
       if (codes.length === 1) {
         const g = groups.get(codes[0])!; usedOurs.add(codes[0]);
-        if (g.total === ctl.amount_php) add("dpwh", `PAP: ${label}`, g.total, ctl.amount_php, "exact", `Our program ${codes[0]}.`);
-        else if (g.total - g.fap === ctl.amount_php) add("dpwh", `PAP: ${label}`, g.total, ctl.amount_php, "explained", `Our program ${codes[0]} folds a ${peso(g.fap)} foreign-assisted component into the same PREXC code; their control is the local PAP only.`);
-        else add("dpwh", `PAP: ${label}`, g.total, ctl.amount_php, "mismatch", `Our program ${codes[0]} differs and the gap is not the FAP component (${peso(g.fap)}).`);
+        if (g.total === ctl.amount_php) add("dpwh", `Program line: ${label}`, g.total, ctl.amount_php, "exact", `Same amount in our data (program ${codes[0]}).`);
+        else if (g.total - g.fap === ctl.amount_php) add("dpwh", `Program line: ${label}`, g.total, ctl.amount_php, "explained", `Our data adds ${peso(g.fap)} of foreign-assisted projects to the same line; the printed total covers locally funded projects only (program ${codes[0]}).`);
+        else add("dpwh", `Program line: ${label}`, g.total, ctl.amount_php, "mismatch", `Our amount differs, and the gap is not the foreign-assisted part (${peso(g.fap)}; program ${codes[0]}).`);
       } else pending.push([label, ctl.amount_php]);
     }
     // Labels that did not match: pair by unique amount, then explain regroupings by group sums.
@@ -984,23 +1014,23 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
       const hits = [...groups].filter(([code, g]) => !usedOurs.has(code) && (g.total === amount || g.total - g.fap === amount));
       if (hits.length === 1) {
         const [code, g] = hits[0]; usedOurs.add(code);
-        add("dpwh", `PAP: ${label}`, g.total, amount, "explained", `Labels differ (ours: "${g.label.replace(/\s+/g, " ").trim()}", program ${code}); matched by amount${g.total !== amount ? ` net of the ${peso(g.fap)} foreign-assisted component` : ""}.`);
+        add("dpwh", `Program line: ${label}`, g.total, amount, "explained", `Our data names this line "${g.label.replace(/\s+/g, " ").trim()}"; matched by amount${g.total !== amount ? ` net of ${peso(g.fap)} of foreign-assisted projects` : ""} (program ${code}).`);
       } else stillPending.push([label, amount]);
     }
     const leftover = [...groups].filter(([code, g]) => !usedOurs.has(code) && g.total > 0 && !/^[12]/.test(code));
     const leftoverSum = sum(leftover, ([, g]) => g.total), pendingSum = sum(stillPending, ([, a]) => a);
     for (const [label, amount] of stillPending) {
-      add("dpwh", `PAP: ${label}`, null, amount, leftoverSum === pendingSum ? "explained" : "mismatch",
-        `Printed PAP has no single CSV program; the ${stillPending.length} unmatched printed PAPs (${peso(pendingSum)}) regroup into ${leftover.length} CSV programs (${peso(leftoverSum)}): ${leftover.map(([c, g]) => `${c} ${g.label.replace(/\s+/g, " ").trim()}`).join("; ")}.`);
+      add("dpwh", `Program line: ${label}`, null, amount, leftoverSum === pendingSum ? "explained" : "mismatch",
+        `This printed line has no single counterpart in our data; the ${stillPending.length} printed lines without one (${peso(pendingSum)}) add up to the same total as ${leftover.length} of our programs (${peso(leftoverSum)}): ${leftover.map(([c, g]) => `${g.label.replace(/\s+/g, " ").trim()} (${c})`).join("; ")}.`);
     }
-    add("dpwh", "Printed PAP controls covered", Object.keys(srcProjects.pap_controls).length, 45, "info", `${rows.filter((r) => r.check.startsWith("PAP:")).length} PAP rows emitted (counts, not pesos).`);
+    add("dpwh", "Printed program lines covered", Object.keys(srcProjects.pap_controls).length, 45, "info", `${rows.filter((r) => r.check.startsWith("Program line:")).length} program lines compared (counts, not pesos).`);
   }
 
   // --- FMR ------------------------------------------------------------------
   if (built.fmr) {
     const fmr = leaves("05").find((r) => r.fpap_code === "310203206315000" && r.prexc_level === 7);
-    add("fmr", "DA activity 310203206315000 (FMR in designated key production areas)", fmr ? toPesos(fmr.years["2027"]?.amount ?? 0) : null, built.fmr.meta.totals.nep_php, null,
-      "Our CSV activity vs their NEP FMR schedule root. Our FMR sub-program total adds planning and monitoring, which the annex excludes.");
+    add("fmr", "Farm-to-market roads: our budget line for the program against the total of the source's list (DA activity 310203206315000)", fmr ? toPesos(fmr.years["2027"]?.amount ?? 0) : null, built.fmr.meta.totals.nep_php, null,
+      "Our wider farm-to-market sub-program also pays for road planning and monitoring, which the list leaves out, so only the road-building line is compared.");
   }
   // --- HFEP -----------------------------------------------------------------
   if (built.hfep) {
@@ -1009,10 +1039,10 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
     const hfepWb = readJson<HfepWorkbench>(resolve(src, "other-analysis/data/hfep_workbench.json"));
     const printed = hfepWb.stages.nep.annex_control.total, ledger = hfepWb.stages.nep.facility_ledger.total;
     ensure(ledger === built.hfep.meta.totals.nep_php, "hfep totals.nep_php must be the facility ledger");
-    add("hfep", "DOH activity 350202100002000, capital outlays vs printed annex total", byClass("6"), printed, null, "Expense class 6 of the HFEP activity vs the NEP annex printed grand total (the printed control, not the facility ledger).");
-    add("hfep", "DOH activity 350202100002000, MOOE (outside the annex)", byClass("2"), 67_173_000, byClass("2") === 67_173_000 ? "explained" : "mismatch", "The annex covers capital outlays only; the activity's MOOE is documented by the workbench as outside it.");
-    add("hfep", "DOH capital outlays vs NEP annex facility ledger (the compared population)", byClass("6"), ledger, byClass("6") - ledger === 140_000 && printed - ledger === 140_000 ? "explained" : "mismatch",
-      `Our DOH capital outlays ${peso(byClass("6"))} equal the printed annex control and exceed the facility ledger (${peso(ledger)}, the population the bridge and totals use) by ₱140,000: the source's documented Metro Manila medical-equipment printing defect (metro_manila_med_overhang_140000).`);
+    add("hfep", "Health facilities: our construction and equipment budget against the total printed on the President's list (DOH activity 350202100002000)", byClass("6"), printed, null, "Our construction and equipment budget for the program against the grand total printed on the list, not the sum of its lines (expense class 6).");
+    add("hfep", "Health facilities: running costs, which the list does not cover (DOH activity 350202100002000)", byClass("2"), 67_173_000, byClass("2") === 67_173_000 ? "explained" : "mismatch", "The list covers construction, equipment and vehicles only; the program's ₱67,173,000 for running costs sits outside it, as the source documents.");
+    add("hfep", "Health facilities: our construction and equipment budget against the sum of the list's lines (the figure these pages use)", byClass("6"), ledger, byClass("6") - ledger === 140_000 && printed - ledger === 140_000 ? "explained" : "mismatch",
+      `Ours (${peso(byClass("6"))}) equals the printed total but is ₱140,000 more than the sum of the lines (${peso(ledger)}), which these pages use; the source documents the gap as a printing error in a Metro Manila medical-equipment line.`);
   }
   // --- NIA ------------------------------------------------------------------
   if (built.nia) {
@@ -1025,9 +1055,9 @@ function reconcile(nepDir: string, src: string, built: Partial<Record<DatasetKey
     for (const [prefix, label, fallback] of subs) {
       const ours = toPesos(sum(nia.filter((r) => r.fpap_code.startsWith(prefix)), (r) => r.years["2027"]?.amount));
       const t = theirs.find((c) => norm(c.key).startsWith(norm(label).split(" ").slice(0, 2).join(" ")))?.nep_php ?? fallback;
-      add("nia", `NIA sub-program ${prefix}: ${label}`, ours, t, null, `Agency 35-005 leaf activities with PREXC prefix ${prefix} vs their NEP annex sub-program control.`);
+      add("nia", `Irrigation program: ${label} (sub-program ${prefix})`, ours, t, null, `Our NIA activities under this program, added up, against the source's program total (agency 35-005, PREXC ${prefix}).`);
     }
-    add("nia", "NIA annex total (six sub-programs)", toPesos(sum(nia.filter((r) => subs.some(([p]) => r.fpap_code.startsWith(p))), (r) => r.years["2027"]?.amount)), built.nia.meta.totals.nep_php, null, "Sum of the six sub-programs vs their annex grand total.");
+    add("nia", "Irrigation: the six programs together", toPesos(sum(nia.filter((r) => subs.some(([p]) => r.fpap_code.startsWith(p))), (r) => r.years["2027"]?.amount)), built.nia.meta.totals.nep_php, null, "Sum of the six programs against the total of the source's list.");
   }
   return rows;
 }
@@ -1075,16 +1105,16 @@ function buildDocuments(src: string, used: Record<string, number[]>): HgabDocume
     return { sha256: sha256(path), bytes: statSync(path).size };
   };
   const houseUrl = "https://www.congress.gov.ph/cso";
-  const ibNote = "Pages are one-based PDF file pages. DPWH PAP controls cite this volume (project rows cite Volume I-C); the DA FMR annex is pages 667–726, the DOH HFEP annex 877–893 and the NIA irrigation annex 896–941.";
+  const ibNote = "Page numbers are positions in this file, not the numbers printed on the pages. This volume carries the DPWH program totals (the project list is in Volume I-C) and the lists of farm-to-market roads (pages 667–726), health facilities (877–893) and irrigation projects (896–941).";
   return [
-    { key: DOC.ib2, title: "House Bill 10858 (GAB FY2027), Volume I-B — second reading", stage: "house", reading: 2, volume: "I-B", pages: range(used[DOC.ib2]), ...info(DOC.ib2), source_url: houseUrl, notes: `${ibNote} The annex pages were verified text-identical to the third-reading printing; annex rows cite this copy.` },
-    { key: DOC.ic2, title: "House Bill 10858 (GAB FY2027), Volume I-C — second reading", stage: "house", reading: 2, volume: "I-C", pages: range(used[DOC.ic2]), ...info(DOC.ic2), source_url: houseUrl, notes: "DPWH project detail. Pages are one-based PDF file pages; House project rows cite I-C, controls cite I-B." },
-    { key: DOC.ib3, title: "House Bill 10858 (GAB FY2027), Volume I-B — third reading", stage: "house", reading: 3, volume: "I-B", pages: range(used[DOC.ib3]), ...info(DOC.ib3), source_url: houseUrl, notes: `${ibNote} Annex pages identical to the second-reading copy at the same page indices.` },
-    { key: DOC.ic3, title: "House Bill 10858 (GAB FY2027), Volume I-C — third reading", stage: "house", reading: 3, volume: "I-C", pages: range(used[DOC.ic3]), ...info(DOC.ic3), source_url: houseUrl, notes: "DPWH project detail at third reading. Pages are one-based PDF file pages; House project rows cite I-C, controls cite I-B." },
-    { key: DOC.nepIIB, title: "DBM National Expenditure Program FY2027, Volume II-B (DPWH) — retained OCR copy", stage: "nep", reading: null, volume: "II-B", pages: range(used[DOC.nepIIB]), ...info(DOC.nepIIB), source_url: "https://www.dbm.gov.ph/wp-content/uploads/NEP2027/DPWH/DPWH.pdf", notes: "722-page OCR copy used by the workbench; page references are one-based file pages in this copy and do not match the pagination of the DBM-published department extract linked here." },
-    { key: DOC.nepFmr, title: "DBM NEP FY2027 — DA farm-to-market roads schedule (standalone annex)", stage: "nep", reading: null, volume: "Annex (NEP Volume I printed pages 1511–1557)", pages: range(used[DOC.nepFmr]), ...info(DOC.nepFmr), source_url: null, notes: "47-page standalone schedule supplied with the workbench; one-based file pages." },
-    { key: DOC.nepNia, title: "DBM NEP FY2027 — NIA irrigation program schedule (standalone annex)", stage: "nep", reading: null, volume: "Annex", pages: range(used[DOC.nepNia]), ...info(DOC.nepNia), source_url: null, notes: "30-page scanned schedule with embedded OCR text; one-based file pages." },
-    { key: DOC.nepHfep, title: "DBM NEP FY2027, Volume II-A — DOH Health Facilities Enhancement Program annex (excerpt)", stage: "nep", reading: null, volume: "II-A (PDF pages 727–739)", pages: range(used[DOC.nepHfep]), ...info(DOC.nepHfep), source_url: null, notes: `13-page excerpt of Volume II-A: excerpt page k is Volume II-A PDF page ${HFEP_PAGE_OFFSET} + k (printed pages 719–731). HFEP rows cite excerpt pages.` },
+    { key: DOC.ib2, title: "House Bill 10858, Volume I-B: program totals and the three project lists, second reading", stage: "house", reading: 2, volume: "I-B", pages: range(used[DOC.ib2]), ...info(DOC.ib2), source_url: houseUrl, notes: `${ibNote} The list pages are word-for-word identical in the third-reading copy, so list rows link to this copy.` },
+    { key: DOC.ic2, title: "House Bill 10858, Volume I-C: DPWH project list, second reading", stage: "house", reading: 2, volume: "I-C", pages: range(used[DOC.ic2]), ...info(DOC.ic2), source_url: houseUrl, notes: "The DPWH project list as printed for second reading. Page numbers are positions in this file. Project rows link here; program totals link to Volume I-B." },
+    { key: DOC.ib3, title: "House Bill 10858, Volume I-B: program totals and the three project lists, third reading", stage: "house", reading: 3, volume: "I-B", pages: range(used[DOC.ib3]), ...info(DOC.ib3), source_url: houseUrl, notes: `${ibNote} The list pages are identical to the second-reading copy, at the same positions.` },
+    { key: DOC.ic3, title: "House Bill 10858, Volume I-C: DPWH project list, third reading", stage: "house", reading: 3, volume: "I-C", pages: range(used[DOC.ic3]), ...info(DOC.ic3), source_url: houseUrl, notes: "The DPWH project list as printed for third reading. Page numbers are positions in this file. Project rows link here; program totals link to Volume I-B." },
+    { key: DOC.nepIIB, title: "President's proposed budget 2027 (NEP), Volume II-B: DPWH", stage: "nep", reading: null, volume: "II-B", pages: range(used[DOC.nepIIB]), ...info(DOC.nepIIB), source_url: "https://www.dbm.gov.ph/wp-content/uploads/NEP2027/DPWH/DPWH.pdf", notes: "A 722-page scanned copy with machine-read text, the copy the source analysis worked from. Page numbers are positions in this file and do not match the DBM-published extract linked under Original." },
+    { key: DOC.nepFmr, title: "President's proposed budget 2027 (NEP): farm-to-market roads list, Department of Agriculture", stage: "nep", reading: null, volume: "Annex (NEP Volume I printed pages 1511–1557)", pages: range(used[DOC.nepFmr]), ...info(DOC.nepFmr), source_url: null, notes: "A 47-page list supplied with the source analysis. Page numbers are positions in this file." },
+    { key: DOC.nepNia, title: "President's proposed budget 2027 (NEP): irrigation projects list, National Irrigation Administration", stage: "nep", reading: null, volume: "Annex", pages: range(used[DOC.nepNia]), ...info(DOC.nepNia), source_url: null, notes: "A 30-page scanned list with machine-read text. Page numbers are positions in this file." },
+    { key: DOC.nepHfep, title: "President's proposed budget 2027 (NEP), Volume II-A: health facilities list, Department of Health", stage: "nep", reading: null, volume: "II-A (PDF pages 727–739)", pages: range(used[DOC.nepHfep]), ...info(DOC.nepHfep), source_url: null, notes: `A 13-page extract of Volume II-A: its pages 1–13 are pages ${HFEP_PAGE_OFFSET + 1}–${HFEP_PAGE_OFFSET + 13} of the full volume (printed page numbers 719–731). Health-facility rows link to this extract's pages.` },
   ];
 }
 

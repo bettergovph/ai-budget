@@ -9,12 +9,17 @@
  * rows carry `house` / `nep` sides with `path_labels` and a `comparison` (or,
  * for HFEP, a per-column `record`). Whatever the shape, the raw JSON is one
  * click away at the bottom of the page.
+ *
+ * Copy: plain first. Labels on the page are the section's plain words
+ * ("Type of line", "Checked against the scan", "How this match was made");
+ * scores, internal statuses, the raw source record and the query live in the
+ * "Details for analysts" boxes.
  */
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
-import { DisclaimerNotice, HgabError, HgabHeader, HgabLoading, StatusChip } from '../components/HgabBits';
+import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabLoading, StatusChip } from '../components/HgabBits';
 import { Amt } from '../components/HgabProjects';
 import HgabEvidence from '../components/HgabEvidence';
 import { runQuery } from '../lib/duckdb';
@@ -26,9 +31,24 @@ import {
   type HgabDatasetMeta, type HgabOverview, type ProjectRecord, type StageKey,
 } from '../lib/hgab';
 import {
-  apiPresenceInfo, coerceRow, flagLabel, matchLabel, pickHouseDoc, recordSql, recordSqlLiteral, splitFlags, zoneLabel,
+  apiPresenceInfo, coerceRow, flagLabel, matchLabel, papLabel, pickHouseDoc, recordSql, recordSqlLiteral, splitFlags,
+  zoneLabel,
 } from '../lib/hgab-query';
+import { DATASET_SHORT } from '../lib/hgab-ui';
 import '../hgab-dataset.css';
+
+/**
+ * The NEP scan's per-row amount check (`evidence`), in plain words. The DBM
+ * DPWH volume is a scan; each amount was read twice and graded. Unknown grades
+ * are shown humanised; the raw code is in the tooltip.
+ */
+const EVIDENCE_LABELS: Record<string, string> = {
+  within_bbox_agreement: 'Yes — a second read of the scan agrees',
+  native_row_ambiguity: 'Under review — the line is hard to pin down on the scan',
+  nearby_alignment_candidate: 'Under review — lined up with a nearby amount',
+  native_text_review: 'Under review — the text needs a second look',
+  not_checked: 'Not checked',
+};
 
 type Side = Record<string, unknown>;
 
@@ -115,17 +135,18 @@ export default function HgabRecord() {
   }, [row]);
 
   if (!isDatasetKey(key)) {
-    return <HgabError message={`There is no HGAB dataset called “${key}”. The four datasets are dpwh, fmr, hfep and nia.`} />;
+    return <HgabError message={`There is no House-bill program called “${key}”. The four programs are dpwh, fmr, hfep and nia.`} />;
   }
   if (overview?.err) return <HgabError message={overview.err} />;
   if (current?.err) {
-    return <HgabError message={`Could not read record ${id} from hgab/2027/${key}/projects.parquet — ${current.err}`} />;
+    return <HgabError message={`Could not load this project line (${id}). Try reloading the page. The error was: ${current.err}`} />;
   }
-  if (!current || !data) return <HgabLoading what={`record ${id}`} />;
-  if (!row) return <HgabError message={`No record with id “${id}” in the ${key.toUpperCase()} dataset.`} />;
+  if (!current || !data) return <HgabLoading what="this project line" />;
+  if (!row) return <HgabError message={`There is no line “${id}” in the ${DATASET_SHORT[key]} list.`} />;
 
   const datasetMeta: HgabDatasetMeta = meta ?? {
-    key, label: key.toUpperCase(), short: key.toUpperCase(), agency: '', dept_id: '', grain: '', scope: '',
+    key, label: key.toUpperCase(), short: key.toUpperCase(), agency: '', dept_id: '',
+    summary: '', one_row: '', caveats: [], grain: '', scope: '',
     totals: { nep_php: 0, hgab2_php: null, hgab3_php: null, api_php: null },
     counts: { nep: 0, hgab2: null, hgab3: null, api: null }, printed: null,
     bridge: {} as HgabDatasetMeta['bridge'], documents: { nep: [], house: [] },
@@ -181,7 +202,7 @@ export default function HgabRecord() {
     cards.push({
       stage: 'hgab2',
       label: 'House bill',
-      sub: 'HB 10858 · the 2nd and 3rd reading print the same annex text',
+      sub: 'House Bill 10858 · the second and third reading print the same list',
       amount: houseAmount(row),
       page: row.hgab2_page ?? row.hgab3_page,
       doc: row.hgab2_doc ?? row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 2, 'projects'),
@@ -212,25 +233,30 @@ export default function HgabRecord() {
   const match = matchLabel(row.house_match);
   const reading = row.reading_status ? (READING_LABELS[row.reading_status] ?? row.reading_status) : null;
 
-  // Pairing notes: scalar fields the workbench attaches to explain a pairing.
+  // "How this match was made": scalar fields the workbench attaches to explain
+  // a pairing. Plain ones show on the page; scores and internal statuses go
+  // into the section's "Details for analysts".
   const notes: Array<[string, string]> = [];
-  const note = (label: string, v: unknown) => { const s = str(v); if (s) notes.push([label, s]); };
-  note('Reason', rec?.reason);
-  note('Match basis', rec?.match_basis);
-  note('Identity score', num(rec?.identity_score) != null ? num(rec?.identity_score)!.toFixed(3) : null);
-  note('Segment overlap', num(rec?.segment_overlap_ratio) != null ? num(rec?.segment_overlap_ratio)!.toFixed(3) : null);
-  note('Δ third − second', num(rec?.reading_delta_php) != null ? fmt.php(num(rec?.reading_delta_php), { unit: 'full' }) : null);
+  const techNotes: Array<[string, string]> = [];
+  const note = (label: string, v: unknown, list = notes) => { const s = str(v); if (s) list.push([label, s]); };
+  note('Reason, as the analysis words it', rec?.reason, techNotes);
+  note('Match key', rec?.match_basis, techNotes);
+  note('Third minus second reading', num(rec?.reading_delta_php) != null ? fmt.php(num(rec?.reading_delta_php), { unit: 'full' }) : null);
   const diffTags = (arr(rec?.diff_tags) ?? []).map(str).filter(Boolean) as string[];
-  if (diffTags.length) notes.push(['Title differences', diffTags.join(', ')]);
-  note('Grouping flag', obj(rec?.road_group)?.flag);
+  if (diffTags.length) notes.push(['How the names differ', diffTags.map((t) => t.replace(/_/g, ' ')).join(', ')]);
   const comparison = obj(rec?.comparison);
-  note('Pairing method', comparison?.method);
-  note('Comparison status', comparison?.status);
-  note('Strict status', comparison?.strict_status);
+  const method = str(comparison?.method);
+  note('How it was matched', method ? matchLabel(method) ?? method : null);
   const hfep = obj(rec?.record);
-  note('Funding column', hfep?.column_label ?? hfep?.column);
-  note('Event', hfep?.event);
-  note('Similarity', num(hfep?.similarity) != null ? num(hfep?.similarity)!.toFixed(3) : null);
+  note(papLabel(key) ?? 'What it pays for', hfep?.column_label ?? hfep?.column);
+  note('Event code', hfep?.event, techNotes);
+  note('Identity score (0–1)', num(rec?.identity_score) != null ? num(rec?.identity_score)!.toFixed(3) : null, techNotes);
+  note('Segment overlap (0–1)', num(rec?.segment_overlap_ratio) != null ? num(rec?.segment_overlap_ratio)!.toFixed(3) : null, techNotes);
+  note('Grouping flag', obj(rec?.road_group)?.flag, techNotes);
+  note('Pairing method code', method, techNotes);
+  note('Comparison status', comparison?.status, techNotes);
+  note('Strict status', comparison?.strict_status, techNotes);
+  note('Name similarity (0–1)', num(hfep?.similarity) != null ? num(hfep?.similarity)!.toFixed(3) : null, techNotes);
 
   // Source-tree paths: annex sides carry `path_labels`; also accept a flat string.
   const paths: Array<{ label: string; steps: string[] }> = [];
@@ -251,37 +277,37 @@ export default function HgabRecord() {
 
   return (
     <>
-      <HgabHeader crumb={`${datasetMeta.short} · record`} compiledMeta={house != null ? `${fmt.shortPhp(house)} House` : undefined} />
+      <HgabHeader crumb={`${DATASET_SHORT[key]} · project`} compiledMeta={house != null ? `${fmt.shortPhp(house)} House` : undefined} />
       <main className="nep-main">
         <div className="hgab-rec-head">
           <p className="hgab-rec-crumb" aria-label="Breadcrumb">
-            <Link to={HGAB_ROOT}>HGAB 2027</Link>
+            <Link to={HGAB_ROOT}>The House bill, 2027</Link>
             <span className="sep">›</span>
-            <Link to={datasetPath(key)}>{datasetMeta.short}</Link>
+            <Link to={datasetPath(key)}>{DATASET_SHORT[key]}</Link>
             <span className="sep">›</span>
             <Link to={datasetPath(key, 'projects')}>Projects</Link>
             <span className="sep">›</span>
-            Record
+            This line
           </p>
           <h1 className="hgab-rec-title">{row.title}</h1>
           <p className="hgab-rec-meta">
             {[row.program, row.pap, row.region, row.office].filter(Boolean).join(' · ') || datasetMeta.label}
-            <span className="nep-code">{row.id}</span>
+            <span className="nep-code" title="Line reference, for citing this line">{row.id}</span>
           </p>
           <div className="hgab-rec-labels">
             <StatusChip trace={row.trace} />
-            {match && <span className="hgab-rec-label" title={row.house_match ?? undefined}><em>pairing</em>{match}</span>}
-            {reading && twoReadings && <span className="hgab-rec-label" title={row.reading_status ?? undefined}><em>readings</em>{reading}</span>}
-            {api && <span className="hgab-rec-label" title={api.help}><em>Transparency</em>{api.label}</span>}
+            {match && <span className="hgab-rec-label" title={row.house_match ? `Code: ${row.house_match}` : undefined}><em>How it was matched</em>{match}</span>}
+            {reading && twoReadings && <span className="hgab-rec-label" title={row.reading_status ? `Code: ${row.reading_status}` : undefined}><em>Between the House votes</em>{reading}</span>}
+            {api && <span className="hgab-rec-label" title={api.help}><em>DPWH website</em>{api.label}</span>}
             {row.confidence != null && (
-              <span className="hgab-rec-label" title="Title similarity of the pairing (0–1). A text measure, not a probability."><em>similarity</em>{row.confidence.toFixed(3)}</span>
+              <span className="hgab-rec-label" title="How alike the two names are, from 0 to 1. A text measure, not a probability."><em>Name similarity</em>{row.confidence.toFixed(3)}</span>
             )}
-            {row.zone && <span className="hgab-rec-label"><em>zone</em>{zoneLabel(row.zone)}</span>}
-            {row.length_m != null && <span className="hgab-rec-label"><em>length</em>{(row.length_m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 })} km</span>}
+            {row.zone && <span className="hgab-rec-label"><em>Funding</em>{zoneLabel(row.zone)}</span>}
+            {row.length_m != null && <span className="hgab-rec-label" title="Worked out from the kilometre markers in the name"><em>Road length</em>{(row.length_m / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 })} km</span>}
           </div>
           {(info.help || api?.help) && (
             <p className="hgab-rec-help">
-              {info.help}{info.held ? ' This row is held out of the headline counts.' : ''}
+              {info.help}{info.held && !/headline counts/i.test(info.help) ? ' This unconfirmed match is left out of the headline counts.' : ''}
               {api?.help ? ` ${api.help}` : ''}
             </p>
           )}
@@ -291,18 +317,18 @@ export default function HgabRecord() {
           {cards.map((c) => <StageCard key={c.stage} card={c} row={row} docTitle={docTitle} open={evidence === c.stage} onToggle={() => setEvidence(evidence === c.stage ? null : c.stage)} />)}
           <div className={`hgab-rec-card is-delta ${delta == null ? 'is-empty' : ''}`.trim()}>
             <div className="hgab-rec-card-stage">
-              Δ House − NEP
-              <small>{twoReadings ? 'Latest House reading minus the NEP' : 'House bill minus the NEP'}</small>
+              Change
+              <small>{twoReadings ? 'Latest House reading minus the President’s proposal' : 'House bill minus the President’s proposal'}</small>
             </div>
             {delta == null ? (
               <>
                 <div className="hgab-rec-card-amt is-empty">—</div>
                 <p className="hgab-rec-card-title">
                   {row.nep_php == null && house == null
-                    ? 'Neither side carries an amount.'
+                    ? 'Neither document prints an amount.'
                     : row.nep_php == null
-                      ? 'No NEP record is attached, so there is no difference to compute. A House-only row is an insertion candidate, not a confirmed insertion.'
-                      : 'No House record is attached, so there is no difference to compute. An NEP-only row is a deletion candidate, not a confirmed removal.'}
+                      ? 'No matching line was found in the President’s proposal, so there is no difference to show. A House-only line is an insertion candidate: a lead to check, not a confirmed addition.'
+                      : 'No matching line was found in the House bill, so there is no difference to show. A proposal-only line is a deletion candidate: a lead to check, not a confirmed removal.'}
                 </p>
               </>
             ) : (
@@ -312,11 +338,11 @@ export default function HgabRecord() {
                 </div>
                 <div className="hgab-rec-card-exact">
                   {delta === 0
-                    ? 'Same amount on both stages'
-                    : `${delta > 0 ? '+' : '−'}${fmt.php(Math.abs(delta), { unit: 'full' })}${deltaPct != null ? ` · ${formatPct(deltaPct)}` : ' · no NEP base'}`}
+                    ? 'Same amount in both versions'
+                    : `${delta > 0 ? '+' : '−'}${fmt.php(Math.abs(delta), { unit: 'full' })}${deltaPct != null ? ` · ${formatPct(deltaPct)}` : row.nep_php ? '' : ' · no proposal amount to compare'}`}
                 </div>
                 {info.group === 'scope_review' && (
-                  <p className="hgab-rec-card-title">Segment-scope pair: this difference is deliberately not booked as an adjustment.</p>
+                  <p className="hgab-rec-card-title">A different stretch of the same road: this difference is not counted as an increase or a reduction.</p>
                 )}
               </>
             )}
@@ -327,13 +353,18 @@ export default function HgabRecord() {
           <HgabEvidence docKey={open.doc} page={open.page} docTitle={docTitle(open.doc)} onClose={() => setEvidence(null)} />
         )}
 
-        {(flags.length > 0 || notes.length > 0) && (
+        {(flags.length > 0 || notes.length > 0 || techNotes.length > 0) && (
           <div className="hgab-rec-section">
-            <SectionHead size="sm" eyebrow="Review" headline="Flags and pairing notes" dek="Flags mark things a reviewer should look at. They do not establish error or intent." />
+            <SectionHead
+              size="sm"
+              eyebrow="For checking"
+              headline={notes.length ? 'How this match was made' : `Marked for checking (${flags.length})`}
+              dek="Marks show what a reviewer should look at. They do not show an error or anyone’s intent."
+            />
             {flags.length > 0 && (
               <ul className="hgab-rec-flags">
                 {flags.map((f) => (
-                  <li className="hgab-rec-flag" key={f}>{flagLabel(f)}<code>{f}</code></li>
+                  <li className="hgab-rec-flag" key={f} title={`Code: ${f}`}>{flagLabel(f)}</li>
                 ))}
               </ul>
             )}
@@ -342,6 +373,14 @@ export default function HgabRecord() {
                 {notes.map(([k, v]) => (<div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>))}
               </dl>
             )}
+            {(techNotes.length > 0 || flags.length > 0) && (
+              <HgabDetails>
+                <dl>
+                  {flags.length > 0 && <><dt>Flag codes</dt><dd>{flags.map((f) => <code key={f} style={{ marginRight: 6 }}>{f}</code>)}</dd></>}
+                  {techNotes.map(([k, v]) => (<div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>))}
+                </dl>
+              </HgabDetails>
+            )}
           </div>
         )}
 
@@ -349,19 +388,19 @@ export default function HgabRecord() {
           <div className="hgab-rec-section">
             <SectionHead
               size="sm"
-              eyebrow="Not attached"
-              headline={`${suggestions.length} NEP suggestion${suggestions.length === 1 ? '' : 's'}`}
-              dek="Similar-title NEP rows the matcher found but did not accept. Similarity is a text measure (0–1), not a probability; suggestions add nothing to any total. Review for a re-titled or re-scoped counterpart before reading this row as an insertion."
+              eyebrow="Not matched"
+              headline={`${suggestions.length} similar line${suggestions.length === 1 ? '' : 's'} in the President’s proposal`}
+              dek="Lines with a similar name that the rules did not accept as a match. They add nothing to any total. Check them for a renamed or re-scoped version before reading this line as new."
             />
             <div className="nep-table-wrap">
               <table className="nep-table hgab-rec-sugg">
                 <thead>
                   <tr>
-                    <th className="num">Similarity</th>
-                    <th className="num">Identity</th>
-                    <th className="nep-th-name">NEP row</th>
-                    <th className="num">{STAGE_LABELS.nep.short}</th>
-                    <th>Differences</th>
+                    <th className="num" title="How alike the names are, from 0 to 1. A text measure, not a probability.">Name similarity</th>
+                    <th className="num" title="The matching rules' identity score, from 0 to 1">Match score</th>
+                    <th className="nep-th-name">Line in the proposal</th>
+                    <th className="num" title={STAGE_LABELS.nep.label}>{STAGE_LABELS.nep.short}</th>
+                    <th>How it differs</th>
                     <th>Page</th>
                   </tr>
                 </thead>
@@ -402,7 +441,7 @@ export default function HgabRecord() {
 
         {paths.length > 0 && (
           <div className="hgab-rec-section">
-            <SectionHead size="sm" eyebrow="Where it sits" headline="Source-tree path" dek="The heading hierarchy each document prints above this row." />
+            <SectionHead size="sm" eyebrow="Where it sits" headline="Headings above this line" dek="The headings each document prints above this line, from the agency down." />
             {paths.map((p) => (
               <div key={p.label}>
                 <p className="hgab-rec-path-stage">{p.label}</p>
@@ -413,14 +452,18 @@ export default function HgabRecord() {
         )}
 
         <div className="hgab-rec-section">
-          <details className="nep-sql hgab-rec-json">
-            <summary>Source record (JSON)</summary>
-            <pre>{row.record == null ? 'No source record attached.' : typeof row.record === 'string' ? row.record : JSON.stringify(row.record, null, 2)}</pre>
-          </details>
           <p className="nep-hier-note">
-            Queried from <code>hgab/2027/{key}/projects.parquet</code> in {current.ms} ms ·{' '}
-            <Link to={datasetPath(key, 'projects')}>back to all {datasetMeta.short} projects</Link>
+            <Link to={datasetPath(key, 'projects')}>Back to all {DATASET_SHORT[key]} projects</Link>
           </p>
+          <HgabDetails>
+            <dl>
+              <dt>Line reference</dt><dd><code>{row.id}</code></dd>
+              <dt>Status code</dt><dd><code>{row.trace}</code></dd>
+              <dt>Query</dt><dd><code>hgab/2027/{key}/projects.parquet</code>, read in the browser in {current.ms.toLocaleString()} ms</dd>
+            </dl>
+            <p style={{ marginTop: 10 }}>The full source record, as the analysis repository builds it:</p>
+            <pre className="hgab-rec-json">{row.record == null ? 'No source record attached.' : typeof row.record === 'string' ? row.record : JSON.stringify(row.record, null, 2)}</pre>
+          </HgabDetails>
         </div>
 
         <DisclaimerNotice compact />
@@ -453,15 +496,16 @@ function StageCard({
   put('Region', s?.region ?? (card.stage === 'nep' || !s ? row.region : null));
   put('Office', s?.office ?? (!s ? row.office : null));
   put('Program', s?.program ?? s?.program_group);
-  put('PAP', s?.pap ?? s?.subprogram_label ?? s?.sub_program ?? (!s ? row.pap : null));
-  put('Zone', zoneLabel(str(s?.zone) ?? (!s ? row.zone : null)));
+  put(row.dataset === 'nia' ? 'Sub-program' : 'Program line', s?.pap ?? s?.subprogram_label ?? s?.sub_program ?? (!s ? row.pap : null));
+  put('Funding', zoneLabel(str(s?.zone) ?? (!s ? row.zone : null)));
   put('Category', s?.category);
   put('Sub-category', s?.subcategory);
   put('Province', s?.province);
-  put('Source id', s?.id);
-  put('Record kind', s?.record_kind);
-  put('Amount evidence', s?.evidence);
-  if (printed) kv.push(['Printed page', String(printed)]);
+  put('Line reference', s?.id);
+  put('Type of line', typeof s?.record_kind === 'string' ? s.record_kind.replace(/_/g, ' ') : null);
+  const evidence = str(s?.evidence);
+  if (evidence) kv.push(['Checked against the scan', EVIDENCE_LABELS[evidence] ?? evidence.replace(/_/g, ' ')]);
+  if (printed) kv.push(['Page number printed on the page', String(printed)]);
   const amounts = obj(s?.amounts_php);
   const members = arr(s?.records);
   const funding = obj(s?.funding_php);
@@ -472,7 +516,7 @@ function StageCard({
       {card.amount == null ? (
         <>
           <div className="hgab-rec-card-amt is-empty">—</div>
-          <div className="hgab-rec-card-exact">No record on this stage</div>
+          <div className="hgab-rec-card-exact">No such line in this document</div>
         </>
       ) : (
         <>
@@ -481,7 +525,7 @@ function StageCard({
         </>
       )}
       {sideTitle && sideTitle !== row.title && (
-        <p className="hgab-rec-card-title" title="Title as printed on this stage">“{sideTitle}”</p>
+        <p className="hgab-rec-card-title" title="The name as this document prints it">“{sideTitle}”</p>
       )}
       {kv.length > 0 && (
         <dl className="hgab-rec-kv">
@@ -504,7 +548,7 @@ function StageCard({
       )}
       {members && members.length > 1 && (
         <p className="hgab-rec-card-title">
-          Grouped: {members.length} printed rows share this key
+          Grouped: {members.length} printed lines share the same name and place
           {members.every((m) => num(obj(m)?.amount_php) != null)
             ? ` (${members.map((m) => fmt.shortPhp(num(obj(m)?.amount_php))).join(' + ')})`
             : ''}.
@@ -517,13 +561,13 @@ function StageCard({
               Open page {card.page} ↗
             </a>
             <button type="button" aria-expanded={open} onClick={onToggle}>
-              {open ? 'Hide evidence' : 'Show evidence'}
+              {open ? 'Hide the page' : 'Show the page here'}
             </button>
           </>
         ) : card.stage === 'api' ? (
-          <span className="hgab-ds-null">Listing record · no page</span>
+          <span className="hgab-ds-null">Website listing · no page</span>
         ) : (
-          <span className="hgab-ds-null">No page reference</span>
+          <span className="hgab-ds-null">No page recorded</span>
         )}
       </div>
     </div>
