@@ -11,6 +11,10 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0',
+    // Reserved in ~/projects/ports.md (ai-reports web). strictPort so a
+    // collision fails loudly instead of silently moving the reader's URL.
+    port: 5130,
+    strictPort: true,
     // duckdb-wasm fetches parquet via HTTP Range requests; Vite's dev server
     // supports them natively. The headers below enable cross-origin isolation,
     // which lets duckdb-wasm use SharedArrayBuffer + Web Workers for the
