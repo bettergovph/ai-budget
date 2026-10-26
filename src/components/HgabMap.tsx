@@ -26,7 +26,8 @@
  */
 import {
   memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
-  type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode,
+  type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent, type ReactNode,
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { SectionHead } from './shared';
@@ -73,6 +74,16 @@ const DOT_LABELS: Record<DotKey, { label: string; sub: string }> = {
 /** Pointer distance, in screen pixels, that still counts as "on" a dot. */
 const HIT_PX = 12;
 const ZOOM_MS = 520;
+/** Free zoom: the closest view is the whole map divided by this. */
+const MAX_ZOOM = 40;
+/** From this scale the map counts as zoomed in: bigger dots, road lines drawn. */
+const ZOOMED_AT = 1.6;
+/** One press of + or −, and one arrow-key step as a share of the view. */
+const ZOOM_STEP = 1.6;
+const PAN_STEP = 0.2;
+const STEP_MS = 240;
+/** Pixels a press may travel and still count as a click, not a drag. */
+const DRAG_SLOP = 5;
 
 function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -449,32 +460,236 @@ function MapCanvas({
   const aspect = proj.width / proj.height;
   const regionByKey = useMemo(() => new Map(regions.map((r) => [r.key, r] as const)), [regions]);
   const curBox = useRef<Box>(full);
+  const rafRef = useRef(0);
+  // Zoomed in (bigger dots, road lines): React state only flips when the scale crosses ZOOMED_AT.
+  const zoomedRef = useRef(false);
+  const [zoomedIn, setZoomedIn] = useState(false);
+  // Any zoom at all (for "Whole country" and zoom-out).
+  const awayRef = useRef(false);
+  const [away, setAway] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const hintTimer = useRef<number | undefined>(undefined);
 
-  // Zoom: animate the viewBox attribute itself; React never renders per frame.
+  /** Keep a view inside the map: no closer than MAX_ZOOM, no wider than the whole map, centre on the map. */
+  const clampBox = useCallback((b: Box): Box => {
+    const w = Math.min(full.w, Math.max(full.w / MAX_ZOOM, b.w));
+    const h = w / aspect;
+    const cx = Math.min(full.x + full.w - w / 2, Math.max(full.x + w / 2, b.x + b.w / 2));
+    const cy = h >= full.h ? full.y + full.h / 2 : Math.min(full.y + full.h - h / 2, Math.max(full.y + h / 2, b.y + b.h / 2));
+    return { x: cx - w / 2, y: cy - h / 2, w, h };
+  }, [full, aspect]);
+
+  /** Write a view straight to the viewBox attribute; React never renders per frame. */
+  const applyBox = useCallback((b: Box) => {
+    const svg = svgRef.current;
+    curBox.current = b;
+    if (svg) svg.setAttribute('viewBox', boxToViewBox(b));
+    const scale = full.w / b.w;
+    const z = scale >= ZOOMED_AT;
+    if (z !== zoomedRef.current) {
+      zoomedRef.current = z;
+      setZoomedIn(z);
+    }
+    const a = scale > 1.01;
+    if (a !== awayRef.current) {
+      awayRef.current = a;
+      setAway(a);
+    }
+  }, [full]);
+
+  const animateTo = useCallback((target: Box, ms: number) => {
+    cancelAnimationFrame(rafRef.current);
+    const from = curBox.current;
+    if (ms <= 0 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      applyBox(target);
+      return;
+    }
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      applyBox(lerpBox(from, target, easeInOut(t)));
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [applyBox]);
+
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current);
+    window.clearTimeout(hintTimer.current);
+  }, []);
+
+  /** Zoom by `factor` keeping the map point (px, py) under the same spot. */
+  const zoomAround = useCallback((factor: number, px: number, py: number, ms = 0) => {
+    const b = curBox.current;
+    const w = b.w / factor;
+    const k = w / b.w;
+    const next = clampBox({ x: px - (px - b.x) * k, y: py - (py - b.y) * k, w, h: w / aspect });
+    if (ms > 0) animateTo(next, ms);
+    else { cancelAnimationFrame(rafRef.current); applyBox(next); }
+  }, [aspect, clampBox, animateTo, applyBox]);
+
+  const zoomStep = useCallback((dir: 1 | -1) => {
+    const b = curBox.current;
+    zoomAround(dir > 0 ? ZOOM_STEP : 1 / ZOOM_STEP, b.x + b.w / 2, b.y + b.h / 2, STEP_MS);
+  }, [zoomAround]);
+
+  const panBy = useCallback((dxFrac: number, dyFrac: number) => {
+    const b = curBox.current;
+    animateTo(clampBox({ ...b, x: b.x + b.w * dxFrac, y: b.y + b.h * dyFrac }), STEP_MS);
+  }, [animateTo, clampBox]);
+
+  const showHint = useCallback((text: string) => {
+    setHint(text);
+    window.clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => setHint(null), 1600);
+  }, []);
+
+  // A picked region: animate to it; no region: back to the whole map.
+  useEffect(() => {
+    const r = selected ? regionByKey.get(selected) : null;
+    animateTo(r ? clampBox(fitBox(r.box, aspect)) : full, ZOOM_MS);
+  }, [selected, regionByKey, aspect, full, animateTo, clampBox]);
+
+  /** Screen point → map units for the view `b` (the frame keeps the map's aspect, so no letterbox). */
+  const toMap = useCallback((clientX: number, clientY: number, b: Box = curBox.current) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width) return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+    return { x: b.x + ((clientX - rect.left) / rect.width) * b.w, y: b.y + ((clientY - rect.top) / rect.height) * b.h };
+  }, []);
+
+  // Wheel: Ctrl/⌘ + scroll (and trackpad pinch, which arrives as a ctrl-wheel) zooms at the pointer.
+  // A plain scroll keeps scrolling the page and says how to zoom.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    const r = selected ? regionByKey.get(selected) : null;
-    const target = r ? fitBox(r.box, aspect) : full;
-    const from = curBox.current;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) {
-      curBox.current = target;
-      svg.setAttribute('viewBox', boxToViewBox(target));
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) {
+        showHint('Hold Ctrl (⌘ on a Mac) and scroll to zoom');
+        return;
+      }
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+      const factor = Math.exp(-e.deltaY * unit * 0.0022);
+      const pt = toMap(e.clientX, e.clientY);
+      zoomAround(factor, pt.x, pt.y);
+    };
+    svg.addEventListener('wheel', onWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', onWheel);
+  }, [toMap, zoomAround, showHint]);
+
+  // Drag to pan (mouse and pen; one finger once zoomed in), two fingers to pinch-zoom.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{
+    startX: number; startY: number; box: Box; moved: boolean;
+    pinch: { dist: number; mid: { x: number; y: number }; box: Box } | null;
+  } | null>(null);
+  const suppressClick = useRef(false);
+
+  function startGesture(e: ReactPointerEvent<SVGSVGElement>) {
+    pointerType.current = e.pointerType;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointers.current.values()];
+    if (pts.length === 2) {
+      const [a, b] = pts;
+      gesture.current = {
+        startX: e.clientX, startY: e.clientY, box: curBox.current, moved: true,
+        pinch: { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, box: curBox.current },
+      };
+      setHover(null);
       return;
     }
-    let raf = 0;
-    const t0 = performance.now();
-    const step = (now: number) => {
-      const t = Math.min(1, (now - t0) / ZOOM_MS);
-      const b = lerpBox(from, target, easeInOut(t));
-      curBox.current = b;
-      svg.setAttribute('viewBox', boxToViewBox(b));
-      if (t < 1) raf = requestAnimationFrame(step);
+    if (pts.length === 1) {
+      gesture.current = { startX: e.clientX, startY: e.clientY, box: curBox.current, moved: false, pinch: null };
+    }
+  }
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!pointers.current.has(e.pointerId)) return;
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const g = gesture.current;
+      if (!g) return;
+      const pts = [...pointers.current.values()];
+      if (g.pinch && pts.length >= 2) {
+        const [a, b] = pts;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const b0 = g.pinch.box;
+        const anchor = toMap(g.pinch.mid.x, g.pinch.mid.y, b0);
+        const w = b0.w / (dist / g.pinch.dist);
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (!rect || !rect.width) return;
+        const h = w / aspect;
+        // Keep the anchor under the fingers' moving midpoint.
+        const x = anchor.x - ((mid.x - rect.left) / rect.width) * w;
+        const y = anchor.y - ((mid.y - rect.top) / rect.height) * h;
+        cancelAnimationFrame(rafRef.current);
+        applyBox(clampBox({ x, y, w, h }));
+        return;
+      }
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (!g.moved && Math.hypot(dx, dy) < DRAG_SLOP) return;
+      // One finger pans only once the map is zoomed in; at the whole map it scrolls the page.
+      if (e.pointerType === 'touch' && !awayRef.current) return;
+      if (!g.moved) {
+        g.moved = true;
+        setHover(null);
+        frameRef.current?.classList.add('is-panning');
+      }
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect || !rect.width) return;
+      cancelAnimationFrame(rafRef.current);
+      applyBox(clampBox({
+        ...g.box,
+        x: g.box.x - (dx / rect.width) * g.box.w,
+        y: g.box.y - (dy / rect.height) * g.box.h,
+      }));
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [selected, regionByKey, aspect, full]);
+    const onEnd = (e: PointerEvent) => {
+      if (!pointers.current.has(e.pointerId)) return;
+      pointers.current.delete(e.pointerId);
+      const g = gesture.current;
+      if (g?.moved) suppressClick.current = true;
+      if (pointers.current.size === 0) {
+        gesture.current = null;
+        frameRef.current?.classList.remove('is-panning');
+      } else if (g?.pinch) {
+        // One finger left after a pinch: continue as a pan from here.
+        const [rest] = [...pointers.current.values()];
+        gesture.current = { startX: rest.x, startY: rest.y, box: curBox.current, moved: true, pinch: null };
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+    };
+  }, [applyBox, aspect, clampBox, toMap]);
+
+  function onKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    if (e.target instanceof HTMLButtonElement && (e.key === 'Enter' || e.key === ' ')) return;
+    const zoomed = awayRef.current;
+    let handled = true;
+    if (e.key === '+' || e.key === '=') zoomStep(1);
+    else if (e.key === '-' || e.key === '_') zoomStep(-1);
+    else if (e.key === '0') resetView();
+    else if (zoomed && e.key === 'ArrowLeft') panBy(-PAN_STEP, 0);
+    else if (zoomed && e.key === 'ArrowRight') panBy(PAN_STEP, 0);
+    else if (zoomed && e.key === 'ArrowUp') panBy(0, -PAN_STEP);
+    else if (zoomed && e.key === 'ArrowDown') panBy(0, PAN_STEP);
+    else handled = false;
+    if (handled) e.preventDefault();
+  }
+
+  function resetView() {
+    if (selected) onReset();
+    else animateTo(full, ZOOM_MS);
+  }
 
   // After the tooltip's content changes, re-measure and place it.
   useLayoutEffect(() => {
@@ -523,6 +738,11 @@ function MapCanvas({
   }
 
   function onClick(e: ReactMouseEvent<SVGSVGElement>) {
+    if (suppressClick.current) {
+      // The press was a drag or a pinch, not a click.
+      suppressClick.current = false;
+      return;
+    }
     const isTouch = pointerType.current === 'touch' || pointerType.current === 'pen';
     const h = hitTest(e.clientX, e.clientY, e.target);
     if (isTouch !== touch) setTouch(isTouch);
@@ -556,18 +776,19 @@ function MapCanvas({
   return (
     <div
       ref={frameRef}
-      className="hgab-map-frame"
+      className={`hgab-map-frame ${away ? 'is-away' : ''}`.trim()}
       style={{ '--hgab-map-ar': `${proj.width} / ${proj.height}`, '--hgab-map-ar-n': aspect } as CSSProperties}
+      onKeyDown={onKeyDown}
     >
       <svg
         ref={svgRef}
-        className={`hgab-map-svg ${showDots ? 'has-dots' : ''} ${selected ? 'is-zoomed' : ''}`.trim()}
+        className={`hgab-map-svg ${showDots ? 'has-dots' : ''} ${selected || zoomedIn ? 'is-zoomed' : ''}`.trim()}
         viewBox={boxToViewBox(full)}
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label={ariaLabel}
         style={{ '--hgab-map-hatch': `url(#${hatchId})` } as CSSProperties}
-        onPointerDown={(e) => { pointerType.current = e.pointerType; }}
+        onPointerDown={startGesture}
         onPointerMove={onPointerMove}
         onPointerLeave={(e) => { if (e.pointerType !== 'touch') setHover(null); }}
         onClick={onClick}
@@ -581,7 +802,7 @@ function MapCanvas({
         <RegionLayer regions={regions} classes={classes} selected={selected} />
         {selectedShape && <RegionOverlay shape={selectedShape} cls={classes[selectedShape.key] ?? 'is-empty'} kind="selected" />}
         {hoverShape && <RegionOverlay shape={hoverShape} cls={classes[hoverShape.key] ?? 'is-empty'} kind="hover" />}
-        {showDots && selected && pp.lineCount > 0 && <LineLayer pp={pp} hidden={hidden} />}
+        {showDots && (selected || zoomedIn) && pp.lineCount > 0 && <LineLayer pp={pp} hidden={hidden} />}
         {showDots && <DotLayer pp={pp} hidden={hidden} showHeld={showHeld} />}
         {hp >= 0 && (
           <g className={`hgab-map-dot-hi is-${pp.keys[hp]}`} aria-hidden="true">
@@ -591,12 +812,22 @@ function MapCanvas({
         )}
       </svg>
 
-      {selected && (
-        <button type="button" className="hgab-map-reset" onClick={onReset}>
+      {(selected || away) && (
+        <button type="button" className="hgab-map-reset" onClick={resetView}>
           <span aria-hidden="true">←</span> Whole country
           {selectedName && <span className="visually-hidden"> (now showing {selectedName})</span>}
         </button>
       )}
+
+      <div className="hgab-map-zoom" role="group" aria-label="Map zoom">
+        <button type="button" onClick={() => zoomStep(1)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+        <button type="button" onClick={() => zoomStep(-1)} aria-label="Zoom out" title="Zoom out (−)" disabled={!away}>−</button>
+      </div>
+      <p className="hgab-map-howto" aria-hidden="true">
+        <span className="is-mouse">Drag to move · Ctrl/⌘ + scroll to zoom</span>
+        <span className="is-touch">Pinch to zoom · then drag to move</span>
+      </p>
+      {hint && <p className="hgab-map-hint" role="status">{hint}</p>}
 
       {hover && (
         <div ref={tipRef} className="hgab-map-tip" role="presentation">
