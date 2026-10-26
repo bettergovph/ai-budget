@@ -161,8 +161,13 @@ export function objectsToCsv(
   return lines.join('\n');
 }
 
-export function downloadCsv(filename: string, csv: string): void {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+/**
+ * Save a CSV string as a file. `excelBom` prepends a UTF-8 byte-order mark so
+ * Excel on Windows reads accented names (Las Piñas, Parañaque) correctly;
+ * other spreadsheet apps and CSV readers ignore it.
+ */
+export function downloadCsv(filename: string, csv: string, opts: { excelBom?: boolean } = {}): void {
+  const blob = new Blob([opts.excelBom ? '\uFEFF' : '', csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

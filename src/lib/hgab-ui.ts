@@ -11,7 +11,7 @@
  * shown inside a "Details for analysts" block (labelled "Each row") or on
  * Methodology. `one_row` stays in the data but no page shows it.
  */
-import type { DatasetKey, HgabDatasetMeta, ReconciliationRow } from './hgab';
+import { PLAIN_TERMS, type BridgeGroup, type DatasetKey, type DimKey, type HgabDatasetMeta, type ReconciliationRow } from './hgab';
 
 /** Tab labels for the four datasets, shared by the sub-nav, the switch and tables. */
 export const DATASET_SHORT: Record<DatasetKey, string> = {
@@ -127,6 +127,24 @@ export type HubView = (typeof HUB_VIEWS)[number]['key'];
 export function hubViews(hasReadings: boolean): ReadonlyArray<(typeof HUB_VIEWS)[number]> {
   return HUB_VIEWS.filter((v) => v.key !== 'readings' || hasReadings);
 }
+
+/**
+ * The groups the Changes view lists, in order: every group but "Same amount
+ * in both". The view and its CSV download read this one list.
+ */
+export const CHANGE_LIST_GROUPS: readonly BridgeGroup[] = ['house_only', 'nep_only', 'increased', 'decreased', 'scope_review'];
+
+/**
+ * The labels the overview's "By label" table can group by, in button order,
+ * with the Projects filter each one opens. The table and its CSV download
+ * read this one list.
+ */
+export const DIM_TABS: ReadonlyArray<{ key: DimKey; label: string; param: string; help?: string }> = [
+  { key: 'region', label: 'Region', param: 'region' },
+  { key: 'office_kind', label: 'Type of office', param: 'office', help: PLAIN_TERMS.deo.meaning },
+  { key: 'program', label: 'Program', param: 'program' },
+  { key: 'pap', label: 'Program line', param: 'pap', help: PLAIN_TERMS.pap.meaning },
+];
 
 /** The program hubs in sub-nav order, with whether each has the readings view. */
 export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasReadings: boolean }> = [

@@ -633,3 +633,128 @@ pre.hgab-rec-json { max-height: 60vh; overflow: auto; white-space: pre; word-bre
   .hgab-rec-cards { grid-template-columns: 1fr; }
   .hgab-rec-evidence iframe { height: 70vh; }
 }
+
+/* --- Download CSV menu (page head, every view) ------------------------------
+   The trigger reads like .hgab-cta; the panel like the sub-nav's program menu
+   (.hgab-subnav-menu). On the overview it sits on the navy band (.is-dark). */
+.hgab-ds-headtools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.hgab-dl { position: relative; display: inline-block; }
+.hgab-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  background: transparent;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.hgab-dl-btn:hover,
+.hgab-dl-btn[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+.hgab-dl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-dl-btn[aria-busy="true"] { cursor: progress; }
+.hgab-dl-caret { font-size: 0.75em; opacity: 0.8; transition: transform 0.15s ease; }
+.hgab-dl.is-open .hgab-dl-caret { transform: rotate(180deg); }
+.hgab-dl.is-dark .hgab-dl-btn { border-color: rgba(255, 255, 255, 0.72); color: #fff; }
+.hgab-dl.is-dark .hgab-dl-btn:hover,
+.hgab-dl.is-dark .hgab-dl-btn[aria-expanded="true"] { background: #fff; border-color: #fff; color: var(--accent-deep); }
+.hgab-dl.is-dark .hgab-dl-btn:focus-visible { outline-color: #fff; }
+
+.hgab-dl-panel {
+  position: absolute;
+  z-index: 45;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(400px, calc(100vw - 28px));
+  padding: 6px;
+  background: var(--paper, #fff);
+  color: var(--ink);
+  border: 1px solid var(--rule, #d9dde3);
+  border-radius: 4px;
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.18);
+  text-align: left;
+}
+.hgab-dl-panel[hidden] { display: none; }
+.hgab-dl-menu { display: flex; flex-direction: column; }
+.hgab-dl-sep { border-top: 1px solid var(--rule, #d9dde3); margin-top: 6px; padding-top: 6px; }
+.hgab-dl-head {
+  margin: 0;
+  padding: 4px 12px 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-dl-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.hgab-dl-item:hover,
+.hgab-dl-item:focus-visible { background: var(--paper-2); color: var(--accent); outline: none; }
+.hgab-dl-item:focus-visible { box-shadow: inset 3px 0 0 var(--accent); }
+.hgab-dl-item[aria-disabled="true"] { color: var(--ink-mute); cursor: default; background: none; }
+.hgab-dl-item code { font-family: var(--font-mono); font-size: 12.5px; }
+.hgab-dl-item small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-3); }
+.hgab-dl-busy {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+.hgab-dl-error {
+  margin: 6px 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--negative);
+  background: var(--paper-2);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.hgab-dl-note {
+  margin: 6px 0 0;
+  padding: 8px 12px 4px;
+  border-top: 1px solid var(--rule, #d9dde3);
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+@media (max-width: 720px) {
+  .hgab-ds-headtools { margin-top: 12px; }
+  .hgab-dl-item { font-size: 14.5px; min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hgab-dl-btn,
+  .hgab-dl-caret { transition: none; }
+}
