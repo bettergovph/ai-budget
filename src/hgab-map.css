@@ -589,3 +589,73 @@
   .hgab-map-dot { stroke: CanvasText; }
   .hgab-map-sw { forced-color-adjust: none; }
 }
+
+/* --- free zoom and pan ----------------------------------------------------
+   Whole map: one finger scrolls the page (pan-y); a pinch zooms the map.
+   Zoomed in: the map takes every gesture, and a mouse drag pans. */
+.hgab-map-svg { touch-action: pan-y; }
+.hgab-map-frame.is-away .hgab-map-svg { touch-action: none; cursor: grab; }
+.hgab-map-frame.is-panning .hgab-map-svg { cursor: grabbing; }
+.hgab-map-frame.is-panning .hgab-map-svg * { cursor: grabbing; }
+
+.hgab-map-zoom {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--paper);
+  box-shadow: 0 2px 8px rgba(10, 20, 40, 0.1);
+}
+.hgab-map-zoom button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 18px/1 var(--font-body);
+  cursor: pointer;
+}
+.hgab-map-zoom button + button { border-top: 1px solid var(--rule); }
+.hgab-map-zoom button:hover:not(:disabled) { background: var(--paper-2); }
+.hgab-map-zoom button:disabled { color: var(--ink-mute); cursor: default; }
+.hgab-map-zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.hgab-map-howto {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  z-index: 2;
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.hgab-map-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  background: rgba(10, 20, 40, 0.45);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.hgab-map-howto .is-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .hgab-map-howto .is-mouse { display: none; }
+  .hgab-map-howto .is-touch { display: inline; }
+}
