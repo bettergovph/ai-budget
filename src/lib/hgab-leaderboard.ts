@@ -741,3 +741,14 @@ export function seatHolders(entry: Pick<LeaderEntry, 'people'>, max = Infinity):
   const more = names.length - shown.length;
   return `${names.length > 1 ? 'Reps.' : 'Rep.'} ${shown.join(' · ')}${more > 0 ? ` +${more}` : ''}`;
 }
+
+/**
+ * "As of October 26, 2026": the date the leaderboard data was built, in
+ * Manila time. Printed on every share image and beside the board, so a
+ * screenshot shared later still says how current its figures are.
+ */
+export function asOfText(data: Pick<LeaderboardData, 'built_at'>): string {
+  const d = new Date(data.built_at);
+  if (Number.isNaN(d.getTime())) return '';
+  return `As of ${d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' })}`;
+}

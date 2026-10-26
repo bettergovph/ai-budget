@@ -33,7 +33,7 @@ import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadHgabLeaderboard, type RegionKey } from '../lib/hgab';
 import {
   BOARDS, BOARD_SECTIONS, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
-  leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
+  asOfText, leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
 import '../nep2027.css';
@@ -206,7 +206,8 @@ function Gallery({
         dek={
           <>
             DPWH district offices ranked by their budgets in the 2027 House bill and the NEP, and by enacted
-            budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.
+            budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.{' '}
+            <span className="hgab-lb-asof">{asOfText(data)}.</span>
           </>
         }
         note="Amounts belong to DPWH district offices, not to people. The representative shown holds the district’s seat in the 20th Congress. The documents do not say who asked for any project."
@@ -424,7 +425,7 @@ function BoardPage({
               </button>
             </div>
             <p className="hgab-lb-status" role="status">
-              {problem ?? (api ? `PNG, ${api.width.toLocaleString()} × ${api.height.toLocaleString()} pixels` : 'Drawing the image…')}
+              {problem ?? (api ? `PNG, ${api.width.toLocaleString()} × ${api.height.toLocaleString()} pixels · ${asOfText(data)}` : 'Drawing the image…')}
             </p>
 
             {/* Right beside the actions: what a shared image must not be read as saying. */}

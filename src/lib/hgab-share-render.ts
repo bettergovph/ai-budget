@@ -24,6 +24,7 @@ import {
   rankByCongress,
   rankEntries,
   rankMembers,
+  asOfText,
   rankRegions,
   residualLine,
   seatHolders,
@@ -580,6 +581,8 @@ interface Spec {
   urlInHero?: boolean;
   /** Shared rows run the seat holders and the tier on as one paragraph (no forced line break). */
   rowFlow?: boolean;
+  /** Tighter spacing in the title band (link previews). */
+  heroTight?: boolean;
   /** A thin bar at the very bottom of each row (link previews), so rows can be shorter. */
   rowBarSlim?: boolean;
   /** Space above and below the rows (default rowSub × 0.9). */
@@ -595,11 +598,11 @@ const SPECS: Record<Exclude<ShareFormat, 'landscape'>, Spec> = {
     foot: 22, logo: 40, footPad: 0.85,
   },
   square: {
-    W: 1080, H: 1080, pad: 56, heroTop: 46, heroBottom: 30,
+    W: 1080, H: 1080, pad: 56, heroTop: 42, heroBottom: 26,
     kicker: 22, titleMax: 58, titleMin: 40, sub: 24, subLines: 3,
     rowName: 27, rowSub: 22, rowValue: 31, rowDetail: 22, rank: 28, avatar: 60, rowMin: 70, rowMax: 108,
     spot: null,
-    foot: 22, logo: 38,
+    foot: 22, logo: 38, heroTight: true,
   },
   story: {
     // Stories: the app's profile bar covers the top ~120px and the reply field the bottom ~150px.
@@ -622,10 +625,27 @@ interface Block {
   fits?: boolean;
 }
 
-interface HeroText { kicker: string; title: string; subtitle: string; region: string | null; count: string | null; /** Drawn white, right-aligned on the count line (link previews). */ url?: string | null }
+interface HeroText {
+  kicker: string;
+  title: string;
+  subtitle: string;
+  region: string | null;
+  count: string | null;
+  /** Drawn white, right-aligned on the count line (link previews). */
+  url?: string | null;
+  /** "As of October 26, 2026": a row of its own under the count line (or the subtitle). */
+  asOf: string;
+}
+
+/** asOfText(data) for the card being drawn (set by drawShareCard). */
+let cardAsOf = '';
+/** Set during a draw when the as-of row is missing or does not fit its line. */
+let asOfMissing = false;
+/** Set when the as-of row has been drawn whole. */
+let asOfDrawn = false;
 
 function heroText(board: BoardDef, region: string | null, count: string | null): HeroText {
-  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count };
+  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count, asOf: cardAsOf };
 }
 
 /** Kicker, region pill, title, subtitle and count line, white on the band. */
@@ -640,7 +660,7 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   const logoW = logo ? logoWidth(ctx, logo.images, SHARE_LOGO_WHITE, logo.h) : 0;
   setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.14);
   const kLines = wrapSegments(ctx, t.kicker.toUpperCase(), logo ? w - logoW - s.kicker * 1.5 : w, kickerLines);
-  const kLH = s.kicker * 1.45;
+  const kLH = s.kicker * (s.heroTight ? 1.35 : 1.45);
   const kFits = (() => { setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.14); return wrapSegments(ctx, t.kicker.toUpperCase(), logo ? w - logoW - s.kicker * 1.5 : w).length <= kickerLines; })();
   setFont(ctx, 700, titleSize, F.display, -titleSize * 0.02);
   const titleMaxLines = titleLines;
@@ -680,12 +700,17 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   const urlInline = !!t.url && cLines.length > 0 && lastCW + s.kicker * 1.5 + urlW <= w;
   if (t.url && !urlInline) cLines.push('');
   const urlFits = !t.url || urlW <= w;
-  const cLH = s.kicker * 1.45;
-  const gap = s.kicker * 0.7;
-  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + (cLines.length ? gap * 0.6 + cLines.length * cLH : 0);
+  const cLH = s.kicker * (s.heroTight ? 1.32 : 1.45);
+  const gap = s.kicker * (s.heroTight ? 0.55 : 0.7);
+  // The as-of row: its own line, mono like the count line, never cut.
+  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
+  const asOfFits = !!t.asOf && tw(ctx, t.asOf) <= w;
+  const asOfLH = s.kicker * (s.heroTight ? 1.26 : 1.34);
+  const asOfH = t.asOf ? (cLines.length ? 0 : gap * 0.6) + asOfLH : 0;
+  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + (cLines.length ? gap * 0.6 + cLines.length * cLH : 0) + asOfH;
   return {
     h,
-    fits: kFits && tFits && sFits && urlFits,
+    fits: kFits && tFits && sFits && urlFits && (asOfFits || !t.asOf),
     draw(y0) {
       let y = y0;
       if (logo) drawLogo(ctx, logo.images, SHARE_LOGO_WHITE, x + w, y + s.kicker * 0.62 - logo.h / 2, logo.h, 'right', true);
@@ -720,6 +745,13 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
           setFont(ctx, urlFont.weight, s.kicker, urlFont.family, 0);
           text(ctx, t.url, x + w, y - cLH + s.kicker * 1.05, '#ffffff', 'right');
         }
+      }
+      if (t.asOf) {
+        if (!cLines.length) y += gap * 0.6;
+        setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
+        if (asOfFits) asOfDrawn = true;
+        else asOfMissing = true;
+        text(ctx, t.asOf, x, y + s.kicker * 1.05, 'rgba(255,255,255,0.6)');
       }
       ctx.letterSpacing = '0px';
     },
@@ -992,7 +1024,7 @@ function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Bloc
   const src = wrap(ctx, ft.source, g.w);
   const logoW = g.logo ? logoWidth(ctx, g.logo.images, SHARE_LOGO_PRIMARY, g.logo.h) + g.fs : 0;
   const u = fitUrl(ctx, url, g.w - logoW, g.urlMax, g.urlMin);
-  const resPad = g.fs * 0.5;
+  const resPad = g.fs * 0.4;
   const resH = res ? res.lines.length * g.lh + resPad * 2 : 0;
   const urlH = g.noUrl ? 0 : g.fs * 0.6 + Math.max(u.lines.length * u.size * 1.3, g.logo ? g.logo.h : 0);
   const h = g.padT + note.length * g.lh + (note.length ? g.gap : 0) + (res ? resH + g.gap : 0) + src.length * g.lh + urlH + g.padB;
@@ -1031,7 +1063,7 @@ function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPe
   const pad = s.footPad ?? 1;
   return footerBlock(ctx, {
     x: s.pad, w: s.W - s.pad * 2, bgX: 0, bgW: s.W, H: s.H,
-    fs, lh: fs * (s.urlInHero ? 1.28 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.5,
+    fs, lh: fs * (s.urlInHero ? 1.25 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.45,
     urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: s.urlInHero,
   }, footerText(input.data, input.board, people), shareUrl(input.board, input.region ?? null));
 }
@@ -1115,9 +1147,14 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
   } else if (isGroup(it)) {
     // Office headline; then the seat holders; then the tier, with every district served or the block number.
     setFont(ctx, 400, g.subSize, F.body);
-    runs = g.flow
-      ? [{ text: `${seatHolders({ people: it.people }, 2)} · `, weight: 400, color: holderColor }]
-      : [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
+    if (g.flow) {
+      // Two names, or one where that saves a line of the district list.
+      const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
+      const tail: Run[] = [{ text: lab, weight: 600, color: C.tierB }, { text: ` · ${districtsSummary(it.people)}`, weight: 400, color: C.ink3 }];
+      const withNames = (k: number): Run[] => [{ text: `${seatHolders({ people: it.people }, k)} · `, weight: 400, color: holderColor }, ...(ref ? [] : tail)];
+      const lines = (k: number) => wrapRuns(ctx, withNames(k), g.subSize, (i) => (i === 0 ? tmax : fullW)).lines.length;
+      runs = [{ text: `${seatHolders({ people: it.people }, lines(1) < lines(2) ? 1 : 2)} · `, weight: 400, color: holderColor }];
+    } else runs = [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
     if (ref) {
       const head: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, { text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }];
       const forms = [` · ${sharedLabel(it.people.length)}`, ` · Shared by ${it.people.length} districts`, ` · ${it.people.length} districts`];
@@ -2021,7 +2058,7 @@ function drawShiftVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareC
     body: shiftBody(ctx, input.data, {
       x: s.pad, w: s.W - s.pad * 2,
       label: Math.round(28 * big),
-      barH: Math.round(74 * big), gapH: Math.round((format === 'square' ? 64 : 104) * big),
+      barH: Math.round((format === 'square' ? 66 : 74) * big), gapH: Math.round((format === 'square' ? 48 : 104) * big),
       statName: Math.round(30 * big), statValue: Math.round(50 * big), statSub: Math.max(22, Math.round(23 * big)), statGap: Math.round((format === 'square' ? 16 : 30) * big), shares: true,
     }),
   }), NO_PEOPLE);
@@ -2133,12 +2170,12 @@ const L = {
 
 /** Ranking, members and by-Congress link previews: a title band across the top, rows, then the footer. */
 const LAND: Spec = {
-  W: 1200, H: 630, pad: 40, heroTop: 18, heroBottom: 12,
+  W: 1200, H: 630, pad: 40, heroTop: 14, heroBottom: 11,
   kicker: 20, titleMax: 42, titleMin: 30, sub: 20, subLines: 2,
   rowName: 23, rowSub: 20, rowValue: 27, rowDetail: 20, rank: 23, avatar: 42, rowMin: 58, rowMax: 84,
   spot: null,
   foot: 20, footMin: 20, logo: 28, footPad: 0.7,
-  urlInHero: true, rowFlow: true, rowPadY: 4, rowBarSlim: true,
+  urlInHero: true, rowFlow: true, rowPadY: 4, rowBarSlim: true, heroTight: true,
 };
 
 /** The by-Congress link preview: one row per Congress (its top office), labelled "18th", with the years beside the value. */
@@ -2238,7 +2275,8 @@ export interface ShareCardReport {
   /**
    * False when some layout had to fall back (a title cut, rows squeezed, fewer
    * than three rows), when a district list or the residual could not be laid
-   * out whole, or when the data has no residual figures yet.
+   * out whole, when the data has no residual figures yet, or when the as-of
+   * row is missing or does not fit its line.
    */
   fits: boolean;
   /** Fewer rows than usual fitted (the count line says "Top K of N"); not a defect, worth a look. */
@@ -2250,6 +2288,9 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   layoutFits = true;
   layoutSparse = false;
   residualMissing = false;
+  cardAsOf = asOfText(input.data);
+  asOfMissing = !cardAsOf;
+  asOfDrawn = false;
   const { board, format } = input;
   const region = board.regionFilter ? input.region ?? null : null;
   const inp: ShareCardInput = { ...input, region };
@@ -2270,7 +2311,7 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
     else drawRankingVertical(ctx, s, format, inp);
   }
   ctx.restore();
-  return { fits: layoutFits && !residualMissing, sparse: layoutSparse };
+  return { fits: layoutFits && !residualMissing && !asOfMissing && asOfDrawn, sparse: layoutSparse };
 }
 
 /** Every image a card draws: the portraits of the rows shown (up to three per shared office) and the logo. */
@@ -2305,7 +2346,8 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
   void format; // Same text for every format: the field and the top three.
   const r = board.regionFilter ? region ?? null : null;
   const where = r ? ` ${regionName(r)}.` : '';
-  const head = `${board.title}.${where} ${board.subtitle}`;
+  const asOf = asOfText(data);
+  const head = `${board.title}.${where}${asOf ? ` ${asOf}.` : ''} ${board.subtitle}`;
   const tiers = board.kind === 'ranking' || board.kind === 'congress';
   let top: string[] = [];
   let people = false;
