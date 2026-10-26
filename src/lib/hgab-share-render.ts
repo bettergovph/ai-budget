@@ -16,7 +16,6 @@
  */
 
 import {
-  PEOPLE_LINE,
   SHARE_FORMATS,
   displayName,
   formatValue,
@@ -26,14 +25,19 @@ import {
   rankEntries,
   rankMembers,
   rankRegions,
+  residualLine,
+  seatHolders,
   shortDistrict,
+  tierText,
   type BoardDef,
   type LeaderEntry,
+  type LeaderSlice,
   type LeaderPerson,
   type LeaderboardData,
   type ShareFormat,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
+import { CARD_DISCLAIMER } from './hgab-disclaimers';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -232,6 +236,7 @@ function text(ctx: Ctx, s: string, x: number, y: number, color: string, align: C
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
+  if (!(w > 0 && h > 0)) return;
   ctx.roundRect(x, y, w, h, Math.min(r, h / 2, w / 2));
 }
 
@@ -272,18 +277,18 @@ function sharedLabel(n: number): string {
   return `Shared by ${n} districts · not split`;
 }
 
-/** The Tier B mark, shortened only as far as the space needs. */
-function fitShared(ctx: Ctx, n: number, max: number): string {
-  for (const s of [sharedLabel(n), `Shared by ${n} districts`, `Shared by ${n}`]) if (tw(ctx, s) <= max) return s;
-  return ellipsize(ctx, `Shared by ${n}`, max);
-}
-
 // ---------------------------------------------------------------------------
 // Rows (what a card shows)
 // ---------------------------------------------------------------------------
 
 interface Item {
   rank: number;
+  /** Shown in the rank column instead of the number ("18th"). */
+  label?: string;
+  /** The group's key (person district id on the members board). */
+  key: string;
+  /** Members board: the person is the headline. Everywhere else the place is (district or office). */
+  personFirst?: boolean;
   people: LeaderPerson[];
   tier: 'A' | 'B';
   /** officeLabel(entry): the headline of a shared group (never one person's name); null for one district. */
@@ -297,9 +302,29 @@ function isGroup(it: Item): boolean {
 }
 
 /** What a row is called: the office for a shared group, else the representative. */
+/**
+ * What a row is called. The place, never a person: the district for a
+ * one-district office, the office for a shared one (entryTitle in the
+ * contract). Only the members board leads with the person.
+ */
 function headline(it: Item): string {
+  if (it.personFirst) return it.people[0] ? personName(it.people[0]) : '—';
   if (isGroup(it)) return it.office ?? `${it.people.length} districts sharing one office`;
-  return it.people[0] ? personName(it.people[0]) : '—';
+  return it.people[0]?.district ?? it.key;
+}
+
+/**
+ * "Rep. JB Bernos" / "Reps. A · B +5": as many names as fit in `max` (the
+ * font must be set). A single name too long for the line is ellipsized.
+ */
+function fitHolders(ctx: Ctx, it: Item, max: number): string {
+  const all = seatHolders({ people: it.people });
+  if (tw(ctx, all) <= max) return all;
+  for (let k = it.people.length - 1; k >= 1; k--) {
+    const s = seatHolders({ people: it.people }, k);
+    if (tw(ctx, s) <= max) return s;
+  }
+  return ellipsize(ctx, seatHolders({ people: it.people }, 1), max);
 }
 
 function regionName(region: string | null | undefined): string | null {
@@ -319,18 +344,18 @@ function rankingItems(data: LeaderboardData, board: BoardDef, region: string | n
     const { rows, eligible } = rankMembers(data, { region, limit });
     return {
       eligible,
-      items: rows.map((r) => ({ rank: r.rank, people: [r.person], tier: 'A' as const, office: null, value: r.value, detail: r.value === 1 ? 'bill' : 'bills' })),
+      items: rows.map((r) => ({ rank: r.rank, key: r.person.district_id, personFirst: true, people: [r.person], tier: 'A' as const, office: null, value: r.value, detail: r.value === 1 ? 'bill' : 'bills' })),
     };
   }
   const { rows, eligible } = rankEntries(data, board, { region, limit });
   return {
     eligible,
-    items: rows.map((r) => ({ rank: r.rank, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), value: r.value, detail: board.detail?.(r.entry) ?? null })),
+    items: rows.map((r) => ({ rank: r.rank, key: r.entry.key, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), value: r.value, detail: board.detail?.(r.entry) ?? null })),
   };
 }
 
 function entryItem(rank: number, e: LeaderEntry, value: number): Item {
-  return { rank, people: e.people, tier: e.tier, office: officeLabel(e), value, detail: null };
+  return { rank, key: e.key, people: e.people, tier: e.tier, office: officeLabel(e), value, detail: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +417,11 @@ function avatarBoxWidth(maxPeople: number, d: number): number {
  * "+N" chip for a shared office. Left-aligned in a box `boxW` wide.
  */
 function drawAvatars(ctx: Ctx, images: ReadonlyMap<string, ShareImageSource>, people: LeaderPerson[], x: number, cy: number, d: number, boxW: number, ring: string, chipBg = C.ink2): void {
+  if (!(d > 8)) {
+    // No room for faces: a layout fallback, already flagged as not fitting.
+    layoutFits = false;
+    return;
+  }
   if (people.length <= 1) {
     const p = people[0];
     if (p) drawFace(ctx, p.portrait_url ? images.get(p.portrait_url) : undefined, p, x + d / 2, cy, d / 2, ring);
@@ -510,6 +540,8 @@ function drawChip(ctx: Ctx, label: string, x: number, y: number, size: number, f
 
 /** Set false during a draw when a layout had to fall back (text cut or rows squeezed past their minimum). */
 let layoutFits = true;
+/** Set during a draw when fewer rows than the board's usual minimum fitted (honest "Top K", but a thin card). */
+let layoutSparse = false;
 
 // ---------------------------------------------------------------------------
 // Format specs
@@ -544,6 +576,14 @@ interface Spec {
   footBottom?: number;
   /** Smallest footer font the layout may fall back to (22 on 1080-wide cards, 20 on 1200×630). */
   footMin?: number;
+  /** Link previews: the link sits on the count line of the title band instead of the footer. */
+  urlInHero?: boolean;
+  /** Shared rows run the seat holders and the tier on as one paragraph (no forced line break). */
+  rowFlow?: boolean;
+  /** A thin bar at the very bottom of each row (link previews), so rows can be shorter. */
+  rowBarSlim?: boolean;
+  /** Space above and below the rows (default rowSub × 0.9). */
+  rowPadY?: number;
 }
 
 const SPECS: Record<Exclude<ShareFormat, 'landscape'>, Spec> = {
@@ -582,7 +622,7 @@ interface Block {
   fits?: boolean;
 }
 
-interface HeroText { kicker: string; title: string; subtitle: string; region: string | null; count: string | null }
+interface HeroText { kicker: string; title: string; subtitle: string; region: string | null; count: string | null; /** Drawn white, right-aligned on the count line (link previews). */ url?: string | null }
 
 function heroText(board: BoardDef, region: string | null, count: string | null): HeroText {
   return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count };
@@ -624,14 +664,28 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   setFont(ctx, 700, titleSize, F.display, -titleSize * 0.02);
   const pillAfterTitle = !!t.region && !pillInline && tLines.length === 1 && tw(ctx, tLines[0]) + titleSize * 0.4 + pillW <= w;
   const pillH = t.region && !pillInline && !pillAfterTitle ? s.kicker * 1.7 : 0;
+  // The link (link previews) goes at the right of the count line (mono, else Inter), or on a line of its own.
   setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
   const cLines = t.count ? wrap(ctx, t.count, w, 2) : [];
+  const lastCW = cLines.length ? tw(ctx, cLines[cLines.length - 1]) : 0;
+  let urlFont = { weight: 500, family: F.mono };
+  setFont(ctx, 500, s.kicker, F.mono, 0);
+  let urlW = t.url ? tw(ctx, t.url) : 0;
+  if (t.url && lastCW + s.kicker * 1.5 + urlW > w) {
+    urlFont = { weight: 600, family: F.body };
+    setFont(ctx, 600, s.kicker, F.body, 0);
+    urlW = tw(ctx, t.url);
+  }
+  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
+  const urlInline = !!t.url && cLines.length > 0 && lastCW + s.kicker * 1.5 + urlW <= w;
+  if (t.url && !urlInline) cLines.push('');
+  const urlFits = !t.url || urlW <= w;
   const cLH = s.kicker * 1.45;
   const gap = s.kicker * 0.7;
   const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + (cLines.length ? gap * 0.6 + cLines.length * cLH : 0);
   return {
     h,
-    fits: kFits && tFits && sFits,
+    fits: kFits && tFits && sFits && urlFits,
     draw(y0) {
       let y = y0;
       if (logo) drawLogo(ctx, logo.images, SHARE_LOGO_WHITE, x + w, y + s.kicker * 0.62 - logo.h / 2, logo.h, 'right', true);
@@ -662,6 +716,10 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
         y += gap * 0.6;
         setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
         for (const l of cLines) { text(ctx, l, x, y + s.kicker * 1.05, 'rgba(255,255,255,0.68)'); y += cLH; }
+        if (t.url) {
+          setFont(ctx, urlFont.weight, s.kicker, urlFont.family, 0);
+          text(ctx, t.url, x + w, y - cLH + s.kicker * 1.05, '#ffffff', 'right');
+        }
       }
       ctx.letterSpacing = '0px';
     },
@@ -708,51 +766,279 @@ function drawUrl(ctx: Ctx, u: FitUrl, x: number, y: number): void {
   u.lines.forEach((l, i) => text(ctx, l, x, y + u.size * 0.95 + i * u.size * 1.3, C.hero));
 }
 
-/**
- * The notes a card prints: the board's first note and, on a card that shows
- * people next to amounts (ranking and by-Congress boards with rows), the
- * people line when the first note does not already say it.
- */
-function footerNotes(board: BoardDef, withPhotos: boolean): string[] {
-  const out = board.notes[0] ? [board.notes[0]] : [];
-  const showsPeopleWithAmounts = withPhotos && (board.kind === 'ranking' || board.kind === 'congress');
-  if (showsPeopleWithAmounts && !(board.notes[0] ?? '').includes('do not say who asked for any project')) out.push(PEOPLE_LINE);
+// ---------------------------------------------------------------------------
+// Styled text: runs of words in different weights and colours, with inline
+// numbered badges, wrapped greedily. Nothing is ever cut; `overflow` reports a
+// word wider than its line so the fit check can fail.
+// ---------------------------------------------------------------------------
+
+interface Run { text?: string; badge?: number; weight?: number; color: string; /** Start a new line here. */ br?: boolean }
+interface Tok { kind: 'word' | 'space' | 'badge' | 'br'; text: string; weight: number; color: string; w: number }
+interface PlacedTok { tok: Tok; x: number }
+interface RunLayout { lines: PlacedTok[][]; overflow: boolean }
+
+function badgeW(size: number): number {
+  return Math.round(size * 1.45);
+}
+
+function runTokens(ctx: Ctx, runs: Run[], size: number): Tok[] {
+  const out: Tok[] = [];
+  for (const r of runs) {
+    if (r.br) {
+      out.push({ kind: 'br', text: '', weight: 400, color: r.color, w: 0 });
+      continue;
+    }
+    if (r.badge != null) {
+      out.push({ kind: 'badge', text: String(r.badge), weight: 700, color: r.color, w: badgeW(size) });
+      continue;
+    }
+    const weight = r.weight ?? 400;
+    setFont(ctx, weight, size, F.body);
+    for (const part of (r.text ?? '').split(/(\s+)/)) {
+      if (!part) continue;
+      const space = /^\s+$/.test(part);
+      out.push({ kind: space ? 'space' : 'word', text: space ? ' ' : part, weight, color: r.color, w: tw(ctx, space ? ' ' : part) });
+    }
+  }
   return out;
 }
 
-/** Notes, source and the short link, on a pale strip. `fs` is the footer font size. */
-function footerBlock(ctx: Ctx, s: Spec, board: BoardDef, region: string | null, withPhotos: boolean, fs = s.foot): Block {
-  const x = s.pad;
-  const w = s.W - s.pad * 2;
-  const lh = fs * 1.36;
-  // Notes run together as one paragraph, and so do the source lines: fewer half-empty lines.
-  setFont(ctx, 500, fs, F.body);
-  const note = wrap(ctx, footerNotes(board, withPhotos).join(' '), w, 5);
-  setFont(ctx, 400, fs, F.body);
-  const src = wrap(ctx, sourceLines(board, withPhotos).join(' '), w, 3);
-  const url = fitUrl(ctx, shareUrl(board, region), w, fs + 2, Math.min(fs, 22));
-  const pad = s.footPad ?? 1;
-  const padT = fs * pad;
-  const gap = fs * 0.45;
-  const h = padT + note.length * lh + gap + src.length * lh + fs * 0.7 + url.lines.length * url.size * 1.3 + fs * 1.15 * pad + (s.footBottom ?? 0);
+/** Greedy wrap of styled runs; line i may be `widthOf(i)` wide. */
+function wrapRuns(ctx: Ctx, runs: Run[], size: number, widthOf: (i: number) => number): RunLayout {
+  const lines: PlacedTok[][] = [[]];
+  let x = 0;
+  let space = 0;
+  let overflow = false;
+  for (const t of runTokens(ctx, runs, size)) {
+    if (t.kind === 'br') {
+      if (lines[lines.length - 1].length) lines.push([]);
+      x = 0;
+      space = 0;
+      continue;
+    }
+    if (t.kind === 'space') {
+      if (lines[lines.length - 1].length) space = t.w;
+      continue;
+    }
+    let line = lines[lines.length - 1];
+    const gap = line.length ? space : 0;
+    if (line.length && x + gap + t.w > widthOf(lines.length - 1)) {
+      line = [];
+      lines.push(line);
+      x = 0;
+    } else x += gap;
+    if (!line.length && t.w > widthOf(lines.length - 1)) overflow = true;
+    line.push({ tok: t, x });
+    x += t.w;
+    space = 0;
+  }
+  return { lines: lines.filter((l) => l.length), overflow };
+}
+
+function runLineWidth(line: PlacedTok[]): number {
+  const last = line[line.length - 1];
+  return last ? last.x + last.tok.w : 0;
+}
+
+function drawBadge(ctx: Ctx, label: string, x: number, baseline: number, size: number, color: string): void {
+  const d = Math.round(size * 1.3);
+  const cx = x + badgeW(size) / 2;
+  const cy = baseline - size * 0.36;
+  ctx.beginPath();
+  ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  setFont(ctx, 700, label.length > 1 ? Math.max(20, Math.round(size * 0.9)) : size, F.body);
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, cx, cy + 1);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+/** Draw wrapped runs; `align` 'center' centres each line on x. */
+function drawRuns(ctx: Ctx, layout: RunLayout, x: number, firstBaseline: number, lh: number, size: number, align: 'left' | 'center' = 'left'): void {
+  layout.lines.forEach((line, i) => {
+    const by = firstBaseline + i * lh;
+    const x0 = align === 'center' ? x - runLineWidth(line) / 2 : x;
+    for (const p of line) {
+      if (p.tok.kind === 'badge') drawBadge(ctx, p.tok.text, x0 + p.x, by, size, p.tok.color);
+      else {
+        setFont(ctx, p.tok.weight, size, F.body);
+        text(ctx, p.tok.text, x0 + p.x, by, p.tok.color);
+      }
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Shared offices: numbered, with every district each one serves
+// ---------------------------------------------------------------------------
+
+/** A shared office on a card, numbered for the "Shared offices serve" block. */
+interface SharedRef { n: number; office: string; people: LeaderPerson[] }
+
+/** Shared offices in the order they first appear. */
+function sharedRefsOf(items: Item[]): Map<string, SharedRef> {
+  const out = new Map<string, SharedRef>();
+  for (const it of items) {
+    if (!isGroup(it) || out.has(it.key)) continue;
+    out.set(it.key, { n: out.size + 1, office: headline(it), people: it.people });
+  }
+  return out;
+}
+
+/**
+ * "Shared offices serve: ① Metro Manila 1st district office (Tier B · 7
+ * districts): City of Mandaluyong Lone · …". Never cut.
+ */
+function sharedBlock(ctx: Ctx, refs: Map<string, SharedRef>, w: number, size: number): { h: number; fits: boolean; draw: (x: number, y: number) => void } {
+  const runs: Run[] = [{ text: 'Shared offices serve:', weight: 700, color: C.ink }];
+  for (const r of refs.values()) {
+    runs.push(
+      { text: ' ', color: C.ink3 }, { badge: r.n, color: C.tierB },
+      { text: ` ${r.office}`, weight: 600, color: C.ink2 }, { text: ` (Tier B · ${r.people.length} districts):`, weight: 600, color: C.tierB },
+      { text: ` ${districtsSummary(r.people)}`, weight: 400, color: C.ink3 },
+    );
+  }
+  const lay = wrapRuns(ctx, runs, size, () => w);
+  const lh = size * 1.32;
+  const h = lay.lines.length * lh + size * 0.95;
   return {
     h,
-    draw(y0) {
-      ctx.fillStyle = C.paper2;
-      ctx.fillRect(0, y0, s.W, s.H - y0);
-      ctx.fillStyle = C.rule;
-      ctx.fillRect(0, y0, s.W, 2);
-      let y = y0 + padT;
-      setFont(ctx, 500, fs, F.body);
-      for (const l of note) { text(ctx, l, x, y + fs * 0.95, C.ink2); y += lh; }
-      y += gap;
-      setFont(ctx, 400, fs, F.body);
-      for (const l of src) { text(ctx, l, x, y + fs * 0.95, C.ink3); y += lh; }
-      y += fs * 0.7;
-      drawUrl(ctx, url, x, y);
+    fits: !lay.overflow,
+    draw(x, y) {
+      ctx.fillStyle = C.ruleSoft;
+      ctx.fillRect(x, y + size * 0.2, w, 2);
+      drawRuns(ctx, lay, x, y + size * 0.55 + size * 0.95, lh, size);
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Footer: board note, card disclaimer, the unattributable residual (a strip of
+// its own), source and link. Never cut; the layouts make room instead.
+// ---------------------------------------------------------------------------
+
+const PEOPLE_NOTE_MARK = 'do not say who asked for any project';
+const SHARED_NOTE_MARK = 'Its amount is not split';
+
+/** Set during a draw when a card needs the residual line but the data cannot give it. */
+let residualMissing = false;
+
+/** residualLine(), or null; a missing or broken figure marks the card as not fitting. */
+function residualText(data: LeaderboardData, board: BoardDef): string | null {
+  try {
+    const r = residualLine(data, board);
+    if (r && /NaN|undefined|—/.test(r)) {
+      residualMissing = true;
+      return null;
+    }
+    return r;
+  } catch {
+    residualMissing = true;
+    return null;
+  }
+}
+
+/** What a card shows: portraits (credit the photos) and amounts beside people (the disclaimer and tiers). */
+interface CardPeople { photos: boolean; amounts: boolean }
+
+interface FooterText { notes: string; residual: string | null; source: string }
+
+function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople): FooterText {
+  // Cards with people beside amounts print CARD_DISCLAIMER; the board's own people
+  // or shared-office note then gives way to its first other note.
+  const boardNote = people.amounts
+    ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
+    : board.notes[0] ?? null;
+  const notes = [boardNote, people.amounts ? CARD_DISCLAIMER : null].filter(Boolean).join(' ');
+  return { notes, residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
+}
+
+function residualRuns(r: string): Run[] {
+  const i = r.indexOf(': ');
+  if (i < 0) return [{ text: r, weight: 500, color: C.ink2 }];
+  return [{ text: r.slice(0, i + 1), weight: 700, color: C.ink }, { text: r.slice(i + 1), weight: 500, color: C.ink2 }];
+}
+
+interface FooterGeom {
+  /** Text column. */
+  x: number;
+  w: number;
+  /** Background span. */
+  bgX: number;
+  bgW: number;
+  H: number;
+  fs: number;
+  lh: number;
+  padT: number;
+  padB: number;
+  gap: number;
+  urlMax: number;
+  urlMin: number;
+  /** Logo at the right end of the link line. */
+  logo?: { images: ReadonlyMap<string, ShareImageSource>; h: number };
+  /** The link is printed elsewhere (link previews: in the title band). */
+  noUrl?: boolean;
+}
+
+function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Block {
+  setFont(ctx, 500, g.fs, F.body);
+  const note = ft.notes ? wrap(ctx, ft.notes, g.w) : [];
+  const res = ft.residual ? wrapRuns(ctx, residualRuns(ft.residual), g.fs, () => g.w - g.fs * 0.6) : null;
+  setFont(ctx, 400, g.fs, F.body);
+  const src = wrap(ctx, ft.source, g.w);
+  const logoW = g.logo ? logoWidth(ctx, g.logo.images, SHARE_LOGO_PRIMARY, g.logo.h) + g.fs : 0;
+  const u = fitUrl(ctx, url, g.w - logoW, g.urlMax, g.urlMin);
+  const resPad = g.fs * 0.5;
+  const resH = res ? res.lines.length * g.lh + resPad * 2 : 0;
+  const urlH = g.noUrl ? 0 : g.fs * 0.6 + Math.max(u.lines.length * u.size * 1.3, g.logo ? g.logo.h : 0);
+  const h = g.padT + note.length * g.lh + (note.length ? g.gap : 0) + (res ? resH + g.gap : 0) + src.length * g.lh + urlH + g.padB;
+  return {
+    h,
+    fits: !res?.overflow,
+    draw(y0) {
+      ctx.fillStyle = C.paper2;
+      ctx.fillRect(g.bgX, y0, g.bgW, g.H - y0);
+      ctx.fillStyle = C.rule;
+      ctx.fillRect(g.bgX, y0, g.bgW, 2);
+      let y = y0 + g.padT;
+      setFont(ctx, 500, g.fs, F.body);
+      for (const l of note) { text(ctx, l, g.x, y + g.fs * 0.95, C.ink2); y += g.lh; }
+      if (note.length) y += g.gap;
+      if (res) {
+        // The residual: its own strip, so district rows never read as the whole budget.
+        ctx.fillStyle = C.accentSoft;
+        ctx.fillRect(g.bgX, y, g.bgW, resH);
+        ctx.fillStyle = C.accent;
+        ctx.fillRect(g.bgX, y, 6, resH);
+        drawRuns(ctx, res, g.x + g.fs * 0.3, y + resPad + g.fs * 0.95, g.lh, g.fs);
+        y += resH + g.gap;
+      }
+      setFont(ctx, 400, g.fs, F.body);
+      for (const l of src) { text(ctx, l, g.x, y + g.fs * 0.95, C.ink3); y += g.lh; }
+      if (g.noUrl) return;
+      y += g.fs * 0.6;
+      drawUrl(ctx, u, g.x, y);
+      if (g.logo) drawLogo(ctx, g.logo.images, SHARE_LOGO_PRIMARY, g.x + g.w, y + (u.size * 1.3 - g.logo.h) / 2 - 2, g.logo.h, 'right', false);
+    },
+  };
+}
+
+function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPeople, fs: number): Block {
+  const pad = s.footPad ?? 1;
+  return footerBlock(ctx, {
+    x: s.pad, w: s.W - s.pad * 2, bgX: 0, bgW: s.W, H: s.H,
+    fs, lh: fs * (s.urlInHero ? 1.28 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.5,
+    urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: s.urlInHero,
+  }, footerText(input.data, input.board, people), shareUrl(input.board, input.region ?? null));
+}
+
+// ---------------------------------------------------------------------------
+// Ranked rows
+// ---------------------------------------------------------------------------
 
 interface RowGeom {
   x: number; // row left (rank column starts here)
@@ -763,61 +1049,152 @@ interface RowGeom {
   valueW: number;
   nameSize: number;
   subSize: number;
+  /** Line step for the district list lines under the first sub line. */
+  subLH: number;
   valueSize: number;
   detailSize: number;
   rankSize: number;
+  /** Ranking boards mark every row "Tier A" / "Tier B". */
+  tierMarks: boolean;
+  /** When set, shared rows show their number in the "Shared offices serve" block instead of the district list. */
+  refs?: Map<string, SharedRef> | null;
+  /** Draw the value bar (default true). */
+  bars?: boolean;
+  /** Shared rows: seat holders and tier run on as one paragraph. */
+  flow?: boolean;
+  /** Thin bar at the very bottom of the row. */
+  barSlim?: boolean;
 }
 
 /**
  * The row headline at `size`, shrunk (to no less than 85% and never below
  * 22px) before it is ellipsized. Leaves the font set; returns the text.
  */
-function fitHeadline(ctx: Ctx, it: Item, size: number, max: number): string {
-  const s0 = headline(it);
-  const floor = Math.max(22, Math.round(size * 0.85));
-  for (let z = size; z >= floor; z--) {
-    setFont(ctx, 600, z, F.body, -z * 0.005);
-    if (tw(ctx, s0) <= max) return s0;
+function fitHeadline(ctx: Ctx, it: Item, size: number, max: number, prefix = ''): string {
+  const forms = [prefix + headline(it)];
+  if (!it.personFirst && !isGroup(it) && it.people[0]) forms.push(prefix + shortDistrict(it.people[0]));
+  const floor = Math.max(20, Math.min(size, Math.max(22, Math.round(size * 0.85))));
+  for (const s0 of forms) {
+    for (let z = size; z >= floor; z--) {
+      setFont(ctx, 600, z, F.body, -z * 0.005);
+      if (tw(ctx, s0) <= max) return s0;
+    }
   }
-  return ellipsize(ctx, s0, max);
+  return ellipsize(ctx, forms[forms.length - 1], max);
 }
 
-function itemDistrict(ctx: Ctx, p: LeaderPerson, max: number): string {
-  if (tw(ctx, p.district) <= max) return p.district;
-  return ellipsize(ctx, shortDistrict(p), max);
+/** "Tier B · Shared by 3 districts · not split", shortened only as far as `max` needs (the tier never goes). */
+function fitTierShared(ctx: Ctx, n: number, max: number, tierMarks: boolean): string {
+  const forms = tierMarks
+    ? [`Tier B · ${sharedLabel(n)}`, `Tier B · Shared by ${n} districts`, `Tier B · ${n} districts`, 'Tier B']
+    : [sharedLabel(n), `Shared by ${n} districts`, `Shared by ${n}`];
+  for (const f of forms) if (tw(ctx, f) <= max) return f;
+  return forms[forms.length - 1];
 }
 
-/**
- * One ranked row: rank, portraits, name and district, value and detail, and
- * under the text a bar on a light track, as long as |value| / max |value|
- * among the rows on the card.
- */
-function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, y: number, h: number, maxAbs: number, images: ReadonlyMap<string, ShareImageSource>, opts: { ring?: string } = {}): void {
-  const th = valueTheme(board, it.value);
-  const barH = Math.max(5, Math.round(h * 0.07));
-  const barGap = Math.max(4, Math.round(h * 0.07));
-  const laneY = y + h - barH - barGap;
-  // Text and value are centred in the space above the bar lane, clear of it.
-  const cy = (y + laneY - Math.max(4, h * 0.06)) / 2 + 1;
+function rowX(g: RowGeom): { ax: number; right: number; tx: number; tmax: number; fullW: number } {
   const ax = g.x + g.rankW + g.rankSize * 0.3;
   const right = g.x + g.w - g.rankSize * 0.45;
   const tx = ax + g.avatarBoxW + g.nameSize * 0.6;
+  return { ax, right, tx, tmax: right - g.valueW - g.nameSize * 0.7 - tx, fullW: right - tx };
+}
+
+/** The lines under a row's name: the district (and tier), or the tier, shared mark and every district served. */
+interface RowPlan { sub: RunLayout; extra: number }
+
+function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
+  const { tmax, fullW } = rowX(g);
+  let runs: Run[] = [];
+  const ref = g.refs?.get(it.key);
+  const holderColor = C.ink3;
+  if (it.personFirst) {
+    // Members board: the district under the person.
+    const p = it.people[0];
+    setFont(ctx, 400, g.subSize, F.body);
+    runs = [{ text: tw(ctx, p.district) <= tmax ? p.district : shortDistrict(p), weight: 400, color: C.ink3 }];
+  } else if (isGroup(it)) {
+    // Office headline; then the seat holders; then the tier, with every district served or the block number.
+    setFont(ctx, 400, g.subSize, F.body);
+    runs = g.flow
+      ? [{ text: `${seatHolders({ people: it.people }, 2)} · `, weight: 400, color: holderColor }]
+      : [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
+    if (ref) {
+      const head: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, { text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }];
+      const forms = [` · ${sharedLabel(it.people.length)}`, ` · Shared by ${it.people.length} districts`, ` · ${it.people.length} districts`];
+      const width = (rs: Run[]) => runLineWidth(wrapRuns(ctx, rs, g.subSize, () => Infinity).lines[0] ?? []);
+      let done = false;
+      if (g.flow) {
+        // One line if it can be: fewer names, then a shorter tier mark (the tier and the number always stay).
+        search: for (const k of [2, 1]) {
+          for (const extra of forms) {
+            const cand: Run[] = [{ text: `${seatHolders({ people: it.people }, k)} · `, weight: 400, color: holderColor }, ...head, { text: extra, weight: 600, color: C.tierB }];
+            if (width(cand) <= tmax) { runs = cand; done = true; break search; }
+          }
+        }
+      }
+      if (!done) {
+        let tier = head;
+        for (const extra of forms) {
+          const cand = [...head, { text: extra, weight: 600, color: C.tierB }];
+          if (width(cand) <= fullW) { tier = cand; break; }
+        }
+        runs.push(...tier);
+      }
+    } else {
+      const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
+      runs.push({ text: lab, weight: 600, color: C.tierB }, { text: ` · ${districtsSummary(it.people)}`, weight: 400, color: C.ink3 });
+    }
+  } else if (it.people[0]) {
+    // District headline; then "Rep. … · Tier A".
+    setFont(ctx, 400, g.subSize, F.body);
+    runs = [{ text: seatHolders({ people: it.people }), weight: 400, color: holderColor }];
+    if (g.tierMarks) runs.push({ text: ' · ', weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2 });
+  }
+  const sub = wrapRuns(ctx, runs, g.subSize, (i) => (i === 0 ? tmax : fullW));
+  return { sub, extra: Math.max(0, sub.lines.length - 1) };
+}
+
+/**
+ * One ranked row: rank, portraits, name, the district or shared-office lines,
+ * value and detail, and under the text a bar on a light track, as long as
+ * |value| / max |value| among the rows on the card. `h` includes the extra
+ * district lines of the plan.
+ */
+function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, plan: RowPlan, y: number, h: number, maxAbs: number, images: ReadonlyMap<string, ShareImageSource>): void {
+  const th = valueTheme(board, it.value);
+  const { ax, right, tx } = rowX(g);
+  const exH = plan.extra * g.subLH;
+  const baseH = h - exH;
+  const barH = g.barSlim ? 4 : Math.max(5, Math.round(baseH * 0.07));
+  const barGap = g.barSlim ? 1 : Math.max(4, Math.round(baseH * 0.07));
+  const laneY = y + h - barH - barGap;
+  // The name and first sub line are centred in the base row; extra district lines follow.
+  const cy = (y + laneY - exH - (g.barSlim ? 2 : Math.max(4, baseH * 0.06))) / 2 + 1;
   // Bar on its track
-  const frac = maxAbs > 0 ? Math.max(0.006, Math.abs(it.value) / maxAbs) : 0;
-  ctx.fillStyle = C.paper3;
-  roundRect(ctx, tx, laneY, right - tx, barH, barH / 2);
-  ctx.fill();
-  ctx.fillStyle = th.solid;
-  roundRect(ctx, tx, laneY, Math.max(barH, (right - tx) * frac), barH, barH / 2);
-  ctx.fill();
-  // Rank
-  setFont(ctx, 700, g.rankSize, F.display);
-  ctx.fillStyle = it.rank === 1 ? th.text : C.ink3;
+  if (g.bars !== false) {
+    const frac = maxAbs > 0 ? Math.max(0.006, Math.abs(it.value) / maxAbs) : 0;
+    ctx.fillStyle = C.paper3;
+    roundRect(ctx, tx, laneY, right - tx, barH, barH / 2);
+    ctx.fill();
+    ctx.fillStyle = th.solid;
+    roundRect(ctx, tx, laneY, Math.max(barH, (right - tx) * frac), barH, barH / 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = C.ruleSoft;
+    ctx.fillRect(g.x, y + h - 1, g.w, 2);
+  }
+  // Rank (or label) and portraits
   ctx.textBaseline = 'middle';
-  drawTab(ctx, String(it.rank), g.x + g.rankW - g.rankSize * 0.55, y + h / 2 + 1, 'right');
+  if (it.label) {
+    setFont(ctx, 700, Math.round(g.rankSize * 0.92), F.display);
+    text(ctx, it.label, g.x, cy + 1, C.ink2);
+  } else {
+    setFont(ctx, 700, g.rankSize, F.display);
+    ctx.fillStyle = it.rank === 1 ? th.text : C.ink3;
+    drawTab(ctx, String(it.rank), g.x + g.rankW - g.rankSize * 0.55, cy + 1, 'right');
+  }
   ctx.textBaseline = 'alphabetic';
-  // Portraits (centred on the whole row)
-  drawAvatars(ctx, images, it.people, ax, y + h / 2, g.avatarD, g.avatarBoxW, opts.ring ?? '#ffffff');
+  drawAvatars(ctx, images, it.people, ax, cy, g.avatarD, g.avatarBoxW, '#ffffff');
   // Value + detail (right column)
   const vText = formatValue(it.value, board.value);
   const hasDetail = !!it.detail;
@@ -830,27 +1207,13 @@ function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, y: number, h: 
     setFont(ctx, 500, g.detailSize, F.body);
     text(ctx, ellipsize(ctx, it.detail!, g.valueW), right, vy + g.detailSize * 1.22, C.ink3, 'right');
   }
-  // Name + district
-  const tmax = right - g.valueW - g.nameSize * 0.7 - tx;
+  // Name, then the sub lines
+  const { tmax } = rowX(g);
   const lineGap = g.subSize * 0.3;
   const nh = g.nameSize + lineGap + g.subSize;
   const ny = cy - nh / 2 + g.nameSize * 0.8;
   text(ctx, fitHeadline(ctx, it, g.nameSize, tmax), tx, ny, C.ink);
-  const sy = ny + lineGap + g.subSize * 1.02;
-  if (isGroup(it)) {
-    setFont(ctx, 600, g.subSize, F.body);
-    const lab = fitShared(ctx, it.people.length, tmax);
-    const lw = Math.min(tw(ctx, lab), tmax);
-    text(ctx, lab, tx, sy, C.tierB);
-    const restW = tmax - lw - g.subSize * 0.8;
-    if (restW > g.subSize * 4) {
-      setFont(ctx, 400, g.subSize, F.body);
-      text(ctx, ellipsize(ctx, '· ' + districtsSummary(it.people), restW), tx + lw + g.subSize * 0.4, sy, C.ink3);
-    }
-  } else if (it.people[0]) {
-    setFont(ctx, 400, g.subSize, F.body);
-    text(ctx, itemDistrict(ctx, it.people[0], tmax), tx, sy, C.ink3);
-  }
+  drawRuns(ctx, plan.sub, tx, ny + lineGap + g.subSize * 1.02, g.subLH, g.subSize);
 }
 
 function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: number, detailSize: number, cap: number): number {
@@ -873,15 +1236,14 @@ function countLine(board: BoardDef, shown: number, eligible: number): string | n
 // Spotlight (#1 in portrait and story), drawn on the hero band
 // ---------------------------------------------------------------------------
 
-function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: ReadonlyMap<string, ShareImageSource>, squeeze = 0): Block {
+function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: ReadonlyMap<string, ShareImageSource>, squeeze: number, tierMarks: boolean): Block {
   const k = [1, 0.84, 0.7][squeeze] ?? 0.7;
   const base = s.spot!;
-  const group0 = it.people.length > 1;
+  const group = isGroup(it);
   // A shared office's faces sit in a wider box: start them smaller.
-  const sp = { ...base, avatar: Math.round(base.avatar * k * (group0 ? 0.74 : 1)), name: Math.round(base.name * (k < 1 ? 0.92 : 1)), value: Math.round(base.value * (0.7 + 0.3 * k)) };
+  const sp = { ...base, avatar: Math.round(base.avatar * k * (group ? 0.74 : 1)), name: Math.round(base.name * (k < 1 ? 0.92 : 1)), value: Math.round(base.value * (0.7 + 0.3 * k)) };
   const x = s.pad;
   const w = s.W - s.pad * 2;
-  const group = it.people.length > 1;
   const d = sp.avatar;
   const boxW = group ? avatarBoxWidth(it.people.length, d) : d;
   const vText = formatValue(it.value, board.value);
@@ -896,14 +1258,28 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
   setFont(ctx, 700, sp.name, F.display, -sp.name * 0.01);
   const nameLines = wrap(ctx, headline(it), tmax, 2);
   const nLH = sp.name * 1.1;
-  const subLH = sp.sub * 1.4;
-  const subLines = group ? 2 : 1;
+  const subLH = sp.sub * 1.36;
+  const chipSize = Math.round(sp.sub * 0.92);
+  setFont(ctx, 600, chipSize, F.body);
+  const chip = group ? fitTierShared(ctx, it.people.length, tmax - chipSize * 1.2, tierMarks) : null;
+  const soft = 'rgba(255,255,255,0.86)';
+  // Under the place: the seat holders (and "Tier A"); a shared office then gets its tier chip and every district it serves.
+  setFont(ctx, 400, sp.sub, F.body);
+  const holdersRuns: Run[] = it.personFirst
+    ? [{ text: it.people[0]?.district ?? '', weight: 400, color: soft }]
+    : group
+      ? [{ text: fitHolders(ctx, it, tmax), weight: 400, color: soft }]
+      : [{ text: seatHolders({ people: it.people }), weight: 400, color: soft }, ...(tierMarks ? [{ text: ' · ', weight: 400, color: soft }, { text: 'Tier A', weight: 600, color: '#ffffff' }] : [])];
+  const holders = wrapRuns(ctx, holdersRuns, sp.sub, () => tmax);
+  const sub = wrapRuns(ctx, group ? [{ text: districtsSummary(it.people), weight: 400, color: soft }] : [], sp.sub, () => tmax);
+  const chipH = chip ? subLH : 0;
   const detailBelow = sp.stacked && it.detail ? vw + sp.detail + dw > tmax : false;
   const valueH = sp.stacked ? sp.sub * 0.5 + sp.value * 1.0 + (detailBelow ? sp.detail * 1.35 : 0) : 0;
-  const textH = nameLines.length * nLH + sp.sub * 0.4 + subLines * subLH + valueH;
+  const textH = nameLines.length * nLH + sp.sub * 0.4 + holders.lines.length * subLH + chipH + sub.lines.length * subLH + valueH;
   const h = Math.max(d + sp.name * 0.5, textH) + sp.name * 0.2;
   return {
     h,
+    fits: !sub.overflow && !holders.overflow,
     draw(y0) {
       const cy = y0 + h / 2;
       // Divider above the spotlight
@@ -927,22 +1303,19 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
       ctx.textBaseline = 'middle';
       drawTab(ctx, String(it.rank), bcx, bcy + 1, 'center');
       ctx.textBaseline = 'alphabetic';
-      // Name + district
+      // Name, tier and districts
       let y = cy - textH / 2;
       setFont(ctx, 700, sp.name, F.display, -sp.name * 0.01);
       for (const l of nameLines) { text(ctx, l, tx, y + sp.name * 0.86, '#ffffff'); y += nLH; }
       y += sp.sub * 0.4;
-      if (group) {
-        setFont(ctx, 600, Math.round(sp.sub * 0.92), F.body);
-        drawChip(ctx, fitShared(ctx, it.people.length, tmax - sp.sub), tx, y + (subLH - sp.sub * 1.6) / 2, Math.round(sp.sub * 0.92), '#ffffff', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0.55)');
+      drawRuns(ctx, holders, tx, y + sp.sub * 1.0, subLH, sp.sub);
+      y += holders.lines.length * subLH;
+      if (chip) {
+        drawChip(ctx, chip, tx, y + (subLH - chipSize * 1.6) / 2, chipSize, '#ffffff', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0.55)');
         y += subLH;
-        setFont(ctx, 400, sp.sub, F.body);
-        text(ctx, ellipsize(ctx, districtsSummary(it.people), tmax), tx, y + sp.sub * 1.0, 'rgba(255,255,255,0.82)');
-      } else {
-        setFont(ctx, 400, sp.sub, F.body);
-        text(ctx, itemDistrict(ctx, it.people[0], tmax), tx, y + sp.sub * 1.0, 'rgba(255,255,255,0.82)');
       }
-      y += subLH;
+      drawRuns(ctx, sub, tx, y + sp.sub * 1.0, subLH, sp.sub);
+      y += sub.lines.length * subLH;
       if (sp.stacked) {
         y += sp.sub * 0.5;
         const vy = y + sp.value * 0.84;
@@ -980,32 +1353,36 @@ interface Body {
   minH: number;
   /** Height it would like. */
   idealH: number;
+  /** False when a district list cannot be laid out whole. */
+  fits?: boolean;
   draw: (y: number, h: number) => void;
 }
 
 /**
- * Hero on top, body in the middle, footer at the bottom. The title shrinks
- * (down to the spec's minimum) until the body gets at least its minimum height.
+ * Hero on top, body in the middle, footer at the bottom. Tries the largest
+ * title, a smaller spotlight, a footer a pixel or two smaller, a subtitle a
+ * pixel or two smaller, until the body gets its minimum height. Returns whether
+ * it fitted; `dry` only measures.
  */
-function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, body: (squeeze: number) => { extra: Block | null; body: Body }, withPhotos: boolean): void {
+function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, body: (squeeze: number) => { extra: Block | null; body: Body }, people: CardPeople, dry = false): boolean {
   const images = input.images ?? new Map();
-  const region = input.region ?? null;
   const x = s.pad;
   const w = s.W - s.pad * 2;
   const footMin = s.footMin ?? 22;
-  const footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => footerBlock(ctx, s, input.board, region, withPhotos, s.foot - i));
+  const footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => verticalFooter(ctx, s, input, people, s.foot - i));
+  if (s.urlInHero) t = { ...t, url: shareUrl(input.board, input.region ?? null) };
   const heroHeight = (hero: Block, parts: { extra: Block | null }) => s.heroTop + hero.h + s.heroBottom + (parts.extra ? parts.extra.h + s.heroBottom * 1.6 : 0);
-  // Largest title, then a smaller spotlight, whose kicker, title and subtitle fit whole and leave the body its room.
-  // Then a footer a pixel or two smaller (never below footMin).
   type Choice = { hero: Block; parts: { extra: Block | null; body: Body }; heroH: number; footer: Block };
   let chosen: Choice | null = null;
   let fallback: Choice | null = null;
   search: for (let squeeze = 0; squeeze <= 3; squeeze++) {
     const parts = body(squeeze);
+    if (parts.body.fits === false || parts.extra?.fits === false) continue;
     for (const f of footers) {
       for (let size = s.titleMax; size >= s.titleMin; size -= 2) {
-        // The subtitle may drop a pixel or two (never below 22) where that saves a line.
-        for (let sub = s.sub; sub >= Math.max(22, s.sub - 2); sub--) {
+        // The subtitle may drop a pixel or two (never below the format's floor) where that saves a line.
+        const subFloor = Math.min(s.sub, Math.max(s.footMin ?? 22, s.sub - 2));
+        for (let sub = s.sub; sub >= subFloor; sub--) {
           const hero = heroBlock(ctx, sub === s.sub ? s : { ...s, sub }, t, size, x, w, s.subLines, { images, h: s.logo });
           const heroH = heroHeight(hero, parts);
           if (!hero.fits) continue;
@@ -1015,6 +1392,7 @@ function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, b
       }
     }
   }
+  if (dry) return !!chosen;
   if (!chosen) {
     layoutFits = false;
     if (fallback) chosen = fallback;
@@ -1025,6 +1403,7 @@ function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, b
     }
   }
   const { hero, parts, heroH, footer } = chosen;
+  if (footer.fits === false || parts.body.fits === false || parts.extra?.fits === false) layoutFits = false;
   const footY = s.H - footer.h;
   // Background
   ctx.fillStyle = C.paper;
@@ -1039,39 +1418,61 @@ function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, b
   ctx.clip();
   parts.body.draw(heroH, footY - heroH);
   ctx.restore();
+  return !!chosen;
 }
 
-/** Rows under the hero; bars are scaled to `maxAbs` (the largest |value| on the card, spotlight included). */
-function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: ReadonlyMap<string, ShareImageSource>, maxAbs: number): Body {
+/**
+ * Rows under the hero. A shared office's row grows by the lines its district
+ * list needs; bars are scaled to `maxAbs` (the largest |value| on the card,
+ * spotlight included).
+ */
+function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: ReadonlyMap<string, ShareImageSource>, maxAbs: number, tierMarks: boolean, refs: Map<string, SharedRef> | null = null): Body {
   const x = s.pad - s.rank * 0.2;
   const w = s.W - x * 2;
   const n = items.length;
-  const padY = s.rowSub * 0.9;
+  const padY = s.rowPadY ?? s.rowSub * 0.9;
   const maxPeople = Math.max(1, ...items.map((i) => i.people.length));
+  const labelled = items.some((i) => i.label);
+  // Labelled rows have no bar lane under the text, so they can be a little shorter.
+  const rowMin = labelled ? s.rowMin - (s.rowBarSlim ? 10 : 6) : s.rowMin;
+  const avatarD = Math.round(Math.min(s.avatar, rowMin - 10));
+  const g: RowGeom = {
+    x, w,
+    flow: !!s.rowFlow,
+    barSlim: !!s.rowBarSlim,
+    refs: refs && refs.size ? refs : null,
+    // Labelled rows ("18th") compare different spans: no bars.
+    bars: !labelled,
+    rankW: Math.round(s.rank * (labelled ? 2.5 : 1.9)),
+    avatarD,
+    avatarBoxW: avatarBoxWidth(maxPeople, avatarD),
+    valueW: 0,
+    nameSize: s.rowName,
+    subSize: s.rowSub,
+    subLH: s.rowSub * 1.28,
+    valueSize: s.rowValue,
+    detailSize: s.rowDetail,
+    rankSize: s.rank,
+    tierMarks,
+  };
+  g.valueW = valueColumnWidth(ctx, board, items, g.valueSize, g.detailSize, w * 0.4);
+  const plans = items.map((it) => planRow(ctx, it, g));
+  const exTotal = plans.reduce((a, p) => a + p.extra, 0) * g.subLH;
   return {
-    minH: n * s.rowMin + padY * 2,
-    idealH: n * s.rowMax + padY * 2,
+    minH: n * rowMin + exTotal + padY * 2,
+    idealH: n * s.rowMax + exTotal + padY * 2,
+    fits: plans.every((p) => !p.sub.overflow),
     draw(y0, hAvail) {
       const rowMax = n <= 4 ? s.rowMax * 1.25 : s.rowMax;
-      const rowH = Math.max(s.rowMin, Math.min(rowMax, (hAvail - padY * 2) / Math.max(1, n)));
-      const avatarD = Math.round(Math.min(s.avatar * Math.max(1, rowH / s.rowMin * 0.9), rowH - 10, s.avatar * 1.25));
-      const g: RowGeom = {
-        x, w,
-        rankW: Math.round(s.rank * 1.9),
-        avatarD,
-        avatarBoxW: avatarBoxWidth(maxPeople, avatarD),
-        valueW: 0,
-        nameSize: s.rowName,
-        subSize: s.rowSub,
-        valueSize: s.rowValue,
-        detailSize: s.rowDetail,
-        rankSize: s.rank,
-      };
-      g.valueW = valueColumnWidth(ctx, board, items, g.valueSize, g.detailSize, w * 0.4);
+      const rowH = Math.max(rowMin, Math.min(rowMax, (hAvail - padY * 2 - exTotal) / Math.max(1, n)));
       // A short list sits a little above the middle of the space instead of leaving a gap at the bottom.
-      const spare = Math.max(0, hAvail - padY * 2 - rowH * n);
-      const top = y0 + padY + spare * 0.4;
-      items.forEach((it, i) => drawRow(ctx, board, it, g, top + i * rowH, rowH, maxAbs, images));
+      const spare = Math.max(0, hAvail - padY * 2 - rowH * n - exTotal);
+      let y = y0 + padY + spare * 0.4;
+      items.forEach((it, i) => {
+        const h = rowH + plans[i].extra * g.subLH;
+        drawRow(ctx, board, it, g, plans[i], y, h, maxAbs, images);
+        y += h;
+      });
     },
   };
 }
@@ -1101,33 +1502,98 @@ function emptyBody(ctx: Ctx, s: Spec, board: BoardDef, region: string | null): B
   };
 }
 
+const NO_PEOPLE: CardPeople = { photos: false, amounts: false };
+
+/**
+ * Ranking and members boards. Rows are dropped from the bottom (and the count
+ * line says "Top K of N") until every row, with every district it serves,
+ * fits whole; fewer than three rows marks the card for review.
+ */
 function drawRankingVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareCardInput): void {
   const { data, board } = input;
   const region = input.region ?? null;
   const images = input.images ?? new Map();
-  const n = SHARE_FORMATS[format].rows;
-  const { items, eligible } = rankingItems(data, board, region, n);
-  const t = heroText(board, region, countLine(board, items.length, eligible));
-  if (!items.length) {
-    layoutVertical(ctx, s, input, t, () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), false);
+  const { items: all, eligible } = rankingItems(data, board, region, SHARE_FORMATS[format].rows);
+  if (!all.length) {
+    layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
-  const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
-  // Squeeze 0–2 shrink the #1 spotlight; 3 folds #1 back into the list.
-  layoutVertical(ctx, s, input, t, (squeeze) => {
-    const spot = s.spot && items.length >= 2 && squeeze < 3 ? items[0] : null;
-    return {
-      extra: spot ? spotlightBlock(ctx, s, board, spot, images, squeeze) : null,
-      body: rowsBody(ctx, s, board, spot ? items.slice(1) : items, images, maxAbs),
-    };
-  }, true);
+  const tierMarks = board.kind === 'ranking';
+  const people: CardPeople = { photos: true, amounts: board.kind === 'ranking' };
+  const attempt = (k: number, useBlock: boolean, dry: boolean) => {
+    const items = all.slice(0, k);
+    const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
+    const t = heroText(board, region, countLine(board, k, eligible));
+    // Squeeze 0–2 shrink the #1 spotlight; 3 folds #1 back into the list.
+    return layoutVertical(ctx, s, input, t, (squeeze) => {
+      const spot = s.spot && items.length >= 2 && squeeze < 3 ? items[0] : null;
+      const listed = spot ? items.slice(1) : items;
+      const refs = useBlock ? sharedRefsOf(listed) : null;
+      const rows = rowsBody(ctx, s, board, listed, images, maxAbs, tierMarks, refs);
+      return {
+        extra: spot ? spotlightBlock(ctx, s, board, spot, images, squeeze, tierMarks) : null,
+        body: refs && refs.size ? withSharedBlock(ctx, rows, refs, s.pad, s.W - s.pad * 2, s.rowSub) : rows,
+      };
+    }, people, dry);
+  };
+  // Most rows first; each shared office lists its districts in its row, else in the block under the rows.
+  const minRows = Math.min(format === 'landscape' ? 2 : 3, all.length);
+  for (let k = all.length; k >= 1; k--) {
+    for (const useBlock of [false, true]) {
+      if (!attempt(k, useBlock, true)) continue;
+      if (k < minRows) layoutSparse = true;
+      attempt(k, useBlock, false);
+      return;
+    }
+  }
+  layoutFits = false;
+  attempt(1, true, false);
 }
 
 // --- by Congress -------------------------------------------------------------
 
 const CONGRESS_LABEL: Record<'18' | '19' | '20', string> = { '18': '18th Congress', '19': '19th Congress', '20': '20th Congress' };
 
-function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: ReturnType<typeof rankByCongress>, images: ReadonlyMap<string, ShareImageSource>): Body {
+type CongressCols = ReturnType<typeof rankByCongress>;
+
+/** Shared offices in the order they first appear (Congress by Congress, rank by rank). */
+function sharedRefs(cols: CongressCols): Map<string, SharedRef> {
+  return sharedRefsOf(cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value))));
+}
+
+/** The tier line of a by-Congress cell: "Tier A", or "Tier B" and the shared office's number. */
+/** The tier line of a by-Congress cell: "Tier A", or "Tier B", the shared office's number and "Shared by N" where it fits. */
+function cellTierRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
+  if (!isGroup(it)) return [{ text: 'Tier A', weight: 600, color: C.ink2 }];
+  const base: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
+  for (const extra of [` · Shared by ${it.people.length}`, ` · ${it.people.length} districts`]) {
+    const runs = [...base, { text: extra, weight: 600, color: C.tierB }];
+    if (runLineWidth(wrapRuns(ctx, runs, size, () => Infinity).lines[0] ?? []) <= max) return runs;
+  }
+  return base;
+}
+
+/** The by-Congress cells cannot hold a shared office's district list, so the lists sit in one block under the cells. */
+function withSharedBlock(ctx: Ctx, main: Body, refs: Map<string, SharedRef>, x: number, w: number, size: number): Body {
+  if (!refs.size) return main;
+  const blk = sharedBlock(ctx, refs, w, size);
+  return {
+    minH: main.minH + blk.h,
+    idealH: main.idealH + blk.h,
+    fits: main.fits !== false && blk.fits,
+    draw(y0, h) {
+      main.draw(y0, h - blk.h);
+      blk.draw(x, y0 + h - blk.h);
+    },
+  };
+}
+
+function congressCount(k: number, full: CongressCols): string | null {
+  return full.some((c) => c.rows.length > k) ? `Top ${k} shown for each Congress` : null;
+}
+
+/** Portrait and story: one band per Congress, a card per office with its faces. */
+function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, images: ReadonlyMap<string, ShareImageSource>, refs: Map<string, SharedRef>): Body {
   // Band headers align with the page margin; the cards use more of the width so office names fit.
   const x = s.pad;
   const w = s.W - s.pad * 2;
@@ -1142,18 +1608,23 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: ReturnType<type
   const cardGap = Math.max(8, Math.round(s.rowSub * 0.4));
   const innerW = cardW - cardGap;
   const textW = innerW - 6;
-  // Office names of shared groups can need three lines; every cell gets the same slot so values line up.
+  const cells = cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value)));
+  // Every cell gets the same slots so values line up: names up to three lines (four on stories), district up to two.
   setFont(ctx, 600, s.rowSub, F.body);
-  // Stories have the height for a fourth line; portrait stops at three.
   const maxNameLines = s.H >= 1900 ? 4 : 3;
-  const nameLinesN = Math.min(maxNameLines, Math.max(2, ...cols.flatMap((c) => c.rows.map((r) => wrap(ctx, headline(entryItem(r.rank, r.entry, r.value)), textW).length))));
+  const nameLinesN = Math.min(maxNameLines, Math.max(2, ...cells.map((it) => wrap(ctx, headline(it), textW).length)));
+  setFont(ctx, 400, s.rowSub, F.body);
+  const subLinesN = Math.min(2, Math.max(1, ...cells.map((it) => (isGroup(it) ? 1 : wrap(ctx, seatHolders({ people: it.people }), textW).length))));
   const lineH = s.rowSub * (nameLinesN > 2 ? 1.13 : 1.25);
+  const slots = nameLinesN + subLinesN + 1;
   // The bar under each value is dropped only when keeping it would shrink the faces below faceMin.
-  const textNoBar = lineH * (nameLinesN + 1) + s.rowValue * 1.2 + 8;
+  const textNoBar = lineH * slots + s.rowValue * 1.2 + 8;
   const cardMinH = faceMin + textNoBar + 10;
+  let overflow = false;
   return {
     minH: cols.length * (headH + cardMinH) + s.rowSub * 2,
     idealH: cols.length * (headH + cardMinH + barLane) * 1.2,
+    get fits() { return !overflow; },
     draw(y0, hAvail) {
       const bandH = (hAvail - s.rowSub * 1.2) / cols.length;
       const cardH0 = bandH - headH - s.rowSub * 0.5;
@@ -1196,28 +1667,32 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: ReturnType<type
           ctx.fillStyle = '#ffffff'; ctx.textBaseline = 'middle';
           drawTab(ctx, String(r.rank), bcx, bcy + 1, 'center');
           ctx.textBaseline = 'alphabetic';
-          // Name (office for a shared group) and the district or shared mark, centred in a fixed slot
+          // Name (office for a shared group), district or shared mark, tier: centred in fixed slots
           const slotTop = ay + d / 2;
           setFont(ctx, 600, s.rowSub, F.body);
           const nl = wrap(ctx, headline(it), textW, nameLinesN);
-          let ty = slotTop + lineH + ((nameLinesN - nl.length) * lineH) / 2;
+          if (wrap(ctx, headline(it), textW).length > nameLinesN) overflow = true;
+          setFont(ctx, 400, s.rowSub, F.body);
+          const subL = group ? [fitHolders(ctx, it, textW)] : wrap(ctx, seatHolders({ people: it.people }), textW, subLinesN);
+          const used = nl.length + subL.length + 1;
+          let ty = slotTop + lineH + ((slots - used) * lineH) / 2;
+          setFont(ctx, 600, s.rowSub, F.body);
           for (const l of nl) { text(ctx, l, cx, ty, C.ink, 'center'); ty += lineH; }
-          setFont(ctx, group ? 600 : 400, s.rowSub, F.body);
-          const sub = group ? fitShared(ctx, it.people.length, textW) : ellipsize(ctx, shortDistrict(it.people[0]), textW);
-          text(ctx, sub, cx, ty, group ? C.tierB : C.ink3, 'center');
-          ty = slotTop + lineH * (nameLinesN + 1) + s.rowValue * 1.2;
+          setFont(ctx, 400, s.rowSub, F.body);
+          for (const l of subL) { text(ctx, l, cx, ty, C.ink3, 'center'); ty += lineH; }
+          drawRuns(ctx, wrapRuns(ctx, cellTierRuns(ctx, it, refs.get(r.entry.key), s.rowSub, textW), s.rowSub, () => textW), cx, ty, lineH, s.rowSub, 'center');
+          ty = slotTop + lineH * slots + s.rowValue * 1.2;
           setFont(ctx, 700, s.rowValue, F.display, -s.rowValue * 0.01);
           ctx.fillStyle = th.text;
           drawTab(ctx, formatValue(r.value, board.value), cx, ty, 'center');
           if (!withBars) return;
           const bw = innerW - s.rowSub * 1.2;
-          const bh = barH;
-          const by = ty + s.rowSub * 0.45;
+          const bby = ty + s.rowSub * 0.45;
           ctx.fillStyle = C.paper3;
-          roundRect(ctx, cx - bw / 2, by, bw, bh, bh / 2);
+          roundRect(ctx, cx - bw / 2, bby, bw, barH, barH / 2);
           ctx.fill();
           ctx.fillStyle = th.solid;
-          roundRect(ctx, cx - bw / 2, by, Math.max(bh, bw * frac), bh, bh / 2);
+          roundRect(ctx, cx - bw / 2, bby, Math.max(barH, bw * frac), barH, barH / 2);
           ctx.fill();
         });
       });
@@ -1226,11 +1701,35 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: ReturnType<type
 }
 
 /**
- * Three columns, one per Congress (square and landscape). Rows carry the name,
- * the district (or the shared mark) and the value on three lines, or on two
- * lines (value first on the second) when the space is short.
+ * The second line of a by-Congress row: the district and "Tier A" (the
+ * district is shortened, never the tier), or "Tier B", the shared office's
+ * number and "Shared by N" where it fits.
  */
-function congressColumns(ctx: Ctx, board: BoardDef, cols: ReturnType<typeof rankByCongress>, images: ReadonlyMap<string, ShareImageSource>, x: number, w: number, sizes: { name: number; sub: number; value: number; head: number; avatar: number }): Body {
+function cellSubRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
+  const sep = ' · ';
+  if (!isGroup(it)) {
+    // "Rep. Ferdinand Alexander Marcos · Tier A": the name is shortened, never the tier.
+    setFont(ctx, 600, size, F.body);
+    const tailW = tw(ctx, 'Tier A');
+    setFont(ctx, 400, size, F.body);
+    const room = max - tailW - tw(ctx, sep) - 2;
+    return [{ text: fitHolders(ctx, it, room), weight: 400, color: C.ink3 }, { text: sep, weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2 }];
+  }
+  // "Tier B ① · Reps. A +6" (names as far as they fit).
+  const base: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
+  const baseW = runLineWidth(wrapRuns(ctx, base, size, () => Infinity).lines[0] ?? []);
+  setFont(ctx, 400, size, F.body);
+  const room = max - baseW - tw(ctx, sep) - 2;
+  if (room < size * 4) return base;
+  return [...base, { text: sep, weight: 400, color: C.ink3 }, { text: fitHolders(ctx, it, room), weight: 400, color: C.ink3 }];
+}
+
+/**
+ * Three columns, one per Congress (portrait, square, landscape). Rows carry the
+ * name, the tier with the district or the shared office's number, and the
+ * value with a bar.
+ */
+function congressColumns(ctx: Ctx, board: BoardDef, cols: CongressCols, images: ReadonlyMap<string, ShareImageSource>, x: number, w: number, sizes: { name: number; sub: number; value: number; head: number; avatar: number }, refs: Map<string, SharedRef>): Body {
   const perCol = Math.max(1, ...cols.map((c) => c.rows.length));
   const gap = sizes.sub * 1.1;
   const colW = (w - gap * (cols.length - 1)) / cols.length;
@@ -1240,16 +1739,14 @@ function congressColumns(ctx: Ctx, board: BoardDef, cols: ReturnType<typeof rank
   const yearsW = Math.max(...cols.map((c) => tw(ctx, c.years)));
   const oneLineHead = labelW + yearsW + sizes.sub <= colW;
   const headH = sizes.head * (oneLineHead ? 1.75 : 2.6);
-  const full = sizes.name * 1.2 + sizes.sub * 1.25 + sizes.value * 1.1 + 12;
-  const compact = Math.max(sizes.avatar + 10, sizes.name * 1.2 + sizes.value * 1.1 + 8);
+  const d0 = sizes.avatar;
+  const rowNeed = Math.max(sizes.name * 1.2 + sizes.sub * 1.3 + sizes.value * 1.1 + 14, d0 + 12);
   return {
-    minH: headH + perCol * compact + sizes.sub,
-    idealH: headH + perCol * full * 1.15 + sizes.sub,
+    minH: headH + perCol * rowNeed + sizes.sub,
+    idealH: headH + perCol * rowNeed * 1.2 + sizes.sub,
     draw(y0, hAvail) {
       const top = y0 + sizes.sub * 0.5;
-      const avail = (hAvail - headH - sizes.sub) / perCol;
-      const isCompact = avail < full;
-      const rowH = Math.min(avail, full * 1.3);
+      const rowH = Math.min((hAvail - headH - sizes.sub) / perCol, rowNeed * 1.3);
       const th = boardTheme(board);
       cols.forEach((col, ci) => {
         const cx = x + ci * (colW + gap);
@@ -1265,51 +1762,31 @@ function congressColumns(ctx: Ctx, board: BoardDef, cols: ReturnType<typeof rank
           const it = entryItem(r.rank, r.entry, r.value);
           const ry = top + headH + i * rowH;
           const cyy = ry + rowH / 2;
-          const frac = maxAbs > 0 ? Math.abs(r.value) / maxAbs : 0;
           ctx.fillStyle = C.paper2;
           roundRect(ctx, cx, ry + 3, colW, rowH - 6, 8);
           ctx.fill();
-          const d = Math.min(sizes.avatar, rowH - 12);
+          const d = Math.min(d0, rowH - 12);
           const group = isGroup(it);
           const boxW = group ? Math.round(d * 1.6) : d;
           drawAvatars(ctx, images, it.people, cx + 6, cyy, d, boxW, '#ffffff');
           const tx = cx + 6 + boxW + sizes.sub * 0.5;
-          const tmax = cx + colW - tx - 6;
-          const vText = formatValue(r.value, board.value);
-          const blockH = isCompact ? sizes.name * 1.2 + sizes.value * 1.05 : sizes.name * 1.2 + sizes.sub * 1.25 + sizes.value * 1.05;
+          const tmax = cx + colW - tx - 8;
+          const blockH = rowNeed - 14;
           let ty = cyy - blockH / 2 + sizes.name * 0.85;
-          // "1. Metro Manila 1st district office" (shrinks before it is cut) or "1. JB Bernos"
-          const numbered: Item = isGroup(it) ? { ...it, office: `${r.rank}. ${headline(it)}` } : it;
-          let line: string;
-          if (group) line = fitHeadline(ctx, numbered, sizes.name, tmax);
-          else {
-            setFont(ctx, 600, sizes.name, F.body);
-            line = ellipsize(ctx, `${r.rank}. ${headline(it)}`, tmax);
-          }
-          text(ctx, line, tx, ty, C.ink);
-          if (isCompact) {
-            ty += sizes.value * 1.12;
-            setFont(ctx, 700, sizes.value, F.display);
-            ctx.fillStyle = th.text;
-            const vw = drawTab(ctx, vText, tx, ty, 'left');
-            const room = tmax - vw - sizes.sub * 0.6;
-            setFont(ctx, group ? 600 : 400, sizes.sub, F.body);
-            const sub = group ? fitShared(ctx, it.people.length, room) : itemDistrict(ctx, it.people[0], room);
-            if (room > sizes.sub * 3) text(ctx, sub, tx + vw + sizes.sub * 0.6, ty, group ? C.tierB : C.ink3);
-            return;
-          }
-          ty += sizes.sub * 1.25;
-          setFont(ctx, group ? 600 : 400, sizes.sub, F.body);
-          text(ctx, group ? fitShared(ctx, it.people.length, tmax) : itemDistrict(ctx, it.people[0], tmax), tx, ty, group ? C.tierB : C.ink3);
-          ty += sizes.value * 1.08;
+          // "1. Metro Manila 1st district office" / "1. Ilocos Norte, 1st District" (shrinks before it is cut)
+          text(ctx, fitHeadline(ctx, it, sizes.name, tmax, `${r.rank}. `), tx, ty, C.ink);
+          ty += sizes.sub * 1.3;
+          drawRuns(ctx, wrapRuns(ctx, cellSubRuns(ctx, it, refs.get(r.entry.key), sizes.sub, tmax), sizes.sub, () => Infinity), tx, ty, sizes.sub * 1.3, sizes.sub);
+          ty += sizes.value * 1.1;
           setFont(ctx, 700, sizes.value, F.display);
           ctx.fillStyle = th.text;
-          const vw = drawTab(ctx, vText, tx, ty, 'left');
+          const vw = drawTab(ctx, formatValue(r.value, board.value), tx, ty, 'left');
           // Bar beside the value, ∝ value within this Congress
           const bx0 = tx + vw + sizes.sub * 0.6;
           const bw = cx + colW - 12 - bx0;
           const bh = Math.max(5, Math.round(sizes.sub * 0.28));
           if (bw > sizes.sub * 2) {
+            const frac = maxAbs > 0 ? Math.abs(r.value) / maxAbs : 0;
             const by = ty - sizes.value * 0.32 - bh / 2;
             ctx.fillStyle = C.paper3;
             roundRect(ctx, bx0, by, bw, bh, bh / 2);
@@ -1324,33 +1801,80 @@ function congressColumns(ctx: Ctx, board: BoardDef, cols: ReturnType<typeof rank
   };
 }
 
+/**
+ * The by-Congress board, vertical formats. Shows the top five under each
+ * Congress where they fit with every tier and shared-office list, else fewer
+ * (and the count line says so).
+ */
 function drawCongressVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareCardInput): void {
   const { data, board } = input;
   const region = input.region ?? null;
   const images = input.images ?? new Map();
-  const cols = rankByCongress(data, { region, limit: 5 });
-  const t = heroText(board, region, null);
-  if (!cols.some((c) => c.rows.length)) {
-    layoutVertical(ctx, s, input, t, () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), false);
+  const full = rankByCongress(data, { region, limit: 5 });
+  if (!full.some((c) => c.rows.length)) {
+    layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
-  if (format === 'square') {
-    layoutVertical(ctx, s, input, t, () => ({
+  const people: CardPeople = { photos: true, amounts: true };
+  type Form = 'bands' | 'columns';
+  const attempt = (k: number, form: Form, dry: boolean) => {
+    const cols = rankByCongress(data, { region, limit: k });
+    const refs = sharedRefs(cols);
+    const main = form === 'columns'
+      ? congressColumns(ctx, board, cols, images, s.pad, s.W - s.pad * 2, { name: 22, sub: 22, value: format === 'story' ? 30 : 26, head: 28, avatar: format === 'story' ? 60 : 48 }, refs)
+      : congressBands(ctx, s, board, cols, images, refs);
+    return layoutVertical(ctx, s, input, heroText(board, region, congressCount(k, full)), () => ({
       extra: null,
-      body: congressColumns(ctx, board, cols, images, s.pad, s.W - s.pad * 2, { name: 22, sub: 22, value: 28, head: 28, avatar: 52 }),
-    }), true);
-    return;
+      body: withSharedBlock(ctx, main, refs, s.pad, s.W - s.pad * 2, s.rowSub),
+    }), people, dry);
+  };
+  // Stories have the height for a card per office; portrait and square use the compact columns.
+  const forms: Form[] = format === 'story' ? ['bands', 'columns'] : ['columns'];
+  const most = Math.max(...full.map((c) => c.rows.length));
+  for (let k = most; k >= 1; k--) {
+    for (const form of forms) {
+      if (!attempt(k, form, true)) continue;
+      if (k < Math.min(2, most)) layoutSparse = true;
+      attempt(k, form, false);
+      return;
+    }
   }
-  layoutVertical(ctx, s, input, t, () => ({ extra: null, body: congressBands(ctx, s, board, cols, images) }), true);
+  layoutFits = false;
+  attempt(1, 'columns', false);
 }
 
 // --- shift (NEP vs House bill by office kind) -----------------------------------
 
-const KINDS = [
-  { key: 'deo', label: 'District offices', color: C.accent },
-  { key: 'central', label: 'Central Office', color: C.central },
-  { key: 'regional', label: 'Regional offices', color: C.regional },
-] as const;
+type SliceKey = 'deo' | 'central' | 'regional' | 'office_change' | 'no_office';
+
+/** One part of the shift card: one or more slices of totals.by_office_kind, added up. */
+interface ShiftKind { key: string; keys: SliceKey[]; label: string; color: string; note?: string; dark?: boolean }
+
+const KINDS: readonly ShiftKind[] = [
+  { key: 'deo', keys: ['deo'], label: 'District offices', color: C.accent },
+  { key: 'central', keys: ['central'], label: 'Central Office', color: C.central },
+  { key: 'regional', keys: ['regional'], label: 'Regional offices', color: C.regional, dark: true },
+];
+
+/**
+ * Lines whose NEP and House bill sides name different office groups, and the
+ * few lines that name no office: held out of every district. Shown so the
+ * parts add up to the whole.
+ */
+const HELD_OUT_KIND: ShiftKind = {
+  key: 'held_out', keys: ['office_change', 'no_office'], label: 'Lines that changed office or name no office', color: '#a3a9b5', note: 'held out of every district', dark: true,
+};
+
+function shiftKinds(data: LeaderboardData): readonly ShiftKind[] {
+  const k = data.totals.by_office_kind as Partial<Record<SliceKey, LeaderSlice>>;
+  const held = HELD_OUT_KIND.keys.filter((key) => k[key]);
+  return held.length ? [...KINDS, { ...HELD_OUT_KIND, keys: held }] : KINDS;
+}
+
+function kindSum(data: LeaderboardData, kk: ShiftKind, f: 'nep_php' | 'hgab3_php'): number {
+  const k = data.totals.by_office_kind as Partial<Record<SliceKey, LeaderSlice>>;
+  return kk.keys.reduce((a, key) => a + (k[key]?.[f] ?? 0), 0);
+}
 
 interface ShiftGeom { x: number; w: number; label: number; barH: number; gapH: number; statName: number; statValue: number; statSub: number; statGap: number; shares: boolean }
 
@@ -1360,9 +1884,9 @@ interface ShiftGeom { x: number; w: number; label: number; barH: number; gapH: n
  * line per kind with the peso change.
  */
 function shiftBody(ctx: Ctx, data: LeaderboardData, g: ShiftGeom): Body {
-  const k = data.totals.by_office_kind;
-  const nepTotal = KINDS.reduce((a, kk) => a + (k[kk.key].nep_php ?? 0), 0);
-  const houseTotal = KINDS.reduce((a, kk) => a + (k[kk.key].hgab3_php ?? 0), 0);
+  const KINDS = shiftKinds(data);
+  const nepTotal = KINDS.reduce((a, kk) => a + kindSum(data, kk, 'nep_php'), 0);
+  const houseTotal = KINDS.reduce((a, kk) => a + kindSum(data, kk, 'hgab3_php'), 0);
   const max = Math.max(nepTotal, houseTotal, 1);
   const labelH = g.label * 1.55;
   const chartH = labelH + g.barH + g.gapH + g.barH + labelH;
@@ -1378,8 +1902,8 @@ function shiftBody(ctx: Ctx, data: LeaderboardData, g: ShiftGeom): Body {
       const w = g.w;
       let y = y0 + slack * 0.3;
       const bars = [
-        { label: 'NEP', total: nepTotal, get: (kk: (typeof KINDS)[number]) => k[kk.key].nep_php ?? 0 },
-        { label: 'House bill', total: houseTotal, get: (kk: (typeof KINDS)[number]) => k[kk.key].hgab3_php ?? 0 },
+        { label: 'NEP', total: nepTotal, get: (kk: ShiftKind) => kindSum(data, kk, 'nep_php') },
+        { label: 'House bill', total: houseTotal, get: (kk: ShiftKind) => kindSum(data, kk, 'hgab3_php') },
       ];
       const barLabel = (b: (typeof bars)[number], ly: number) => {
         setFont(ctx, 700, g.label, F.display);
@@ -1404,7 +1928,7 @@ function shiftBody(ctx: Ctx, data: LeaderboardData, g: ShiftGeom): Body {
           const label = pctText(pct);
           setFont(ctx, 700, Math.round(Math.min(g.barH * 0.42, g.label * 1.05)), F.display);
           if (sw > tw(ctx, label) + g.barH * 0.45) {
-            ctx.fillStyle = kk.key === 'regional' ? C.ink : '#ffffff';
+            ctx.fillStyle = kk.dark ? C.ink : '#ffffff';
             ctx.textBaseline = 'middle';
             drawTab(ctx, label, cx + g.barH * 0.22, yy + g.barH / 2 + 1, 'left');
             ctx.textBaseline = 'alphabetic';
@@ -1438,8 +1962,8 @@ function shiftBody(ctx: Ctx, data: LeaderboardData, g: ShiftGeom): Body {
       y += labelH + g.label * 1.2 + slack * 0.4;
       // One line per kind: name and change; NEP → House bill and the share of the total under it
       KINDS.forEach((kk, i) => {
-        const nep = k[kk.key].nep_php ?? 0;
-        const house = k[kk.key].hgab3_php ?? 0;
+        const nep = kindSum(data, kk, 'nep_php');
+        const house = kindSum(data, kk, 'hgab3_php');
         const delta = house - nep;
         const l1 = y + g.statValue * 0.86;
         const l2 = l1 + g.statSub * 1.45;
@@ -1461,8 +1985,13 @@ function shiftBody(ctx: Ctx, data: LeaderboardData, g: ShiftGeom): Body {
         const sh0 = nepTotal > 0 ? (nep / nepTotal) * 100 : 0;
         const sh1 = houseTotal > 0 ? (house / houseTotal) * 100 : 0;
         setFont(ctx, 500, g.statSub, F.body);
-        const share = `${pctText(sh0)} → ${pctText(sh1)} of the total`;
-        if (g.shares && nx + fw + g.statSub * 1.5 + tw(ctx, share) <= x + w) text(ctx, share, x + w, l2, C.ink3, 'right');
+        // Lines that changed office: say they are held out of every district instead of a share.
+        const share = kk.note ?? `${pctText(sh0)} → ${pctText(sh1)} of the total`;
+        if ((g.shares || kk.note) && nx + fw + g.statSub * 1.5 + tw(ctx, share) <= x + w) text(ctx, share, x + w, l2, C.ink3, 'right');
+        else if (kk.note) {
+          // No room beside the figures: the note goes on its own line.
+          text(ctx, share, nx, l2 + g.statSub * 1.3, C.ink3);
+        }
         y += statRowH;
         if (i < KINDS.length - 1) {
           ctx.fillStyle = C.ruleSoft;
@@ -1495,7 +2024,7 @@ function drawShiftVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareC
       barH: Math.round(74 * big), gapH: Math.round((format === 'square' ? 64 : 104) * big),
       statName: Math.round(30 * big), statValue: Math.round(50 * big), statSub: Math.max(22, Math.round(23 * big)), statGap: Math.round((format === 'square' ? 16 : 30) * big), shares: true,
     }),
-  }), false);
+  }), NO_PEOPLE);
 }
 
 // --- regions -------------------------------------------------------------------
@@ -1588,9 +2117,9 @@ function drawRegionsVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
   const sz = format === 'story'
     ? { name: 30, value: 30, rank: 26, rowMin: 52, rowMax: 72 }
     : format === 'square'
-      ? { name: 23, value: 23, rank: 22, rowMin: 30, rowMax: 46 }
+      ? { name: 22, value: 22, rank: 22, rowMin: 27, rowMax: 46 }
       : { name: 25, value: 25, rank: 22, rowMin: 36, rowMax: 52 };
-  layoutVertical(ctx, s, input, t, () => ({ extra: null, body: regionsBody(ctx, input.board, rows, s.pad, s.W - s.pad * 2, sz) }), false);
+  layoutVertical(ctx, s, input, t, () => ({ extra: null, body: regionsBody(ctx, input.board, rows, s.pad, s.W - s.pad * 2, sz) }), NO_PEOPLE);
 }
 
 // ---------------------------------------------------------------------------
@@ -1598,159 +2127,107 @@ function drawRegionsVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
 // ---------------------------------------------------------------------------
 
 const L = {
-  W: 1200, H: 630, panelW: 432, pad: 40, kicker: 22, titleMax: 50, titleMin: 34, sub: 22,
-  rowName: 25, rowSub: 22, rowValue: 30, rowDetail: 22, rank: 24, avatar: 56, foot: 22, logo: 34,
+  W: 1200, H: 630, panelW: 432, pad: 36, kicker: 20, titleMax: 48, titleMin: 30, sub: 21,
+  rowName: 25, rowSub: 22, rowValue: 30, rowDetail: 22, rank: 24, avatar: 46, rowMin: 62, rowMax: 96, foot: 22, logo: 34,
 };
 
-/** Landscape with a full-width title band: the by-Congress board needs the width for three columns. */
-const WIDE: Spec = {
-  ...SPECS.square,
-  W: 1200, H: 630, pad: 48, heroTop: 28, heroBottom: 20,
-  kicker: 22, titleMax: 42, titleMin: 32, sub: 22, subLines: 2,
-  foot: 22, logo: 34, footPad: 0.75, footMin: 20,
+/** Ranking, members and by-Congress link previews: a title band across the top, rows, then the footer. */
+const LAND: Spec = {
+  W: 1200, H: 630, pad: 40, heroTop: 18, heroBottom: 12,
+  kicker: 20, titleMax: 42, titleMin: 30, sub: 20, subLines: 2,
+  rowName: 23, rowSub: 20, rowValue: 27, rowDetail: 20, rank: 23, avatar: 42, rowMin: 58, rowMax: 84,
+  spot: null,
+  foot: 20, footMin: 20, logo: 28, footPad: 0.7,
+  urlInHero: true, rowFlow: true, rowPadY: 4, rowBarSlim: true,
 };
 
+/** The by-Congress link preview: one row per Congress (its top office), labelled "18th", with the years beside the value. */
 function drawCongressLandscape(ctx: Ctx, input: ShareCardInput): void {
   const { data, board } = input;
   const region = input.region ?? null;
   const images = input.images ?? new Map();
-  const cols = rankByCongress(data, { region, limit: 3 });
-  const t = heroText(board, region, null);
-  if (!cols.some((c) => c.rows.length)) {
-    layoutVertical(ctx, WIDE, input, t, () => ({ extra: null, body: emptyBody(ctx, WIDE, board, region) }), false);
+  const s = LAND;
+  const items: Item[] = rankByCongress(data, { region, limit: 1 }).filter((c) => c.rows.length).map((c) => ({
+    ...entryItem(c.rows[0].rank, c.rows[0].entry, c.rows[0].value), label: `${c.congress}th`, detail: c.years,
+  }));
+  if (!items.length) {
+    layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
-  layoutVertical(ctx, WIDE, input, t, () => ({
-    extra: null,
-    body: congressColumns(ctx, board, cols, images, WIDE.pad, WIDE.W - WIDE.pad * 2, { name: 23, sub: 22, value: 26, head: 26, avatar: 48 }),
-  }), true);
+  const t = heroText(board, region, congressCount(1, rankByCongress(data, { region, limit: 5 })));
+  const people: CardPeople = { photos: true, amounts: true };
+  const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
+  const attempt = (useBlock: boolean, dry: boolean) => layoutVertical(ctx, s, input, t, () => {
+    const refs = useBlock ? sharedRefsOf(items) : null;
+    const rows = rowsBody(ctx, s, board, items, images, maxAbs, true, refs);
+    return { extra: null, body: refs && refs.size ? withSharedBlock(ctx, rows, refs, s.pad, s.W - s.pad * 2, s.rowSub) : rows };
+  }, people, dry);
+  if (attempt(false, true)) attempt(false, false);
+  else attempt(true, false);
 }
 
+/** The footer of a landscape card: full width under both panels, logo beside the link. */
+function landscapeFooter(ctx: Ctx, input: ShareCardInput, people: CardPeople, fs: number): Block {
+  return footerBlock(ctx, {
+    x: L.pad, w: L.W - L.pad * 2, bgX: 0, bgW: L.W, H: L.H,
+    fs, lh: fs * 1.3, padT: fs * 0.75, padB: fs * 0.75, gap: fs * 0.4, urlMax: fs, urlMin: fs,
+    logo: { images: input.images ?? new Map(), h: 30 },
+  }, footerText(input.data, input.board, people), shareUrl(input.board, input.region ?? null));
+}
+
+/** Shift and regions link previews: title panel on the left, the chart on the right, the footer across. */
 function drawLandscape(ctx: Ctx, input: ShareCardInput): void {
   const { data, board } = input;
-  if (board.kind === 'congress') {
-    drawCongressLandscape(ctx, input);
-    return;
-  }
-  const region = input.region ?? null;
-  const images = input.images ?? new Map();
   const W = L.W;
   const H = L.H;
   ctx.fillStyle = C.paper;
   ctx.fillRect(0, 0, W, H);
-
-  // What the right panel shows
-  let items: Item[] = [];
-  let count: string | null = null;
+  const pw = L.panelW;
+  const rx = pw + L.pad - 6;
+  const rw = W - rx - L.pad + 6;
+  const bodyTop = 20;
   let regionRowsAll: RegionRow[] = [];
-  if (board.kind === 'ranking' || board.kind === 'members') {
-    const r = rankingItems(data, board, region, SHARE_FORMATS.landscape.rows);
-    items = r.items;
-    count = countLine(board, items.length, r.eligible);
-  } else if (board.kind === 'regions') {
+  let count: string | null = null;
+  if (board.kind === 'regions') {
     regionRowsAll = regionRows(data, board);
     count = regionsCount(regionRowsAll, Math.min(regionRowsAll.length, 8));
   }
-
-  // Left panel
-  const pw = L.panelW;
-  drawHeroBg(ctx, 0, 0, pw, H, { cx: pw * 0.92, cy: H * 0.04, R: pw * 0.78 });
+  const s: Spec = { ...SPECS.square, W: pw, H, pad: L.pad, kicker: L.kicker, sub: L.sub, subLines: 6, titleMax: L.titleMax, titleMin: L.titleMin };
   const lx = L.pad;
   const lw = pw - L.pad * 2;
-  const logoH = L.logo;
-  const logoY = H - L.pad - logoH;
-  const avail = logoY - L.pad - 24;
-  const s: Spec = { ...SPECS.square, W: pw, H, pad: L.pad, kicker: L.kicker, sub: L.sub, subLines: 6, titleMax: L.titleMax, titleMin: L.titleMin };
-  const t = heroText(board, region, count);
-  // Largest title whose kicker, title and subtitle fit whole above the logo.
-  let hero: Block | null = null;
-  for (let size = L.titleMax; size >= L.titleMin && !hero; size -= 2) {
-    const h = heroBlock(ctx, s, t, size, lx, lw, 8, null, 3, 4);
-    if (h.fits && h.h <= avail) hero = h;
+  const t = heroText(board, null, count);
+  const heroFor = (panelH: number): Block | null => {
+    for (let size = L.titleMax; size >= L.titleMin; size -= 2) {
+      const h = heroBlock(ctx, s, t, size, lx, lw, 8, null, 3, 4);
+      if (h.fits && h.h <= panelH - L.pad * 1.5) return h;
+    }
+    return null;
+  };
+  let footer = landscapeFooter(ctx, input, NO_PEOPLE, L.foot);
+  let hero = heroFor(H - footer.h);
+  for (let fs = L.foot - 1; fs >= 20 && !hero; fs--) {
+    footer = landscapeFooter(ctx, input, NO_PEOPLE, fs);
+    hero = heroFor(H - footer.h);
   }
   if (!hero) {
     layoutFits = false;
     hero = heroBlock(ctx, s, t, L.titleMin, lx, lw, 8, null, 3, 5);
   }
-  hero.draw(L.pad + 2);
-  drawLogo(ctx, images, SHARE_LOGO_WHITE, lx, logoY, logoH, 'left', true);
-
-  // Right panel
-  const rx = pw + L.pad - 6;
-  const rw = W - rx - L.pad + 6;
-  const withPhotos = (board.kind === 'ranking' || board.kind === 'members') && items.length > 0;
-  const bodyTop = 22;
-  // Footer at 22px, down to 20px when the rows would get too short.
-  const rowsH = (f: Block) => (H - f.h - bodyTop - 12) / Math.max(1, items.length);
-  let footer = landscapeFooter(ctx, board, region, rx, rw, withPhotos);
-  for (let fs = L.foot - 1; fs >= 20 && items.length && Math.min(96, rowsH(footer)) < 66; fs--) footer = landscapeFooter(ctx, board, region, rx, rw, withPhotos, fs);
-  const bodyH = H - footer.h - bodyTop;
-  if (board.kind === 'ranking' || board.kind === 'members') {
-    if (!items.length) emptyLandscape(ctx, board, region, rx, rw, bodyTop, bodyH);
-    else {
-      const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
-      const maxPeople = Math.max(1, ...items.map((i) => i.people.length));
-      const rowH = Math.min(96, (bodyH - 12) / items.length);
-      if (rowH < 66) layoutFits = false;
-      const d = Math.min(L.avatar, rowH - 18);
-      const g: RowGeom = {
-        x: rx - 8, w: rw + 8, rankW: Math.round(L.rank * 1.7), avatarD: d, avatarBoxW: avatarBoxWidth(maxPeople, d), valueW: 0,
-        nameSize: L.rowName, subSize: L.rowSub, valueSize: L.rowValue, detailSize: L.rowDetail, rankSize: L.rank,
-      };
-      g.valueW = valueColumnWidth(ctx, board, items, g.valueSize, g.detailSize, rw * 0.36);
-      // Names come first: drop the detail line when it would squeeze them.
-      const nameRoom = g.w - g.rankW - L.rank * 0.3 - g.avatarBoxW - L.rowName * 1.3 - g.valueW - L.rank * 0.45;
-      let shown = items;
-      if (nameRoom < 360) {
-        shown = items.map((it) => ({ ...it, detail: null }));
-        g.valueW = valueColumnWidth(ctx, board, shown, g.valueSize, g.detailSize, rw * 0.36);
-      }
-      shown.forEach((it, i) => drawRow(ctx, board, it, g, bodyTop + 6 + i * rowH, rowH, maxAbs, images));
-    }
-  } else if (board.kind === 'shift') {
-    shiftBody(ctx, data, { x: rx, w: rw, label: 22, barH: 40, gapH: 34, statName: 24, statValue: 32, statSub: 22, statGap: 8, shares: false }).draw(bodyTop - 6, bodyH + 6);
+  if (footer.fits === false) layoutFits = false;
+  const panelH = H - footer.h;
+  const bodyH = panelH - bodyTop;
+  drawHeroBg(ctx, 0, 0, pw, panelH, { cx: pw * 0.92, cy: H * 0.04, R: pw * 0.78 });
+  hero.draw(L.pad * 0.8);
+  if (board.kind === 'shift') {
+    const body = shiftBody(ctx, data, { x: rx, w: rw, label: 21, barH: 34, gapH: 28, statName: 21, statValue: 28, statSub: 20, statGap: 4, shares: false });
+    if (body.minH > bodyH + 8) layoutFits = false;
+    body.draw(bodyTop - 8, bodyH + 8);
   } else if (board.kind === 'regions') {
-    regionsBody(ctx, board, regionRowsAll, rx, rw, { name: 22, value: 22, rank: 22, rowMin: 30, rowMax: 50 }, 8).draw(bodyTop - 6, bodyH);
+    const body = regionsBody(ctx, board, regionRowsAll, rx, rw, { name: 21, value: 21, rank: 21, rowMin: 27, rowMax: 46 }, 8);
+    if (body.minH > bodyH) layoutFits = false;
+    body.draw(bodyTop - 8, bodyH + 4);
   }
-  footer.draw(H - footer.h);
-}
-
-function landscapeFooter(ctx: Ctx, board: BoardDef, region: string | null, x: number, w: number, withPhotos: boolean, fs = L.foot): Block {
-  const lh = fs * 1.3;
-  setFont(ctx, 500, fs, F.body);
-  const note = wrap(ctx, footerNotes(board, withPhotos).join(' '), w, 5);
-  setFont(ctx, 400, fs, F.body);
-  const src = wrap(ctx, sourceLines(board, withPhotos).join(' '), w, 3);
-  const url = fitUrl(ctx, shareUrl(board, region), w, fs, fs);
-  const h = fs * 0.8 + note.length * lh + 4 + src.length * lh + 4 + url.lines.length * url.size * 1.3 + fs * 0.9;
-  return {
-    h,
-    draw(y0) {
-      ctx.fillStyle = C.paper2;
-      ctx.fillRect(x - L.pad + 6, y0, L.W - x + L.pad, L.H - y0);
-      ctx.fillStyle = C.rule;
-      ctx.fillRect(x - L.pad + 6, y0, L.W - x + L.pad, 2);
-      let y = y0 + fs * 0.8;
-      setFont(ctx, 500, fs, F.body);
-      for (const l of note) { text(ctx, l, x, y + fs * 0.95, C.ink2); y += lh; }
-      y += 4;
-      setFont(ctx, 400, fs, F.body);
-      for (const l of src) { text(ctx, l, x, y + fs * 0.95, C.ink3); y += lh; }
-      y += 4;
-      drawUrl(ctx, url, x, y);
-    },
-  };
-}
-
-function emptyLandscape(ctx: Ctx, board: BoardDef, region: string | null, x: number, w: number, y: number, h: number): void {
-  const size = 38;
-  setFont(ctx, 700, size, F.display, -0.5);
-  const lines = wrap(ctx, emptyMessage(board, region), w * 0.86, 3);
-  const lh = size * 1.12;
-  let yy = y + (h - lines.length * lh) / 2;
-  ctx.fillStyle = C.accent;
-  ctx.fillRect(x + w / 2 - size * 0.9, yy - size * 0.9, size * 1.8, 6);
-  for (const l of lines) { text(ctx, l, x + w / 2, yy + size * 0.86, C.ink2, 'center'); yy += lh; }
+  footer.draw(panelH);
 }
 
 // ---------------------------------------------------------------------------
@@ -1758,13 +2235,21 @@ function emptyLandscape(ctx: Ctx, board: BoardDef, region: string | null, x: num
 // ---------------------------------------------------------------------------
 
 export interface ShareCardReport {
-  /** False when some layout had to fall back (a title cut, rows squeezed); worth a look. */
+  /**
+   * False when some layout had to fall back (a title cut, rows squeezed, fewer
+   * than three rows), when a district list or the residual could not be laid
+   * out whole, or when the data has no residual figures yet.
+   */
   fits: boolean;
+  /** Fewer rows than usual fitted (the count line says "Top K of N"); not a defect, worth a look. */
+  sparse: boolean;
 }
 
 /** Paint one share card at the format's native size. `ctx.canvas` must already be that size. */
 export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInput): ShareCardReport {
   layoutFits = true;
+  layoutSparse = false;
+  residualMissing = false;
   const { board, format } = input;
   const region = board.regionFilter ? input.region ?? null : null;
   const inp: ShareCardInput = { ...input, region };
@@ -1774,7 +2259,9 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   if (format === 'landscape') {
-    drawLandscape(ctx, inp);
+    if (board.kind === 'congress') drawCongressLandscape(ctx, inp);
+    else if (board.kind === 'ranking' || board.kind === 'members') drawRankingVertical(ctx, LAND, format, inp);
+    else drawLandscape(ctx, inp);
   } else {
     const s = SPECS[format];
     if (board.kind === 'shift') drawShiftVertical(ctx, s, format, inp);
@@ -1783,7 +2270,7 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
     else drawRankingVertical(ctx, s, format, inp);
   }
   ctx.restore();
-  return { fits: layoutFits };
+  return { fits: layoutFits && !residualMissing, sparse: layoutSparse };
 }
 
 /** Every image a card draws: the portraits of the rows shown (up to three per shared office) and the logo. */
@@ -1791,48 +2278,67 @@ export function shareCardImageUrls(data: LeaderboardData, board: BoardDef, forma
   const r = board.regionFilter ? region ?? null : null;
   const urls = new Set<string>();
   urls.add(SHARE_LOGO_WHITE);
+  if (format === 'landscape') urls.add(SHARE_LOGO_PRIMARY);
   const add = (people: LeaderPerson[]) => { for (const p of people.slice(0, 3)) if (p.portrait_url) urls.add(p.portrait_url); };
   if (board.kind === 'ranking' || board.kind === 'members') {
     for (const it of rankingItems(data, board, r, SHARE_FORMATS[format].rows).items) add(it.people);
   } else if (board.kind === 'congress') {
-    for (const c of rankByCongress(data, { region: r, limit: format === 'landscape' ? 3 : 5 })) for (const row of c.rows) add(row.entry.people);
+    for (const c of rankByCongress(data, { region: r, limit: format === 'landscape' ? 1 : 5 })) for (const row of c.rows) add(row.entry.people);
   }
   return [...urls];
 }
 
-/** "Ilocos Norte, 1st District (Ferdinand Alexander Marcos)" or, for a shared office, the office and every district it serves. */
-function altItem(it: Item): string {
-  if (!isGroup(it)) {
+/** "Ilocos Norte, 1st District (Ferdinand Alexander Marcos), Tier A" or, for a shared office, the office, its tier and every district it serves. */
+function altItem(it: Item, tiers: boolean): string {
+  if (it.personFirst) {
     const p = it.people[0];
-    return p.name ? `${p.district} (${personName(p)})` : p.district;
+    return `${personName(p)} (${p.district})`;
   }
-  return `${headline(it)}, shared by ${it.people.length} districts, not split (${it.people.map((p) => p.district).join('; ')})`;
+  const holders = seatHolders({ people: it.people });
+  if (!isGroup(it)) return `${headline(it)}${holders ? ` (${holders})` : ''}${tiers ? `, ${tierText(it, true)}` : ''}`;
+  const tier = tiers ? tierText(it) : `shared by ${it.people.length} districts, not split`;
+  return `${headline(it)}, ${tier}: ${it.people.map((p) => p.district).join('; ')}${holders ? ` (${holders})` : ''}`;
 }
 
-/** Text alternative for the card: title, scope and the top three with their values. */
+/** Text alternative for the card: title, scope, the top three with their values and tiers, the residual and the disclaimer. */
 export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: ShareFormat, region?: string | null): string {
-  void format;
+  void format; // Same text for every format: the field and the top three.
   const r = board.regionFilter ? region ?? null : null;
   const where = r ? ` ${regionName(r)}.` : '';
   const head = `${board.title}.${where} ${board.subtitle}`;
+  const tiers = board.kind === 'ranking' || board.kind === 'congress';
   let top: string[] = [];
+  let people = false;
   if (board.kind === 'ranking' || board.kind === 'members') {
     const { items, eligible } = rankingItems(data, board, r, 3);
-    if (!items.length) return `${head} ${emptyMessage(board, r)}.`;
-    top = items.map((it) => `${it.rank}. ${altItem(it)}: ${formatValue(it.value, board.value)}${it.detail ? ` ${it.detail}` : ''}`);
-    top.unshift(countLine(board, Math.min(eligible, SHARE_FORMATS[format].rows), eligible) + '.');
+    if (!items.length) top = [`${emptyMessage(board, r)}`];
+    else {
+      people = board.kind === 'ranking';
+      top = items.map((it) => `${it.rank}. ${altItem(it, tiers)}: ${formatValue(it.value, board.value)}${it.detail ? ` ${it.detail}` : ''}`);
+      // The card may fit fewer rows than the format holds; the alt text gives the field and the top three.
+      top.unshift(`${countLine(board, eligible, eligible) ?? ''}; the top three`);
+    }
   } else if (board.kind === 'congress') {
     for (const c of rankByCongress(data, { region: r, limit: 3 })) {
       if (!c.rows.length) continue;
-      top.push(`${CONGRESS_LABEL[c.congress]} (${c.years}): ` + c.rows.map((row) => `${row.rank}. ${altItem(entryItem(row.rank, row.entry, row.value))}: ${formatValue(row.value, board.value)}`).join('; '));
+      people = true;
+      top.push(`${CONGRESS_LABEL[c.congress]} (${c.years}): ` + c.rows.map((row) => `${row.rank}. ${altItem(entryItem(row.rank, row.entry, row.value), tiers)}: ${formatValue(row.value, board.value)}`).join('; '));
     }
   } else if (board.kind === 'regions') {
     top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}`);
   } else if (board.kind === 'shift') {
-    const k = data.totals.by_office_kind;
-    top = KINDS.map((kk) => `${kk.label}: NEP ${formatValue(k[kk.key].nep_php, 'php')}, House bill ${formatValue(k[kk.key].hgab3_php, 'php')}, change ${formatValue((k[kk.key].hgab3_php ?? 0) - (k[kk.key].nep_php ?? 0), 'signed_php')}`);
+    const part = (label: string, nep: number, house: number) => `${label}: NEP ${formatValue(nep, 'php')}, House bill ${formatValue(house, 'php')}, change ${formatValue(house - nep, 'signed_php')}`;
+    top = shiftKinds(data).flatMap((kk) => {
+      // A combined part also lists each slice's own amounts.
+      if (kk.keys.length < 2) return [part(kk.label, kindSum(data, kk, 'nep_php'), kindSum(data, kk, 'hgab3_php'))];
+      const names: Record<string, string> = { office_change: 'lines that changed office', no_office: 'lines that name no office' };
+      const k = data.totals.by_office_kind as Partial<Record<SliceKey, LeaderSlice>>;
+      return [`${part(kk.label, kindSum(data, kk, 'nep_php'), kindSum(data, kk, 'hgab3_php'))} (${kk.note}; ` + kk.keys.map((key) => `${names[key] ?? key}: NEP ${formatValue(k[key]?.nep_php ?? 0, 'php')}, House bill ${formatValue(k[key]?.hgab3_php ?? 0, 'php')}`).join('; ') + ')'];
+    });
   }
-  return `${head} ${top.join('. ')}.`.replace(/\.\./g, '.');
+  const residual = residualText(data, board);
+  const tail = [residual, people ? CARD_DISCLAIMER : null].filter(Boolean);
+  return `${head} ${[...top.filter(Boolean), ...tail].join('. ')}.`.replace(/\.\./g, '.').replace(/\.\s*\./g, '.');
 }
 
 /** "bettergov-house-bill-2027-<board>-<region?>-<format>.png" */

@@ -190,7 +190,7 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
           <Link className="hgab-cta hgab-cta-primary" to={districtListHref()}>{browse}</Link>
         </section>
 
-        <DisclaimerNotice compact />
+        <DisclaimerNotice compact offices />
         <Provenance />
         <DistrictsDetails index={index} />
       </main>
@@ -678,7 +678,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               every DPWH project recorded under that office.
             </p>
 
-            <DisclaimerNotice compact />
+            <DisclaimerNotice compact offices />
             <Provenance />
             <DistrictsDetails index={index} />
           </div>

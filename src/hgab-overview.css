@@ -1,0 +1,277 @@
+/* FY2027 House bill overview (/hgab/2027/overview): the opening lines under
+   the hero and the "House bill vs. NEP: candidate changes" table. Built on
+   the section's tokens (src/hgab.css) and group colours (`is-<group>`). */
+
+/* --- opening lines ------------------------------------------------------- */
+
+.hgab-ov-intro { margin-bottom: 24px; max-width: 860px; }
+.hgab-ov-lede {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+.hgab-ov-scope {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+.hgab-ov-scope a { color: var(--accent); }
+
+/* --- candidate changes ---------------------------------------------------- */
+
+.hgab-cc .hgab-whatmeans { margin: 0 0 14px; }
+.hgab-cc-exact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hgab-cc-exact input { margin: 0; accent-color: var(--accent); }
+
+/* Scrolls sideways only when it must (exact pesos on a narrow screen). */
+.hgab-cc-wrap {
+  overflow-x: auto;
+  border-top: 1px solid var(--ink);
+}
+.hgab-cc-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.hgab-cc-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.hgab-cc-wrap.is-exact .hgab-cc-table { min-width: 1120px; }
+.hgab-cc-table caption {
+  caption-side: bottom;
+  text-align: left;
+  padding: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+.hgab-cc-table th,
+.hgab-cc-table td {
+  padding: 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgab-cc-table thead th {
+  padding: 10px 12px 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: bottom;
+}
+.hgab-cc-table thead th:first-child { width: 15%; }
+.hgab-cc-table thead th[class^='is-'] { box-shadow: inset 0 3px 0 var(--hgab-group); }
+.hgab-cc-table th small,
+.hgab-cc-mlabel small {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-3);
+}
+.hgab-cc-table tbody th,
+.hgab-cc-table tfoot th {
+  padding: 12px 12px 12px 0;
+  font-family: var(--font-hero);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-cc-table tbody th a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.hgab-cc-table tbody th a:hover { color: var(--accent); border-color: var(--accent); }
+.hgab-cc-table tbody th small,
+.hgab-cc-table tfoot th small { font-family: var(--font-mono); font-size: 10.5px; margin-top: 5px; }
+
+.hgab-cc-table td.is-house { --hgab-group: var(--ink); }
+.hgab-cc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  padding: 12px 12px 13px;
+  color: inherit;
+  text-decoration: none;
+}
+a.hgab-cc-cell:hover { background: var(--paper-2); }
+a.hgab-cc-cell:hover .hgab-cc-n { text-decoration: underline; }
+a.hgab-cc-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.hgab-cc-mlabel { display: none; }
+.hgab-cc-fig { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hgab-cc-amt {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hgab-group);
+}
+.hgab-cc-wrap.is-exact .hgab-cc-amt { font-size: 14px; letter-spacing: -0.01em; }
+.hgab-cc-n {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.hgab-cc-meta {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+.hgab-cc-total th,
+.hgab-cc-total td { border-top: 2px solid var(--ink); background: var(--paper-2); }
+.hgab-cc-total .hgab-cc-amt { color: var(--ink); }
+.hgab-cc-total td.is-increased .hgab-cc-amt,
+.hgab-cc-total td.is-decreased .hgab-cc-amt { color: var(--hgab-group); }
+.hgab-cc-total th { padding-left: 10px; }
+
+/* Scope review: one notice per program that has same-road pairs. */
+.hgab-cc-scope {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  max-width: 900px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  border-left: 3px solid var(--hgab-group);
+  background: color-mix(in srgb, var(--hgab-group) 6%, var(--paper));
+}
+.hgab-cc-scope strong { color: var(--ink); font-weight: 600; }
+.hgab-cc-scope .hgab-cc-amt { font-size: inherit; font-family: inherit; font-weight: 600; letter-spacing: 0; }
+.hgab-cc-scope a { color: var(--accent); white-space: nowrap; }
+
+.hgab-cc-notes {
+  margin: 14px 0 0;
+  padding: 0 0 0 18px;
+  max-width: 900px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+.hgab-cc-notes li + li { margin-top: 2px; }
+.hgab-cc-allegations {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  max-width: 900px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ink-3);
+}
+.hgab-cc-allegations strong { color: var(--ink); font-weight: 600; }
+.hgab-cc-source {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+.hgab-cc-source a { color: inherit; }
+
+/* Tablets: the seven columns stay, a little tighter. */
+@media (max-width: 1100px) {
+  .hgab-cc-cell { padding: 10px 8px 11px; }
+  .hgab-cc-amt { font-size: 16px; }
+  .hgab-cc-table thead th { padding: 8px 8px; font-size: 9.5px; }
+  .hgab-cc-table th small { font-size: 10.5px; }
+  .hgab-cc-meta { font-size: 10px; }
+}
+@media (max-width: 900px) {
+  .hgab-cc-table { min-width: 860px; }
+}
+
+/* Phones: each program becomes a card listing its six figures. */
+@media (max-width: 720px) {
+  .hgab-ov-lede { font-size: 15px; }
+  .hgab-cc-exact { margin-top: 8px; }
+  .hgab-cc-wrap { overflow-x: visible; border-top: none; }
+  .hgab-cc-table,
+  .hgab-cc-wrap.is-exact .hgab-cc-table { min-width: 0; table-layout: auto; }
+  .hgab-cc-table,
+  .hgab-cc-table tbody,
+  .hgab-cc-table tfoot,
+  .hgab-cc-table tr,
+  .hgab-cc-table th,
+  .hgab-cc-table td { display: block; width: auto; }
+  .hgab-cc-table caption { display: block; padding: 0 0 10px; }
+  .hgab-cc-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .hgab-cc-table tr {
+    margin: 0 0 12px;
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--ink);
+    background: var(--paper);
+  }
+  .hgab-cc-table tbody th,
+  .hgab-cc-table tfoot th {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+  }
+  .hgab-cc-table td { border-bottom: 1px solid var(--rule-soft); border-left: 3px solid var(--hgab-group); }
+  .hgab-cc-table td:last-child { border-bottom: none; }
+  .hgab-cc-total th,
+  .hgab-cc-total td { border-top: none; }
+  .hgab-cc-cell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    padding: 9px 10px;
+  }
+  .hgab-cc-mlabel {
+    display: block;
+    font-family: var(--font-hero);
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+  .hgab-cc-mlabel small { font-size: 11.5px; }
+  .hgab-cc-fig { align-items: flex-end; text-align: right; }
+  .hgab-cc-amt,
+  .hgab-cc-wrap.is-exact .hgab-cc-amt { font-size: 17px; }
+  .hgab-cc-wrap.is-exact .hgab-cc-fig { max-width: 58vw; }
+  .hgab-cc-meta { overflow-wrap: anywhere; }
+}

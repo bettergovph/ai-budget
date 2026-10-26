@@ -67,8 +67,10 @@ interface RenderResult {
   colours: number;
   images: number;
   imagesLoaded: number;
-  /** The renderer's own check: false when a layout fell back (text cut, rows squeezed). */
+  /** The renderer's own check: false when a layout fell back (text, a district list or the residual cut; rows squeezed). */
   fits: boolean;
+  /** Fewer rows than usual fitted; the card says "Top K of N". Reported, not a failure. */
+  sparse: boolean;
 }
 
 function pngSize(buf: Buffer): { width: number; height: number } {
@@ -129,11 +131,12 @@ async function main() {
   console.log("─".repeat(72));
 
   const failures: string[] = [];
+  const sparse: string[] = [];
   let missingImages = 0;
   for (const job of jobs) {
     const res: RenderResult = await page.evaluate(async ({ id, format, region }) => {
       type Mod = {
-        renderShareCard: (c: HTMLCanvasElement, o: object) => Promise<{ fits: boolean } | null>;
+        renderShareCard: (c: HTMLCanvasElement, o: object) => Promise<{ fits: boolean; sparse: boolean } | null>;
         shareCardImageUrls: (d: unknown, b: unknown, f: string, r: string | null) => string[];
         loadShareImages: (u: string[]) => Promise<Map<string, unknown>>;
       };
@@ -162,6 +165,7 @@ async function main() {
         images: urls.length,
         imagesLoaded: loaded.size,
         fits: report.fits,
+        sparse: report.sparse,
       };
     }, job);
     const buf = Buffer.from(res.png.slice(res.png.indexOf(",") + 1), "base64");
@@ -170,17 +174,19 @@ async function main() {
     const problems: string[] = [];
     if (size.width !== want.width || size.height !== want.height) problems.push(`size ${size.width}×${size.height}, want ${want.width}×${want.height}`);
     if (res.inked < 0.05 || res.colours < 24) problems.push(`looks blank (inked ${(res.inked * 100).toFixed(1)}%, ${res.colours} colours)`);
-    if (!res.fits) problems.push("layout did not fit (text cut or rows squeezed)");
+    if (!res.fits) problems.push("layout did not fit (text, a district list or the residual cut, or rows squeezed)");
+    if (res.sparse) sparse.push(job.file);
     const miss = res.images - res.imagesLoaded;
     missingImages += miss;
     writeFileSync(resolve(opts.out, job.file), buf);
     const tag = problems.length ? "FAIL" : "ok  ";
-    console.log(`  ${tag} ${job.file.padEnd(44)} ${size.width}×${size.height} ${(buf.length / 1024).toFixed(0).padStart(5)} KB  images ${res.imagesLoaded}/${res.images}${problems.length ? `  ${problems.join("; ")}` : ""}`);
+    console.log(`  ${tag} ${job.file.padEnd(44)} ${size.width}×${size.height} ${(buf.length / 1024).toFixed(0).padStart(5)} KB  images ${res.imagesLoaded}/${res.images}${res.sparse ? "  sparse" : ""}${problems.length ? `  ${problems.join("; ")}` : ""}`);
     if (problems.length) failures.push(`${job.file}: ${problems.join("; ")}`);
   }
   await browser.close();
   console.log("─".repeat(72));
   if (missingImages) console.warn(`${missingImages} image(s) did not load; those cards show initials instead of portraits.`);
+  if (sparse.length) console.warn(`${sparse.length} card(s) fit fewer rows than usual (honest "Top K of N"): ${sparse.join(", ")}`);
   if (failures.length) {
     console.error(`${failures.length} image(s) failed:\n  ${failures.join("\n  ")}`);
     process.exit(1);

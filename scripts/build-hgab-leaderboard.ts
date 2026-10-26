@@ -31,7 +31,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions,
+  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
   type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
 } from "../src/lib/hgab-leaderboard";
 
@@ -41,12 +41,15 @@ import {
 
 type FiscalStage = "gaa" | "nep" | "hgab3";
 interface BridgeCell { rows: number; php: number }
-interface Bridge { house_only: BridgeCell; nep_only: BridgeCell; net_php: number }
+interface Bridge { house_only: BridgeCell; nep_only: BridgeCell; scope_review: BridgeCell; net_php: number }
 interface OfficeHistory {
   id: string; name: string; kind: string; region: string | null; district_ids: string[]; tier: "A" | "B";
   years: Array<{ fy: number; stage: FiscalStage; php: number | null; matched_label: string | null }>;
   by_congress: Array<{ congress: number; gaa_php: number | null; years_counted: number[] }>;
-  fy2027: { nep_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null } | null;
+  fy2027: {
+    nep_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null;
+    office_change: { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] };
+  } | null;
   notes: string[];
 }
 interface Representative {
@@ -63,6 +66,12 @@ interface DistrictIndex {
   representatives_source: { url: string; congress: number; fetched_at: string };
   terms: Array<{ congress: number; years: number[] }>;
   districts: DistrictCard[]; offices: Record<string, OfficeHistory>;
+  residual: Array<{
+    fy: number; stage: FiscalStage; total_php: number; deo_php: number; central_office_php: number; regional_offices_php: number; unmatched_php: number;
+    office_change_php: number; office_change_rows: number; no_office_php: number; no_office_rows: number;
+  }>;
+  office_change: { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] };
+  no_office: { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] };
 }
 
 const GAA_YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
@@ -156,42 +165,54 @@ function regionKeyOf(label: string | null | undefined): string | null {
 // Parquet: added / held / dropped per office label, slices per office kind
 // ---------------------------------------------------------------------------
 
-interface ParquetSums { byLabel: Map<string, { kind: string; slice: LeaderSlice }>; byKind: Record<KindKey, LeaderSlice> }
+interface LabelSums { kind: string; slice: LeaderSlice; scope_rows: number }
+type CountedSlice = LeaderSlice & { rows: number };
+interface ParquetSums { byLabel: Map<string, LabelSums>; byKind: Record<KindKey, LeaderSlice>; officeChange: CountedSlice; noOffice: CountedSlice }
 
-async function loadParquet(path: string, traces: Map<string, { group: string; held: boolean }>): Promise<ParquetSums> {
+/**
+ * Per printed office label and per office kind, without the office-change and no-office lines (ids from
+ * districts.json), which form their own slices: the districts builder holds them out of every office and of
+ * Central/regional.
+ */
+async function loadParquet(path: string, traces: Map<string, { group: string; held: boolean }>, heldOut: Set<string>, noOfficeIds: Set<string>): Promise<ParquetSums> {
   ensure(existsSync(path), `${path} not found — run \`npm run import:hgab\` first`);
   const db = await DuckDBInstance.create(":memory:");
   const c = await db.connect();
-  const rows = (await c.runAndReadAll(`
-    SELECT office, office_kind, trace, count(*), sum(nep_php), sum(hgab3_php)
-    FROM read_parquet('${q(path)}') GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`)).getRows();
+  const rows = (await c.runAndReadAll(`SELECT id, office, office_kind, trace, nep_php, hgab3_php FROM read_parquet('${q(path)}') ORDER BY id`)).getRows();
   c.closeSync(); db.closeSync();
 
   const kindKey = new Map(Object.entries(OFFICE_KINDS).map(([k, v]) => [v as string, k as KindKey]));
-  const byLabel = new Map<string, { kind: string; slice: LeaderSlice }>();
+  const byLabel = new Map<string, LabelSums>();
   const byKind: Record<KindKey, LeaderSlice> = { deo: emptySlice(), central: emptySlice(), regional: emptySlice() };
+  const officeChange: CountedSlice = { ...emptySlice(), rows: 0 }, noOffice: CountedSlice = { ...emptySlice(), rows: 0 };
+  const seen = new Set<string>();
   for (const r of rows) {
-    const office = r[0] == null ? "" : String(r[0]);
-    const kind = r[1] == null ? "" : String(r[1]);
-    const trace = String(r[2]);
-    ensure(office, "a DPWH parquet row has no office");
+    const id = String(r[0]);
+    const office = r[1] == null ? "" : String(r[1]);
+    const kind = r[2] == null ? "" : String(r[2]);
+    const trace = String(r[3]);
+    ensure(office, `${id}: a DPWH parquet row has no office`);
     const k = kindKey.get(kind);
     ensure(k, `${office}: office_kind '${kind}' is not one of ${Object.values(OFFICE_KINDS).join(" / ")}`);
-    ensure(traces.has(trace), `trace ${trace} is not in the contract's TRACE_LABELS`);
-    const n = num(r[3]);
+    const t = traces.get(trace);
+    ensure(t, `trace ${trace} is not in the contract's TRACE_LABELS`);
     const nep = r[4] == null ? 0 : num(r[4]);
     const h3 = r[5] == null ? 0 : num(r[5]);
     const s: LeaderSlice = { ...emptySlice(), nep_php: nep, hgab3_php: h3 };
-    if (ADDED_TRACES.includes(trace)) { s.added_php = h3; s.added_rows = n; }
-    if (HELD_TRACES.includes(trace)) { s.held_php = h3; s.held_rows = n; }
-    if (DROPPED_TRACES.includes(trace)) { s.dropped_php = nep; s.dropped_rows = n; }
-    const cur = byLabel.get(office) ?? { kind, slice: emptySlice() };
+    if (ADDED_TRACES.includes(trace)) { s.added_php = h3; s.added_rows = 1; }
+    if (HELD_TRACES.includes(trace)) { s.held_php = h3; s.held_rows = 1; }
+    if (DROPPED_TRACES.includes(trace)) { s.dropped_php = nep; s.dropped_rows = 1; }
+    const cur = byLabel.get(office) ?? { kind, slice: emptySlice(), scope_rows: 0 };
     ensure(cur.kind === kind, `${office} is listed under two office kinds (${cur.kind}, ${kind})`);
-    addSlice(cur.slice, s);
     byLabel.set(office, cur);
+    if (heldOut.has(id)) { addSlice(officeChange, s); officeChange.rows++; seen.add(id); continue; }
+    if (noOfficeIds.has(id)) { addSlice(noOffice, s); noOffice.rows++; seen.add(id); continue; }
+    addSlice(cur.slice, s);
+    if (t.group === "scope_review") cur.scope_rows++;
     addSlice(byKind[k], s);
   }
-  return { byLabel, byKind };
+  ensure(seen.size === heldOut.size + noOfficeIds.size, `${heldOut.size + noOfficeIds.size - seen.size} office-change or no-office ids from districts.json are not in the parquet`);
+  return { byLabel, byKind, officeChange, noOffice };
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +271,11 @@ const NOTE_PATTERNS: ReadonlyArray<{ kind: string; re: RegExp; counts: (m: RegEx
   // About the 2027 documents only: does not count.
   { kind: "not listed in the 2027 NEP", re: /^Not listed under this name in the 2027 NEP\.$/, counts: () => false },
   { kind: "no 2027 projects", re: /^No projects under this office in the 2027 House bill or the NEP\.$/, counts: () => false },
+  // The office-change annotation (lines held out because the NEP and the House bill name different offices): a 2027
+  // note, not a change of office in the enacted years. Does not count.
+  { kind: "office-change lines", re: /^(?:1 project line changed office between the NEP and the House bill; it is not counted here|\d+ project lines changed office between the NEP and the House bill; they are not counted here)\.$/, counts: () => false },
+  // A line listed under this office that the source records with no office (residual): a 2027 note. Does not count.
+  { kind: "no-office lines", re: /^(?:1 House bill line listed here has no office in the source data; it is|\d+ House bill lines listed here have no office in the source data; they are) left unassigned\.$/, counts: () => false },
   // About a regional grouping (never ranked): does not count.
   { kind: "regional grouping", re: /^A regional grouping, not an engineering office; it has no figures of its own, and its money is not assigned to any district\.$/, counts: () => false },
 ];
@@ -352,7 +378,19 @@ async function main(): Promise<void> {
   const regionOrder = contractRegionOrder(args.contract);
   ensure(regionOrder.length === 18, `REGION_ORDER has ${regionOrder.length} regions`);
 
-  const parquet = await loadParquet(resolve(args.out, "dpwh", "projects.parquet"), traces);
+  // Office-change lines (DEO2LEG condition 3), held out by the districts builder: every office's annotation, together.
+  const heldOut = new Set(Object.values(D.offices).flatMap((o) => o.fy2027?.office_change.row_ids ?? []));
+  const h3Slot = D.residual.find((r) => r.stage === "hgab3" && r.fy === 2027);
+  ensure(h3Slot, "districts.json residual has no House bill 2027 slot");
+  ensure(heldOut.size === D.office_change.rows && heldOut.size === h3Slot.office_change_rows && [...heldOut].sort().join() === [...D.office_change.row_ids].sort().join(),
+    `office-change lines: ${heldOut.size} on offices, ${D.office_change.rows} in the summary, ${h3Slot.office_change_rows} on the residual slot`);
+  const noOfficeIds = new Set(D.no_office.row_ids);
+  ensure(noOfficeIds.size === D.no_office.rows && noOfficeIds.size === h3Slot.no_office_rows && [...noOfficeIds].every((id) => !heldOut.has(id)), "no-office lines disagree across districts.json");
+  const parquet = await loadParquet(resolve(args.out, "dpwh", "projects.parquet"), traces, heldOut, noOfficeIds);
+  ensure(parquet.noOffice.hgab3_php === D.no_office.hgab3_php && parquet.noOffice.nep_php === D.no_office.nep_php && parquet.noOffice.hgab3_php === h3Slot.no_office_php,
+    `no-office slice ${peso(parquet.noOffice.hgab3_php)} ≠ districts.json ${peso(D.no_office.hgab3_php)}`);
+  ensure(parquet.officeChange.nep_php === D.office_change.nep_php && parquet.officeChange.hgab3_php === D.office_change.hgab3_php && parquet.officeChange.hgab3_php === h3Slot.office_change_php,
+    `office-change slice ${peso(parquet.officeChange.nep_php)} / ${peso(parquet.officeChange.hgab3_php)} ≠ districts.json ${peso(D.office_change.nep_php)} / ${peso(D.office_change.hgab3_php)}`);
 
   // Engineering offices (not regional groupings) and the districts they serve.
   const allOffices = Object.values(D.offices);
@@ -381,9 +419,11 @@ async function main(): Promise<void> {
 
   // Per-office FY2027 slice, tied out to the office's own figures and bridge.
   const officeSlice = new Map<string, LeaderSlice>();
+  const officeScope = new Map<string, number>();
   for (const o of ledger) {
     const label = labelOf.get(o.id);
     const s = label ? parquet.byLabel.get(label)!.slice : emptySlice();
+    officeScope.set(o.id, label ? parquet.byLabel.get(label)!.scope_rows : 0);
     if (o.fy2027) {
       const b = o.fy2027.bridge;
       ensure(b, `${o.id}: fy2027 block without a bridge`);
@@ -392,6 +432,7 @@ async function main(): Promise<void> {
         `${o.id}: added + held (${s.added_rows + s.held_rows} rows, ${peso(s.added_php + s.held_php)}) ≠ bridge house_only (${b.house_only.rows}, ${peso(b.house_only.php)})`);
       ensure(s.dropped_rows === b.nep_only.rows && s.dropped_php === b.nep_only.php,
         `${o.id}: dropped (${s.dropped_rows}, ${peso(s.dropped_php)}) ≠ bridge nep_only (${b.nep_only.rows}, ${peso(b.nep_only.php)})`);
+      ensure(officeScope.get(o.id) === b.scope_review.rows, `${o.id}: ${officeScope.get(o.id)} segment-scope lines ≠ bridge scope_review ${b.scope_review.rows}`);
     }
     officeSlice.set(o.id, s);
   }
@@ -469,6 +510,8 @@ async function main(): Promise<void> {
       gaa, gaa_total_php: sumOrNull(Object.values(gaa)), gaa_years: gaaYears,
       congress, growth_pct: pctChange(meanAnnual("20"), meanAnnual("18")),
       reorganised: reorganisedNotes.length > 0, reorganised_notes: reorganisedNotes,
+      office_change_rows: new Set(offices.flatMap((o) => o.fy2027?.office_change.row_ids ?? [])).size,
+      scope_rows: offices.reduce((a, o) => a + officeScope.get(o.id)!, 0),
     };
   }).sort((a, b) => byLabel(a.people[0].district, b.people[0].district));
 
@@ -485,6 +528,8 @@ async function main(): Promise<void> {
   ensure(sameSlice(entrySum, parquet.byKind.deo), `entries sum ${JSON.stringify(entrySum)} ≠ district offices ${JSON.stringify(parquet.byKind.deo)}`);
   const all = emptySlice();
   for (const k of Object.keys(OFFICE_KINDS) as KindKey[]) addSlice(all, parquet.byKind[k]);
+  addSlice(all, parquet.officeChange);
+  addSlice(all, parquet.noOffice);
   ensure(all.nep_php === summary.dataset.totals.nep_php && all.hgab3_php === summary.dataset.totals.hgab3_php,
     `parquet totals ${peso(all.nep_php)} / ${peso(all.hgab3_php)} ≠ summary.json ${peso(summary.dataset.totals.nep_php)} / ${peso(summary.dataset.totals.hgab3_php)}`);
 
@@ -511,7 +556,10 @@ async function main(): Promise<void> {
   const data: LeaderboardData = {
     schema: LEADERBOARD_SCHEMA, fiscal_year: 2027, built_at: builtAt, source_commit: D.source_commit, dataset: "dpwh",
     totals: {
-      all, by_office_kind: parquet.byKind,
+      all, by_office_kind: { ...parquet.byKind, office_change: parquet.officeChange, no_office: parquet.noOffice },
+      gaa_residual: D.residual.filter((r) => r.stage === "gaa").map((r) => ({
+        fy: r.fy, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php, regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php,
+      })),
       units: entries.length,
       units_tier_a: entries.filter((e) => e.tier === "A").length,
       units_tier_b: entries.filter((e) => e.tier === "B").length,
@@ -543,8 +591,8 @@ async function main(): Promise<void> {
   for (const e of entries) { const k = `${e.people.length} district${e.people.length > 1 ? "s" : ""} / ${e.offices.length} office${e.offices.length > 1 ? "s" : ""}`; shape.set(k, (shape.get(k) ?? 0) + 1); }
   log(`  entries ${entries.length} (Tier A ${data.totals.units_tier_a} · Tier B ${data.totals.units_tier_b}) · districts ranked ${seenDistricts.length} · without an office ${unranked.length} · regions ${regions.length}`);
   log(`  shapes: ${[...shape].sort().map(([k, n]) => `${k} ×${n}`).join(" · ")}`);
-  for (const k of ["all", ...Object.keys(OFFICE_KINDS)] as Array<"all" | KindKey>) {
-    const s = k === "all" ? all : parquet.byKind[k];
+  for (const k of ["all", ...Object.keys(OFFICE_KINDS), "office_change", "no_office"] as Array<"all" | KindKey | "office_change" | "no_office">) {
+    const s = k === "all" ? all : k === "office_change" ? parquet.officeChange : k === "no_office" ? parquet.noOffice : parquet.byKind[k];
     log(`  ${k.padEnd(8)} NEP ${peso(s.nep_php)} → House ${peso(s.hgab3_php)} · added ${s.added_rows} ${peso(s.added_php)} · held ${s.held_rows} ${peso(s.held_php)} · dropped ${s.dropped_rows} ${peso(s.dropped_php)}`);
   }
   for (const w of warnings) log(`  ! ${w}`);
@@ -569,6 +617,8 @@ async function main(): Promise<void> {
       log(`  ${b.id.padEnd(18)}     ${(Object.keys(OFFICE_KINDS) as KindKey[]).map((k) => `${k} ${formatValue(parquet.byKind[k].nep_php, "php")} → ${formatValue(parquet.byKind[k].hgab3_php, "php")}`).join(" · ")}`);
     }
   }
+  log("\n  residualLine()");
+  for (const b of BOARDS) log(`  ${b.id.padEnd(18)} ${residualLine(data, b) ?? "—"}`);
   log(`\nwrote ${outPath}`);
 }
 

@@ -25,18 +25,25 @@ import {
   datasetPath, traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
 } from '../lib/hgab';
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
+import {
+  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+} from '../lib/hgab-disclaimers';
 import '../hgab.css';
 
 /**
  * Section entries that are plain links (programs and Districts are dropdowns,
- * see PROGRAM_NAV). The first is Intro; the rest follow Districts, in order.
+ * see PROGRAM_NAV). The first two lead the nav: Overview (the landing page,
+ * where `/hgab` and `/hgab/2027` redirect) and the story-style Explainer
+ * (`/intro`); the rest follow Districts, in order.
  */
+const LEAD_LINKS = 2;
 const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
   {
-    to: `${HGAB_ROOT}/intro`,
-    label: 'Intro',
-    match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/intro`,
+    to: `${HGAB_ROOT}/overview`,
+    label: 'Overview',
+    match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/overview`,
   },
+  { to: `${HGAB_ROOT}/intro`, label: 'Explainer' },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
@@ -48,7 +55,7 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active (`aria-current="page"`). A
  * record page (`/hgab/2027/dpwh/p/…`) counts as its dataset's tab. On
- * desktop the eight tabs sit on one row inside the navy band; on mobile the
+ * desktop the ten tabs sit on one row inside the navy band; on mobile the
  * band scrolls horizontally (site-header.css) and the drawer repeats the
  * links under an "FY2027 HGAB" eyebrow.
  */
@@ -72,7 +79,8 @@ export function HgabHeader({
       {n.label}
     </Link>
   );
-  const [intro, ...rest] = SECTION_LINKS;
+  const lead = SECTION_LINKS.slice(0, LEAD_LINKS);
+  const rest = SECTION_LINKS.slice(LEAD_LINKS);
   // Districts: an overview, the list, and each district's page (which counts as the list).
   const districtsActive = path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
   const districtsKey = !districtsActive ? null
@@ -85,7 +93,7 @@ export function HgabHeader({
       compiledMeta={compiledMeta ?? 'House Bill 10858 · 2nd and 3rd reading'}
       subNav={
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 House bill sections">
-          {link(intro)}
+          {lead.map(link)}
           {PROGRAM_NAV.map((p) => (
             <SectionMenu
               key={p.key}
@@ -107,7 +115,7 @@ export function HgabHeader({
       drawerExtras={
         <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 House bill sections">
           <p className="hgab-drawer-eyebrow">The House bill for 2027</p>
-          {link(intro)}
+          {lead.map(link)}
           {PROGRAM_NAV.map((p) => (
             <div className="hgab-drawer-group" key={p.key}>
               <Link
@@ -277,7 +285,7 @@ export function HgabHero({
   children?: ReactNode;
   /**
    * Subpages: breadcrumb, title and a short line on the page itself, with no
-   * navy band. The landing pages (intro, overview) keep the full band.
+   * navy band. The landing pages (overview, explainer) keep the full band.
    */
   compact?: boolean;
 }) {
@@ -484,20 +492,54 @@ export function StageAmounts({ row }: { row: ProjectRow }) {
   );
 }
 
-/** The one-paragraph notice every page in the section carries, in plain words, with a link to the full text. */
-export function DisclaimerNotice({ compact = false }: { compact?: boolean }) {
+/** One disclaimer: bold title, then the body; its closing "DEO mapping restrictions" links to their summary. */
+function DisclaimerItem({ d }: { d: Disclaimer }) {
+  const i = d.body.lastIndexOf(DEO_RESTRICTIONS_LINK_TEXT);
   return (
-    <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''}`.trim()} aria-label="Disclaimer">
-      <p className="hgab-disclaimer-eyebrow">Independent and unofficial</p>
-      <p>
-        This comparison is our own reading of the published documents. It is not an official record of
-        the budget department, the agencies or the House. Matches between the NEP and
-        the House bill are candidates found by written rules, not confirmed findings. A line found in
-        only one document does not prove a project was added, dropped or cut. Nothing here says any
-        office or official did anything wrong. Figures are the amounts published in the documents, not
-        money spent.{' '}
+    <p className="hgab-disclaimer-item">
+      <strong>{d.title}</strong>{' '}
+      {i < 0 ? d.body : (
+        <>
+          {d.body.slice(0, i)}
+          <Link to={DEO_RESTRICTIONS_PATH}>{DEO_RESTRICTIONS_LINK_TEXT}</Link>
+          {d.body.slice(i + DEO_RESTRICTIONS_LINK_TEXT.length)}
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * The notice every page in the section carries: "Independent and unofficial"
+ * and then the disclaimers, each as a titled paragraph, verbatim from
+ * `lib/hgab-disclaimers.ts`. Office-based views (Districts, the leaderboards)
+ * pass `offices` and carry both disclaimers, as the office-and-district
+ * disclaimer itself requires; every other page carries "No allegations".
+ * `heading` replaces the small eyebrow and keeps it visible in the compact
+ * form (the leaderboard's "Before you share" box).
+ */
+export function DisclaimerNotice({
+  compact = false,
+  offices = false,
+  heading,
+  className = '',
+}: {
+  compact?: boolean;
+  offices?: boolean;
+  heading?: string;
+  className?: string;
+}) {
+  const list = offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS;
+  return (
+    <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''} ${className}`.trim()} aria-label={heading ?? 'Disclaimer'}>
+      <p className={`hgab-disclaimer-eyebrow ${heading ? 'is-heading' : ''}`.trim()}>{heading ?? 'Disclaimer'}</p>
+      <p className="hgab-disclaimer-item">
+        <strong>Independent and unofficial.</strong> This comparison is our own reading of the published
+        documents, not an official record of the budget department, the agencies or the House. Figures are
+        the amounts published in the documents, not spending.{' '}
         <Link to={`${HGAB_ROOT}/methodology#disclaimer`}>Read the full notice</Link>.
       </p>
+      {list.map((d) => <DisclaimerItem key={d.id} d={d} />)}
     </aside>
   );
 }

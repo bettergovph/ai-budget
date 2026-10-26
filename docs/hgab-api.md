@@ -29,13 +29,63 @@ which is the one the source workbench's own builders produced.
   (non-zero only on DPWH `house_only`). The "10 largest per group" lists
   leave unconfirmed matches out (`held = 0`).
 - District figures carry their tier. Tier B (shared office) money is never
-  divided; the unassigned residual is always returned with district lists.
+  divided; the unassigned residual is always returned with district lists
+  and district pages. Office-based views (the district routes, and DPWH
+  project lists filtered with `office`) also carry the co-served districts
+  and the source's uncertainty annotations (below), as the DEO mapping's
+  restrictions require.
 - Every response carries `meta` with `dataset: "hgab"`, `fiscal_year`,
   `currency: "PHP"`, `scale: "pesos"`, `source_commit`, `built_at` and a
-  one-paragraph `notice` (the disclaimer), and every row that has a page on
+  one-paragraph `notice` (the disclaimer), plus a top-level `disclaimers`
+  array (see Disclaimers), and every row that has a page on
   the site carries `url` (canonical host `https://budget.bettergov.ph`).
   Document page references carry `pdf_url` with `#page=N` on
   `https://budget-assets.bettergov.ph/hgab/2027/pdf/<key>.pdf`.
+
+## Disclaimers
+
+Every response (and every MCP tool result, which is the same JSON) carries
+`disclaimers` beside `meta` and `data`: an array of
+`{ id, title, body, url }` taken verbatim from `src/lib/hgab-disclaimers.ts`,
+the module the pages print them from, so the wording cannot drift. `url` is
+the paragraph's anchor on the Methodology page. Which routes carry which:
+
+| Routes | `disclaimers` |
+| --- | --- |
+| `/districts`, `/districts/{id}`, and `/datasets/dpwh/projects?office=…` (office-based views) | `disclaimer-offices`, `disclaimer-no-allegations` |
+| Every other route | `disclaimer-no-allegations` |
+
+The office paragraph also carries `restrictions_url` (our summary,
+`https://budget.bettergov.ph/hgab/2027/methodology#deo-mapping-restrictions`)
+and `upstream_restrictions_url` (the
+[DEO mapping restrictions upstream](https://github.com/csiiiv/DPWH-NEP-HB-2027-ANALYSIS/blob/main/DEO2LEG/README.md#disclaimers)).
+Both paragraphs, verbatim:
+
+> **Office and legislative-district associations.** The DEO mapping associates offices with legislative districts; it does not establish that a representative requested, sponsored, or controlled a project, or that each project lies in every district associated with its office. Shared-office totals remain undivided and must not be split among the districts served. Office-based views must retain attribution tiers, co-served districts, unattributable residuals, and upstream uncertainty annotations. Historical or undated amounts retained as mapping evidence are separate from the FY2027 project ledger and must not be quoted as FY2027 allocations. See the DEO mapping restrictions.
+
+> **No allegations.** An insertion, deletion, or amount-change candidate describes a provisional comparison between identified sources. That classification alone does not establish irregularity or wrongdoing by any office or official and should not be represented as such. Absence from an API snapshot likewise does not establish absence from the published NEP or concealment.
+
+What the office paragraph's "must retain" means in the responses:
+
+- **Attribution tiers.** Every card has `attribution` (A, B, mixed, none);
+  every office has `tier` and `tier_text`; the `office_lens` of an
+  office-filtered project list has the office's `tier`.
+- **Co-served districts.** Card headlines carry `shared_office_total` and
+  `co_served_district_ids`; each office lists its co-served districts; the
+  `office_lens` lists every district the office is associated with.
+- **Unattributable residuals.** `residual` (all nine year slots) comes with
+  `/districts` and `/districts/{id}`; for the FY2027 House bill it includes
+  `office_change_php` / `office_change_rows`, the paired lines held out of
+  every office because their two versions name different office groups, and
+  `no_office_php` / `no_office_rows`, the lines whose grouped records name no
+  office. deo + central + regional + unmatched + no_office + office_change =
+  total; `not_on_any_district_php` is everything but deo. Each bucket's fields
+  are omitted on a deployment whose D1 predates it, never shown as 0.
+- **Upstream uncertainty annotations.** Each office's `fy2027.annotations`
+  (unconfirmed matches, different-stretch rows, second-to-third-reading
+  markers), `unconfirmed_rows` / `unconfirmed_php` on each office bridge
+  group and on the card's `fy2027_vs_proposal`, and `fy2027.office_change`
+  / `fy2027.no_office` (the office's held-out lines, with links).
 
 ## D1 tables (`data/hgab/2027/d1-import.sql`)
 
@@ -149,6 +199,7 @@ CREATE TABLE hgab_offices (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, region TEXT, region_key TEXT,
   tier TEXT NOT NULL, district_ids_json TEXT NOT NULL,
   years_json TEXT NOT NULL, by_congress_json TEXT NOT NULL, fy2027_json TEXT,
+  office_change_rows INTEGER, office_change_nep_php INTEGER, office_change_hgab3_php INTEGER,
   notes_json TEXT NOT NULL, aliases_json TEXT NOT NULL
 );
 
@@ -157,6 +208,8 @@ CREATE TABLE hgab_residual (
   total_php INTEGER NOT NULL, deo_php INTEGER NOT NULL, central_office_php INTEGER NOT NULL,
   regional_offices_php INTEGER NOT NULL, unmatched_php INTEGER NOT NULL,
   unmatched_labels_json TEXT NOT NULL,
+  office_change_php INTEGER NOT NULL, office_change_rows INTEGER NOT NULL,
+  no_office_php INTEGER NOT NULL, no_office_rows INTEGER NOT NULL,
   PRIMARY KEY (fy, stage)
 );
 ```
@@ -164,6 +217,17 @@ CREATE TABLE hgab_residual (
 Expected row counts: datasets 4, documents 8, controls 46 + 16 + 12 + 6,
 regions 72, projects and records 17,613 + 1,059 + 746 + 1,013 = 20,431,
 reconciliation 69, districts 254, offices 200, residual 9.
+
+Office change (DEO2LEG condition 3, see `docs/hgab-data.md` "Office change"):
+`hgab_residual.office_change_php` / `office_change_rows` are the 2027 House bill
+lines held out of every office because the NEP and the House bill name
+different office groups; `no_office_php` / `no_office_rows` are the 3 lines the
+source reads as naming no office, residual as upstream (both 0 on the GAA and
+NEP slots; deo + central + regional + unmatched + no_office + office_change =
+total). `hgab_offices.office_change_rows`,
+`office_change_nep_php`, `office_change_hgab3_php` annotate the office those
+lines name (null without a 2027 block); the amounts are not in the office's
+figures, and a line naming two offices is on both.
 
 ## REST endpoints (`/api/v1/hgab/2027`)
 
@@ -181,7 +245,7 @@ existing `ApiError` shape (`400 bad_request`, `404 not_found`).
 | `/api/v1/hgab/2027/documents` | Document registry with `pdf_url` |
 | `/api/v1/hgab/2027/reconciliation` | The 69 checks against this portal's NEP data |
 | `/api/v1/hgab/2027/districts` | District cards (below), plus the residual per year |
-| `/api/v1/hgab/2027/districts/{id}` | One district: card, representative, and every serving office's full history |
+| `/api/v1/hgab/2027/districts/{id}` | One district: card, representative, every serving office's full history with its annotations, and the residual per year |
 
 Projects query parameters: `q` (every word must appear in `search_text`),
 `group` (comma list of `house_only,nep_only,unchanged,increased,decreased,scope_review`),
@@ -193,7 +257,15 @@ Projects query parameters: `q` (every word must appear in `search_text`),
 title), `limit` (1–200, default 50), `offset`. Response `data`: `total`
 (matched rows), `sums` `{ nep_php, hgab2_php, hgab3_php,
 not_additive_across_versions: true }`, `rows` (no `record_json`; each with
-`status_label`, `url`).
+`status_label`, `url`). Filtered with `office` on `dpwh`, `data` also has
+`office_lens`: `printed_office`, the matched crosswalk `offices` (each with
+`tier`, `tier_text`, every associated `districts` entry, and `office_change`
+when it has held-out lines; empty for the Central Office and regional
+offices, whose money is in the residual), `no_office` (lines printed under
+this office whose grouped records name no office, when any),
+`shared_office_total`, `tier_meaning`, `note` and `residual_api`. Lines in
+`office_change` and `no_office` are among the list's rows and sums but in no
+office's district-card figures.
 
 Districts query parameters: `region` (key), `q` (district, representative,
 office), `attribution` (`A` | `B` | `mixed` | `none`), `sort` (`hgab3`
@@ -201,7 +273,28 @@ default | `gaa2026` | `change` | `name`), `limit` (1–254, default 50),
 `offset`. Each card: label, region, attribution with its plain meaning,
 representative (name, seat, status, portrait and its attribution and licence,
 bills link), offices (id, name, tier, co-served districts), headline amounts
-labelled as shared office totals when attribution is not `A`, and `url`.
+labelled as shared office totals when attribution is not `A`,
+`fy2027_vs_proposal` (with `unconfirmed_rows` / `unconfirmed_php`, the
+unconfirmed matches inside it), and `url`. The list's `data` also has
+`residual` (nine slots; the FY2027 House bill slot with `no_office_php` /
+`no_office_rows` and `office_change_php` / `office_change_rows`, both counted
+in `not_on_any_district_php`) and `residual_note`, which states the identity
+for the buckets present.
+
+`/districts/{id}` adds, per serving office: `years`, `by_congress`, and
+`fy2027` with the bridge (each group with `unconfirmed_rows` /
+`unconfirmed_php`), `annotations` `{ unconfirmed_rows, unconfirmed_php,
+scope_review_rows, reading_markers: [{ code, label, rows }], note }` and,
+when the office has any, `office_change` `{ rows, nep_php, hgab3_php,
+lines: [{ id, url, api_url }], note }` and `no_office` `{ rows, hgab3_php,
+lines, note }` (lines printed under the office whose grouped records name no
+office; present only when the data has that bucket), whose amounts are in no
+figure on the card. Annotations count the rows printed under the office
+minus its office-change and no-office lines, so they match the office's
+figures. No-office lines are found with the source lens's own rule
+(`sideOffices` / `classifyRow`: a grouped side is read from its `records`
+only) on the record of each repeated line. The page also returns `residual`
+and `residual_note`.
 
 ## MCP tools
 
@@ -220,7 +313,13 @@ The server `INSTRUCTIONS` gain a fifth dataset paragraph: what the House bill
 and the NEP are, the four programs and their grain, that pairings are
 candidates and versions are compared not added, that district figures carry
 tiers and shared offices are not split, and that tools should cite the `url`
-of a row.
+of a row. It ends with both disclaimers verbatim
+(`disclaimerText(OFFICE_VIEW_DISCLAIMERS)`) and the restrictions links, and
+says every result carries `disclaimers`. The two district tools' descriptions
+say plainly that results are office associations, that tiers must be kept,
+shared totals must not be split, the residual must be reported, annotations
+kept apart, and that nothing attributes a project or amount to a
+representative.
 
 ## Loading
 

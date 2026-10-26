@@ -403,8 +403,12 @@ a.hgab-stage-name:hover { color: var(--accent); }
   margin: 0;
 }
 .hgab-disclaimer a { color: var(--accent); }
+/* Titled paragraphs: "Independent and unofficial." and the disclaimers. */
+.hgab-disclaimer p.hgab-disclaimer-item + p.hgab-disclaimer-item { margin-top: 8px; }
+.hgab-disclaimer-item strong { color: var(--ink); font-weight: 600; }
 .hgab-disclaimer.is-compact { margin-top: 20px; padding: 10px 14px; }
 .hgab-disclaimer.is-compact .hgab-disclaimer-eyebrow { display: none; }
+.hgab-disclaimer.is-compact .hgab-disclaimer-eyebrow.is-heading { display: block; }
 .hgab-disclaimer.is-compact p { font-size: 12px; }
 
 /* --- dataset switch: a pill row --------------------------------------- */
@@ -829,6 +833,25 @@ a.hgab-stage-name:hover { color: var(--accent); }
   margin: 22px 0 6px;
 }
 .hgab-notice p + h3 { margin-top: 22px; }
+/* The DEO mapping restrictions: a boxed subsection inside the disclaimers. */
+.hgab-deo-rules {
+  margin: 24px 0 8px;
+  padding: 4px 20px 14px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--hgab-scope-review);
+}
+.hgab-deo-rules h4 {
+  margin: 16px 0 6px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-deo-conditions { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.hgab-deo-conditions li { font-family: var(--font-body); font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.hgab-deo-conditions strong { color: var(--ink); }
 .hgab-notice-stamp {
   font-family: var(--font-mono);
   font-size: 11px;

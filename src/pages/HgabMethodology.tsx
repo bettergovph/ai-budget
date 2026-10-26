@@ -23,6 +23,9 @@ import {
   loadHgabOverview, type HgabOverview,
 } from '../lib/hgab';
 import { DATASET_SHORT, RECON_STATUS_LABEL, reconStatusClass } from '../lib/hgab-ui';
+import {
+  DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_OFFICES, type Disclaimer,
+} from '../lib/hgab-disclaimers';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/methodology`;
@@ -37,12 +40,16 @@ export default function HgabMethodology() {
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
   }, []);
 
-  // React Router does not scroll to a hash on its own; `#disclaimer` and
-  // `#reconciliation` are linked from every page in the section.
+  // React Router does not scroll to a hash on its own; `#disclaimer`,
+  // `#deo-mapping-restrictions` and `#reconciliation` are linked from every
+  // page in the section. The sticky masthead's height changes with the
+  // viewport, so the target is placed just below it.
   useEffect(() => {
     if (!hash) return;
     const el = document.getElementById(hash.slice(1));
-    if (el) el.scrollIntoView({ block: 'start' });
+    if (!el) return;
+    const head = document.querySelector<HTMLElement>('.masthead')?.getBoundingClientRect().height ?? 0;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - head - 12 });
   }, [hash, ov]);
 
   const commit = ov?.source_commit?.slice(0, 7);
@@ -71,7 +78,8 @@ export default function HgabMethodology() {
           <a href="#bridge">Six groups</a>
           <a href="#reconciliation">Checks</a>
           <a href="#limits">Limits</a>
-          <a href="#disclaimer">Disclaimer</a>
+          <a href="#disclaimer">Disclaimers</a>
+          <a href="#deo-mapping-restrictions">DEO mapping restrictions</a>
         </nav>
 
         {/* ---- documents and stages ---- */}
@@ -341,14 +349,19 @@ export default function HgabMethodology() {
         {/* ---- disclaimer ---- */}
         <section className="nep-section hgab-notice" id="disclaimer">
           <SectionHead
-            eyebrow="Disclaimer"
+            eyebrow="Disclaimers"
             headline="Read before quoting any figure from this section"
-            dek="Adapted from the extraction workbench’s notice of 23 October 2026. The substance is unchanged; the wording is this site’s."
+            dek="The first two paragraphs are the analysis repository’s own disclaimer, word for word. The rest adapts its full notice of 23 October 2026."
           />
           <p className="hgab-plain-intro">
             This is our own reading of the documents, not an official record. A possible change is a lead
             to check; it does not say anyone did anything wrong.
           </p>
+          <NoticeItem d={DISCLAIMER_OFFICES} />
+          <NoticeItem d={DISCLAIMER_NO_ALLEGATIONS} />
+
+          <DeoRestrictions />
+
           <h3>Independent and unofficial</h3>
           <p>
             This section is independent analysis of retained copies of the FY2027 National Expenditure
@@ -397,21 +410,6 @@ export default function HgabMethodology() {
             multi-segment records must not be added together as separate funding. Each workspace
             covers its stated schedules and record grain, not an agency’s whole budget.
           </p>
-          <h3>Offices and districts</h3>
-          <p>
-            An implementing office is an administrative unit. Associating one with a legislative
-            district does not establish that any representative requested, sponsored or controlled a
-            project, nor that every project of that office lies in every district it serves. Totals of
-            shared offices stay undivided; central and regional office amounts remain unattributable.
-            This section does not publish district attributions.
-          </p>
-          <h3>No allegations</h3>
-          <p>
-            An insertion, deletion or amount-change candidate is a provisional comparison between two
-            identified sources. The classification alone does not establish irregularity or wrongdoing
-            by any office or official and must not be represented as doing so. Absence from a listing
-            does not establish absence from the published document, or concealment.
-          </p>
           <h3>Units, pages and verification</h3>
           <p>
             Check currency units, fiscal year, funding column and scope before comparing amounts: some
@@ -453,6 +451,81 @@ export default function HgabMethodology() {
       </main>
       <SiteFooter source="SOURCE: HOUSE BILL 10858 (2ND & 3RD READING) · DBM NEP FY 2027 · 4 PROGRAMS" />
     </>
+  );
+}
+
+/** A disclaimer as a titled paragraph with its own anchor; "DEO mapping restrictions" jumps to the summary below. */
+function NoticeItem({ d }: { d: Disclaimer }) {
+  const i = d.body.lastIndexOf(DEO_RESTRICTIONS_LINK_TEXT);
+  return (
+    <>
+      <h3 id={d.id} className="hgab-notice-anchor">{d.title.replace(/\.$/, '')}</h3>
+      <p>
+        {i < 0 ? d.body : (
+          <>
+            {d.body.slice(0, i)}
+            <a href="#deo-mapping-restrictions">{DEO_RESTRICTIONS_LINK_TEXT}</a>
+            {d.body.slice(i + DEO_RESTRICTIONS_LINK_TEXT.length)}
+          </>
+        )}
+      </p>
+    </>
+  );
+}
+
+/**
+ * The office-to-district crosswalk's own restrictions (DEO2LEG/README.md,
+ * "Disclaimers"), in plain words, with how this site meets each condition.
+ */
+function DeoRestrictions() {
+  return (
+    <div className="hgab-deo-rules" id="deo-mapping-restrictions">
+      <h3 className="hgab-notice-anchor">DEO mapping restrictions</h3>
+      <p>
+        The Districts pages and the leaderboards group DPWH money by the office that carries out the work.
+        A map from the analysis repository says which legislative districts each office serves. Its authors
+        set rules for using it, and this site follows them.
+      </p>
+      <h4>What the map must not be used for</h4>
+      <ul className="nep-bullets">
+        <li>To claim that a representative requested, sponsored or controlled any project or amount.</li>
+        <li>To divide a shared office’s money among its districts. Any split, by any rule, invents a district figure.</li>
+        <li>To read the map’s own evidence amounts as a budget figure for 2027 or any other year.</li>
+        <li>To assume one office per district. Some districts have two offices, and many offices serve several districts.</li>
+        <li>To treat an office’s absence from a district as proof that the two are unrelated.</li>
+        <li>To present a representative’s total as that person’s insertions, deletions or budget changes.</li>
+        <li>To guess a district from an office’s number. Office numbers and district numbers often differ.</li>
+      </ul>
+      <h4>Four conditions on every office-based view, and how this site meets them</h4>
+      <ol className="hgab-deo-conditions">
+        <li>
+          <strong>Every total carries its attribution tier.</strong> Tier A means the office serves one district.
+          Tier B means it serves several, so the figure is shared. District cards, district pages, leaderboard
+          tiles and every leaderboard row show the tier.
+        </li>
+        <li>
+          <strong>Shared money is never divided.</strong> A Tier B total is shown whole. Every district it serves is
+          listed beside it. Leaderboards name a shared office by the office, not by one representative.
+        </li>
+        <li>
+          <strong>The money in no district is published.</strong> Projects under the Central Office, regional
+          offices or no office have no district. The Districts overview shows that money for every year. Each
+          leaderboard of office money says how much of that money is outside every district. Lines whose office differs
+          between the NEP and the House bill count in no district. They are shown on their own.
+        </li>
+        <li>
+          <strong>The source’s own uncertainty notes stay.</strong> Lines with an unconfirmed NEP match are not
+          counted as added. Lines in segment review are not counted as increases or cuts. Offices created,
+          renamed or split since 2020 are marked, and left out of the growth boards. A seat with two listed
+          members shows both names.
+        </li>
+      </ol>
+      <p>
+        <a href={DEO_RESTRICTIONS_UPSTREAM_URL} target="_blank" rel="noopener noreferrer">
+          Read the map’s full restrictions in the analysis repository ↗
+        </a>
+      </p>
+    </div>
   );
 }
 

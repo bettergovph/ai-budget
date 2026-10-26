@@ -205,26 +205,27 @@ export function pageMeta(pathname: string): PageMeta {
   }
 
   // --- FY2027 House General Appropriations Bill (HB 10858) ---------------
-  // `/hgab` and `/hgab/2027` redirect to the introduction, so they share its
-  // metadata; the Worker folds their canonical onto `/hgab/2027/intro` too.
-  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") {
+  // `/hgab` and `/hgab/2027` redirect to the overview, the section's landing
+  // page, so they share its metadata; the Worker folds their canonical onto
+  // `/hgab/2027/overview` too.
+  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/overview") {
     return {
       title: `House Budget Analysis — House Bill 10858 against the 2027 NEP, Four Programs · ${SITE}`,
       description:
-        "House Bill 10858, the FY 2027 General Appropriations Bill at third reading, compared " +
-        "project by project with the NEP for DPWH infrastructure, farm-to-market " +
-        "roads, health facilities and irrigation: program and region totals, the five-group " +
-        "bridge, foreign-assisted projects and the reading-to-reading difference, in short " +
-        "illustrated chapters.",
+        "House Bill 10858, the FY 2027 General Appropriations Bill, compared project by project " +
+        "with the NEP for DPWH infrastructure, farm-to-market roads, health facilities and " +
+        "irrigation: insertion and deletion candidates, increases and decreases per program, " +
+        "stage totals, checks against this portal's NEP data, and the published source documents.",
     };
   }
-  if (p === "/hgab/2027/overview") {
+  if (p === "/hgab/2027/intro") {
     return {
-      title: `House Bill 10858 vs NEP 2027 — Dashboard View · ${SITE}`,
+      title: `House Budget Analysis Explainer — the 2027 House Bill against the NEP in Short Chapters · ${SITE}`,
       description:
-        "Dashboard view of House Bill 10858 against the FY 2027 NEP: stage totals, record counts and " +
-        "the five-group bridge for DPWH infrastructure, farm-to-market roads, health facilities and " +
-        "irrigation, the reconciliation against this portal's NEP data, and the published source documents.",
+        "An illustrated explainer of House Bill 10858 against the FY 2027 NEP for DPWH " +
+        "infrastructure, farm-to-market roads, health facilities and irrigation: program and " +
+        "region totals, what the House added and dropped, foreign-assisted projects and the " +
+        "reading-to-reading difference, in short chapters.",
     };
   }
   if (p === "/hgab/2027/sources") {
@@ -271,7 +272,7 @@ export function pageMeta(pathname: string): PageMeta {
     const gallery: PageMeta = {
       title: `House Budget Analysis 2027 Leaderboards — DPWH District Offices and House Members Ranked · ${SITE}`,
       description:
-        "DPWH district offices ranked by their money in the FY 2027 House bill and the NEP, and by " +
+        "DPWH district offices ranked by their budgets in the FY 2027 House bill and the NEP, and by " +
         "enacted budgets from 2020 to 2026; district representatives ranked by bills authored. " +
         "Each board is an image to download and share. Amounts belong to offices, not people.",
     };

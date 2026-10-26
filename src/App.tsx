@@ -89,9 +89,9 @@ export default function App() {
               The static pages and the Districts lens are declared before
               `:dataset` so they can never be mistaken for a dataset key. */}
           <Route path="/hgab" element={<Navigate to="/hgab/2027" replace />} />
-          {/* The section lands on the narrative introduction; the dense
-              dashboard it replaced stays reachable as the overview. */}
-          <Route path="/hgab/2027" element={<Navigate to="/hgab/2027/intro" replace />} />
+          {/* The section lands on the overview; the story-style Explainer
+              stays at /intro, listed right after it in the sub-nav. */}
+          <Route path="/hgab/2027" element={<Navigate to="/hgab/2027/overview" replace />} />
           <Route path="/hgab/2027/intro" element={<HgabIntro />} />
           <Route path="/hgab/2027/overview" element={<HgabOverview />} />
           <Route path="/hgab/2027/sources" element={<HgabSources />} />

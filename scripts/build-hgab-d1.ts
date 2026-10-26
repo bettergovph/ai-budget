@@ -33,6 +33,7 @@ import { DuckDBInstance } from "@duckdb/node-api";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import ts from "typescript";
+import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
 
 // ---------------------------------------------------------------------------
 // Contract replicas (src/lib/hgab.ts; agreement asserted in contractAgreement())
@@ -237,6 +238,7 @@ CREATE TABLE hgab_offices (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL, region TEXT, region_key TEXT,
   tier TEXT NOT NULL, district_ids_json TEXT NOT NULL,
   years_json TEXT NOT NULL, by_congress_json TEXT NOT NULL, fy2027_json TEXT,
+  office_change_rows INTEGER, office_change_nep_php INTEGER, office_change_hgab3_php INTEGER,
   notes_json TEXT NOT NULL, aliases_json TEXT NOT NULL
 );
 
@@ -245,6 +247,8 @@ CREATE TABLE hgab_residual (
   total_php INTEGER NOT NULL, deo_php INTEGER NOT NULL, central_office_php INTEGER NOT NULL,
   regional_offices_php INTEGER NOT NULL, unmatched_php INTEGER NOT NULL,
   unmatched_labels_json TEXT NOT NULL,
+  office_change_php INTEGER NOT NULL, office_change_rows INTEGER NOT NULL,
+  no_office_php INTEGER NOT NULL, no_office_rows INTEGER NOT NULL,
   PRIMARY KEY (fy, stage)
 );
 `;
@@ -309,10 +313,11 @@ interface DistrictCard {
 }
 interface OfficeHistory {
   id: string; name: string; kind: string; region: string | null; district_ids: string[]; tier: string; years: unknown[]; by_congress: unknown[];
-  fy2027: unknown; aliases_used: string[]; notes: string[];
+  fy2027: { office_change: { rows: number; nep_php: number; hgab3_php: number } } | null; aliases_used: string[]; notes: string[];
 }
 interface ResidualYear {
   fy: number; stage: string; total_php: number; deo_php: number; central_office_php: number; regional_offices_php: number; unmatched_php: number; unmatched_labels: string[];
+  office_change_php: number; office_change_rows: number; no_office_php: number; no_office_rows: number;
 }
 interface DistrictIndex { districts: DistrictCard[]; offices: Record<string, OfficeHistory>; residual: ResidualYear[] }
 
@@ -406,15 +411,19 @@ function contractAgreement(c: ContractEval, labels: Iterable<string | null>, tra
   ensure(Object.keys(c.PLAIN_TERMS).length > 0 && Object.values(c.PLAIN_TERMS).every((t) => t.term && t.meaning), "PLAIN_TERMS empty or malformed");
 }
 
-/** The disclaimer paragraph, as `DisclaimerNotice` prints it, plus where the full notice lives. */
+/**
+ * The notice as `DisclaimerNotice` prints it on every page (its default, non-office form): the "Independent and
+ * unofficial" paragraph, then `COMPARISON_DISCLAIMERS` verbatim from src/lib/hgab-disclaimers.ts, then where the
+ * full notice lives.
+ */
 function disclaimerNotice(path: string): string {
   const src = readFileSync(path, "utf8");
-  const fn = /export function DisclaimerNotice[\s\S]*?\n\}/.exec(src)?.[0] ?? "";
-  const eyebrow = /hgab-disclaimer-eyebrow">([^<]+)</.exec(fn)?.[1]?.trim();
-  const body = /<p>\s*([\s\S]*?)\{' '\}\s*<Link/.exec(fn)?.[1]?.replace(/\s+/g, " ").trim();
-  ensure(eyebrow && body, `DisclaimerNotice text not found in ${path} (its markup changed; update disclaimerNotice())`);
-  const text = `${eyebrow}. ${body} Read the full notice: ${SITE}/hgab/2027/methodology#disclaimer.`;
-  ensure(!/[<>{}]/.test(text) && /candidates/.test(text) && /not an official record/.test(text), `disclaimer extraction looks wrong: ${text}`);
+  const fn = /export function DisclaimerNotice[\s\S]*?\n\}\n/.exec(src)?.[0] ?? "";
+  const lead = /<strong>([^<]+)<\/strong>\s*([\s\S]*?)\{' '\}\s*<Link/.exec(fn);
+  ensure(lead && /offices \? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS/.test(fn),
+    `DisclaimerNotice text not found in ${path} (its markup changed; update disclaimerNotice())`);
+  const text = `${lead[1].trim()} ${lead[2].replace(/\s+/g, " ").trim()} ${disclaimerText(COMPARISON_DISCLAIMERS)} Read the full notice: ${SITE}/hgab/2027/methodology#disclaimer.`;
+  ensure(!/[<>{}]/.test(text) && /candidate/.test(text) && /not an official record/.test(text), `disclaimer extraction looks wrong: ${text}`);
   return text;
 }
 
@@ -715,12 +724,17 @@ async function main(): Promise<void> {
     rows.hgab_offices.push({
       id: o.id, name: o.name, kind: o.kind, region: o.region, region_key: regionKeyOf(o.region), tier: o.tier,
       district_ids_json: json(o.district_ids), years_json: json(o.years), by_congress_json: json(o.by_congress),
-      fy2027_json: jsonOrNull(o.fy2027), notes_json: json(o.notes), aliases_json: json(o.aliases_used),
+      fy2027_json: jsonOrNull(o.fy2027),
+      // Held-out office-change lines naming this office (an annotation; not in its figures). Null without a 2027 block.
+      office_change_rows: o.fy2027?.office_change.rows ?? null, office_change_nep_php: o.fy2027?.office_change.nep_php ?? null,
+      office_change_hgab3_php: o.fy2027?.office_change.hgab3_php ?? null,
+      notes_json: json(o.notes), aliases_json: json(o.aliases_used),
     });
   }
   districts.residual.forEach((r, i) => rows.hgab_residual.push({
     fy: r.fy, stage: r.stage, sort: i, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php,
     regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php, unmatched_labels_json: json(r.unmatched_labels),
+    office_change_php: r.office_change_php, office_change_rows: r.office_change_rows, no_office_php: r.no_office_php, no_office_rows: r.no_office_rows,
   }));
 
   for (const [t, n] of Object.entries(EXPECTED_ROWS)) ensure(rows[t].length === n, `${t}: ${rows[t].length} rows, contract says ${n}`);

@@ -723,6 +723,24 @@
 .hgab-res-seg.is-unmatched, .hgab-res-swatch.is-unmatched {
   background: repeating-linear-gradient(135deg, var(--ink-3) 0 3px, var(--paper-3) 3px 6px);
 }
+/* Lines that name no office (House bill). */
+.hgab-res-seg.is-no_office, .hgab-res-swatch.is-no_office {
+  background: repeating-linear-gradient(45deg, var(--ink-mute) 0 2px, var(--paper-3) 2px 5px);
+}
+/* Lines whose two documents name different office groups: held out of every district. */
+.hgab-res-seg.is-office_change, .hgab-res-swatch.is-office_change {
+  background: repeating-linear-gradient(135deg, var(--hgab-scope-review) 0 3px, var(--paper-3) 3px 6px);
+}
+.hgab-dd-office-change {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--hgab-scope-review);
+  background: color-mix(in srgb, var(--hgab-scope-review) 6%, var(--paper));
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
 
 .hgab-res-rows { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .hgab-res-row {
@@ -1005,6 +1023,125 @@
 }
 .hgab-dc-bridge .hgab-dc-bridge-net { white-space: nowrap; }
 .hgab-dc-bridge .hgab-delta { display: inline; margin: 0; font-weight: 600; }
+
+/* --- card tabs: "2027: NEP vs House bill" and "History" --------------------
+   Panels share one grid cell so the card keeps its tallest panel's height and
+   nothing below jumps; the inactive one is hidden with visibility. */
+.hgab-dc-tabs { min-width: 0; }
+.hgab-dc-tablist {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.hgab-dc-tablist [role="tab"] {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 7px 10px 6px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.hgab-dc-tablist [role="tab"]:hover { color: var(--ink); }
+.hgab-dc-tablist [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.hgab-dc-tablist [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 2px; }
+.hgab-dc-panels { display: grid; min-width: 0; }
+.hgab-dc-panel { grid-area: 1 / 1; min-width: 0; padding-top: 10px; }
+.hgab-dc-panel:not(.is-active) { visibility: hidden; }
+.hgab-dc-panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-dc-history { display: flex; flex-direction: column; gap: 10px; }
+.hgab-dc-history .hgab-dc-chartrow:first-child { border-top: 0; padding-top: 0; }
+.hgab-dc-fy27 { display: flex; flex-direction: column; gap: 14px; }
+
+/* One office's 2027 comparison. */
+.hgab-dc-br { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hgab-dc-fy27 .hgab-dc-br + .hgab-dc-br { padding-top: 12px; border-top: 1px solid var(--rule-soft); }
+.hgab-dc-br-office {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.hgab-dc-br-empty { margin: 0; font-family: var(--font-body); font-size: 12px; color: var(--ink-mute); }
+.hgab-dc-br-totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.hgab-dc-br-totals strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hgab-dc-br-net { font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.hgab-dc-br-net .hgab-delta { display: inline; margin: 0; font-size: 13px; font-weight: 700; }
+/* How much moved in each kind of change. Cuts and deletions are hatched, so
+   the bar reads without telling the colours apart. */
+.hgab-dc-br-bar { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: var(--paper-3); }
+.hgab-dc-br-bar span { display: block; height: 100%; min-width: 2px; background: var(--hgab-group); }
+.hgab-dc-br-bar span + span { box-shadow: inset 1px 0 0 var(--paper); }
+.hgab-dc-br-bar .is-nep_only,
+.hgab-dc-br-bar .is-decreased {
+  background: repeating-linear-gradient(135deg, var(--hgab-group) 0 3px, color-mix(in srgb, var(--hgab-group) 35%, var(--paper)) 3px 5px);
+}
+.hgab-dc-br-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.hgab-dc-br-cell {
+  min-width: 0;
+  padding: 6px 8px 7px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--hgab-group);
+}
+.hgab-dc-br-cell.is-nep_only,
+.hgab-dc-br-cell.is-decreased { border-left-style: dashed; }
+.hgab-dc-br-cell.is-zero { background: transparent; border-left-color: var(--rule); }
+.hgab-dc-br-cell dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 5px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--ink-2);
+}
+.hgab-dc-br-cell dt small {
+  flex-basis: 100%;
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.hgab-dc-br-cell dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  margin: 3px 0 0;
+}
+.hgab-dc-br-cell dd strong {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.hgab-dc-br-cell.is-zero dd strong { color: var(--ink-mute); }
+.hgab-dc-br-cell dd span { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+.hgab-dc-br-note { margin: 0; font-family: var(--font-body); font-size: 11px; line-height: 1.45; color: var(--ink-3); }
+.hgab-dc-br-note.is-office-change { color: var(--hgab-tier-b); }
 
 .hgab-dc .hgab-card-ctas { padding-top: 8px; border-top: 1px solid var(--rule-soft); }
 .hgab-dc .hgab-cta { padding: 6px 11px; font-size: 12px; }
