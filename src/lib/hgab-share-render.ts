@@ -24,6 +24,7 @@ import {
   rankByCongress,
   rankEntries,
   rankMembers,
+  asOfText,
   rankRegions,
   residualLine,
   seatHolders,
@@ -580,6 +581,8 @@ interface Spec {
   urlInHero?: boolean;
   /** Shared rows run the seat holders and the tier on as one paragraph (no forced line break). */
   rowFlow?: boolean;
+  /** Tighter spacing in the title band (link previews). */
+  heroTight?: boolean;
   /** A thin bar at the very bottom of each row (link previews), so rows can be shorter. */
   rowBarSlim?: boolean;
   /** Space above and below the rows (default rowSub × 0.9). */
@@ -622,10 +625,94 @@ interface Block {
   fits?: boolean;
 }
 
-interface HeroText { kicker: string; title: string; subtitle: string; region: string | null; count: string | null; /** Drawn white, right-aligned on the count line (link previews). */ url?: string | null }
+interface HeroText {
+  kicker: string;
+  title: string;
+  subtitle: string;
+  region: string | null;
+  count: string | null;
+  /** Drawn white, right-aligned on the count line (link previews). */
+  url?: string | null;
+  /** "As of October 26, 2026": on the count row ("Top 7 of 190 district offices · As of …"), or alone where the count would be. */
+  asOf: string;
+  /** "As of Oct 26, 2026", for a count row that is too narrow for the long date. */
+  asOfShort: string;
+  /** Width the count row may take (link previews keeping the link beside a shortened row). */
+  rowMax?: number;
+}
+
+/** asOfText(data) for the card being drawn, and its short form (set by drawShareCard). */
+let cardAsOf = '';
+let cardAsOfShort = '';
+/** Set during a draw when the date is missing or does not fit on the count row. */
+let asOfMissing = false;
+/** Set when the date has been drawn whole on the count row (or alone where the count would be). */
+let asOfDrawn = false;
 
 function heroText(board: BoardDef, region: string | null, count: string | null): HeroText {
-  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count };
+  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count, asOf: cardAsOf, asOfShort: cardAsOfShort };
+}
+
+/** "Top 7 of 190 district offices" → "Top 7 of 190"; "Top 2 shown for each Congress" → "Top 2 per Congress". */
+function shortCount(count: string): string {
+  return count
+    .replace(/ shown for each Congress$/, ' per Congress')
+    .replace(/ (district offices|district office|representatives|representative|regions)$/, '');
+}
+
+interface CountRow {
+  /** Runs in drawing order (count, separator, date). */
+  parts: { text: string; color: string }[];
+  width: number;
+  tracking: number;
+  /** The date is on the row (whole). */
+  dated: boolean;
+}
+
+/**
+ * The count row: "Top 7 of 190 district offices · As of October 26, 2026" on
+ * ONE line. Narrower rows take the short date, then the short count, then no
+ * letter-spacing, but never split the count and the date. Null when the card
+ * has neither; `dated: false` when even the shortest form is too wide.
+ */
+function countRow(ctx: Ctx, s: Spec, t: HeroText, w: number): CountRow | null {
+  const cc = 'rgba(255,255,255,0.68)';
+  const dc = 'rgba(255,255,255,0.58)';
+  const forms: { text: string; color: string }[][] = [];
+  if (t.count && t.asOf) {
+    const topN = /^Top \d+/.exec(t.count)?.[0];
+    const pairs = [[t.count, t.asOf], [t.count, t.asOfShort], [shortCount(t.count), t.asOfShort], ...(topN ? [[topN, t.asOfShort]] : [])];
+    for (const [c, d] of pairs) {
+      forms.push([{ text: c, color: cc }, { text: ' · ', color: dc }, { text: d, color: dc }]);
+    }
+  } else if (t.asOf) {
+    forms.push([{ text: t.asOf, color: dc }], [{ text: t.asOfShort, color: dc }]);
+  } else if (t.count) {
+    forms.push([{ text: t.count, color: cc }], [{ text: shortCount(t.count), color: cc }]);
+  } else return null;
+  const measure = (parts: { text: string }[], tracking: number) => {
+    setFont(ctx, 500, s.kicker, F.mono, tracking);
+    return tw(ctx, parts.map((p) => p.text).join(''));
+  };
+  // The least-shortened form that fits, letter-spaced if it can be.
+  for (const parts of forms) {
+    for (const tracking of [s.kicker * 0.08, 0]) {
+      const width = measure(parts, tracking);
+      if (width <= w) return { parts, width, tracking, dated: !!t.asOf };
+    }
+  }
+  const parts = forms[forms.length - 1];
+  return { parts, width: measure(parts, 0), tracking: 0, dated: false };
+}
+
+/** The link's width beside the count row (mono, else Inter); null when it does not fit there. */
+function urlBeside(ctx: Ctx, s: Spec, row: CountRow | null, url: string, w: number): { weight: number; family: string; width: number } | null {
+  for (const [weight, family] of [[500, F.mono], [600, F.body]] as const) {
+    setFont(ctx, weight, s.kicker, family, 0);
+    const width = tw(ctx, url);
+    if ((row ? row.width + s.kicker * 1.5 : 0) + width <= w) return { weight, family, width };
+  }
+  return null;
 }
 
 /** Kicker, region pill, title, subtitle and count line, white on the band. */
@@ -640,7 +727,7 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   const logoW = logo ? logoWidth(ctx, logo.images, SHARE_LOGO_WHITE, logo.h) : 0;
   setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.14);
   const kLines = wrapSegments(ctx, t.kicker.toUpperCase(), logo ? w - logoW - s.kicker * 1.5 : w, kickerLines);
-  const kLH = s.kicker * 1.45;
+  const kLH = s.kicker * (s.heroTight ? 1.35 : 1.45);
   const kFits = (() => { setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.14); return wrapSegments(ctx, t.kicker.toUpperCase(), logo ? w - logoW - s.kicker * 1.5 : w).length <= kickerLines; })();
   setFont(ctx, 700, titleSize, F.display, -titleSize * 0.02);
   const titleMaxLines = titleLines;
@@ -664,28 +751,18 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   setFont(ctx, 700, titleSize, F.display, -titleSize * 0.02);
   const pillAfterTitle = !!t.region && !pillInline && tLines.length === 1 && tw(ctx, tLines[0]) + titleSize * 0.4 + pillW <= w;
   const pillH = t.region && !pillInline && !pillAfterTitle ? s.kicker * 1.7 : 0;
-  // The link (link previews) goes at the right of the count line (mono, else Inter), or on a line of its own.
-  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-  const cLines = t.count ? wrap(ctx, t.count, w, 2) : [];
-  const lastCW = cLines.length ? tw(ctx, cLines[cLines.length - 1]) : 0;
-  let urlFont = { weight: 500, family: F.mono };
-  setFont(ctx, 500, s.kicker, F.mono, 0);
-  let urlW = t.url ? tw(ctx, t.url) : 0;
-  if (t.url && lastCW + s.kicker * 1.5 + urlW > w) {
-    urlFont = { weight: 600, family: F.body };
-    setFont(ctx, 600, s.kicker, F.body, 0);
-    urlW = tw(ctx, t.url);
-  }
-  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-  const urlInline = !!t.url && cLines.length > 0 && lastCW + s.kicker * 1.5 + urlW <= w;
-  if (t.url && !urlInline) cLines.push('');
-  const urlFits = !t.url || urlW <= w;
-  const cLH = s.kicker * 1.45;
-  const gap = s.kicker * 0.7;
-  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + (cLines.length ? gap * 0.6 + cLines.length * cLH : 0);
+  // The count row (count · date, one line) and, on link previews, the link beside it.
+  const row = countRow(ctx, s, t, Math.min(w, t.rowMax ?? w));
+  const urlAt = t.url ? urlBeside(ctx, s, row, t.url, w) : null;
+  const urlFits = !t.url || !!urlAt;
+  const dateFits = !t.asOf || (!!row && row.dated);
+  const cLH = s.kicker * (s.heroTight ? 1.32 : 1.45);
+  const gap = s.kicker * (s.heroTight ? 0.55 : 0.7);
+  const rowH = row ? gap * 0.6 + cLH : 0;
+  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + rowH;
   return {
     h,
-    fits: kFits && tFits && sFits && urlFits,
+    fits: kFits && tFits && sFits && urlFits && dateFits,
     draw(y0) {
       let y = y0;
       if (logo) drawLogo(ctx, logo.images, SHARE_LOGO_WHITE, x + w, y + s.kicker * 0.62 - logo.h / 2, logo.h, 'right', true);
@@ -712,13 +789,22 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
       y += gap * 0.9;
       setFont(ctx, 400, s.sub, F.body);
       for (const l of sLines) { text(ctx, l, x, y + s.sub * 0.98, 'rgba(255,255,255,0.86)'); y += sLH; }
-      if (cLines.length) {
+      if (row) {
         y += gap * 0.6;
-        setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-        for (const l of cLines) { text(ctx, l, x, y + s.kicker * 1.05, 'rgba(255,255,255,0.68)'); y += cLH; }
-        if (t.url) {
-          setFont(ctx, urlFont.weight, s.kicker, urlFont.family, 0);
-          text(ctx, t.url, x + w, y - cLH + s.kicker * 1.05, '#ffffff', 'right');
+        const by = y + s.kicker * 1.05;
+        setFont(ctx, 500, s.kicker, F.mono, row.tracking);
+        let cx = x;
+        for (const p of row.parts) {
+          text(ctx, p.text, cx, by, p.color);
+          cx += tw(ctx, p.text);
+        }
+        if (t.asOf) {
+          if (row.dated) asOfDrawn = true;
+          else asOfMissing = true;
+        }
+        if (t.url && urlAt) {
+          setFont(ctx, urlAt.weight, s.kicker, urlAt.family, 0);
+          text(ctx, t.url, x + w, by, '#ffffff', 'right');
         }
       }
       ctx.letterSpacing = '0px';
@@ -992,7 +1078,7 @@ function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Bloc
   const src = wrap(ctx, ft.source, g.w);
   const logoW = g.logo ? logoWidth(ctx, g.logo.images, SHARE_LOGO_PRIMARY, g.logo.h) + g.fs : 0;
   const u = fitUrl(ctx, url, g.w - logoW, g.urlMax, g.urlMin);
-  const resPad = g.fs * 0.5;
+  const resPad = g.fs * 0.4;
   const resH = res ? res.lines.length * g.lh + resPad * 2 : 0;
   const urlH = g.noUrl ? 0 : g.fs * 0.6 + Math.max(u.lines.length * u.size * 1.3, g.logo ? g.logo.h : 0);
   const h = g.padT + note.length * g.lh + (note.length ? g.gap : 0) + (res ? resH + g.gap : 0) + src.length * g.lh + urlH + g.padB;
@@ -1027,12 +1113,13 @@ function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Bloc
   };
 }
 
-function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPeople, fs: number): Block {
+/** `urlInHero`: the link is on the count row of the title band, so the footer leaves it out. */
+function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPeople, fs: number, urlInHero = false): Block {
   const pad = s.footPad ?? 1;
   return footerBlock(ctx, {
     x: s.pad, w: s.W - s.pad * 2, bgX: 0, bgW: s.W, H: s.H,
-    fs, lh: fs * (s.urlInHero ? 1.28 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.5,
-    urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: s.urlInHero,
+    fs, lh: fs * (s.urlInHero ? 1.25 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.45,
+    urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: urlInHero,
   }, footerText(input.data, input.board, people), shareUrl(input.board, input.region ?? null));
 }
 
@@ -1115,9 +1202,14 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
   } else if (isGroup(it)) {
     // Office headline; then the seat holders; then the tier, with every district served or the block number.
     setFont(ctx, 400, g.subSize, F.body);
-    runs = g.flow
-      ? [{ text: `${seatHolders({ people: it.people }, 2)} · `, weight: 400, color: holderColor }]
-      : [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
+    if (g.flow) {
+      // Two names, or one where that saves a line of the district list.
+      const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
+      const tail: Run[] = [{ text: lab, weight: 600, color: C.tierB }, { text: ` · ${districtsSummary(it.people)}`, weight: 400, color: C.ink3 }];
+      const withNames = (k: number): Run[] => [{ text: `${seatHolders({ people: it.people }, k)} · `, weight: 400, color: holderColor }, ...(ref ? [] : tail)];
+      const lines = (k: number) => wrapRuns(ctx, withNames(k), g.subSize, (i) => (i === 0 ? tmax : fullW)).lines.length;
+      runs = [{ text: `${seatHolders({ people: it.people }, lines(1) < lines(2) ? 1 : 2)} · `, weight: 400, color: holderColor }];
+    } else runs = [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
     if (ref) {
       const head: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, { text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }];
       const forms = [` · ${sharedLabel(it.people.length)}`, ` · Shared by ${it.people.length} districts`, ` · ${it.people.length} districts`];
@@ -1369,28 +1461,49 @@ function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, b
   const x = s.pad;
   const w = s.W - s.pad * 2;
   const footMin = s.footMin ?? 22;
-  const footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => verticalFooter(ctx, s, input, people, s.foot - i));
-  if (s.urlInHero) t = { ...t, url: shareUrl(input.board, input.region ?? null) };
+  // Link previews: the link sits beside the full count row when it fits there; else in the footer's last
+  // row; and only if the card cannot fit that way, beside a shortened count row (count and date stay together).
+  type Mode = { t: HeroText; urlInHero: boolean };
+  const modes: Mode[] = [{ t, urlInHero: false }];
+  if (s.urlInHero) {
+    const url = shareUrl(input.board, input.region ?? null);
+    if (urlBeside(ctx, s, countRow(ctx, s, t, w), url, w)) modes.splice(0, 1, { t: { ...t, url }, urlInHero: true });
+    else {
+      // The link in Inter (its narrower face) leaves the count row the most room.
+      setFont(ctx, 600, s.kicker, F.body, 0);
+      const uw = tw(ctx, url);
+      if (uw < w * 0.7) modes.push({ t: { ...t, url, rowMax: w - uw - s.kicker * 1.5 }, urlInHero: true });
+    }
+  }
   const heroHeight = (hero: Block, parts: { extra: Block | null }) => s.heroTop + hero.h + s.heroBottom + (parts.extra ? parts.extra.h + s.heroBottom * 1.6 : 0);
   type Choice = { hero: Block; parts: { extra: Block | null; body: Body }; heroH: number; footer: Block };
   let chosen: Choice | null = null;
   let fallback: Choice | null = null;
-  search: for (let squeeze = 0; squeeze <= 3; squeeze++) {
-    const parts = body(squeeze);
-    if (parts.body.fits === false || parts.extra?.fits === false) continue;
-    for (const f of footers) {
-      for (let size = s.titleMax; size >= s.titleMin; size -= 2) {
-        // The subtitle may drop a pixel or two (never below the format's floor) where that saves a line.
-        const subFloor = Math.min(s.sub, Math.max(s.footMin ?? 22, s.sub - 2));
-        for (let sub = s.sub; sub >= subFloor; sub--) {
-          const hero = heroBlock(ctx, sub === s.sub ? s : { ...s, sub }, t, size, x, w, s.subLines, { images, h: s.logo });
-          const heroH = heroHeight(hero, parts);
-          if (!hero.fits) continue;
-          if (!fallback || heroH + f.h < fallback.heroH + fallback.footer.h) fallback = { hero, parts, heroH, footer: f };
-          if (s.H - heroH - f.h >= parts.body.minH) { chosen = { hero, parts, heroH, footer: f }; break search; }
+  let footers: Block[] = [];
+  for (const mode of modes) {
+    t = mode.t;
+    footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => verticalFooter(ctx, s, input, people, s.foot - i, mode.urlInHero));
+    if (searchMode()) break;
+  }
+  function searchMode(): boolean {
+    search: for (let squeeze = 0; squeeze <= 3; squeeze++) {
+      const parts = body(squeeze);
+      if (parts.body.fits === false || parts.extra?.fits === false) continue;
+      for (const f of footers) {
+        for (let size = s.titleMax; size >= s.titleMin; size -= 2) {
+          // The subtitle may drop a pixel or two (never below the format's floor) where that saves a line.
+          const subFloor = Math.min(s.sub, Math.max(s.footMin ?? 22, s.sub - 2));
+          for (let sub = s.sub; sub >= subFloor; sub--) {
+            const hero = heroBlock(ctx, sub === s.sub ? s : { ...s, sub }, t, size, x, w, s.subLines, { images, h: s.logo });
+            const heroH = heroHeight(hero, parts);
+            if (!hero.fits) continue;
+            if (!fallback || heroH + f.h < fallback.heroH + fallback.footer.h) fallback = { hero, parts, heroH, footer: f };
+            if (s.H - heroH - f.h >= parts.body.minH) { chosen = { hero, parts, heroH, footer: f }; break search; }
+          }
         }
       }
     }
+    return !!chosen;
   }
   if (dry) return !!chosen;
   if (!chosen) {
@@ -2021,7 +2134,7 @@ function drawShiftVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareC
     body: shiftBody(ctx, input.data, {
       x: s.pad, w: s.W - s.pad * 2,
       label: Math.round(28 * big),
-      barH: Math.round(74 * big), gapH: Math.round((format === 'square' ? 64 : 104) * big),
+      barH: Math.round((format === 'square' ? 66 : 74) * big), gapH: Math.round((format === 'square' ? 48 : 104) * big),
       statName: Math.round(30 * big), statValue: Math.round(50 * big), statSub: Math.max(22, Math.round(23 * big)), statGap: Math.round((format === 'square' ? 16 : 30) * big), shares: true,
     }),
   }), NO_PEOPLE);
@@ -2133,12 +2246,12 @@ const L = {
 
 /** Ranking, members and by-Congress link previews: a title band across the top, rows, then the footer. */
 const LAND: Spec = {
-  W: 1200, H: 630, pad: 40, heroTop: 18, heroBottom: 12,
+  W: 1200, H: 630, pad: 40, heroTop: 14, heroBottom: 11,
   kicker: 20, titleMax: 42, titleMin: 30, sub: 20, subLines: 2,
   rowName: 23, rowSub: 20, rowValue: 27, rowDetail: 20, rank: 23, avatar: 42, rowMin: 58, rowMax: 84,
   spot: null,
   foot: 20, footMin: 20, logo: 28, footPad: 0.7,
-  urlInHero: true, rowFlow: true, rowPadY: 4, rowBarSlim: true,
+  urlInHero: true, rowFlow: true, rowPadY: 4, rowBarSlim: true, heroTight: true,
 };
 
 /** The by-Congress link preview: one row per Congress (its top office), labelled "18th", with the years beside the value. */
@@ -2238,7 +2351,8 @@ export interface ShareCardReport {
   /**
    * False when some layout had to fall back (a title cut, rows squeezed, fewer
    * than three rows), when a district list or the residual could not be laid
-   * out whole, or when the data has no residual figures yet.
+   * out whole, when the data has no residual figures yet, or when the as-of
+   * row is missing or does not fit its line.
    */
   fits: boolean;
   /** Fewer rows than usual fitted (the count line says "Top K of N"); not a defect, worth a look. */
@@ -2250,6 +2364,13 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   layoutFits = true;
   layoutSparse = false;
   residualMissing = false;
+  cardAsOf = asOfText(input.data);
+  const built = new Date(input.data.built_at);
+  cardAsOfShort = cardAsOf && !Number.isNaN(built.getTime())
+    ? `As of ${built.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}`
+    : cardAsOf;
+  asOfMissing = !cardAsOf;
+  asOfDrawn = false;
   const { board, format } = input;
   const region = board.regionFilter ? input.region ?? null : null;
   const inp: ShareCardInput = { ...input, region };
@@ -2270,7 +2391,7 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
     else drawRankingVertical(ctx, s, format, inp);
   }
   ctx.restore();
-  return { fits: layoutFits && !residualMissing, sparse: layoutSparse };
+  return { fits: layoutFits && !residualMissing && !asOfMissing && asOfDrawn, sparse: layoutSparse };
 }
 
 /** Every image a card draws: the portraits of the rows shown (up to three per shared office) and the logo. */
@@ -2305,7 +2426,8 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
   void format; // Same text for every format: the field and the top three.
   const r = board.regionFilter ? region ?? null : null;
   const where = r ? ` ${regionName(r)}.` : '';
-  const head = `${board.title}.${where} ${board.subtitle}`;
+  const asOf = asOfText(data);
+  const head = `${board.title}.${where}${asOf ? ` ${asOf}.` : ''} ${board.subtitle}`;
   const tiers = board.kind === 'ranking' || board.kind === 'congress';
   let top: string[] = [];
   let people = false;
