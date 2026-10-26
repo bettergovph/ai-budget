@@ -275,7 +275,7 @@ export default function HgabDistrict() {
               </ol>
             </aside>
 
-            <DisclaimerNotice compact />
+            <DisclaimerNotice compact offices />
 
             <p className="nep-provenance">
               Sources: the enacted budgets for 2020–2026, the NEP for 2027, House Bill 10858
@@ -409,6 +409,20 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
             {f.bridge
               ? <BridgeStrip bridge={f.bridge} dataset="dpwh" explain={first} />
               : <p className="nep-empty">No project comparison for this office.</p>}
+            {(f.office_change?.rows ?? 0) > 0 && (
+              <p className="hgab-dd-office-change">
+                <strong>
+                  Lines that changed office between the NEP and the House bill: {f.office_change.rows.toLocaleString()}{' '}
+                  {f.office_change.rows === 1 ? 'line' : 'lines'}, held out of every district.
+                </strong>{' '}
+                {f.office_change.rows === 1
+                  ? 'One document lists it under this office, the other under a different office or none. Its money'
+                  : 'One document lists them under this office, the other under a different office or none. Their money'}{' '}
+                (NEP <span title={fmt.php(f.office_change.nep_php, { unit: 'full' })}>{fmt.php(f.office_change.nep_php)}</span>, House bill{' '}
+                <span title={fmt.php(f.office_change.hgab3_php, { unit: 'full' })}>{fmt.php(f.office_change.hgab3_php)}</span>) is in none of the
+                figures above.
+              </p>
+            )}
           </>
         ) : (
           <p className="nep-empty">This office has no 2027 project comparison.</p>

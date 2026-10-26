@@ -680,16 +680,37 @@ export function bangsamoroDistricts(cards: readonly DistrictCard[], index: HgabD
 // Residual: the money that appears on no district card
 // ---------------------------------------------------------------------------
 
-/** Money under Central Office, regional offices and offices we could not place — on no district card. */
-export function residualUnattributed(y: ResidualYear): number {
-  return y.central_office_php + y.regional_offices_php + y.unmatched_php;
+/** Lines held out of every district because the NEP and the House bill name different office groups (House bill slot only). */
+export function residualOfficeChange(y: ResidualYear): number {
+  return y.office_change_php ?? 0;
 }
 
-/** "the DPWH Central Office or a regional office", adding the unplaced offices only when that year has any. */
+/** House bill lines the source reads as naming no office (House bill slot only). */
+export function residualNoOffice(y: ResidualYear): number {
+  return y.no_office_php ?? 0;
+}
+
+/**
+ * Money on no district card: Central Office, regional offices, offices we
+ * could not place and, for the House bill, lines naming no office and lines
+ * that changed office.
+ */
+export function residualUnattributed(y: ResidualYear): number {
+  return y.central_office_php + y.regional_offices_php + y.unmatched_php + residualNoOffice(y) + residualOfficeChange(y);
+}
+
+/**
+ * Where a year's off-card money is listed, for "… is listed under {where}":
+ * "the DPWH Central Office or a regional office", adding an office we could
+ * not place, no office and lines that changed office only when that year has
+ * any.
+ */
 export function residualWhere(y: ResidualYear): string {
-  return y.unmatched_php > 0
-    ? 'the DPWH Central Office, a regional office or an office we could not place'
-    : 'the DPWH Central Office or a regional office';
+  const parts = ['the DPWH Central Office', 'a regional office'];
+  if (y.unmatched_php > 0) parts.push('an office we could not place');
+  if (residualNoOffice(y) > 0) parts.push('no office');
+  const list = `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}`;
+  return residualOfficeChange(y) > 0 ? `${list}, or on lines that changed office` : list;
 }
 
 /** Share of the year's total that no district card shows (0–1), null when the total is 0. */

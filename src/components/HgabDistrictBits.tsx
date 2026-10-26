@@ -15,7 +15,7 @@
  * detail (matched labels, crosswalk ids, parquet paths) is not rendered here;
  * the detail page keeps it in a "Details for analysts" block.
  */
-import { memo, useId, type ReactNode } from 'react';
+import { memo, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
@@ -28,7 +28,7 @@ import {
   cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
   districtLabel, districtRegionKey, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
   officeKindText, officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
-  residualShare, residualUnattributed, residualWhere, slotLabel, type HistorySlot,
+  residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, type HistorySlot,
 } from '../lib/hgab-districts';
 import { HgabDetails, SignedPhp } from './HgabBits';
 import '../hgab-districts.css';
@@ -359,11 +359,17 @@ export function ChartKeyRow({ terms = CONGRESS_TERMS }: { terms?: readonly Congr
 // The money that appears on no district card (condition 3)
 // ---------------------------------------------------------------------------
 
-const RESIDUAL_SEGMENTS: ReadonlyArray<{ key: 'deo' | 'central' | 'regional' | 'unmatched'; label: string; pick: (y: ResidualYear) => number }> = [
+const RESIDUAL_SEGMENTS: ReadonlyArray<{
+  key: 'deo' | 'central' | 'regional' | 'unmatched' | 'no_office' | 'office_change';
+  label: string;
+  pick: (y: ResidualYear) => number;
+}> = [
   { key: 'deo', label: 'On district cards', pick: (y) => y.deo_php },
   { key: 'central', label: 'Central Office', pick: (y) => y.central_office_php },
   { key: 'regional', label: 'Regional offices', pick: (y) => y.regional_offices_php },
   { key: 'unmatched', label: 'Offices we could not place', pick: (y) => y.unmatched_php },
+  { key: 'no_office', label: 'Lines with no office', pick: (y) => residualNoOffice(y) },
+  { key: 'office_change', label: 'Lines that changed office', pick: (y) => residualOfficeChange(y) },
 ];
 
 /**
@@ -380,7 +386,7 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
       <p className="hgab-res-eyebrow">Money not assigned to a district · shown every year</p>
       <h2 id="hgab-res-title">
         {head
-          ? <>{fmt.php(residualUnattributed(head))} of {fmt.php(head.total_php)} in the {slotLabel(head)} is listed under {residualWhere(head)}, so it appears on no district card.</>
+          ? <>{fmt.php(residualUnattributed(head))} of {fmt.php(head.total_php)} in the {slotLabel(head)} appears on no district card.</>
           : 'Money under the DPWH Central Office and regional offices appears on no district card.'}
       </h2>
       {head && share != null && (
@@ -388,6 +394,15 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
           That is <strong>{fmt.pct(share, 1)}</strong> of the total. The Central Office holds{' '}
           <strong>{fmt.php(head.central_office_php)}</strong> and regional offices <strong>{fmt.php(head.regional_offices_php)}</strong>.
           {head.unmatched_php > 0 && <> Another <strong>{fmt.php(head.unmatched_php)}</strong> sits under offices we could not place on our office-to-district map.</>}
+          {residualNoOffice(head) > 0 && (
+            <> Lines with no office: <strong>{fmt.php(residualNoOffice(head))}</strong>{head.no_office_rows ? ` in ${head.no_office_rows.toLocaleString()} ${head.no_office_rows === 1 ? 'line' : 'lines'}` : ''}.</>
+          )}
+          {residualOfficeChange(head) > 0 && (
+            <>
+              {' '}Lines that changed office between the NEP and the House bill: <strong>{fmt.php(residualOfficeChange(head))}</strong>
+              {head.office_change_rows ? ` in ${head.office_change_rows.toLocaleString()} ${head.office_change_rows === 1 ? 'line' : 'lines'}` : ''}, held out of every district.
+            </>
+          )}
           {' '}The district cards carry the remaining <strong>{fmt.php(head.deo_php)}</strong> ({fmt.pct(1 - share, 1)}).
           {residualMostlyOffCards(residual) && ' In every year shown, most DPWH money is not assigned to a district.'}
         </p>
@@ -443,6 +458,8 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
                 <th className="num">Central Office</th>
                 <th className="num">Regional offices</th>
                 <th className="num">Could not place</th>
+                <th className="num" title="House bill lines the source lists under no office: in no district">Lines with no office</th>
+                <th className="num" title="Lines whose NEP and House bill sides name different office groups: held out of every district">Lines that changed office</th>
                 <th className="num">On no card</th>
               </tr>
             </thead>
@@ -460,6 +477,8 @@ export function ResidualPanel({ residual, scopeNotes }: { residual: readonly Res
                     <td className="num">{fmt.php(y.central_office_php, { unit: 'full' })}</td>
                     <td className="num">{fmt.php(y.regional_offices_php, { unit: 'full' })}</td>
                     <td className="num">{fmt.php(y.unmatched_php, { unit: 'full' })}</td>
+                    <td className="num">{fmt.php(residualNoOffice(y), { unit: 'full' })}</td>
+                    <td className="num">{fmt.php(residualOfficeChange(y), { unit: 'full' })}</td>
                     <td className="num">{fmt.php(residualUnattributed(y), { unit: 'full' })}{off != null && ` (${fmt.pct(off, 1)})`}</td>
                   </tr>
                 );
@@ -530,50 +549,161 @@ export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: H
   );
 }
 
-/** Short, plain name of each group in the one-line 2027 summary; the tooltip carries the full meaning. */
-const GROUP_PHRASE: Record<BridgeGroup, (rows: number) => string> = {
-  house_only: (n) => `${n === 1 ? 'project' : 'projects'} not in the NEP`,
-  nep_only: () => 'in the NEP only',
-  unchanged: () => 'same amount in both',
-  increased: () => 'raised',
-  decreased: () => 'cut',
-  scope_review: () => 'a different stretch of the same road',
-};
+/**
+ * The 2027 groups as the card's first tab shows them: what each is called,
+ * what it means in a few words, and the sign it contributes to House − NEP.
+ * Insertion and deletion candidates lead because they are what readers ask
+ * about; unchanged comes last, for scale.
+ */
+const BRIDGE_TAB_ROWS: ReadonlyArray<{ group: BridgeGroup; label: string; sub: string; sign: '+' | '−' | '±' | '' }> = [
+  { group: 'house_only', label: 'Insertion candidates', sub: 'in the House bill only', sign: '+' },
+  { group: 'nep_only', label: 'Deletion candidates', sub: 'in the NEP only', sign: '−' },
+  { group: 'increased', label: 'Increases', sub: 'higher in the House bill', sign: '+' },
+  { group: 'decreased', label: 'Decreases', sub: 'lower in the House bill', sign: '−' },
+  { group: 'scope_review', label: 'Scope review', sub: 'same road, different stretch', sign: '±' },
+  { group: 'unchanged', label: 'Unchanged', sub: 'same amount in both', sign: '' },
+];
 
-function BridgeCellText({ group, cell, sign }: { group: BridgeGroup; cell: { rows: number; php: number }; sign: string }) {
+/** "+₱315.6M", "−₱25.0M", "₱688.8M"; "—" when the group is empty. */
+function bridgeAmount(sign: string, rows: number, php: number): string {
+  if (!rows && !php) return '—';
+  const s = sign === '±' ? (php > 0 ? '+' : php < 0 ? '−' : '±') : sign;
+  return `${s}${fmt.php(Math.abs(php))}`;
+}
+
+/**
+ * One office's 2027 comparison inside a district card: NEP → House bill on
+ * the same named projects and the net change, a five-part bar of how much
+ * money moved in each kind of change (cuts hatched, so it reads without
+ * colour), then every group with its count and pesos. The notes the source
+ * requires stay with it: insertion candidates include unconfirmed matches,
+ * and lines whose office changed between the documents are held out.
+ */
+export function OfficeBridgePanel({ office, withName = false }: { office: OfficeHistory; withName?: boolean }) {
+  const f = office.fy2027;
+  const b = f?.bridge ?? null;
+  const change = f?.office_change;
+  const name = withName ? <p className="hgab-dc-br-office">{office.name}</p> : null;
+  if (!f || !b) {
+    return (
+      <div className="hgab-dc-br">
+        {name}
+        <p className="hgab-dc-br-empty">No 2027 project comparison for this office.</p>
+      </div>
+    );
+  }
+  const moving = BRIDGE_TAB_ROWS.filter((r) => r.group !== 'unchanged');
+  const moved = moving.reduce((a, r) => a + Math.abs(b[r.group]?.php ?? 0), 0);
+  const barLabel = moving
+    .map((r) => `${r.label} ${bridgeAmount(r.sign, b[r.group]?.rows ?? 0, b[r.group]?.php ?? 0)}`)
+    .join(', ');
   return (
-    <span className={`hgab-dc-bridge-cell is-${group}`} title={bridgeGroupTitle(group)}>
-      <strong>{cell.rows.toLocaleString()}</strong> {GROUP_PHRASE[group](cell.rows)}
-      {cell.rows > 0 && <> ({sign}{fmt.shortPhp(Math.abs(cell.php))})</>}
-    </span>
+    <div className="hgab-dc-br">
+      {name}
+      <p className="hgab-dc-br-totals">
+        <span title="Same named projects in both documents">
+          NEP <strong title={fmt.php(f.nep_php, { unit: 'full' })}>{fmt.php(f.nep_php)}</strong> → House bill{' '}
+          <strong title={fmt.php(f.hgab3_php, { unit: 'full' })}>{fmt.php(f.hgab3_php)}</strong>
+        </span>
+        <span className="hgab-dc-br-net" title={`House bill minus the NEP, same named projects: ${fmt.php(b.net_php, { unit: 'full' })}`}>
+          Net <SignedPhp value={b.net_php} />
+        </span>
+      </p>
+      {moved > 0 && (
+        <span className="hgab-dc-br-bar" role="img" aria-label={`How the House bill differs from the NEP: ${barLabel}`}>
+          {moving.map((r) => {
+            const v = Math.abs(b[r.group]?.php ?? 0);
+            return v > 0 ? <span key={r.group} className={`is-${r.group}`} style={{ width: `${(v / moved) * 100}%` }} /> : null;
+          })}
+        </span>
+      )}
+      <dl className="hgab-dc-br-grid">
+        {BRIDGE_TAB_ROWS.map((r) => {
+          const cell = b[r.group] ?? { rows: 0, php: 0 };
+          return (
+            <div key={r.group} className={`hgab-dc-br-cell is-${r.group} ${cell.rows ? '' : 'is-zero'}`.trim()} title={bridgeGroupTitle(r.group)}>
+              <dt>
+                {r.label}
+                <small>{r.sub}</small>
+              </dt>
+              <dd>
+                <strong>{bridgeAmount(r.sign, cell.rows, cell.php)}</strong>
+                <span>{cell.rows.toLocaleString()} {cell.rows === 1 ? 'project' : 'projects'}</span>
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+      <p className="hgab-dc-br-note">
+        Candidates are leads to check, not findings. Insertion candidates include lines whose NEP match is unconfirmed.
+      </p>
+      {change && change.rows > 0 && (
+        <p className="hgab-dc-br-note is-office-change">
+          {change.rows.toLocaleString()} {change.rows === 1 ? 'line' : 'lines'} changed office between the NEP and the House bill:
+          held out of every district, and not in these figures.
+        </p>
+      )}
+    </div>
   );
 }
 
 /**
- * One line: how the House bill differs from the NEP for an office's
- * projects. "Not in the NEP" and "in the NEP only" are leads for
- * checking, not findings; uncertain matches are left out upstream.
+ * Accessible tabs inside a card: a tablist with roving focus (arrow keys,
+ * Home, End) and panels stacked in one grid cell, so the card keeps the
+ * height of its tallest panel and nothing below it jumps when the tab
+ * changes. Inactive panels are hidden from sight and from assistive
+ * technology (visibility), not removed from layout.
  */
-export function OfficeBridgeLine({ office, withName = false }: { office: OfficeHistory; withName?: boolean }) {
-  const b = office.fy2027?.bridge ?? null;
-  if (!b) {
-    return (
-      <p className="hgab-dc-bridge">
-        <em>In the House bill{withName ? ` · ${office.name}` : ''}:</em>{' '}no 2027 project comparison for this office.
-      </p>
-    );
-  }
+function CardTabs({ label, tabs }: { label: string; tabs: ReadonlyArray<{ key: string; label: string; panel: ReactNode }> }) {
+  const base = useId();
+  const [active, setActive] = useState(0);
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const n = tabs.length;
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (active + 1) % n;
+    else if (e.key === 'ArrowLeft') next = (active - 1 + n) % n;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = n - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    setActive(next);
+    refs.current[next]?.focus();
+  };
   return (
-    <p className="hgab-dc-bridge">
-      <em>In the House bill{withName ? ` · ${office.name}` : ''}:</em>{' '}
-      <BridgeCellText group="house_only" cell={b.house_only} sign="+" />{' · '}
-      <BridgeCellText group="nep_only" cell={b.nep_only} sign="−" />{' · '}
-      <BridgeCellText group="increased" cell={b.increased} sign="+" />{' · '}
-      <BridgeCellText group="decreased" cell={b.decreased} sign="−" />
-      {b.scope_review.rows > 0 && <>{' · '}<BridgeCellText group="scope_review" cell={b.scope_review} sign="±" /></>}
-      {' · '}
-      <span className="hgab-dc-bridge-net" title="House bill total minus NEP total, for the same named projects">net <SignedPhp value={b.net_php} /></span>
-    </p>
+    <div className="hgab-dc-tabs">
+      <div className="hgab-dc-tablist" role="tablist" aria-label={label} onKeyDown={onKey}>
+        {tabs.map((t, i) => (
+          <button
+            key={t.key}
+            ref={(el) => { refs.current[i] = el; }}
+            type="button"
+            role="tab"
+            id={`${base}-tab-${t.key}`}
+            aria-selected={i === active}
+            aria-controls={`${base}-panel-${t.key}`}
+            tabIndex={i === active ? 0 : -1}
+            onClick={() => setActive(i)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="hgab-dc-panels">
+        {tabs.map((t, i) => (
+          <div
+            key={t.key}
+            role="tabpanel"
+            id={`${base}-panel-${t.key}`}
+            aria-labelledby={`${base}-tab-${t.key}`}
+            className={`hgab-dc-panel ${i === active ? 'is-active' : ''}`.trim()}
+            tabIndex={i === active ? 0 : -1}
+          >
+            {t.panel}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -640,51 +770,69 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
         {offices.length === 0 && groups.length === 0 && <li className="hgab-dc-nooffice">{ATTRIBUTION_LABELS.none.help}</li>}
       </ul>
 
-      {offices.map((o, i) => (
-        <div className="hgab-dc-chartrow" key={o.id}>
-          <div className="hgab-dc-chartrow-head">
-            <span title={o.name}>{o.name}{offices.length > 1 ? ` · office ${i + 1} of ${offices.length}` : ''}</span>
-            <TierBadge tier={o.tier} sharedWith={Math.max(0, o.district_ids.length - 1)} compact />
-          </div>
-          <HistoryChart office={o} max={max || undefined} />
-        </div>
-      ))}
-
-      {offices.length > 0 && (
-        <div>
-          <dl className="hgab-dc-figures">
-            <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</dt><dd><Figure v={h.fy2026_gaa_php} /></dd></div>
-            <div>
-              <dt title={`${FISCAL_STAGE_LONG.nep} Whole office; not the figure the change below is measured from.`}>2027 NEP</dt>
-              <dd><Figure v={h.fy2027_nep_php} /></dd>
-            </div>
-            <div>
-              <dt title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</dt>
-              <dd>
-                <Figure v={h.fy2027_hgab3_php} />
-                {fy27.delta_php != null && (
-                  <span
-                    className="hgab-delta-line"
-                    title={`House bill (third reading) against the NEP, same named projects: NEP ${fmt.php(fy27.nep_php, { unit: 'full' })} → House bill ${fmt.php(fy27.hgab3_php, { unit: 'full' })}`}
-                  >
-                    <SignedPhp value={fy27.delta_php} /> <span className="hgab-delta">vs the NEP, same projects</span>
-                  </span>
-                )}
-              </dd>
-            </div>
-          </dl>
-          {undivided && (
-            <p className="hgab-dc-undivided">
-              Shared office total, not split · also serves <CoServedLinks ids={coServed} index={index} />
-            </p>
-          )}
-          {!undivided && offices.length > 1 && (
-            <p className="hgab-dc-undivided is-sum">Total of {offices.length} offices</p>
-          )}
-        </div>
+      {undivided && (
+        <p className="hgab-dc-undivided">
+          Shared office total, not split · also serves <CoServedLinks ids={coServed} index={index} />
+        </p>
+      )}
+      {!undivided && offices.length > 1 && (
+        <p className="hgab-dc-undivided is-sum">Total of {offices.length} offices</p>
       )}
 
-      {offices.map((o) => <OfficeBridgeLine key={o.id} office={o} withName={offices.length > 1} />)}
+      {offices.length > 0 && (
+        <CardTabs
+          label={`${card.label}: 2027 comparison or budget history`}
+          tabs={[
+            {
+              key: 'fy2027',
+              label: '2027: NEP vs House bill',
+              panel: (
+                <div className="hgab-dc-fy27">
+                  {offices.map((o) => <OfficeBridgePanel key={o.id} office={o} withName={offices.length > 1} />)}
+                </div>
+              ),
+            },
+            {
+              key: 'history',
+              label: 'History',
+              panel: (
+                <div className="hgab-dc-history">
+                  {offices.map((o, i) => (
+                    <div className="hgab-dc-chartrow" key={o.id}>
+                      <div className="hgab-dc-chartrow-head">
+                        <span title={o.name}>{o.name}{offices.length > 1 ? ` · office ${i + 1} of ${offices.length}` : ''}</span>
+                        <TierBadge tier={o.tier} sharedWith={Math.max(0, o.district_ids.length - 1)} compact />
+                      </div>
+                      <HistoryChart office={o} max={max || undefined} />
+                    </div>
+                  ))}
+                  <dl className="hgab-dc-figures">
+                    <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</dt><dd><Figure v={h.fy2026_gaa_php} /></dd></div>
+                    <div>
+                      <dt title={`${FISCAL_STAGE_LONG.nep} Whole office; not the figure the 2027 tab compares.`}>2027 NEP</dt>
+                      <dd><Figure v={h.fy2027_nep_php} /></dd>
+                    </div>
+                    <div>
+                      <dt title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</dt>
+                      <dd>
+                        <Figure v={h.fy2027_hgab3_php} />
+                        {fy27.delta_php != null && (
+                          <span
+                            className="hgab-delta-line"
+                            title={`House bill (third reading) against the NEP, same named projects: NEP ${fmt.php(fy27.nep_php, { unit: 'full' })} → House bill ${fmt.php(fy27.hgab3_php, { unit: 'full' })}`}
+                          >
+                            <SignedPhp value={fy27.delta_php} /> <span className="hgab-delta">vs the NEP, same projects</span>
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              ),
+            },
+          ]}
+        />
+      )}
 
       <footer className="hgab-card-ctas">
         <Link className="hgab-cta hgab-cta-primary" to={districtPath(card.id)}>Open district →</Link>
