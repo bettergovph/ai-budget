@@ -16,6 +16,10 @@
  *   - money is grouped by the office the source documents print; nothing infers
  *     which district a project is in;
  *   - a shared office's money is never divided (Tier B = undivided range);
+ *   - a 2027 line whose NEP and House sides name different office groups, or a
+ *     district office on one side and none on the other, is held out of every
+ *     office and of the residual as `office_change` (condition 3; the source's
+ *     buildCongressIndex.mjs classifyRow, ported below);
  *   - the Central Office / regional / unmatched residual is published per year
  *     and stage and must satisfy deo + central + regional + unmatched = total;
  *   - a predecessor office's history is never split across successors: it stays
@@ -61,9 +65,13 @@ interface OfficeHistory {
   id: string; name: string; kind: OfficeKind; region: string | null; district_ids: string[]; tier: "A" | "B";
   years: YearAmount[];
   by_congress: Array<{ congress: number; gaa_php: number | null; years_counted: number[] }>;
-  fy2027: { nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null } | null;
+  fy2027: { nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null; office_change: OfficeChange } | null;
   aliases_used: string[]; notes: string[];
 }
+/** Held-out paired lines where either side names this office: an annotation, never in the office's figures. */
+interface OfficeChange { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] }
+interface OfficeChangeSummary { rows: number; cross_district_rows: number; one_side_rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] }
+interface NoOfficeSummary { rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] }
 interface DistrictRepresentative {
   name: string; seat: string; status: "resolved" | "ambiguous"; member_code: string | null; profile_url: string | null;
   juris_id: string | null; juris_url: string | null; portrait_url: string | null; portrait_attribution: string | null;
@@ -78,13 +86,15 @@ interface DistrictCard {
 }
 interface ResidualYear {
   fy: number; stage: FiscalStage; total_php: number; deo_php: number; central_office_php: number; regional_offices_php: number;
-  unmatched_php: number; unmatched_labels: string[];
+  unmatched_php: number; unmatched_labels: string[]; office_change_php: number; office_change_rows: number;
+  no_office_php: number; no_office_rows: number;
 }
 interface HgabDistrictIndex {
   fiscal_year: number; built_at: string; source_commit: string;
   crosswalk: { schema_version: string; build_date: string; offices: number; districts: number; relationships: number };
   representatives_source: { url: string; congress: number; fetched_at: string; notice: string; matched: number; unmatched: number };
-  terms: CongressTerm[]; districts: DistrictCard[]; offices: Record<string, OfficeHistory>; residual: ResidualYear[]; scope_notes: string[];
+  terms: CongressTerm[]; districts: DistrictCard[]; offices: Record<string, OfficeHistory>; residual: ResidualYear[];
+  office_change: OfficeChangeSummary; no_office: NoOfficeSummary; scope_notes: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -293,6 +303,113 @@ class OfficeJoiner {
 }
 
 // ---------------------------------------------------------------------------
+// The source's office lens (analysis/web/buildCongressIndex.mjs at the pinned commit), ported
+// ---------------------------------------------------------------------------
+//
+// DEO2LEG/README.md condition 3: a paired line whose two stages do not agree on one office group is held out of
+// every card and of the residual, as its own `office_change` bucket. `classifyRow`, `sideOffices` and the group
+// definition below are the source's, line for line; a `no_office` line goes to the residual, as the source does.
+// A "group" is the set of engineering offices serving exactly the same district set; it is used only to classify
+// rows. Money stays booked by the office the House bill lists, as before.
+
+/** analysis/viewers/project_offices.mjs canonicalOffice(), ported verbatim (the same port as import-hgab.ts). */
+function canonicalOffice(office: unknown): string {
+  if (office == null || office === "") return "";
+  let s = String(office).normalize("NFKC").trim().replace(/\s+/g, " ");
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/(\p{L})\s*ñ\s*(\p{L})/gu, (_, a: string, b: string) => `${a}ñ${b}`);
+  } while (s !== prev);
+  if (/District Engineering Office$/i.test(s)) s = s.replace(/\s*-\s*/g, " ").replace(/\s+/g, " ");
+  s = s.replace(/^(Regional Office )([IVXLC]+)([AB])$/i, (_, p: string, n: string, l: string) => `${p}${n.toUpperCase()}-${l.toUpperCase()}`);
+  s = s.replace(/Marindugue/gi, "Marinduque").replace(/Siguijor/gi, "Siquijor").replace(/Occidenatal/gi, "Occidental")
+    .replace(/Batagas/gi, "Batangas").replace(/Ilolilo/gi, "Iloilo");
+  return s;
+}
+/** buildCongressIndex.mjs officeJoinKey(), verbatim. */
+function lensJoinKey(value: string): string {
+  let s = canonicalOffice(value || "");
+  if (!s) return "";
+  s = s.replace(/\bsub[\s-]*deo\b/gi, "sub district engineering office");
+  s = s.replace(/\bDEO\b/gi, "district engineering office");
+  s = s.replace(/[-\u2010-\u2015]/g, " ");
+  return s.replace(/\s+/g, " ").trim().toLowerCase();
+}
+const LENS_OFFICE_TYPES = new Set<OfficeKind>(["district_engineering_office", "sub_district_engineering_office"]);
+/** buildCrosswalk() groups + the officeToGroup closure in buildCongressIndex(): office name → group id, or null. */
+function lensGroups(offices: Record<string, CrosswalkOffice>): { groupOf: (name: string) => string | null; officeGroup: Map<string, string> } {
+  const keyToOffices = new Map<string, string[]>();
+  for (const [id, o] of Object.entries(offices)) {
+    if (!LENS_OFFICE_TYPES.has(o.type)) continue;
+    for (const name of [o.name, ...(o.aliases ?? [])]) {
+      const k = lensJoinKey(name);
+      if (!k) continue;
+      const list = keyToOffices.get(k) ?? [];
+      if (!list.includes(id)) list.push(id);
+      keyToOffices.set(k, list);
+    }
+  }
+  const officeGroup = new Map<string, string>();
+  for (const [id, o] of Object.entries(offices)) {
+    if (!LENS_OFFICE_TYPES.has(o.type) || !o.evidence?.inAllocationTable) continue;
+    const ds = [...(o.legislativeDistrictIds ?? [])].sort();
+    if (!ds.length) continue;
+    officeGroup.set(id, `office-group:${ds.join("+")}`);
+  }
+  const groupOf = (name: string) => {
+    const ids = keyToOffices.get(lensJoinKey(name));
+    if (!ids) return null;
+    const groups = new Set(ids.map((i) => officeGroup.get(i)).filter((g): g is string => Boolean(g)));
+    return groups.size === 1 ? [...groups][0] : null;
+  };
+  return { groupOf, officeGroup };
+}
+
+interface LensSide { office?: string; office_canonical?: string; records?: LensSide[] }
+interface LensRow { id: string; third?: LensSide | null; nep?: LensSide | null }
+type LensVerdict =
+  | { kind: "no_stage" } | { kind: "no_office" } | { kind: "group"; groupId: string } | { kind: "residual" }
+  | { kind: "office_change"; groupIds: string[]; crossDistrict: boolean; oneSideUnattributable: boolean };
+
+/** buildCongressIndex.mjs sideOffices(), verbatim: a side with grouped `records` is read from the records only. */
+function sideOffices(row: LensRow, side: "third" | "nep"): string[] {
+  const source = row[side];
+  if (!source) return [];
+  const records = source.records ?? [source];
+  return records.map((r) => r.office_canonical ?? r.office ?? "").filter(Boolean);
+}
+/**
+ * The source's lens reads these three third-reading `repeated_key` sides as naming no office: each side lists an
+ * office, its grouped records do not repeat it. They go to the residual, as upstream; any other `no_office` line
+ * stops the build.
+ */
+const EXPECTED_NO_OFFICE = ["house-reading:12949", "house-reading:15005", "house-reading:8092"];
+/** The office a side itself lists (for the note on that office only; never used to classify). */
+function sideOwnOffice(row: LensRow, side: "third" | "nep"): string {
+  return row[side]?.office_canonical ?? row[side]?.office ?? "";
+}
+/** buildCongressIndex.mjs classifyRow(), verbatim. */
+function classifyRow(row: LensRow, groupOf: (name: string) => string | null): LensVerdict {
+  const present = (["third", "nep"] as const).filter((side) => row[side]);
+  if (!present.length) return { kind: "no_stage" };
+  const attributed = new Set<string>();
+  let unattributable = false, officesSeen = 0;
+  for (const side of present) {
+    for (const office of sideOffices(row, side)) {
+      officesSeen += 1;
+      const groupId = groupOf(office);
+      if (groupId) attributed.add(groupId);
+      else unattributable = true;
+    }
+  }
+  if (!officesSeen) return { kind: "no_office" };
+  if (attributed.size === 1 && !unattributable) return { kind: "group", groupId: [...attributed][0] };
+  if (attributed.size === 0) return { kind: "residual" };
+  return { kind: "office_change", groupIds: [...attributed].sort(), crossDistrict: attributed.size > 1, oneSideUnattributable: unattributable };
+}
+
+// ---------------------------------------------------------------------------
 // Ledgers: one amount per (label) per slot, in integer pesos
 // ---------------------------------------------------------------------------
 
@@ -356,8 +473,23 @@ interface OfficeHgab {
   office: string; nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number;
   bridge: Bridge;
 }
+/** One held-out paired line (office_change): the label the House bill lists, both sides' offices, the amounts. */
+interface ChangeRow { id: string; title: string; label: string; third: string[]; nep: string[]; cross: boolean; oneSide: boolean; nep_php: number; hgab2_php: number; hgab3_php: number }
+interface LensResult {
+  counts: Record<LensVerdict["kind"], number>;
+  changeRows: ChangeRow[];
+  /** (printed label, lens group) pairs of the rows kept with an office, for the join cross-check. */
+  groupLabels: Map<string, Set<string>>;
+  /** Printed labels of the rows the lens calls residual. */
+  residualLabels: Set<string>;
+  /** Rows kept with one group whose two sides name different offices of that group (booked to the House-side office). */
+  sameGroupOfficeDiffers: Array<{ id: string; third: string[]; nep: string[]; nep_php: number | null; hgab3_php: number | null }>;
+  /** Lines the lens reads as naming no office: residual, in no office's figures. `own` = the offices the sides themselves list. */
+  noOfficeRows: Array<{ id: string; title: string; label: string; own: string[]; nep_php: number; hgab2_php: number; hgab3_php: number }>;
+}
 
-async function loadHgab(out: string, traceGroups: Map<string, BridgeGroup>): Promise<{ offices: Map<string, OfficeHgab>; totals: { nep: number; hgab3: number } }> {
+async function loadHgab(out: string, traceGroups: Map<string, BridgeGroup>, groupOf: (name: string) => string | null):
+  Promise<{ offices: Map<string, OfficeHgab>; totals: { nep: number; hgab3: number }; lens: LensResult }> {
   const overview = readJson<{ datasets: Array<{ key: string; totals: { nep_php: number; hgab3_php: number | null }; bridge: Bridge }> }>(resolve(out, "overview.json"));
   const dpwh = overview.datasets.find((d) => d.key === "dpwh");
   ensure(dpwh?.totals.hgab3_php != null, "overview.json has no DPWH dataset with an HGAB 3R total");
@@ -367,36 +499,68 @@ async function loadHgab(out: string, traceGroups: Map<string, BridgeGroup>): Pro
   const db = await DuckDBInstance.create(":memory:");
   const c = await db.connect();
   const rows = (await c.runAndReadAll(`
-    SELECT office, trace, count(*) AS rows,
-           sum(nep_php), sum(hgab2_php), sum(hgab3_php),
-           sum(hgab3_php - nep_php) FILTER (hgab3_php IS NOT NULL AND nep_php IS NOT NULL),
-           sum(coalesce(json_array_length(record_json->'$.nep.records'), 1)) FILTER (nep_php IS NOT NULL),
-           sum(coalesce(json_array_length(record_json->'$.third.records'), 1)) FILTER (hgab3_php IS NOT NULL),
-           count(*) FILTER (office IS NULL)
-    FROM read_parquet('${q(parquet)}') GROUP BY 1, 2 ORDER BY 1, 2`)).getRows();
+    SELECT id, office, trace, nep_php, hgab2_php, hgab3_php,
+           CASE WHEN nep_php IS NOT NULL THEN coalesce(json_array_length(record_json->'$.nep.records'), 1) ELSE 0 END,
+           CASE WHEN hgab3_php IS NOT NULL THEN coalesce(json_array_length(record_json->'$.third.records'), 1) ELSE 0 END,
+           title, record_json
+    FROM read_parquet('${q(parquet)}') ORDER BY id`)).getRows();
   c.closeSync(); db.closeSync();
 
   interface Acc { nep: number | null; h2: number | null; h3: number | null; nepN: number; h3N: number; cells: Record<BridgeGroup, { rows: number; nep: number; house: number; delta: number }> }
   const acc = new Map<string, Acc>();
+  const lens: LensResult = {
+    counts: { group: 0, residual: 0, office_change: 0, no_office: 0, no_stage: 0 }, changeRows: [], groupLabels: new Map(),
+    residualLabels: new Set(), sameGroupOfficeDiffers: [], noOfficeRows: [],
+  };
   for (const r of rows) {
-    const office = r[0] == null ? "" : String(r[0]);
-    ensure(office, "a DPWH parquet row has no office; the lens needs the printed office");
-    const trace = String(r[1]);
+    const id = String(r[0]);
+    const office = r[1] == null ? "" : String(r[1]);
+    ensure(office, `${id}: a DPWH parquet row has no office; the lens needs the printed office`);
+    const trace = String(r[2]);
     const group = traceGroups.get(trace);
     ensure(group, `trace ${trace} is not in the contract's TRACE_LABELS`);
-    const n = num(r[2]);
     const nep = r[3] == null ? null : num(r[3]), h2 = r[4] == null ? null : num(r[4]), h3 = r[5] == null ? null : num(r[5]);
-    const delta = r[6] == null ? 0 : num(r[6]);
+    const record = JSON.parse(String(r[9])) as LensRow;
+    ensure(record.id === id, `${id}: record_json carries id ${record.id}`);
+    const verdict = classifyRow(record, groupOf);
+    lens.counts[verdict.kind]++;
+    // Every label keeps an entry (amounts may be all held out) so the office's hgab3 label stays joined.
     const a = acc.get(office) ?? {
       nep: null, h2: null, h3: null, nepN: 0, h3N: 0,
       cells: Object.fromEntries(BRIDGE_ORDER.map((g) => [g, { rows: 0, nep: 0, house: 0, delta: 0 }])) as Acc["cells"],
     };
-    a.nep = sumOrNull([a.nep, nep]); a.h2 = sumOrNull([a.h2, h2]); a.h3 = sumOrNull([a.h3, h3]);
-    a.nepN += r[7] == null ? 0 : num(r[7]); a.h3N += r[8] == null ? 0 : num(r[8]);
-    const cell = a.cells[group];
-    cell.rows += n; cell.nep += nep ?? 0; cell.house += h3 ?? 0; cell.delta += delta;
     acc.set(office, a);
+    if (verdict.kind === "office_change") {
+      lens.changeRows.push({
+        id, title: String(r[8] ?? ""), label: office, third: sideOffices(record, "third"), nep: sideOffices(record, "nep"),
+        cross: verdict.crossDistrict, oneSide: verdict.oneSideUnattributable, nep_php: nep ?? 0, hgab2_php: h2 ?? 0, hgab3_php: h3 ?? 0,
+      });
+      continue;
+    }
+    if (verdict.kind === "no_office") {
+      lens.noOfficeRows.push({
+        id, title: String(r[8] ?? ""), label: office, own: (["third", "nep"] as const).map((sd) => sideOwnOffice(record, sd)).filter(Boolean),
+        nep_php: nep ?? 0, hgab2_php: h2 ?? 0, hgab3_php: h3 ?? 0,
+      });
+      continue;
+    }
+    if (verdict.kind === "group") {
+      lens.groupLabels.set(office, (lens.groupLabels.get(office) ?? new Set()).add(verdict.groupId));
+      const t = sideOffices(record, "third").map(canonicalOffice), n = sideOffices(record, "nep").map(canonicalOffice);
+      if (t.length && n.length && new Set([...t, ...n]).size > 1) lens.sameGroupOfficeDiffers.push({ id, third: t, nep: n, nep_php: nep, hgab3_php: h3 });
+    } else if (verdict.kind === "residual") {
+      lens.residualLabels.add(office);
+    }
+    a.nep = sumOrNull([a.nep, nep]); a.h2 = sumOrNull([a.h2, h2]); a.h3 = sumOrNull([a.h3, h3]);
+    a.nepN += num(r[6]); a.h3N += num(r[7]);
+    const cell = a.cells[group];
+    cell.rows += 1; cell.nep += nep ?? 0; cell.house += h3 ?? 0; cell.delta += h3 != null && nep != null ? h3 - nep : 0;
   }
+  // The source sends no_stage and no_office rows to its residual. No_stage must not exist; no_office must be exactly
+  // the three known sides (a new one needs a look before it moves money out of an office).
+  ensure(lens.counts.no_stage === 0, `${lens.counts.no_stage} DPWH rows carry neither a House bill 3rd reading nor an NEP side`);
+  const noOfficeIds = lens.noOfficeRows.map((x) => x.id).sort();
+  ensure(JSON.stringify(noOfficeIds) === JSON.stringify(EXPECTED_NO_OFFICE), `no_office lines are ${noOfficeIds.join(", ") || "none"}; expected exactly ${EXPECTED_NO_OFFICE.join(", ")}`);
 
   const offices = new Map<string, OfficeHgab>();
   let nepSum = 0, h3Sum = 0;
@@ -422,9 +586,11 @@ async function loadHgab(out: string, traceGroups: Map<string, BridgeGroup>): Pro
     offices.set(office, { office, nep_php: a.nep, hgab2_php: a.h2, hgab3_php: a.h3, nep_records: a.nepN, hgab3_records: a.h3N, bridge });
     nepSum += a.nep ?? 0; h3Sum += a.h3 ?? 0;
   }
-  ensure(nepSum === dpwh.totals.nep_php, `parquet NEP sum ${nepSum} ≠ overview ${dpwh.totals.nep_php}`);
-  ensure(h3Sum === dpwh.totals.hgab3_php, `parquet HGAB3 sum ${h3Sum} ≠ overview ${dpwh.totals.hgab3_php}`);
-  return { offices, totals: { nep: dpwh.totals.nep_php, hgab3: dpwh.totals.hgab3_php } };
+  const held = [...lens.changeRows, ...lens.noOfficeRows];
+  const heldNep = held.reduce((t, x) => t + x.nep_php, 0), heldH3 = held.reduce((t, x) => t + x.hgab3_php, 0);
+  ensure(nepSum + heldNep === dpwh.totals.nep_php, `parquet NEP ${nepSum} + office change and no office ${heldNep} ≠ overview ${dpwh.totals.nep_php}`);
+  ensure(h3Sum + heldH3 === dpwh.totals.hgab3_php, `parquet HGAB3 ${h3Sum} + office change and no office ${heldH3} ≠ overview ${dpwh.totals.hgab3_php}`);
+  return { offices, totals: { nep: dpwh.totals.nep_php, hgab3: dpwh.totals.hgab3_php }, lens };
 }
 
 // ---------------------------------------------------------------------------
@@ -517,7 +683,8 @@ async function main(): Promise<void> {
 
   const gaa = loadGaa(args.gaa);
   const nep = loadNep(args.nep);
-  const hgab = await loadHgab(args.out, traceGroups);
+  const lensMap = lensGroups(crosswalk.offices);
+  const hgab = await loadHgab(args.out, traceGroups, lensMap.groupOf);
   const juris = await loadJuris(args.out, args.offline);
   log(`  gaa: ${GAA_YEARS.length} years · nep FY2027: ${nep.ledger.size} operating units · hgab: ${hgab.offices.size} printed offices`);
 
@@ -532,6 +699,53 @@ async function main(): Promise<void> {
   const joiner = new OfficeJoiner(crosswalk.offices);
   const matches = new Map<string, LabelMatch>();
   for (const ledger of ledgers.values()) for (const label of ledger.keys()) if (!matches.has(label)) matches.set(label, joiner.match(label));
+
+  // The lens and our join must agree: a row kept with a group is booked to an office of that group, a residual row to
+  // Central/regional, and every office a held-out row names joins (or fails to join) the same way in both.
+  for (const [label, groups] of hgab.lens.groupLabels) {
+    const m = matches.get(label);
+    ensure(groups.size === 1, `${label}: rows kept with ${groups.size} different groups`);
+    ensure(m?.kind === "office" && m.office_id && lensMap.officeGroup.get(m.office_id) === [...groups][0], `${label}: booked to ${m?.office_id ?? m?.kind}, but the lens keeps its rows with ${[...groups][0]}`);
+  }
+  for (const label of hgab.lens.residualLabels) {
+    const m = matches.get(label);
+    ensure(m && (m.kind === "central" || m.kind === "regional"), `${label}: a residual row would be booked to ${m?.office_id ?? m?.kind}`);
+  }
+  const officeChange = new Map<string, OfficeChange>();
+  for (const r of hgab.lens.changeRows) {
+    const ids = new Set<string>();
+    for (const name of [...r.third, ...r.nep]) {
+      const g = lensMap.groupOf(name), m = joiner.match(name);
+      ensure((g == null) === (m.kind !== "office"), `${r.id}: '${name}' joins ${m.kind} here but group ${g} in the lens`);
+      if (g == null || !m.office_id) continue;
+      ensure(lensMap.officeGroup.get(m.office_id) === g, `${r.id}: '${name}' joins ${m.office_id} here, ${g} in the lens`);
+      ids.add(m.office_id);
+    }
+    ensure(ids.size > 0, `${r.id}: an office-change row names no engineering office`);
+    for (const id of ids) {
+      const x = officeChange.get(id) ?? { rows: 0, nep_php: 0, hgab3_php: 0, row_ids: [] };
+      x.rows++; x.nep_php += r.nep_php; x.hgab3_php += r.hgab3_php; x.row_ids.push(r.id);
+      officeChange.set(id, x);
+    }
+  }
+  const changeTotals: OfficeChangeSummary = {
+    rows: hgab.lens.changeRows.length, cross_district_rows: hgab.lens.changeRows.filter((r) => r.cross).length,
+    one_side_rows: hgab.lens.changeRows.filter((r) => r.oneSide).length,
+    nep_php: hgab.lens.changeRows.reduce((a, r) => a + r.nep_php, 0), hgab2_php: hgab.lens.changeRows.reduce((a, r) => a + r.hgab2_php, 0),
+    hgab3_php: hgab.lens.changeRows.reduce((a, r) => a + r.hgab3_php, 0), row_ids: hgab.lens.changeRows.map((r) => r.id).sort(),
+  };
+  ensure(changeTotals.cross_district_rows + changeTotals.one_side_rows === changeTotals.rows, "an office-change row is both cross-district and one-sided; the summary would count it twice");
+  const noOffice = hgab.lens.noOfficeRows;
+  const noOfficeTotals: NoOfficeSummary = {
+    rows: noOffice.length, nep_php: noOffice.reduce((a, r) => a + r.nep_php, 0), hgab2_php: noOffice.reduce((a, r) => a + r.hgab2_php, 0),
+    hgab3_php: noOffice.reduce((a, r) => a + r.hgab3_php, 0), row_ids: noOffice.map((r) => r.id).sort(),
+  };
+  // The office a no_office line's printed label joins (if any) gets a note: the line is listed under it but not counted.
+  const noOfficeAt = new Map<string, number>();
+  for (const r of noOffice) {
+    const m = matches.get(r.label);
+    if (m?.kind === "office" && m.office_id) noOfficeAt.set(m.office_id, (noOfficeAt.get(m.office_id) ?? 0) + 1);
+  }
 
   // Offices that may appear on a card: every crosswalk office linked to a district (regional_group included, as kind).
   const cardOffices = Object.entries(crosswalk.offices).filter(([, o]) => o.legislativeDistrictIds.length > 0);
@@ -577,7 +791,12 @@ async function main(): Promise<void> {
       return { congress: t.congress, gaa_php: sumOrNull(counted.map((y) => y.php)), years_counted: counted.map((y) => y.fy) };
     });
     const h = years[8].matched_label ? hgab.offices.get(years[8].matched_label) : undefined;
-    const fy2027 = h ? { nep_php: h.nep_php, hgab2_php: h.hgab2_php, hgab3_php: h.hgab3_php, nep_records: h.nep_records, hgab3_records: h.hgab3_records, bridge: h.bridge } : null;
+    const oc = officeChange.get(id);
+    ensure(h || !oc, `${id}: lines that changed office name it, but it has no 2027 block to carry the note`);
+    const fy2027 = h ? {
+      nep_php: h.nep_php, hgab2_php: h.hgab2_php, hgab3_php: h.hgab3_php, nep_records: h.nep_records, hgab3_records: h.hgab3_records, bridge: h.bridge,
+      office_change: oc ? { ...oc, row_ids: [...oc.row_ids].sort() } : { rows: 0, nep_php: 0, hgab3_php: 0, row_ids: [] },
+    } : null;
 
     // Aliases actually used: every matched label that is not the crosswalk's own spelling, with how it joined.
     const aliases_used: string[] = [];
@@ -601,6 +820,9 @@ async function main(): Promise<void> {
     if (zeroGaa.length) notes.push(`Listed with no money in ${plainYears(zeroGaa)}; shown as blank rather than zero.`);
     if (years[7].php == null) notes.push("Not listed under this name in the 2027 NEP.");
     if (!fy2027) notes.push(o.type === "regional_group" ? "A regional grouping, not an engineering office; it has no figures of its own, and its money is not assigned to any district." : "No projects under this office in the 2027 House bill or the NEP.");
+    if (oc) notes.push(oc.rows === 1 ? "1 project line changed office between the NEP and the House bill; it is not counted here." : `${oc.rows} project lines changed office between the NEP and the House bill; they are not counted here.`);
+    const no = noOfficeAt.get(id);
+    if (no) notes.push(no === 1 ? "1 House bill line listed here has no office in the source data; it is left unassigned." : `${no} House bill lines listed here have no office in the source data; they are left unassigned.`);
     // Predecessor offices whose crosswalk legacy block names this office as a candidate successor: their money
     // stays in the residual (unmatched_labels), never split between successors.
     for (const [legacyId, lo] of Object.entries(crosswalk.offices)) {
@@ -633,10 +855,18 @@ async function main(): Promise<void> {
       else { unmatched += php; if (php !== 0) labels.push(label); }
     }
     const total = totals.get(s.key)!;
-    ensure(deo + central + regional + unmatched === total, `${s.key}: residual identity failed`);
+    // The House bill's office-change lines are in its total but in no label's figure (held out in loadHgab).
+    const h3 = s.key === "hgab3:2027";
+    const changePhp = h3 ? changeTotals.hgab3_php : 0, changeRows = h3 ? changeTotals.rows : 0;
+    const noOfficePhp = h3 ? noOfficeTotals.hgab3_php : 0, noOfficeRows = h3 ? noOfficeTotals.rows : 0;
+    ensure(deo + central + regional + unmatched + noOfficePhp + changePhp === total, `${s.key}: residual identity failed`);
     const fromOffices = Object.values(offices).reduce((a, o) => a + (o.years.find((y) => y.stage === s.stage && y.fy === s.fy)?.php ?? 0), 0);
     ensure(fromOffices === deo, `${s.key}: Σ offices ${fromOffices} ≠ deo_php ${deo}`);
-    return { fy: s.fy, stage: s.stage, total_php: total, deo_php: deo, central_office_php: central, regional_offices_php: regional, unmatched_php: unmatched, unmatched_labels: labels.sort() };
+    return {
+      fy: s.fy, stage: s.stage, total_php: total, deo_php: deo, central_office_php: central, regional_offices_php: regional, unmatched_php: unmatched,
+      unmatched_labels: labels.sort(), office_change_php: changePhp, office_change_rows: changeRows,
+      no_office_php: noOfficePhp, no_office_rows: noOfficeRows,
+    };
   });
 
   // Representatives.
@@ -707,7 +937,7 @@ async function main(): Promise<void> {
       matched: repMatched, unmatched: repUnmatched,
     },
     terms: CONGRESS_TERMS.map((t) => ({ ...t, years: [...t.years] })),
-    districts, offices, residual,
+    districts, offices, residual, office_change: changeTotals, no_office: noOfficeTotals,
     // Reader-facing small print on the districts pages: plain sentences of at most 25 words each (the verifier
     // enforces it). The precise statements they stand for are in docs/hgab-data.md ("Scope notes (technical record)").
     scope_notes: [
@@ -715,11 +945,11 @@ async function main(): Promise<void> {
       `The 2027 NEP figure uses the same whole-department basis (${peso(nep.total)} in all, including items released automatically).`,
       `The 2027 House bill figure counts named projects only, not staff or running costs (${peso(hgab.totals.hgab3)} in all), so it is smaller than whole-department figures.`,
       `The 2027 comparison sets the House bill against the NEP's ${peso(hgab.totals.nep)} on that project-only basis; never mix it with whole-department figures.`,
-      "Every year's total is fully accounted for: office figures plus the Central Office, regional offices and unmatched names add up to the department total.",
+      "Every year's total is fully accounted for: offices, Central Office, regional offices, unmatched names and, in 2027, lines with no or changed office.",
       `Offices are matched by name across years, with ${ALIASES.length} known name changes. ${unmatchedByKind.legacy} names are former offices and ${unmatchedByKind.unmatched} match nothing; their money stays unassigned.`,
       "An office serving several districts shows its full figure on each; district headlines add those undivided figures, so read them as a range.",
       "Districts served only by the BARMM regional grouping have no office figures; their headlines are blank.",
-      "69 projects name a different office in the two 2027 documents; both amounts are shown under the office the House bill lists.",
+      `${changeTotals.rows} paired projects name different offices in the NEP and the House bill; they are held out of every office's figures.`,
       "The table linking offices to districts is used only for those links; the amounts listed in it are not used.",
     ],
   };
@@ -759,12 +989,24 @@ async function main(): Promise<void> {
       used_in: SLOTS.filter((s) => ledgers.get(s.key)!.has(a.label)).map((s) => ({ slot: s.key, php: ledgers.get(s.key)!.get(a.label)! })),
     })),
     normalised_joins: aliasUses.filter((u) => u.via === "normalised").map((u) => ({ office: u.office, label: u.label, slots: u.slots, transforms: matches.get(u.label)?.transforms ?? [] })),
+    // DEO2LEG condition 3 (buildCongressIndex.mjs classifyRow): how every 2027 DPWH line was classified.
+    office_lens: {
+      classification: hgab.lens.counts,
+      no_office: { ...noOfficeTotals, lines: noOffice.map((r) => ({ id: r.id, title: r.title, label: r.label, side_lists: r.own, nep_php: r.nep_php, hgab3_php: r.hgab3_php })) },
+      same_group_office_differs: hgab.lens.sameGroupOfficeDiffers,
+      office_change: { ...changeTotals, row_ids: undefined, lines: hgab.lens.changeRows.map((r) => ({ id: r.id, title: r.title, booked_label_before: r.label, third: r.third, nep: r.nep, cross_district: r.cross, nep_php: r.nep_php, hgab3_php: r.hgab3_php })) },
+    },
     coverage,
   };
   writeFileSync(resolve(args.out, "districts-manifest.json"), `${JSON.stringify(manifest, null, 1)}\n`);
 
   log(`\n  offices on cards ${manifest.offices.on_cards} (A ${manifest.offices.tier_a} · B ${manifest.offices.tier_b} · with FY2027 block ${manifest.offices.with_fy2027_block})`);
   log(`  districts ${districts.length} · attribution ${JSON.stringify(manifest.districts.attribution)}`);
+  const lc = hgab.lens.counts;
+  log(`  office lens: group ${lc.group} · residual ${lc.residual} · office_change ${lc.office_change} (cross-district ${changeTotals.cross_district_rows}, one side ${changeTotals.one_side_rows}) · no_office ${lc.no_office} · no_stage ${lc.no_stage}`);
+  log(`    office change held out: NEP ${peso(changeTotals.nep_php)} · House ${peso(changeTotals.hgab3_php)} · ${officeChange.size} offices annotated`);
+  log(`    no office (residual, as upstream): ${noOffice.length} · House ${peso(noOfficeTotals.hgab3_php)} (${noOffice.map((r) => `${r.id} under ${r.label}`).join("; ")})`);
+  log(`    kept with one group though the two sides name different offices of it: ${hgab.lens.sameGroupOfficeDiffers.length} (${hgab.lens.sameGroupOfficeDiffers.map((x) => `${x.id}: ${x.third.join("|")} / NEP ${x.nep.join("|")}`).join("; ")})`);
   log(`  representatives joined ${repMatched}/${districts.length}${unmatchedNames.length ? ` · unmatched: ${unmatchedNames.join("; ")}` : ""}`);
   for (const c of coverage) log(`  ${c.slot.padEnd(10)} DEO-like ${String(c.deo_like_labels).padStart(3)} → card ${c.matched_to_card_office} · legacy ${c.matched_to_legacy_office} · unmatched ${c.unmatched} · residual ${(c.residual_share * 100).toFixed(1)}% · unmatched ${peso(c.unmatched_php)}`);
   log(`\nwrote ${outPath}`);

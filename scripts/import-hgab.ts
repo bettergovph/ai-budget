@@ -19,7 +19,8 @@
  *   FMR   other-analysis/data/fmr_workbench.json     — build_fmr_workbench.py
  *   HFEP  other-analysis/data/hfep_workbench.json    — build_hfep_workbench.py
  *   NIA   analysis-nia/data/nia_workbench.json       — build_nia_workbench.py
- *   bridges are asserted equal to analysis/data/main_overview_2027.json
+ *   bridges are asserted equal to analysis/data/main_overview_2027.json,
+ *   whose candidate-change table is carried into overview.json `candidate_changes`
  *
  * Integer pesos throughout; null means "no record at this stage", never 0.
  * Stage totals are compared, never summed across stages.
@@ -279,6 +280,165 @@ function assertBridgeMatches(key: DatasetKey, bridge: Bridge, ws: MainWorkspace)
   ];
   const bad = checks.filter(([, a, b]) => a !== b);
   ensure(bad.length === 0, `${key} bridge differs from main_overview_2027.json: ${bad.map(([n, a, b]) => `${n} ${a} vs ${b}`).join("; ")}`);
+}
+
+// ---------------------------------------------------------------------------
+// Candidate changes: the workbench Overview's "House vs. NEP: candidate
+// changes" table (analysis/web/src/MainOverview.jsx), carried verbatim from
+// main_overview_2027.json (overviewSummary.js partition() / hfepSummary()).
+// Nothing is recomputed from rows: every figure is the workbench's, then
+// asserted against the bridge we built from our own rows. Counts keep the
+// workbench's record grain (`count_unit`); where it differs from our rows
+// (DPWH insertions: grouped House rows count each member) both are carried.
+// ---------------------------------------------------------------------------
+
+const MAIN_OVERVIEW = "analysis/data/main_overview_2027.json";
+
+interface MainPopulation { count: number; comparison_rows?: number; amount_php: number }
+interface MainCandidateWorkspace {
+  key: string; label: string; grain: string; count_unit: string; delta_php: number;
+  sources: Record<"house" | "nep", { count: number; amount_php: number; facility_count?: number }>;
+  insertions: MainPopulation; deletions: MainPopulation; unchanged: MainPopulation;
+  adjustments: {
+    count: number; count_unit: string; increased_count: number; reduced_count: number;
+    increased_php: number; reduced_php: number; net_php: number;
+    increased_nep_php: number; increased_house_php: number; reduced_nep_php: number; reduced_house_php: number;
+    events?: { revised: number; added: number; dropped: number };
+  };
+  scope_review?: { count: number; house_php: number; nep_php: number; net_php: number; note: string };
+}
+interface CandidatePopulation { count: number; comparison_rows: number | null; amount_php: number }
+interface CandidateProgram {
+  key: DatasetKey; label: string; count_unit: string; grain: string; house_stage: "hgab2" | "hgab3";
+  sources: Record<"nep" | "house", { count: number; amount_php: number; facility_count: number | null }>;
+  insertions: CandidatePopulation; deletions: CandidatePopulation; unchanged: CandidatePopulation;
+  adjustments: {
+    count: number; count_unit: string; increased_count: number; reduced_count: number;
+    increased_php: number; reduced_php: number; net_php: number;
+    increased_nep_php: number; increased_house_php: number; reduced_nep_php: number; reduced_house_php: number;
+    events: { revised: number; added: number; dropped: number } | null;
+  };
+  scope_review: { count: number; nep_php: number; house_php: number; net_php: number; note: string } | null;
+  delta_php: number;
+}
+interface CandidateChanges {
+  source_file: string; source_sha256: string; source_built_at: string; direction: string;
+  programs: CandidateProgram[];
+  totals: {
+    programs: number;
+    insertions: { count: number; amount_php: number }; deletions: { count: number; amount_php: number };
+    unchanged: { count: number; amount_php: number };
+    increased: { count: number; nep_php: number; house_php: number; php: number };
+    decreased: { count: number; nep_php: number; house_php: number; php: number };
+    scope_review: { count: number; nep_php: number; house_php: number; net_php: number };
+    house: { count: number; amount_php: number }; nep: { count: number; amount_php: number };
+    delta_php: number;
+  };
+}
+
+function candidateChanges(src: string, built: Partial<Record<DatasetKey, { meta: HgabDatasetMeta }>>, keys: readonly DatasetKey[]): CandidateChanges {
+  const path = resolve(src, MAIN_OVERVIEW);
+  const main = readJson<{ built_at: string; direction: string; workspaces: MainCandidateWorkspace[] }>(path);
+  ensure(main.direction === "House minus NEP", `main_overview direction is "${main.direction}", expected "House minus NEP"`);
+  const pop = (p: MainPopulation): CandidatePopulation => ({ count: p.count, comparison_rows: p.comparison_rows ?? null, amount_php: p.amount_php });
+  const programs = keys.map((key): CandidateProgram => {
+    const w = main.workspaces.find((x) => x.key === key);
+    ensure(w, `main_overview has no ${key} workspace`);
+    const meta = built[key]?.meta;
+    ensure(meta, `candidate changes: ${key} was not built`);
+    const b = meta.bridge, a = w.adjustments;
+    const p: CandidateProgram = {
+      key, label: w.label, count_unit: w.count_unit, grain: w.grain, house_stage: b.house_stage,
+      sources: {
+        nep: { count: w.sources.nep.count, amount_php: w.sources.nep.amount_php, facility_count: w.sources.nep.facility_count ?? null },
+        house: { count: w.sources.house.count, amount_php: w.sources.house.amount_php, facility_count: w.sources.house.facility_count ?? null },
+      },
+      insertions: pop(w.insertions), deletions: pop(w.deletions), unchanged: pop(w.unchanged),
+      adjustments: {
+        count: a.count, count_unit: a.count_unit, increased_count: a.increased_count, reduced_count: a.reduced_count,
+        increased_php: a.increased_php, reduced_php: a.reduced_php, net_php: a.net_php,
+        increased_nep_php: a.increased_nep_php, increased_house_php: a.increased_house_php,
+        reduced_nep_php: a.reduced_nep_php, reduced_house_php: a.reduced_house_php,
+        events: a.events ? { revised: a.events.revised, added: a.events.added, dropped: a.events.dropped } : null,
+      },
+      scope_review: w.scope_review
+        ? { count: w.scope_review.count, nep_php: w.scope_review.nep_php, house_php: w.scope_review.house_php, net_php: w.scope_review.net_php, note: w.scope_review.note }
+        : null,
+      delta_php: w.delta_php,
+    };
+    const houseTotal = b.house_stage === "hgab3" ? meta.totals.hgab3_php : meta.totals.hgab2_php;
+    const houseCount = b.house_stage === "hgab3" ? meta.counts.hgab3 : meta.counts.hgab2;
+    const sr = p.scope_review;
+    const checks: Array<[string, number | null | undefined, number | null | undefined]> = [
+      ["insertions PHP = bridge house_only", p.insertions.amount_php, b.house_only.php],
+      ["insertions rows = bridge house_only rows", p.insertions.comparison_rows ?? p.insertions.count, b.house_only.rows],
+      ["deletions PHP = bridge nep_only", p.deletions.amount_php, b.nep_only.php],
+      ["deletions rows = bridge nep_only rows", p.deletions.comparison_rows ?? p.deletions.count, b.nep_only.rows],
+      ["unchanged PHP = bridge unchanged", p.unchanged.amount_php, b.unchanged.php],
+      ["unchanged rows = bridge unchanged rows", p.unchanged.comparison_rows ?? p.unchanged.count, b.unchanged.rows],
+      ["increased count = bridge increased rows", a.increased_count, b.increased.rows],
+      ["increased PHP = bridge increased", a.increased_php, b.increased.php],
+      ["increased NEP base = bridge", a.increased_nep_php, b.increased.nep_php],
+      ["increased House base = bridge", a.increased_house_php, b.increased.house_php],
+      ["reduced count = bridge decreased rows", a.reduced_count, b.decreased.rows],
+      ["reduced PHP = bridge decreased", a.reduced_php, b.decreased.php],
+      ["reduced NEP base = bridge", a.reduced_nep_php, b.decreased.nep_php],
+      ["reduced House base = bridge", a.reduced_house_php, b.decreased.house_php],
+      ["scope review count = bridge", sr?.count ?? 0, b.scope_review.rows],
+      ["scope review net = bridge", sr?.net_php ?? 0, b.scope_review.php],
+      ["scope review NEP = bridge", sr?.nep_php ?? 0, b.scope_review.nep_php ?? 0],
+      ["scope review House = bridge", sr?.house_php ?? 0, b.scope_review.house_php ?? 0],
+      ["House amount = our House total", p.sources.house.amount_php, houseTotal],
+      ["House records = our House count", p.sources.house.count, houseCount],
+      ["NEP amount = our NEP total", p.sources.nep.amount_php, meta.totals.nep_php],
+      ["NEP records = our NEP count", p.sources.nep.count, meta.counts.nep],
+      ["House − NEP = bridge net", p.delta_php, b.net_php],
+      ["House − NEP = House total − NEP total", p.delta_php, p.sources.house.amount_php - p.sources.nep.amount_php],
+      ["adjustment count = increased + reduced", a.count, a.increased_count + a.reduced_count],
+      ["net = increased − reduced", a.net_php, a.increased_php - a.reduced_php],
+      ["increased bases tie", a.increased_house_php - a.increased_nep_php, a.increased_php],
+      ["reduced bases tie", a.reduced_nep_php - a.reduced_house_php, a.reduced_php],
+      ["insertions − deletions + net + scope net = House − NEP", p.insertions.amount_php - p.deletions.amount_php + a.net_php + (sr?.net_php ?? 0), p.delta_php],
+    ];
+    const bad = checks.filter(([, x, y]) => x !== y);
+    ensure(bad.length === 0, `${key} candidate changes differ: ${bad.map(([n, x, y]) => `${n} (${x} vs ${y})`).join("; ")}`);
+    const ints = [
+      p.sources.nep.count, p.sources.nep.amount_php, p.sources.house.count, p.sources.house.amount_php,
+      ...[p.insertions, p.deletions, p.unchanged].flatMap((x) => [x.count, x.amount_php]),
+      a.count, a.increased_count, a.reduced_count, a.increased_php, a.reduced_php,
+      a.increased_nep_php, a.increased_house_php, a.reduced_nep_php, a.reduced_house_php,
+      ...(sr ? [sr.count, sr.nep_php, sr.house_php] : []),
+    ];
+    ensure(ints.every((v) => Number.isSafeInteger(v) && v >= 0), `${key} candidate changes carry a non-integer or negative figure`);
+    ensure(p.count_unit.trim() !== "" && p.adjustments.count_unit.trim() !== "", `${key} candidate changes have no counting unit`);
+    return p;
+  });
+  const S = (f: (p: CandidateProgram) => number) => programs.reduce((t, p) => t + f(p), 0);
+  const totals: CandidateChanges["totals"] = {
+    programs: programs.length,
+    insertions: { count: S((p) => p.insertions.count), amount_php: S((p) => p.insertions.amount_php) },
+    deletions: { count: S((p) => p.deletions.count), amount_php: S((p) => p.deletions.amount_php) },
+    unchanged: { count: S((p) => p.unchanged.count), amount_php: S((p) => p.unchanged.amount_php) },
+    increased: {
+      count: S((p) => p.adjustments.increased_count), nep_php: S((p) => p.adjustments.increased_nep_php),
+      house_php: S((p) => p.adjustments.increased_house_php), php: S((p) => p.adjustments.increased_php),
+    },
+    decreased: {
+      count: S((p) => p.adjustments.reduced_count), nep_php: S((p) => p.adjustments.reduced_nep_php),
+      house_php: S((p) => p.adjustments.reduced_house_php), php: S((p) => p.adjustments.reduced_php),
+    },
+    scope_review: {
+      count: S((p) => p.scope_review?.count ?? 0), nep_php: S((p) => p.scope_review?.nep_php ?? 0),
+      house_php: S((p) => p.scope_review?.house_php ?? 0), net_php: S((p) => p.scope_review?.net_php ?? 0),
+    },
+    house: { count: S((p) => p.sources.house.count), amount_php: S((p) => p.sources.house.amount_php) },
+    nep: { count: S((p) => p.sources.nep.count), amount_php: S((p) => p.sources.nep.amount_php) },
+    delta_php: S((p) => p.delta_php),
+  };
+  const t = totals;
+  ensure(t.insertions.amount_php - t.deletions.amount_php + t.increased.php - t.decreased.php + t.scope_review.net_php === t.delta_php, "candidate changes totals do not reconcile to House − NEP");
+  ensure(t.house.amount_php - t.nep.amount_php === t.delta_php, "candidate changes House and NEP totals do not give the summed difference");
+  return { source_file: MAIN_OVERVIEW, source_sha256: sha256(path), source_built_at: main.built_at, direction: main.direction, programs, totals };
 }
 
 // ---------------------------------------------------------------------------
@@ -1178,9 +1338,14 @@ async function main(): Promise<void> {
     log(`  ${key}/summary.json · ${key}/projects.parquet (${pq.rows.toLocaleString()} rows, ${(pq.bytes / 1e6).toFixed(1)} MB)`);
   }
 
+  // The workbench Overview's candidate-change table, carried and checked against our bridges.
+  const candidate_changes = candidateChanges(args.src, results, args.datasets);
+  const cc = candidate_changes.totals;
+  log(`\ncandidate changes (${MAIN_OVERVIEW}): ${cc.programs} programs · insertions ${peso(cc.insertions.amount_php)} · deletions ${peso(cc.deletions.amount_php)} · net adjustments ${peso(cc.increased.php - cc.decreased.php)} · scope review ${peso(cc.scope_review.net_php)} = ${peso(cc.delta_php)}`);
+
   const overview = {
     fiscal_year: FISCAL_YEAR, built_at: builtAt, source_repo: SOURCE_REPO, source_commit: commit,
-    datasets: args.datasets.map((k) => results[k]!.meta), documents, reconciliation,
+    datasets: args.datasets.map((k) => results[k]!.meta), documents, reconciliation, candidate_changes,
   };
   writeFileSync(resolve(args.out, "overview.json"), `${JSON.stringify(overview)}\n`);
   log("  overview.json");

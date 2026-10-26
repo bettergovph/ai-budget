@@ -310,6 +310,93 @@ export interface HgabOverview {
   datasets: HgabDatasetMeta[];
   documents: HgabDocument[];
   reconciliation: ReconciliationRow[];
+  /** The workbench Overview's "House vs. NEP: candidate changes" table; absent in files built before it. */
+  candidate_changes?: HgabCandidateChanges;
+}
+
+/**
+ * One group of the candidate-change table at the workbench's record grain.
+ * `count` uses the program's `count_unit`; `comparison_rows` is the number of
+ * our project rows when it differs or is published (DPWH insertions: 6,196
+ * allocation records in 6,193 rows, because grouped House rows count each
+ * member), and null where the workbench publishes none (HFEP: rows = records).
+ */
+export interface HgabCandidatePopulation {
+  count: number;
+  comparison_rows: number | null;
+  amount_php: number;
+}
+
+/**
+ * One program's row of the candidate-change table, carried verbatim from the
+ * workbench's `main_overview_2027.json` by the importer and asserted against
+ * this program's bridge. House minus NEP throughout; integer pesos.
+ */
+export interface HgabCandidateProgram {
+  key: DatasetKey;
+  /** The workbench's workspace label ("DPWH", "DA Farm-to-Market Roads", …). */
+  label: string;
+  /** What `count` counts: "allocation records", "project records", "funding-column records". */
+  count_unit: string;
+  grain: string;
+  house_stage: 'hgab2' | 'hgab3';
+  sources: {
+    nep: { count: number; amount_php: number; facility_count: number | null };
+    house: { count: number; amount_php: number; facility_count: number | null };
+  };
+  insertions: HgabCandidatePopulation;
+  deletions: HgabCandidatePopulation;
+  unchanged: HgabCandidatePopulation;
+  adjustments: {
+    /** Changed pairs (HFEP: changed funding-column records), in `count_unit`. */
+    count: number;
+    count_unit: string;
+    increased_count: number;
+    reduced_count: number;
+    /** Gross movements, both non-negative; `net_php` = increased − reduced. */
+    increased_php: number;
+    reduced_php: number;
+    net_php: number;
+    /** What the changed pairs carry in each document. */
+    increased_nep_php: number;
+    increased_house_php: number;
+    reduced_nep_php: number;
+    reduced_house_php: number;
+    /** HFEP only: revised columns, and columns present on one side only within matched facilities. */
+    events: { revised: number; added: number; dropped: number } | null;
+  };
+  /** Same-road pairs covering different stretches; null where the workbench has no such group (HFEP). */
+  scope_review: { count: number; nep_php: number; house_php: number; net_php: number; note: string } | null;
+  /** House − NEP = insertions − deletions + adjustments.net_php + scope_review.net_php. */
+  delta_php: number;
+}
+
+export interface HgabCandidateChanges {
+  /** `analysis/data/main_overview_2027.json` in the source checkout, with its hash and build time. */
+  source_file: string;
+  source_sha256: string;
+  source_built_at: string;
+  /** Always "House minus NEP". */
+  direction: string;
+  programs: HgabCandidateProgram[];
+  /**
+   * Sums over the programs, as the workbench's Total row. Pesos add exactly;
+   * counts add across different record grains, so they are record totals,
+   * not comparable project counts. Each stage is summed on its own; the NEP
+   * and the House bill are never added together.
+   */
+  totals: {
+    programs: number;
+    insertions: { count: number; amount_php: number };
+    deletions: { count: number; amount_php: number };
+    unchanged: { count: number; amount_php: number };
+    increased: { count: number; nep_php: number; house_php: number; php: number };
+    decreased: { count: number; nep_php: number; house_php: number; php: number };
+    scope_review: { count: number; nep_php: number; house_php: number; net_php: number };
+    house: { count: number; amount_php: number };
+    nep: { count: number; amount_php: number };
+    delta_php: number;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +580,16 @@ export interface OfficeHistory {
     nep_records: number;
     hgab3_records: number;
     bridge: Bridge | null;
+    /**
+     * Paired lines held out because their NEP and House bill sides name
+     * different office groups, or one side names no district office
+     * (DEO2LEG condition 3, `classifyRow` in the source's
+     * buildCongressIndex.mjs), where either side names this office. An
+     * annotation only: none of these amounts is in the figures above; they sit
+     * in the 2027 `office_change` residual. A line naming two offices is listed
+     * on both.
+     */
+    office_change: { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] };
   } | null;
   /** Name variants used to join this office across years, and any gaps. */
   aliases_used: string[];
@@ -552,6 +649,22 @@ export interface ResidualYear {
   /** Operating units that matched no crosswalk office (named in `unmatched_labels`). */
   unmatched_php: number;
   unmatched_labels: string[];
+  /**
+   * House bill 3rd reading only: paired lines whose two sides name different
+   * office groups (or one side no district office), held out of every office
+   * and of the Central/regional figures. deo + central + regional + unmatched
+   * + office_change = total. 0 for the GAA years and the NEP operating-unit slot.
+   */
+  office_change_php: number;
+  office_change_rows: number;
+  /**
+   * House bill 3rd reading only: lines the source's lens reads as naming no
+   * office (`no_office` in buildCongressIndex.mjs: the side lists an office but
+   * its grouped records do not), residual as upstream. deo + central +
+   * regional + unmatched + no_office + office_change = total. 0 elsewhere.
+   */
+  no_office_php: number;
+  no_office_rows: number;
 }
 
 export interface HgabDistrictIndex {
@@ -564,6 +677,16 @@ export interface HgabDistrictIndex {
   districts: DistrictCard[];
   offices: Record<string, OfficeHistory>;
   residual: ResidualYear[];
+  /**
+   * The 2027 office-change bucket in full (both sides): paired DPWH lines whose
+   * NEP and House bill sides name different office groups (`cross_district_rows`)
+   * or where one side names no district office (`one_side_rows`). Held out of
+   * every office and of Central/regional; the House side is `office_change_php`
+   * on the hgab3 residual slot.
+   */
+  office_change: { rows: number; cross_district_rows: number; one_side_rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] };
+  /** The 2027 lines the source reads as naming no office, in full: residual as upstream, in no office's figures. */
+  no_office: { rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] };
   /** What the GAA scope per year is (all funds, all expense classes) versus FY2027 (operations population), in one sentence each. */
   scope_notes: string[];
 }

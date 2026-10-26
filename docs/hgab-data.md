@@ -100,7 +100,8 @@ npx tsc --noEmit --ignoreConfig --strict --target es2023 --module esnext --modul
 ```
 data/hgab/2027/
   manifest.json              what ran, when, from which commit; input sha256s; per-dataset totals; PDF list
-  overview.json              HgabOverview: datasets[] (meta + bridge), documents[] (registry), reconciliation[]
+  overview.json              HgabOverview: datasets[] (meta + bridge), documents[] (registry), reconciliation[],
+                             candidate_changes (main_overview_2027.json's candidate-change table, carried and checked)
   <dataset>/summary.json     HgabDatasetSummary: controls, dims, top (25 per bridge group), readings (DPWH)
   <dataset>/projects.parquet one row per comparison record, PROJECT_COLUMNS in order, ZSTD
   pdf/<doc_key>.pdf          the eight source documents the evidence links open
@@ -263,7 +264,7 @@ unmatched residual is published for every year and stage.
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run build:hgab-districts` | `scripts/build-hgab-districts.ts` | Writes `districts.json`, `districts-manifest.json` (inputs with sha256, coverage, aliases) and caches `juris-authors.json`. Flags: `--src=<clone>`, `--out=data/hgab/2027`, `--gaa=data/18`, `--nep=data/2027/18`, `--contract=src/lib/hgab.ts`, `--offline` (reuse the cached juris response) |
-| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "districts.json (DEO lens)" section: 35 checks listed below. `--gaa=data/18` for the GAA yearly totals |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "districts.json (DEO lens)" section: 43 checks listed below. `--gaa=data/18` for the GAA yearly totals |
 
 ### Inputs
 
@@ -296,9 +297,9 @@ unmatched residual is published for every year and stage.
   `co_served_district_ids` = other districts sharing an engineering office
   (regional-group links excluded). Labels are `"<Jurisdiction>, <Nth|Lone>
   District"` with the crosswalk jurisdiction title-cased.
-- 69 paired FY2027 rows print different offices on the two stages; as in the
-  HGAB section both amounts sit under the House-side office (the parquet
-  `office` column).
+- 67 paired FY2027 lines name offices of different groups on the two sides
+  (or a district office on one side and none on the other). They are held out
+  of every office and of Central/regional: see "Office change" below.
 
 ### Office-name join and aliases
 
@@ -347,7 +348,8 @@ Residual share = 1 − deo_php / total_php; it is mostly the Central Office
 ### The residual and the predecessor rule
 
 `residual[]` has one entry per slot and the verifier proves
-`deo_php + central_office_php + regional_offices_php + unmatched_php = total_php`
+`deo_php + central_office_php + regional_offices_php + unmatched_php + no_office_php + office_change_php = total_php`
+(`no_office_php` and `office_change_php` are non-zero on the HGAB 3R slot only; see "Office change")
 (GAA totals from `yearly_totals.json`, NEP ₱643,953,276,000, HGAB 3R
 ₱587,075,661,000) and that Σ offices' `php` equals `deo_php`. `unmatched_php`
 holds two things, both named in `unmatched_labels` (labels with non-zero money
@@ -387,6 +389,69 @@ through `Compostela Valley DEO` → `Davao de Oro DEO` → `Davao de Oro 1st DEO
 (the 2nd DEO has its own code 1800193 from FY2023), which would let the
 Compostela Valley history be assigned to the 1st DEO; the crosswalk calls that
 succession unverified, so it is not done.
+
+### Office change (DEO2LEG condition 3)
+
+`DEO2LEG/README.md` ("Disclaimers", condition 3) requires that a paired line
+whose two stages do not agree on one office group is held out of every card
+and published separately, never folded into a card or the residual.
+`build-hgab-districts.ts` ports the source's rule from
+`analysis/web/buildCongressIndex.mjs`: `canonicalOffice`, `officeJoinKey`, the
+group definition (engineering offices, `evidence.inAllocationTable`, keyed by
+their exact sorted district set, so Apayao 1st + 2nd DEO are one group while
+North and South Manila DEO are two), `sideOffices` and `classifyRow`, reading
+the `third` and `nep` sides of each parquet row's `record_json`:
+
+- `group`: every office named on either side is in one group. Booked to the
+  House side's office as before (13,547 lines; one of them names Ifugao 2nd
+  DEO on the House side and Ifugao 1st DEO in the NEP, same group).
+- `residual`: no side names a district office (Central Office, regional
+  offices; 3,996 lines). Stays under Central/regional as before.
+- `no_office`: no side names any office (3 lines). Residual, as upstream:
+  `residual[hgab3].no_office_php` / `no_office_rows` and the top-level
+  `no_office` summary; in no office's figures.
+- `office_change`: the sides name two groups (10 lines) or a group and no
+  district office (57). Removed from every office's `fy2027` figures, bridge
+  and hgab3 slot. The House side is `residual[hgab3].office_change_php` /
+  `office_change_rows`; both sides are the top-level `office_change`
+  summary; each office either side names carries
+  `fy2027.office_change` (`rows`, `nep_php`, `hgab3_php`, `row_ids`; an
+  annotation, a line naming two offices is on both) and the note "N project
+  lines changed office between the NEP and the House bill; they are not
+  counted here."
+- `no_stage` stops the build (none), and so does any `no_office` set other
+  than the three ids below.
+
+The three `no_office` lines are third-reading `repeated_key` sides
+(house-reading:8092, listed under Pampanga 2nd DEO, ₱24,000,000;
+house-reading:12949, Batangas 4th DEO, ₱25,000,000; house-reading:15005,
+Central Office, ₱150,000,000; House only). The source reads only the records;
+these sides list an office on the side but not on its records, so they are
+residual, as upstream. The two DEOs carry the note "1 House bill line listed
+here has no office in the source data; it is left unassigned." In the
+leaderboard they are `totals.by_office_kind.no_office`.
+
+Reconciliation with the source (its builder run on the pinned checkout; the
+verifier repeats this whenever `--src` is present):
+
+| Bucket | Ours: lines | NEP | House | Source: lines | NEP | House | Difference |
+|---|---:|---:|---:|---:|---:|---:|---|
+| District offices | 13,547 | ₱121,119,847,000 | ₱174,826,097,000 | 13,547 | ₱121,119,847,000 | ₱174,826,097,000 | none |
+| Residual (Central, regional, no office) | 3,999 | ₱447,727,490,000 | ₱408,582,191,000 | 3,999 | ₱447,727,490,000 | ₱408,582,191,000 | none; same line ids |
+| Office change | 67 | ₱4,076,737,000 | ₱3,667,373,000 | 67 | ₱4,076,737,000 | ₱3,667,373,000 | none; same 67 line ids |
+| Whole | 17,613 | ₱572,924,074,000 | ₱587,075,661,000 | 17,613 | ₱572,924,074,000 | ₱587,075,661,000 | none |
+
+Residual shares: NEP 78.1%, House 69.6%, as the source states. Our residual
+splits into Central Office (House ₱408,230,191,000), regional offices
+(₱153,000,000) and no office (₱199,000,000).
+A count of rows whose two `office_canonical` strings differ (the parquet's
+`office_difference` flag) gives 69 (NEP ₱4,146,737,000 / House
+₱3,715,473,000): the 67 above, the Ifugao line (same group; NEP ₱31,600,000,
+House ₱9,700,000) and house-reading:5501 (Central Office in the House bill,
+BARMM in the NEP: no district office on either side, so residual; ₱38,400,000
+each).
+`districts-manifest.json` → `office_lens` lists every held-out line with both
+sides' offices, the no-office lines and the same-group line.
 
 ### Representatives and portraits
 
@@ -432,8 +497,14 @@ slots in order with `php` null or a non-zero integer and a `matched_label`;
 slot; HGAB 3R and NEP totals pinned; GAA totals equal `yearly_totals.json`;
 no Central/regional label in `unmatched_labels`; per-office bridge identity
 and net = hgab3 − nep; `fy2027` sums re-derived from the parquet by printed
-label, Σ offices' `fy2027.nep_php` + Central + regional = ₱572,924,074,000,
-every printed DEO on a card; headline, attribution and co-served recomputed;
+label with office-change lines left out, Σ offices' `fy2027.nep_php` + Central
++ regional + office change = ₱572,924,074,000, every printed DEO on a card;
+the office lens recomputed on its own code path (counts pinned: group 13,547,
+residual 3,996, office change 67 = 10 + 57, no office 3 by id, no stage 0),
+the `office_change` and `no_office` summaries and hgab3 residual slot, every
+kept line booked inside its group and every residual line to
+Central/regional, per-office annotations and notes, and, with `--src`, the
+source's own `buildCongressIndex` run and compared in every cell and line id; headline, attribution and co-served recomputed;
 label format; ≥ 250 seats joined (exact number and unmatched names printed);
 resolved reps carry member code and profile, ambiguous seats choose none;
 portraits carry attribution and licence; juris cache `fetched_at` matches;
@@ -480,11 +551,15 @@ stand for:
    be labelled as a range when attribution is B or mixed. Districts linked
    only to the BARMM regional grouping have attribution `none` and null
    headlines.
-7. 69 paired FY2027 rows print a different implementing office on the NEP and
-   House sides; as in the HGAB section, both amounts are booked to the office
-   printed on the House side (the parquet's `office` column). HGAB statuses
-   are carried verbatim through the per-office bridge (fuzzy and ambiguous
-   rows sit in `house_only` as the contract maps them).
+7. 67 paired FY2027 lines whose NEP and House sides name different office
+   groups, or a district office on one side and none on the other, are held
+   out of every office and of the Central/regional residual (DEO2LEG
+   condition 3; "Office change" below). Every other line is booked to the
+   office the House side lists (the parquet's `office` column), including the
+   one line whose two sides name different offices of the same group (Ifugao
+   1st and 2nd DEO, both serving the lone district). HGAB statuses are carried
+   verbatim through the per-office bridge (fuzzy and ambiguous rows sit in
+   `house_only` as the contract maps them).
 8. The crosswalk's scanned allocation table (undated) is used for structure
    only; none of its amounts appear here.
 
@@ -539,7 +614,7 @@ the tree, so it lands on R2 at `hgab/2027/leaderboard.json`
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run build:hgab-leaderboard` | `scripts/build-hgab-leaderboard.ts` | Writes `leaderboard.json`, prints the slices and the top 3 of every board. Flags: `--out=data/hgab/2027`, `--contract=src/lib/hgab.ts` (`TRACE_LABELS`, `REGION_ORDER`). Fails on any broken rule below |
-| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "leaderboard.json (leaderboards)" section: 44 checks, recomputed from `districts.json` and the parquet. Required: a missing file fails |
+| `npm run verify:hgab` | `scripts/verify-hgab.ts` | The "leaderboard.json (leaderboards)" section: 47 checks, recomputed from `districts.json` and the parquet. Required: a missing file fails |
 
 **The unit** is a connected group of engineering offices (the BARMM
 `regional_group` excluded) and every district they serve, found by union-find
@@ -593,9 +668,20 @@ the 7-district, 2-office group). The 5 BARMM-only districts go to
   group ever spans two); each person's is the district's own, and they agree.
 - `totals.all` and `by_office_kind` come from the parquet grouped by
   `office_kind` (the Camarines Norte Sub-DEO is listed under "District
-  engineering offices (DEOs)"). Σ entries = `deo` on every field; deo +
-  central + regional = all = the DPWH totals (NEP ₱572,924,074,000, House
-  ₱587,075,661,000); held = 389 rows, ₱10,517,119,000.
+  engineering offices (DEOs)"), with the 67 office-change lines and the 3
+  no-office lines (ids from districts.json) as their own `office_change` and
+  `no_office` slices (plus `rows`). Σ entries = `deo` on every field (NEP
+  ₱121,119,847,000, House ₱174,826,097,000, the source's district-office
+  figures); deo + central + regional + no_office + office_change = all = the
+  DPWH totals (NEP
+  ₱572,924,074,000, House ₱587,075,661,000); held = 389 rows,
+  ₱10,517,119,000.
+- Per entry, `office_change_rows` = distinct office-change lines naming any of
+  its offices (an annotation; 41 entries), `scope_rows` = its segment-scope
+  lines (= Σ the offices' `bridge.scope_review.rows`; 15 in all).
+  `totals.gaa_residual` copies the GAA slots of districts.json `residual`.
+  `residualLine()` (in the contract) prints the part no district carries on
+  every board but shift and bills; the verifier checks it returns a sentence.
 - `regions[]`: in `REGION_ORDER`, district offices only (Central Office and
   regional offices are in no region), each the sum of its entries.
 - `credits` and `notes` are reader-facing: plain sentences of at most 20

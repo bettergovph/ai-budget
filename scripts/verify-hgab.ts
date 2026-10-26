@@ -14,6 +14,10 @@
  *   - every document key a row or dataset cites exists in the registry (and on
  *     disk unless --no-pdf);
  *   - the reconciliation against our FY2027 NEP tree has no mismatch;
+ *   - the candidate-change table (overview.json `candidate_changes`, carried
+ *     from main_overview_2027.json): field for field against the checkout,
+ *     every cell recomputed from the parquet, the funding identity per
+ *     program, record partitions and the Total row;
  *   - every dataset's READER-FACING copy (`summary` ≤ 30 words, `one_row`,
  *     `caveats[]`) is present and free of codes, volumes and pipeline jargon
  *     (docs/hgab-data.md "Reader-facing vs technical copy");
@@ -22,7 +26,10 @@
  *     the residual identity deo + central + regional + unmatched = total per
  *     year and stage (HGAB 3R ₱587,075,661,000; NEP ₱643,953,276,000; GAA
  *     yearly totals), per-office bridge identity and parquet tie-out,
- *     headline sums, and ≥ 250 of 254 representatives joined.
+ *     headline sums, and ≥ 250 of 254 representatives joined; the office lens
+ *     (DEO2LEG condition 3) recomputed on its own code path — 67 office-change
+ *     lines held out, booking inside each group, per-office annotations — and,
+ *     with --src, the source's own buildCongressIndex.mjs run and compared.
  *   - the leaderboards (`npm run build:hgab-leaderboard`), recomputed from
  *     districts.json and the DPWH parquet: field lists parsed from
  *     src/lib/hgab-leaderboard.ts, the office–district groups, tiers, people,
@@ -53,10 +60,12 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
-  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions,
+  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
   type LeaderEntry, type LeaderSlice, type LeaderboardData,
 } from "../src/lib/hgab-leaderboard";
+import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -111,7 +120,10 @@ interface YearAmount { fy: number; stage: FiscalStage; php: number | null; match
 interface OfficeHistory {
   id: string; name: string; kind: string; region: string | null; district_ids: string[]; tier: "A" | "B"; years: YearAmount[];
   by_congress: Array<{ congress: number; gaa_php: number | null; years_counted: number[] }>;
-  fy2027: { nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null } | null;
+  fy2027: {
+    nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; nep_records: number; hgab3_records: number; bridge: Bridge | null;
+    office_change: { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] };
+  } | null;
   aliases_used: string[]; notes: string[];
 }
 interface Representative {
@@ -126,12 +138,15 @@ interface DistrictCard {
 }
 interface ResidualYear {
   fy: number; stage: FiscalStage; total_php: number; deo_php: number; central_office_php: number; regional_offices_php: number; unmatched_php: number; unmatched_labels: string[];
+  office_change_php: number; office_change_rows: number; no_office_php: number; no_office_rows: number;
 }
 interface DistrictIndex {
   fiscal_year: number; built_at: string; source_commit: string;
   crosswalk: { schema_version: string; build_date: string; offices: number; districts: number; relationships: number };
   representatives_source: { url: string; congress: number; fetched_at: string; notice: string; matched: number; unmatched: number };
   terms: CongressTerm[]; districts: DistrictCard[]; offices: Record<string, OfficeHistory>; residual: ResidualYear[]; scope_notes: string[];
+  office_change: { rows: number; cross_district_rows: number; one_side_rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] };
+  no_office: { rows: number; nep_php: number; hgab2_php: number; hgab3_php: number; row_ids: string[] };
 }
 const DISTRICT_SLOTS: Array<{ fy: number; stage: FiscalStage }> = [
   ...[2020, 2021, 2022, 2023, 2024, 2025, 2026].map((fy) => ({ fy, stage: "gaa" as FiscalStage })),
@@ -242,6 +257,7 @@ async function main(): Promise<void> {
   const c = await db.connect();
   const rows = async (sql: string) => (await c.runAndReadAll(sql)).getRows();
   const one = async (sql: string) => (await rows(sql))[0];
+  let lens: LensCheck | null = null;
 
   for (const meta of overview.datasets) {
     const key = meta.key;
@@ -411,6 +427,9 @@ async function main(): Promise<void> {
   for (const r of R) t[r.status] = (t[r.status] ?? 0) + 1;
   process.stdout.write(`  ${t.exact} exact · ${t.explained} explained · ${t.info} info · ${t.mismatch} mismatch\n`);
 
+  // The workbench Overview's candidate-change table (overview.json candidate_changes).
+  await verifyCandidateChanges(c);
+
   // -------------------------------------------------------------------------
   // Districts index (the DEO lens)
   // -------------------------------------------------------------------------
@@ -455,8 +474,9 @@ async function main(): Promise<void> {
     // Residual identity per slot, and the office side ties to deo_php.
     const badResidualShape = D.residual.length !== 9 || D.residual.some((r, i) => r.fy !== DISTRICT_SLOTS[i].fy || r.stage !== DISTRICT_SLOTS[i].stage);
     check("residual has the same nine slots in order", !badResidualShape);
-    const badIdentity = D.residual.filter((r) => r.deo_php + r.central_office_php + r.regional_offices_php + r.unmatched_php !== r.total_php);
-    check("residual identity deo + central + regional + unmatched = total holds on every slot", badIdentity.length === 0, badIdentity.map((r) => `${r.stage} ${r.fy}`).join(", "));
+    const badIdentity = D.residual.filter((r) => r.deo_php + r.central_office_php + r.regional_offices_php + r.unmatched_php + r.no_office_php + r.office_change_php !== r.total_php
+      || ((r.stage !== "hgab3") && (r.office_change_php !== 0 || r.office_change_rows !== 0 || r.no_office_php !== 0 || r.no_office_rows !== 0)));
+    check("residual identity deo + central + regional + unmatched + no_office + office_change = total on every slot; the last two are 0 outside the House bill slot", badIdentity.length === 0, badIdentity.map((r) => `${r.stage} ${r.fy}`).join(", "));
     const badDeo = D.residual.filter((r) => offices.reduce((a, o) => a + (slotOf(o, r.stage, r.fy)?.php ?? 0), 0) !== r.deo_php);
     check("Σ offices' php equals deo_php on every slot (so Σ offices + residual = total)", badDeo.length === 0, badDeo.map((r) => `${r.stage} ${r.fy}`).join(", "));
     const h3 = D.residual.find((r) => r.stage === "hgab3")!, nepR = D.residual.find((r) => r.stage === "nep")!;
@@ -485,21 +505,27 @@ async function main(): Promise<void> {
     });
     check("per-office bridge identity holds and nets to hgab3 − nep (hgab3 equals the hgab3 slot)", badBridge.length === 0, badBridge.map((o) => o.id).join(", "));
     const dp = resolve(OUT, "dpwh", "projects.parquet");
+    lens = await recomputeLens(c, resolve(SRC, "DEO2LEG/outputs/deo_leg_crosswalk.json"), dp);
+    const heldOut = lens ? [...lens.change.keys(), ...lens.noOffice] : [...D.office_change.row_ids, ...D.no_office.row_ids];
+    const heldOutSql = heldOut.length ? `WHERE id NOT IN (${heldOut.map((x) => `'${q(x)}'`).join(", ")})` : "";
     if (existsSync(dp)) {
-      const byOffice = new Map((await rows(`SELECT office, sum(nep_php), sum(hgab2_php), sum(hgab3_php), count(*) FROM read_parquet('${q(dp)}') GROUP BY 1`)).map((r) => [String(r[0]), r.slice(1).map((v) => (v == null ? null : num(v)))]));
+      const byOffice = new Map((await rows(`SELECT office, sum(nep_php), sum(hgab2_php), sum(hgab3_php), count(*) FROM read_parquet('${q(dp)}') ${heldOutSql} GROUP BY 1`)).map((r) => [String(r[0]), r.slice(1).map((v) => (v == null ? null : num(v)))]));
       const badTie = withBlock.filter((o) => {
         const label = slotOf(o, "hgab3", 2027)?.matched_label;
         const p = label ? byOffice.get(label) : undefined;
         return !p || p[0] !== o.fy2027!.nep_php || p[1] !== o.fy2027!.hgab2_php || p[2] !== o.fy2027!.hgab3_php;
       });
-      check("fy2027 nep/hgab2/hgab3 equal the parquet sums for the printed office label", badTie.length === 0, badTie.map((o) => o.id).join(", "));
+      check("fy2027 nep/hgab2/hgab3 equal the parquet sums for the printed office label, office-change and no-office lines left out", badTie.length === 0, badTie.map((o) => o.id).join(", "));
       const nepOps = withBlock.reduce((a, o) => a + (o.fy2027!.nep_php ?? 0), 0);
       const parquetNep = [...byOffice.values()].reduce((a, p) => a + (p[0] ?? 0), 0);
       const nonDeoNep = [...byOffice].filter(([l]) => /^central office$/i.test(l) || /regional office/i.test(l)).reduce((a, [, p]) => a + (p[0] ?? 0), 0);
-      check("Σ offices' fy2027.nep_php + Central Office + regional = NEP operations total ₱572,924,074,000", nepOps + nonDeoNep === parquetNep && parquetNep === EXPECTED.dpwh.nep, `${peso(nepOps)} + ${peso(nonDeoNep)} vs ${peso(parquetNep)}`);
+      const changeNep = num((await rows(`SELECT coalesce(sum(nep_php), 0) FROM read_parquet('${q(dp)}') WHERE id IN (${heldOut.map((x) => `'${q(x)}'`).join(", ") || "''"})`))[0][0]);
+      check(`Σ offices' fy2027.nep_php + Central Office + regional + office change and no office (${peso(changeNep)}) = NEP operations total ₱572,924,074,000`,
+        nepOps + nonDeoNep === parquetNep && parquetNep + changeNep === EXPECTED.dpwh.nep && changeNep === D.office_change.nep_php + D.no_office.nep_php, `${peso(nepOps)} + ${peso(nonDeoNep)} + ${peso(changeNep)}`);
       const labels = new Set([...byOffice.keys()].filter((l) => !/^central office$/i.test(l) && !/regional office/i.test(l)));
       const joined = new Set(withBlock.map((o) => slotOf(o, "hgab3", 2027)?.matched_label));
       check(`every printed DEO in the parquet is on a card (${labels.size} labels)`, [...labels].every((l) => joined.has(l)), [...labels].filter((l) => !joined.has(l)).join(", "));
+      await checkLens(D, lens);
     }
 
     // Cards: headline sums, attribution, co-served, labels.
@@ -560,7 +586,7 @@ async function main(): Promise<void> {
     for (const r of D.residual) process.stdout.write(`  ${r.stage.padEnd(5)} FY${r.fy}: residual ${((1 - r.deo_php / r.total_php) * 100).toFixed(1)}% · unmatched ${peso(r.unmatched_php)}${r.unmatched_labels.length ? ` (${r.unmatched_labels.length} labels)` : ""}\n`);
   }
 
-  await verifyLeaderboard(overview, c);
+  await verifyLeaderboard(overview, c, lens);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -570,13 +596,177 @@ async function main(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Office lens (DEO2LEG/README.md condition 3), recomputed on its own code path
+// ---------------------------------------------------------------------------
+//
+// The source's rule (analysis/web/buildCongressIndex.mjs `classifyRow`): a 2027 DPWH line belongs to an office group
+// only when every side that lists an office names offices of that one group (group = engineering offices serving the
+// same district set). No group at all is residual (Central/regional); anything else is `office_change`, held out of
+// every office and of the residual. Written again here from the rule, not imported from the builder.
+
+const EXPECTED_LENS = {
+  group: 13_547, residual: 3_996, office_change: 67, cross: 10, one_side: 57, nep: 4_076_737_000, hgab3: 3_667_373_000,
+  /** Third-reading repeated_key sides whose grouped records repeat no office: `no_office`, residual as upstream. */
+  no_office: ["house-reading:12949", "house-reading:15005", "house-reading:8092"], no_office_house: 199_000_000,
+  /** The source's own figures (its congressModel test pins the residual and office change). */
+  upstream: { residual_rows: 3_999, residual_nep: 447_727_490_000, residual_house: 408_582_191_000, office_change_rows: 67, card_rows: 13_547, card_house: 174_826_097_000 },
+};
+type LensKind = "group" | "residual" | "office_change" | "no_office" | "no_stage";
+interface LensCheck {
+  kind: Map<string, LensKind>;
+  group: Map<string, string>;
+  change: Map<string, { cross: boolean; oneSide: boolean; nep: number; h2: number; h3: number; offices: Set<string> }>;
+  noOffice: string[];
+  officeGroup: Map<string, string>;
+  label: Map<string, string>;
+  amounts: Map<string, { nep: number; h3: number; trace: string }>;
+}
+
+/** project_offices.mjs canonicalOffice(), written out again for the verifier. */
+function lensCanonical(v: unknown): string {
+  if (v == null || v === "") return "";
+  let t = String(v).normalize("NFKC").trim().replace(/\s+/g, " ");
+  for (let before = ""; before !== t;) { before = t; t = t.replace(/(\p{L})\s*ñ\s*(\p{L})/gu, "$1ñ$2"); }
+  if (/District Engineering Office$/i.test(t)) t = t.replace(/\s*-\s*/g, " ").replace(/\s+/g, " ");
+  t = t.replace(/^(Regional Office )([IVXLC]+)([AB])$/i, (_m, a: string, b: string, l: string) => `${a}${b.toUpperCase()}-${l.toUpperCase()}`);
+  for (const [bad, good] of [[/Marindugue/gi, "Marinduque"], [/Siguijor/gi, "Siquijor"], [/Occidenatal/gi, "Occidental"], [/Batagas/gi, "Batangas"], [/Ilolilo/gi, "Iloilo"]] as Array<[RegExp, string]>) t = t.replace(bad, good);
+  return t;
+}
+
+async function recomputeLens(c: DuckDBConnection, crosswalkPath: string, parquetPath: string): Promise<LensCheck | null> {
+  if (!existsSync(crosswalkPath) || !existsSync(parquetPath)) return null;
+  const cw = readJson<{ offices: Record<string, { name: string; type: string; aliases?: string[]; legislativeDistrictIds?: string[]; evidence?: { inAllocationTable?: boolean } }> }>(crosswalkPath);
+  const joinKey = (name: string) => lensCanonical(name || "").replace(/\bsub[\s-]*deo\b/gi, "sub district engineering office").replace(/\bDEO\b/gi, "district engineering office")
+    .replace(/[-\u2010-\u2015]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  const engineering = Object.entries(cw.offices).filter(([, o]) => o.type === "district_engineering_office" || o.type === "sub_district_engineering_office");
+  const byKey = new Map<string, Set<string>>();
+  for (const [id, o] of engineering) for (const n of [o.name, ...(o.aliases ?? [])]) { const k = joinKey(n); if (k) byKey.set(k, (byKey.get(k) ?? new Set()).add(id)); }
+  const officeGroup = new Map(engineering.filter(([, o]) => o.evidence?.inAllocationTable && (o.legislativeDistrictIds ?? []).length)
+    .map(([id, o]) => [id, `office-group:${[...o.legislativeDistrictIds!].sort().join("+")}`] as [string, string]));
+  const resolveName = (name: string) => {
+    const ids = [...(byKey.get(joinKey(name)) ?? [])];
+    const groups = [...new Set(ids.map((i) => officeGroup.get(i)).filter((g): g is string => !!g))];
+    return groups.length === 1 ? { group: groups[0], offices: ids.filter((i) => officeGroup.get(i) === groups[0]) } : null;
+  };
+  type Side = { office?: string; office_canonical?: string; records?: Side[] } | null | undefined;
+  const out: LensCheck = { kind: new Map(), group: new Map(), change: new Map(), noOffice: [], officeGroup, label: new Map(), amounts: new Map() };
+  const all = (await c.runAndReadAll(`SELECT id, office, trace, nep_php, hgab2_php, hgab3_php, record_json FROM read_parquet('${q(parquetPath)}')`)).getRows();
+  for (const r of all) {
+    const id = String(r[0]);
+    const rec = JSON.parse(String(r[6])) as { third?: Side; nep?: Side };
+    // A side with grouped records is read from its records only, as the source does.
+    const namesOf = (side: Side): string[] => (side ? (side.records ?? [side]).map((x) => x?.office_canonical ?? x?.office ?? "").filter((x) => x !== "") : []);
+    const sides = [rec.third, rec.nep].filter((x) => x);
+    const names = sides.flatMap(namesOf);
+    const resolved = names.map(resolveName);
+    const groups = new Set(resolved.filter((x) => x).map((x) => x!.group));
+    const some = resolved.some((x) => !x);
+    const kind: LensKind = !sides.length ? "no_stage" : !names.length ? "no_office" : groups.size === 1 && !some ? "group" : groups.size === 0 ? "residual" : "office_change";
+    out.kind.set(id, kind);
+    out.label.set(id, String(r[1]));
+    out.amounts.set(id, { nep: r[3] == null ? 0 : num(r[3]), h3: r[5] == null ? 0 : num(r[5]), trace: String(r[2]) });
+    if (kind === "group") out.group.set(id, [...groups][0]);
+    if (kind === "no_office") out.noOffice.push(id);
+    if (kind === "office_change") out.change.set(id, {
+      cross: groups.size > 1, oneSide: some, nep: r[3] == null ? 0 : num(r[3]), h2: r[4] == null ? 0 : num(r[4]), h3: r[5] == null ? 0 : num(r[5]),
+      offices: new Set(resolved.flatMap((x) => x?.offices ?? [])),
+    });
+  }
+  return out;
+}
+
+async function checkLens(D: DistrictIndex, L: LensCheck | null): Promise<void> {
+  if (!L) { process.stdout.write("  · office lens recomputation skipped (no crosswalk under --src)\n"); return; }
+  const n = (k: LensKind) => [...L.kind.values()].filter((x) => x === k).length;
+  const change = [...L.change.entries()];
+  const sumOf = (f: (x: (typeof change)[number][1]) => number) => change.reduce((a, [, x]) => a + f(x), 0);
+  const E = EXPECTED_LENS;
+  check(`office lens recomputed: group ${n("group").toLocaleString("en-US")}, residual ${n("residual").toLocaleString("en-US")}, office change ${n("office_change")} (${change.filter(([, x]) => x.cross).length} cross-district, ${change.filter(([, x]) => x.oneSide).length} one side), no office ${n("no_office")}, no stage ${n("no_stage")}`,
+    n("group") === E.group && n("residual") === E.residual && n("office_change") === E.office_change && n("no_office") === E.no_office.length && n("no_stage") === 0
+      && change.filter(([, x]) => x.cross).length === E.cross && change.filter(([, x]) => x.oneSide).length === E.one_side && sumOf((x) => x.nep) === E.nep && sumOf((x) => x.h3) === E.hgab3);
+  const noOff = [...L.noOffice].sort();
+  const noOffHouse = noOff.reduce((a, id) => a + L.amounts.get(id)!.h3, 0), noOffNep = noOff.reduce((a, id) => a + L.amounts.get(id)!.nep, 0);
+  const h3SlotN = D.residual.find((r) => r.stage === "hgab3")!;
+  check(`no-office lines are exactly ${E.no_office.join(", ")} (House ${peso(noOffHouse)}): residual, in the no_office summary and slot, in no office's figures`,
+    JSON.stringify(noOff) === JSON.stringify([...E.no_office].sort()) && noOffHouse === E.no_office_house && JSON.stringify([...D.no_office.row_ids].sort()) === JSON.stringify(noOff)
+      && D.no_office.rows === noOff.length && D.no_office.hgab3_php === noOffHouse && D.no_office.nep_php === noOffNep && h3SlotN.no_office_php === noOffHouse && h3SlotN.no_office_rows === noOff.length,
+    noOff.join(", "));
+  const officeOfLabelN = new Map(Object.values(D.offices).filter((o) => o.kind !== "regional_group").map((o) => [o.years.find((y) => y.stage === "hgab3")?.matched_label ?? "", o.id]));
+  const wantNoteN = new Map<string, number>();
+  for (const id of noOff) { const o = officeOfLabelN.get(L.label.get(id)!); if (o) wantNoteN.set(o, (wantNoteN.get(o) ?? 0) + 1); }
+  const badNoteN = Object.values(D.offices).filter((o) => {
+    const k = wantNoteN.get(o.id);
+    const want = !k ? [] : [k === 1 ? "1 House bill line listed here has no office in the source data; it is left unassigned." : `${k} House bill lines listed here have no office in the source data; they are left unassigned.`];
+    return JSON.stringify(o.notes.filter((x) => /no office in the source data/.test(x))) !== JSON.stringify(want);
+  });
+  check(`offices listing a no-office line carry the note (${wantNoteN.size} offices)`, badNoteN.length === 0, badNoteN.map((o) => o.id).join(", "));
+  const OC = D.office_change;
+  check(`office_change summary = the recomputed held-out lines (${OC.rows} lines, NEP ${peso(OC.nep_php)}, House ${peso(OC.hgab3_php)})`,
+    JSON.stringify([...OC.row_ids].sort()) === JSON.stringify(change.map(([id]) => id).sort()) && OC.rows === change.length && OC.cross_district_rows === change.filter(([, x]) => x.cross).length
+      && OC.one_side_rows === change.filter(([, x]) => x.oneSide).length && OC.nep_php === sumOf((x) => x.nep) && OC.hgab2_php === sumOf((x) => x.h2) && OC.hgab3_php === sumOf((x) => x.h3));
+  const h3Slot = D.residual.find((r) => r.stage === "hgab3")!;
+  check("the House bill residual slot carries the office-change House amount and line count", h3Slot.office_change_php === sumOf((x) => x.h3) && h3Slot.office_change_rows === change.length,
+    `${peso(h3Slot.office_change_php)} / ${h3Slot.office_change_rows}`);
+  // Booking: kept rows sit with an office of their group (by the House bill's office label); residual rows with Central/regional.
+  const officeOfLabel = new Map(Object.values(D.offices).filter((o) => o.kind !== "regional_group").map((o) => [o.years.find((y) => y.stage === "hgab3")?.matched_label ?? "", o.id]));
+  const badBooking = [...L.kind].filter(([id, k]) => {
+    const office = officeOfLabel.get(L.label.get(id)!);
+    if (k === "group") return !office || L.officeGroup.get(office) !== L.group.get(id);
+    if (k === "residual") return office != null;
+    return false;
+  }).map(([id]) => id);
+  check("every line kept with a group is booked to an office of that group; every residual line to Central Office or a regional office", badBooking.length === 0, badBooking.slice(0, 5).join(", "));
+  const want = new Map<string, { rows: number; nep_php: number; hgab3_php: number; row_ids: string[] }>();
+  for (const [id, x] of change) for (const o of x.offices) {
+    const w = want.get(o) ?? { rows: 0, nep_php: 0, hgab3_php: 0, row_ids: [] };
+    w.rows++; w.nep_php += x.nep; w.hgab3_php += x.h3; w.row_ids.push(id); want.set(o, w);
+  }
+  const badAnn = Object.values(D.offices).filter((o) => {
+    const w = want.get(o.id), got = o.fy2027?.office_change;
+    if (!o.fy2027) return !!w;
+    const expect = w ? { ...w, row_ids: [...w.row_ids].sort() } : { rows: 0, nep_php: 0, hgab3_php: 0, row_ids: [] };
+    const note = !w ? null : w.rows === 1 ? "1 project line changed office between the NEP and the House bill; it is not counted here." : `${w.rows} project lines changed office between the NEP and the House bill; they are not counted here.`;
+    const noted = o.notes.filter((x) => /changed office between the NEP and the House bill/.test(x));
+    return JSON.stringify(got) !== JSON.stringify(expect) || JSON.stringify(noted) !== JSON.stringify(note ? [note] : []);
+  });
+  check(`per office, the office-change annotation (lines, NEP, House, ids) and its note recomputed (${want.size} offices named)`, badAnn.length === 0, badAnn.map((o) => o.id).slice(0, 5).join(", "));
+
+  // Against the source's own build, when the checkout is there.
+  const builder = resolve(SRC, "analysis/web/buildCongressIndex.mjs");
+  if (!existsSync(builder)) { process.stdout.write("  · comparison with the source's buildCongressIndex.mjs skipped (no --src checkout)\n"); return; }
+  const mod = await import(pathToFileURL(builder).href) as { buildCongressIndex: (raw: unknown, builtAt: string, prov: null) => {
+    residual: { row_ids: string[]; summary: { sources: { nep: { amount_php: number }; house: { amount_php: number } } } };
+    office_change: { rows: Array<{ id: string }> }; reconciliation: { row_counts: { residual: number; office_change: number } };
+  } };
+  const raw = Object.fromEntries([["detail", "analysis/data/comparison_projects_2027.json"], ["overview", "analysis/data/comparison_overview_2027.json"], ["crosswalk", "DEO2LEG/outputs/deo_leg_crosswalk.json"]]
+    .map(([k, f]) => [k, readJson<unknown>(resolve(SRC, f))]));
+  const up = mod.buildCongressIndex(raw, "verify", null);
+  const upChange = new Set(up.office_change.rows.map((r) => r.id)), upRes = new Set(up.residual.row_ids);
+  // Ours: residual = Central/regional lines + no-office lines; district offices = h3 slot deo_php.
+  const ourRes = [...L.kind].filter(([, k]) => k === "residual" || k === "no_office").map(([id]) => id);
+  const ourResHouse = ourRes.reduce((a, id) => a + L.amounts.get(id)!.h3, 0), ourResNep = ourRes.reduce((a, id) => a + L.amounts.get(id)!.nep, 0);
+  const slot = D.residual.find((r) => r.stage === "hgab3")!;
+  const upCards = (up as unknown as { reconciliation: { row_counts: { cards: number }; cards_total: Record<string, number> } }).reconciliation;
+  check(`the source's own build agrees in every cell: district offices ${upCards.row_counts.cards.toLocaleString("en-US")} lines / House ${peso(upCards.cards_total["sources.house.amount_php"])}, residual ${up.reconciliation.row_counts.residual.toLocaleString("en-US")} / ${peso(up.residual.summary.sources.house.amount_php)}, office change ${upChange.size} lines, same ids`,
+    upChange.size === change.length && change.every(([id]) => upChange.has(id)) && upRes.size === ourRes.length && ourRes.every((id) => upRes.has(id))
+      && up.residual.summary.sources.house.amount_php === ourResHouse && up.residual.summary.sources.nep.amount_php === ourResNep
+      && slot.central_office_php + slot.regional_offices_php + slot.unmatched_php + slot.no_office_php === ourResHouse
+      && upCards.row_counts.cards === n("group") && upCards.cards_total["sources.house.amount_php"] === slot.deo_php
+      && upCards.row_counts.cards === E.upstream.card_rows && slot.deo_php === E.upstream.card_house
+      && up.reconciliation.row_counts.residual === E.upstream.residual_rows && up.residual.summary.sources.nep.amount_php === E.upstream.residual_nep
+      && up.residual.summary.sources.house.amount_php === E.upstream.residual_house && up.reconciliation.row_counts.office_change === E.upstream.office_change_rows,
+    `ours: residual ${ourRes.length} ${peso(ourResHouse)}, offices ${peso(slot.deo_php)}`);
+}
+
+// ---------------------------------------------------------------------------
 // Leaderboards (npm run build:hgab-leaderboard): leaderboard.json
 // ---------------------------------------------------------------------------
 
 const LEADERBOARD_CONTRACT = resolve(arg("leaderboard-contract", "src/lib/hgab-leaderboard.ts"));
 const EXPECTED_LEADERBOARD = {
   held: { rows: 389, php: 10_517_119_000 }, fuzzy: { rows: 385, php: 10_395_246_000 }, ambiguous: { rows: 4, php: 121_873_000 },
-  deo: { nep: 124_275_109_000, hgab3: 176_097_432_000 }, central: { nep: 448_495_965_000, hgab3: 410_825_229_000 }, regional: { nep: 153_000_000, hgab3: 153_000_000 },
+  deo: { nep: 121_119_847_000, hgab3: 174_826_097_000 }, central: { nep: 447_574_490_000, hgab3: 408_230_191_000 }, regional: { nep: 153_000_000, hgab3: 153_000_000 },
+  office_change: { nep: 4_076_737_000, hgab3: 3_667_373_000, rows: 67 }, no_office: { nep: 0, hgab3: 199_000_000, rows: 3 },
   without_office: 5, min_rows: 3, note_words: 20,
 };
 const OFFICE_KIND_LABELS = { deo: "District engineering offices (DEOs)", central: "Central Office", regional: "Regional offices" } as const;
@@ -594,7 +784,7 @@ function contractFields(src: string, name: string, indent = 2): string[] {
   return m[1] ? [...contractFields(src, m[1]), ...own] : own;
 }
 
-async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promise<void> {
+async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: LensCheck | null): Promise<void> {
   process.stdout.write("\nleaderboard.json (leaderboards)\n");
   const path = resolve(OUT, "leaderboard.json");
   check("leaderboard.json present (npm run build:hgab-leaderboard)", existsSync(path), path);
@@ -636,12 +826,16 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
     && [e.added_php, e.added_rows, e.held_php, e.held_rows, e.dropped_php, e.dropped_rows].every((v) => isInt(v) && v >= 0)
     && sameKeys(e.gaa, ["2020", "2021", "2022", "2023", "2024", "2025", "2026"]) && Object.values(e.gaa).every(intOrNull)
     && Array.isArray(e.gaa_years) && e.gaa_years.every(isInt) && sameKeys(e.congress, ["18", "19", "20"]) && Object.values(e.congress).every(intOrNull)
-    && typeof e.reorganised === "boolean" && Array.isArray(e.reorganised_notes) && e.reorganised_notes.every((x) => typeof x === "string");
+    && typeof e.reorganised === "boolean" && Array.isArray(e.reorganised_notes) && e.reorganised_notes.every((x) => typeof x === "string")
+    && isInt(e.office_change_rows) && e.office_change_rows >= 0 && isInt(e.scope_rows) && e.scope_rows >= 0;
   const badEntries = L.entries.filter((e) => !entryOk(e));
   const badRegions = L.regions.filter((r) => !(sameKeys(r, F.region) && K.regionOrder.includes(r.region) && isInt(r.units) && isInt(r.districts) && isInt(r.delta_php) && intOrNull(r.gaa2026_php)
     && F.slice.every((k) => isInt(r[k as keyof Slice]) && r[k as keyof Slice] >= 0)));
   check(`every field the contract names, and only those, with the right types (${F.entry.length} per entry, ${F.person.length} per person, ${F.slice.length} per slice, ${F.region.length} per region)`,
-    sameKeys(L, F.data) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional"]) && sliceOk(L.totals.all) && Object.values(L.totals.by_office_kind).every(sliceOk)
+    sameKeys(L, F.data) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional", "office_change", "no_office"]) && sliceOk(L.totals.all)
+      && [L.totals.by_office_kind.deo, L.totals.by_office_kind.central, L.totals.by_office_kind.regional].every(sliceOk)
+      && [L.totals.by_office_kind.office_change, L.totals.by_office_kind.no_office].every(({ rows, ...rest }) => isInt(rows) && sliceOk(rest))
+      && Array.isArray(L.totals.gaa_residual) && L.totals.gaa_residual.every((y) => sameKeys(y, ["fy", "total_php", "deo_php", "central_office_php", "regional_offices_php", "unmatched_php"]) && Object.values(y).every(isInt))
       && [L.totals.units, L.totals.units_tier_a, L.totals.units_tier_b, L.totals.districts].every(isInt) && sameKeys(L.credits, ["portraits", "representatives", "documents"])
       && Object.values(L.credits).every((s) => typeof s === "string" && s.trim().length > 0) && Array.isArray(L.notes) && L.notes.every((s) => typeof s === "string")
       && badEntries.length === 0 && badRegions.length === 0,
@@ -716,13 +910,18 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
   check("every person's name, status, portrait, credit, links, bill count and roles equal the districts.json representative", badPeople.length === 0, badPeople.slice(0, 5).map((p) => p.district_id).join(", "));
 
   // FY2027 figures, recomputed from the parquet by the office label the House bill lists.
+  // Office-change lines (recomputed above when the crosswalk is there) are held out of every office and kind.
   const dp = resolve(OUT, "dpwh", "projects.parquet");
-  const P = (await c.runAndReadAll(`
-    SELECT office, office_kind, trace, count(*), sum(nep_php), sum(hgab3_php),
+  const heldIds = lens ? [...lens.change.keys()] : D.office_change.row_ids;
+  const noIds = lens ? lens.noOffice : D.no_office.row_ids;
+  const inList = (ids: string[]) => `id IN (${ids.map((x) => `'${q(x)}'`).join(", ") || "''"})`;
+  const ALL = (await c.runAndReadAll(`
+    SELECT office, office_kind, trace, CASE WHEN ${inList(heldIds)} THEN 'office_change' WHEN ${inList(noIds)} THEN 'no_office' ELSE '' END, count(*), sum(nep_php), sum(hgab3_php),
            sum(coalesce(json_array_length(record_json->'$.third.records'), 1)) FILTER (hgab3_php IS NOT NULL)
-    FROM read_parquet('${q(dp)}') GROUP BY 1, 2, 3`)).getRows().map((r) => ({
-    office: String(r[0]), kind: String(r[1]), trace: String(r[2]), n: num(r[3]), nep: r[4] == null ? null : num(r[4]), h3: r[5] == null ? null : num(r[5]), records: r[6] == null ? 0 : num(r[6]),
+    FROM read_parquet('${q(dp)}') GROUP BY 1, 2, 3, 4`)).getRows().map((r) => ({
+    office: String(r[0]), kind: String(r[1]), trace: String(r[2]), held_out: String(r[3]), n: num(r[4]), nep: r[5] == null ? null : num(r[5]), h3: r[6] == null ? null : num(r[6]), records: r[7] == null ? 0 : num(r[7]),
   }));
+  const P = ALL.filter((r) => r.held_out === ""), PO = ALL.filter((r) => r.held_out === "office_change"), PN = ALL.filter((r) => r.held_out === "no_office");
   const role = (trace: string) => { const t = K.traceGroups[trace]; return !t ? null : t.group === "house_only" ? (t.held ? "held" : "added") : t.group === "nep_only" ? "dropped" : null; };
   const sliceOf = (rows: typeof P): Slice => {
     const s: Slice = { nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 };
@@ -753,7 +952,16 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
       || e.hgab3_rows !== sumOrNull(perOffice.map((x) => x.rec))
       || e.added_php !== s.added_php || e.added_rows !== s.added_rows || e.held_php !== s.held_php || e.held_rows !== s.held_rows || e.dropped_php !== s.dropped_php || e.dropped_rows !== s.dropped_rows;
   });
-  check("per entry, NEP, House bill, change, percent change, House bill records and added / held / dropped recomputed from the parquet", badFy.length === 0, badFy.slice(0, 5).map((e) => e.key).join(", "));
+  check("per entry, NEP, House bill, change, percent change, House bill records and added / held / dropped recomputed from the parquet, office-change lines left out", badFy.length === 0, badFy.slice(0, 5).map((e) => e.key).join(", "));
+  const changeOffices = lens ? [...lens.change.values()].map((x) => x.offices) : null;
+  const badAnnot = L.entries.filter((e) => {
+    const ids = new Set(e.offices.map((o) => o.id));
+    const oc = changeOffices ? changeOffices.filter((set) => [...set].some((o) => ids.has(o))).length : new Set(e.offices.flatMap((o) => D.offices[o.id].fy2027?.office_change.row_ids ?? [])).size;
+    const scope = e.offices.flatMap((o) => officeRows(o.id)).filter((r) => K.traceGroups[r.trace]?.group === "scope_review").reduce((a, r) => a + r.n, 0);
+    return e.office_change_rows !== oc || e.scope_rows !== scope;
+  });
+  check(`per entry, office-change lines touching its offices and segment-scope lines recomputed (${L.entries.filter((e) => e.office_change_rows > 0).length} entries with office-change lines, ${L.entries.reduce((a, e) => a + e.scope_rows, 0)} scope lines)`,
+    badAnnot.length === 0, badAnnot.slice(0, 5).map((e) => e.key).join(", "));
 
   // Enacted budgets, by Congress and growth (the district cards' rule).
   const gaaOf = (id: string, fy: number) => D.offices[id].years.find((y) => y.stage === "gaa" && y.fy === fy)?.php ?? null;
@@ -782,6 +990,8 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
     [/^Not listed under this name in the 2027 NEP\.$/, () => false],
     [/^No projects under this office in the 2027 House bill or the NEP\.$/, () => false],
     [/^A regional grouping, not an engineering office; /, () => false],
+    [/^(?:1 project line changed office between the NEP and the House bill; it is|\d+ project lines changed office between the NEP and the House bill; they are) not counted here\.$/, () => false],
+    [/^(?:1 House bill line listed here has no office in the source data; it is|\d+ House bill lines listed here have no office in the source data; they are) left unassigned\.$/, () => false],
   ];
   const unknownNotes: string[] = [];
   const counts = new Map<string, boolean>();
@@ -813,17 +1023,21 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
   };
   const kinds = Object.fromEntries((Object.keys(OFFICE_KIND_LABELS) as Array<keyof typeof OFFICE_KIND_LABELS>).map((k) => [k, sliceOf(P.filter((r) => r.kind === OFFICE_KIND_LABELS[k]))])) as Record<keyof typeof OFFICE_KIND_LABELS, Slice>;
   const BK = L.totals.by_office_kind;
-  check("by_office_kind recomputed from the parquet (the Camarines Norte Sub-DEO is listed as a district office)",
-    eq(BK.deo, kinds.deo) && eq(BK.central, kinds.central) && eq(BK.regional, kinds.regional) && P.every((r) => (Object.values(OFFICE_KIND_LABELS) as string[]).includes(r.kind))
+  const ocSlice = sliceOf(PO), noSlice = sliceOf(PN);
+  check(`by_office_kind recomputed from the parquet, office-change (${PO.reduce((a, r) => a + r.n, 0)}) and no-office (${PN.reduce((a, r) => a + r.n, 0)}) lines as their own slices (the Camarines Norte Sub-DEO is a district office)`,
+    eq(BK.deo, kinds.deo) && eq(BK.central, kinds.central) && eq(BK.regional, kinds.regional) && eq(BK.office_change, ocSlice) && BK.office_change.rows === PO.reduce((a, r) => a + r.n, 0)
+      && eq(BK.no_office, noSlice) && BK.no_office.rows === PN.reduce((a, r) => a + r.n, 0)
+      && (["office_change", "no_office"] as const).every((k) => BK[k].rows === EXPECTED_LEADERBOARD[k].rows && BK[k].nep_php === EXPECTED_LEADERBOARD[k].nep && BK[k].hgab3_php === EXPECTED_LEADERBOARD[k].hgab3)
+      && ALL.every((r) => (Object.values(OFFICE_KIND_LABELS) as string[]).includes(r.kind))
       && P.some((r) => /sub district engineering office/i.test(r.office) && r.kind === OFFICE_KIND_LABELS.deo));
   check(`Σ entries = district offices on every slice field (NEP ${peso(BK.deo.nep_php)} → House ${peso(BK.deo.hgab3_php)})`, eq(entrySum(L.entries), BK.deo),
     JSON.stringify(entrySum(L.entries)));
-  check(`district offices + Central Office + regional offices = all, and all equals the DPWH totals (NEP ${peso(EXPECTED.dpwh.nep)}, House ${peso(EXPECTED.dpwh.hgab3)})`,
-    F.slice.every((k) => BK.deo[k as keyof Slice] + BK.central[k as keyof Slice] + BK.regional[k as keyof Slice] === L.totals.all[k as keyof Slice])
+  check(`district offices + Central Office + regional offices + no office + office change = all on every slice field, and all equals the DPWH totals (NEP ${peso(EXPECTED.dpwh.nep)}, House ${peso(EXPECTED.dpwh.hgab3)})`,
+    F.slice.every((k) => BK.deo[k as keyof Slice] + BK.central[k as keyof Slice] + BK.regional[k as keyof Slice] + BK.no_office[k as keyof Slice] + BK.office_change[k as keyof Slice] === L.totals.all[k as keyof Slice])
       && L.totals.all.nep_php === summary.dataset.totals.nep_php && L.totals.all.hgab3_php === summary.dataset.totals.hgab3_php && L.totals.all.nep_php === EXPECTED.dpwh.nep && L.totals.all.hgab3_php === EXPECTED.dpwh.hgab3
       && (["deo", "central", "regional"] as const).every((k) => BK[k].nep_php === EXPECTED_LEADERBOARD[k].nep && BK[k].hgab3_php === EXPECTED_LEADERBOARD[k].hgab3),
     `${peso(L.totals.all.nep_php)} / ${peso(L.totals.all.hgab3_php)}`);
-  const fuzzy = P.filter((r) => r.trace === "fuzzy_candidate"), amb = P.filter((r) => r.trace === "ambiguous");
+  const fuzzy = ALL.filter((r) => r.trace === "fuzzy_candidate"), amb = ALL.filter((r) => r.trace === "ambiguous");
   const tot = (rs: typeof P) => ({ rows: rs.reduce((a, r) => a + r.n, 0), php: rs.reduce((a, r) => a + (r.h3 ?? 0), 0) });
   check(`unconfirmed matches held out: ${EXPECTED_LEADERBOARD.held.rows} rows, ${peso(EXPECTED_LEADERBOARD.held.php)} (fuzzy ${EXPECTED_LEADERBOARD.fuzzy.rows} + ambiguous ${EXPECTED_LEADERBOARD.ambiguous.rows})`,
     L.totals.all.held_rows === EXPECTED_LEADERBOARD.held.rows && L.totals.all.held_php === EXPECTED_LEADERBOARD.held.php
@@ -876,7 +1090,7 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
         detail: `${n} rows; first ${r[0]?.region.region} ${LB.formatValue(r[0]?.value, b.value)}`,
       };
     }
-    const n = Object.values(BK).filter((s) => s.nep_php > 0 && s.hgab3_php > 0).length;
+    const n = [BK.deo, BK.central, BK.regional].filter((s) => s.nep_php > 0 && s.hgab3_php > 0).length;
     return { ok: n === 3, detail: `${n} office kinds with both figures` };
   };
   for (const b of LB.BOARDS) {
@@ -889,6 +1103,16 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection): Promi
     return per.some((p, i) => p.rows.some((x) => x.entry.region !== L.regions[i].region)) || per.reduce((a, p) => a + p.eligible, 0) !== LB.rankEntries(L, b).eligible;
   });
   check(`?region= partitions every ranking board's rows by region (${ranking.length} boards)`, badFilter.length === 0, badFilter.map((b) => b.id).join(", "));
+
+  // Enacted-budget residual, copied from districts.json; and the residual sentence every office-based board prints.
+  const gaaSlots = D.residual.filter((r) => r.stage === "gaa");
+  check(`totals.gaa_residual = districts.json residual for the ${gaaSlots.length} enacted years, and each year adds up`,
+    JSON.stringify(L.totals.gaa_residual) === JSON.stringify(gaaSlots.map((r) => ({ fy: r.fy, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php, regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php })))
+      && L.totals.gaa_residual.every((y) => y.deo_php + y.central_office_php + y.regional_offices_php + y.unmatched_php === y.total_php)
+      && JSON.stringify(L.totals.gaa_residual.map((y) => y.fy)) === JSON.stringify([2020, 2021, 2022, 2023, 2024, 2025, 2026]));
+  const lines = LB.BOARDS.map((b) => [b.id, residualLine(L, b)] as const);
+  const badLines = lines.filter(([id, t]) => (id === "shift" || id === "bills") ? t !== null : (typeof t !== "string" || !/^Not in any district: /.test(t) || /NaN|undefined|Infinity|—/.test(t)));
+  check(`residualLine() gives a sentence for every board but shift and bills (${lines.filter(([, t]) => t).length} boards)`, badLines.length === 0, badLines.map(([id, t]) => `${id}: ${t}`).join("; "));
 
   // Reader-facing strings: credits and notes.
   const portraits = L.entries.flatMap((e) => e.people).filter((p) => p.portrait_url);
@@ -1059,7 +1283,7 @@ async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> 
     `SELECT * FROM hgab_districts ORDER BY sort`,
     `SELECT * FROM hgab_offices`,
     `SELECT * FROM hgab_residual ORDER BY sort`,
-    `SELECT r.fy, r.stage, r.total_php - (r.deo_php + r.central_office_php + r.regional_offices_php + r.unmatched_php) AS gap, r.deo_php,
+    `SELECT r.fy, r.stage, r.total_php - (r.deo_php + r.central_office_php + r.regional_offices_php + r.unmatched_php + r.no_office_php + r.office_change_php) AS gap, r.deo_php,
             (SELECT coalesce(sum(json_extract(j.value, '$.php')), 0) FROM hgab_offices o, json_each(o.years_json) j
               WHERE json_extract(j.value, '$.fy') = r.fy AND json_extract(j.value, '$.stage') = r.stage) AS offices_php
        FROM hgab_residual r ORDER BY r.sort`,
@@ -1086,9 +1310,9 @@ async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> 
   check("hgab_meta: fiscal year, built_at, source repo and commit equal overview.json",
     !!m && num(m.id) === 1 && num(m.fiscal_year) === raw.fiscal_year && m.built_at === raw.built_at && m.source_repo === raw.source_repo && m.source_commit === raw.source_commit,
     JSON.stringify(m ?? {}).slice(0, 300));
-  check("hgab_meta.notice is the one-paragraph disclaimer (unofficial, candidates, no wrongdoing, printed amounts, link)",
+  check("hgab_meta.notice is the page notice in one paragraph (unofficial, published amounts, the No allegations disclaimer verbatim, link)",
     typeof m?.notice === "string" && !/\n/.test(m.notice) && /Independent and unofficial/.test(m.notice) && /not an official record/.test(m.notice)
-    && /candidates/.test(m.notice) && /did anything wrong/.test(m.notice) && /not money spent/.test(m.notice) && m.notice.includes("https://budget.bettergov.ph/hgab/2027/methodology#disclaimer"),
+    && m.notice.includes(disclaimerText(COMPARISON_DISCLAIMERS)) && /amounts published in the documents, not /.test(m.notice) && m.notice.includes("https://budget.bettergov.ph/hgab/2027/methodology#disclaimer"),
     String(m?.notice ?? "").slice(0, 200));
   check(`hgab_meta.terms_json is PLAIN_TERMS (${Object.keys(K.plainTerms).length} terms, keys and terms as in the contract)`,
     !!terms && Object.keys(terms).join(",") === Object.keys(K.plainTerms).join(",") && Object.entries(K.plainTerms).every(([k, t]) => terms[k]?.term === t && !!terms[k]?.meaning),
@@ -1263,6 +1487,7 @@ async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> 
     const diff = rowDiff(got, {
       id: o.id, name: o.name, kind: o.kind, region: o.region, tier: o.tier, district_ids_json: json(o.district_ids), years_json: json(o.years),
       by_congress_json: json(o.by_congress), fy2027_json: jsonOrNull(o.fy2027), notes_json: json(o.notes), aliases_json: json(o.aliases_used),
+      office_change_rows: o.fy2027?.office_change.rows ?? null, office_change_nep_php: o.fy2027?.office_change.nep_php ?? null, office_change_hgab3_php: o.fy2027?.office_change.hgab3_php ?? null,
     });
     if (o.region && K.regionLabels[String(got?.region_key)]?.short !== o.region) diff.push(`region_key ${String(got?.region_key)} for ${o.region}`);
     return diff.map((x) => `${o.id} ${x}`);
@@ -1272,10 +1497,11 @@ async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> 
   const resBad = D.residual.flatMap((r, i) => rowDiff(residual[i], {
     fy: r.fy, stage: r.stage, sort: i, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php,
     regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php, unmatched_labels_json: json(r.unmatched_labels),
+    office_change_php: r.office_change_php, office_change_rows: r.office_change_rows, no_office_php: r.no_office_php, no_office_rows: r.no_office_rows,
   }).map((x) => `${r.stage} ${r.fy} ${x}`));
   check(`hgab_residual equals districts.json residual (${D.residual.length} slots)`, resBad.length === 0, firstFew(resBad));
   const idBad = residualChecks.filter((r) => num(r.gap) !== 0 || num(r.offices_php) !== num(r.deo_php)).map((r) => `${r.stage} ${r.fy}: gap ${r.gap}, Σ offices ${r.offices_php} vs deo ${r.deo_php}`);
-  check("residual identity in D1: deo + central + regional + unmatched = total, and Σ hgab_offices years php = deo_php, every slot", idBad.length === 0, firstFew(idBad));
+  check("residual identity in D1: deo + central + regional + unmatched + no_office + office_change = total, and Σ hgab_offices years php = deo_php, every slot", idBad.length === 0, firstFew(idBad));
 
   // record_json: 20 random rows (5 per dataset) byte-equal to the parquet, plus the longest, one with a quote and one with non-ASCII text.
   const P = (k: string) => `read_parquet('${q(resolve(OUT, k, "projects.parquet"))}')`;
@@ -1296,6 +1522,208 @@ async function verifyD1(overview: Overview, c: DuckDBConnection): Promise<void> 
   check(`record_json byte-equal to the parquet: ${random} random rows (${EXPECTED_D1.sampleRecordsPerDataset} per dataset) + ${extra.join("; ")}`,
     random === EXPECTED_D1.sampleRecordsPerDataset * DATASETS.length && recBad.length === 0, firstFew(recBad));
   process.stdout.write(`  · D1 checks ran in ${((performance.now() - t0) / 1000).toFixed(1)}s\n`);
+}
+
+// ---------------------------------------------------------------------------
+// Candidate changes (overview.json `candidate_changes`)
+//
+// The workbench Overview's "House vs. NEP: candidate changes" table, carried by
+// the importer from main_overview_2027.json. Re-checked here three ways: field
+// for field against the checkout's file (with --src), every cell recomputed
+// from our own parquet rows, and the funding identity and Total row.
+// ---------------------------------------------------------------------------
+
+interface CcPopulation { count: number; comparison_rows: number | null; amount_php: number }
+interface CcProgram {
+  key: DatasetKey; label: string; count_unit: string; grain: string; house_stage: "hgab2" | "hgab3";
+  sources: Record<"nep" | "house", { count: number; amount_php: number; facility_count: number | null }>;
+  insertions: CcPopulation; deletions: CcPopulation; unchanged: CcPopulation;
+  adjustments: {
+    count: number; count_unit: string; increased_count: number; reduced_count: number; increased_php: number; reduced_php: number; net_php: number;
+    increased_nep_php: number; increased_house_php: number; reduced_nep_php: number; reduced_house_php: number;
+    events: { revised: number; added: number; dropped: number } | null;
+  };
+  scope_review: { count: number; nep_php: number; house_php: number; net_php: number; note: string } | null;
+  delta_php: number;
+}
+interface CcTotals {
+  programs: number; insertions: { count: number; amount_php: number }; deletions: { count: number; amount_php: number }; unchanged: { count: number; amount_php: number };
+  increased: { count: number; nep_php: number; house_php: number; php: number }; decreased: { count: number; nep_php: number; house_php: number; php: number };
+  scope_review: { count: number; nep_php: number; house_php: number; net_php: number };
+  house: { count: number; amount_php: number }; nep: { count: number; amount_php: number }; delta_php: number;
+}
+interface CcBlock { source_file: string; source_sha256: string; source_built_at: string; direction: string; programs: CcProgram[]; totals: CcTotals }
+
+async function verifyCandidateChanges(c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\ncandidate changes (overview.json candidate_changes)\n");
+  const raw = readJson<{ datasets: Meta[]; candidate_changes?: CcBlock }>(resolve(OUT, "overview.json"));
+  const cc = raw.candidate_changes;
+  check("candidate_changes present: House minus NEP, from main_overview_2027.json, the four programs in order, each with its counting unit",
+    !!cc && cc.direction === "House minus NEP" && cc.source_file === "analysis/data/main_overview_2027.json" && /^[0-9a-f]{64}$/.test(cc.source_sha256)
+      && cc.programs.map((p) => p.key).join(",") === DATASETS.join(",") && cc.programs.every((p) => p.count_unit.trim() !== "" && p.adjustments.count_unit.trim() !== ""),
+    cc ? cc.programs.map((p) => `${p.key} (${p.count_unit})`).join(", ") : "missing — run npm run import:hgab");
+  if (!cc) return;
+  const P = cc.programs;
+
+  // 1. Field for field against the checkout's main_overview_2027.json.
+  const mainPath = resolve(SRC, "analysis/data/main_overview_2027.json");
+  if (existsSync(mainPath)) {
+    const hash = createHash("sha256").update(readFileSync(mainPath)).digest("hex");
+    const main = readJson<{ built_at: string; workspaces: Array<Record<string, unknown>> }>(mainPath);
+    check("source_sha256 and source_built_at equal the checkout's main_overview_2027.json", cc.source_sha256 === hash && cc.source_built_at === main.built_at, `${cc.source_sha256.slice(0, 12)} vs ${hash.slice(0, 12)}`);
+    const at = (o: unknown, path: string): unknown => path.split(".").reduce<unknown>((v, k) => (v == null ? undefined : (v as Record<string, unknown>)[k]), o);
+    const FIELDS = [
+      "label", "count_unit", "grain", "delta_php",
+      ...["nep", "house"].flatMap((s) => ["count", "amount_php", "facility_count"].map((f) => `sources.${s}.${f}`)),
+      ...["insertions", "deletions", "unchanged"].flatMap((g) => ["count", "comparison_rows", "amount_php"].map((f) => `${g}.${f}`)),
+      ...["count", "count_unit", "increased_count", "reduced_count", "increased_php", "reduced_php", "net_php",
+        "increased_nep_php", "increased_house_php", "reduced_nep_php", "reduced_house_php", "events.revised", "events.added", "events.dropped"].map((f) => `adjustments.${f}`),
+      ...["count", "nep_php", "house_php", "net_php", "note"].map((f) => `scope_review.${f}`),
+    ];
+    const bad: string[] = [];
+    let compared = 0;
+    for (const p of P) {
+      const w = main.workspaces.find((x) => x.key === p.key);
+      if (!w) { bad.push(`${p.key}: no workspace`); continue; }
+      for (const f of FIELDS) {
+        const theirs = at(w, f) ?? null, ours = at(p, f) ?? null;
+        compared++;
+        if (theirs !== ours) bad.push(`${p.key} ${f}: ${String(ours)} vs ${String(theirs)}`);
+      }
+      // Objects the source omits must be null here, never zeros.
+      if (w.scope_review === undefined && p.scope_review !== null) bad.push(`${p.key} scope_review should be null`);
+      if ((w.adjustments as { events?: unknown }).events === undefined && p.adjustments.events !== null) bad.push(`${p.key} events should be null`);
+    }
+    check(`every carried figure and label equals main_overview_2027.json (${compared} fields across ${P.length} programs; absent groups stay null)`, bad.length === 0, bad.slice(0, 8).join("; "));
+  } else {
+    process.stdout.write("  · main_overview_2027.json comparison skipped (no --src checkout)\n");
+  }
+
+  // 2. Every cell recomputed from our parquet rows (same trace partition as the bridge check above).
+  for (const p of P) {
+    const parquet = resolve(OUT, p.key, "projects.parquet");
+    if (!existsSync(parquet)) { check(`${p.key}: projects.parquet present for the recomputation`, false, parquet); continue; }
+    const h = `${p.house_stage}_php`;
+    // Grouped DPWH rows carry their member records; every other row is one record.
+    const members = (side: "nep" | "house") => p.key === "dpwh"
+      ? `coalesce(json_array_length(record_json->'$.${side === "nep" ? "nep" : p.house_stage === "hgab3" ? "third" : "second"}.records'), 1)`
+      : "1";
+    const sql = `
+      WITH t AS (SELECT *, CASE
+        WHEN trace LIKE '%segment_scope_review%' THEN 'scope_review'
+        WHEN trace LIKE '%house_only_candidate%' OR trace IN ('fuzzy_candidate', 'ambiguous') THEN 'house_only'
+        WHEN trace LIKE '%nep_only_candidate%' THEN 'nep_only'
+        WHEN trace LIKE '%candidate_increase%' THEN 'increased'
+        WHEN trace LIKE '%candidate_decrease%' THEN 'decreased'
+        WHEN trace LIKE '%amount_same%' THEN 'unchanged'
+        WHEN ${h} IS NOT NULL AND nep_php IS NULL THEN 'house_only'
+        WHEN nep_php IS NOT NULL AND ${h} IS NULL THEN 'nep_only'
+        WHEN delta_php > 0 THEN 'increased' WHEN delta_php < 0 THEN 'decreased' ELSE 'unchanged' END g
+        FROM read_parquet('${q(parquet)}'))
+      SELECT g, count(*), coalesce(sum(${h}), 0), coalesce(sum(nep_php), 0), coalesce(sum(delta_php), 0),
+             coalesce(sum(${members("house")}) FILTER (${h} IS NOT NULL), 0), coalesce(sum(${members("nep")}) FILTER (nep_php IS NOT NULL), 0)
+      FROM t GROUP BY g`;
+    const G: Record<string, { rows: number; house: number; nep: number; delta: number; houseRec: number; nepRec: number }> = {};
+    for (const r of (await c.runAndReadAll(sql)).getRows()) {
+      const [rows, house, nep, delta, houseRec, nepRec] = r.slice(1).map(num);
+      G[String(r[0])] = { rows, house, nep, delta, houseRec, nepRec };
+    }
+    const g = (k: string) => G[k] ?? { rows: 0, house: 0, nep: 0, delta: 0, houseRec: 0, nepRec: 0 };
+    const all = Object.values(G);
+    const a = p.adjustments;
+    const sr = p.scope_review;
+    const cells: Array<[string, number | null, number]> = [
+      ["insertions records", p.insertions.count, g("house_only").houseRec],
+      ["insertions rows", p.insertions.comparison_rows ?? p.insertions.count, g("house_only").rows],
+      ["insertions House PHP", p.insertions.amount_php, g("house_only").house],
+      ["deletions records", p.deletions.count, g("nep_only").nepRec],
+      ["deletions rows", p.deletions.comparison_rows ?? p.deletions.count, g("nep_only").rows],
+      ["deletions NEP PHP", p.deletions.amount_php, g("nep_only").nep],
+      ["unchanged records", p.unchanged.count, g("unchanged").houseRec],
+      ["unchanged rows", p.unchanged.comparison_rows ?? p.unchanged.count, g("unchanged").rows],
+      ["unchanged PHP (House)", p.unchanged.amount_php, g("unchanged").house],
+      ["unchanged PHP (NEP)", p.unchanged.amount_php, g("unchanged").nep],
+      ["increased pairs", a.increased_count, g("increased").rows],
+      ["increased NEP", a.increased_nep_php, g("increased").nep],
+      ["increased House", a.increased_house_php, g("increased").house],
+      ["increased adjustment", a.increased_php, g("increased").delta],
+      ["decreased pairs", a.reduced_count, g("decreased").rows],
+      ["decreased NEP", a.reduced_nep_php, g("decreased").nep],
+      ["decreased House", a.reduced_house_php, g("decreased").house],
+      ["decreased adjustment", a.reduced_php, -g("decreased").delta],
+      ["scope review pairs", sr?.count ?? 0, g("scope_review").rows],
+      ["scope review NEP", sr?.nep_php ?? 0, g("scope_review").nep],
+      ["scope review House", sr?.house_php ?? 0, g("scope_review").house],
+      ["scope review net", sr?.net_php ?? 0, g("scope_review").delta],
+      ["House records", p.sources.house.count, all.reduce((t, x) => t + x.houseRec, 0)],
+      ["House PHP", p.sources.house.amount_php, all.reduce((t, x) => t + x.house, 0)],
+      ["NEP records", p.sources.nep.count, all.reduce((t, x) => t + x.nepRec, 0)],
+      ["NEP PHP", p.sources.nep.amount_php, all.reduce((t, x) => t + x.nep, 0)],
+    ];
+    const bad = cells.filter(([, x, y]) => x !== y);
+    const split = p.insertions.comparison_rows != null && p.insertions.comparison_rows !== p.insertions.count
+      ? ` · insertions ${p.insertions.count.toLocaleString("en-US")} ${p.count_unit} in ${p.insertions.comparison_rows.toLocaleString("en-US")} rows` : "";
+    check(`${p.key}: every candidate-change cell recomputed from projects.parquet (${cells.length} figures${split})`, bad.length === 0, bad.map(([n, x, y]) => `${n} ${x} vs parquet ${y}`).join("; "));
+  }
+
+  // 3. Identities, partitions, types and the Total row.
+  const idBad = P.filter((p) => p.insertions.amount_php - p.deletions.amount_php + p.adjustments.net_php + (p.scope_review?.net_php ?? 0) !== p.delta_php
+    || p.sources.house.amount_php - p.sources.nep.amount_php !== p.delta_php
+    || p.adjustments.net_php !== p.adjustments.increased_php - p.adjustments.reduced_php
+    || p.adjustments.increased_house_php - p.adjustments.increased_nep_php !== p.adjustments.increased_php
+    || p.adjustments.reduced_nep_php - p.adjustments.reduced_house_php !== p.adjustments.reduced_php);
+  check("per program, insertions − deletions + net adjustments + scope-review net = House − NEP, and the pair bases tie to the adjustments", idBad.length === 0, idBad.map((p) => p.key).join(", "));
+  const metaBad = P.filter((p) => {
+    const m = raw.datasets.find((d) => d.key === p.key);
+    const house = p.house_stage === "hgab3" ? m?.totals.hgab3_php : m?.totals.hgab2_php;
+    const houseN = p.house_stage === "hgab3" ? m?.counts.hgab3 : m?.counts.hgab2;
+    return !m || m.bridge.house_stage !== p.house_stage || house !== p.sources.house.amount_php || houseN !== p.sources.house.count
+      || m.totals.nep_php !== p.sources.nep.amount_php || m.counts.nep !== p.sources.nep.count || m.bridge.net_php !== p.delta_php;
+  });
+  check("per program, House and NEP records and pesos equal the dataset's totals and counts, and House − NEP its bridge net", metaBad.length === 0, metaBad.map((p) => p.key).join(", "));
+  const partBad = P.filter((p) => {
+    const a = p.adjustments, ev = a.events, s = p.scope_review?.count ?? 0;
+    if (ev) {
+      // HFEP: changed funding-column records are revised columns plus columns on one side of a matched facility.
+      return ev.revised + ev.added + ev.dropped !== a.count || p.sources.house.count !== p.insertions.count + p.unchanged.count + ev.revised + ev.dropped
+        || p.sources.nep.count !== p.deletions.count + p.unchanged.count + ev.revised + ev.added;
+    }
+    return a.count !== a.increased_count + a.reduced_count || p.sources.house.count !== p.insertions.count + p.unchanged.count + a.count + s
+      || p.sources.nep.count !== p.deletions.count + p.unchanged.count + a.count + s;
+  });
+  check("per program, House records = insertions + unchanged + changed + scope review, and NEP records likewise (HFEP: revised + one-sided columns)", partBad.length === 0, partBad.map((p) => p.key).join(", "));
+  const intBad = P.filter((p) => {
+    const a = p.adjustments;
+    const nonNeg = [p.sources.nep.count, p.sources.nep.amount_php, p.sources.house.count, p.sources.house.amount_php,
+      ...[p.insertions, p.deletions, p.unchanged].flatMap((x) => [x.count, x.amount_php, ...(x.comparison_rows == null ? [] : [x.comparison_rows])]),
+      a.count, a.increased_count, a.reduced_count, a.increased_php, a.reduced_php, a.increased_nep_php, a.increased_house_php, a.reduced_nep_php, a.reduced_house_php,
+      ...(p.scope_review ? [p.scope_review.count, p.scope_review.nep_php, p.scope_review.house_php] : [])];
+    const signed = [a.net_php, p.delta_php, ...(p.scope_review ? [p.scope_review.net_php] : [])];
+    return !nonNeg.every((v) => Number.isSafeInteger(v) && v >= 0) || !signed.every(Number.isSafeInteger);
+  });
+  check("every figure is an integer peso or count (gross figures non-negative; only nets signed)", intBad.length === 0, intBad.map((p) => p.key).join(", "));
+  const nullBad = P.filter((p) => (p.scope_review === null) !== (p.key === "hfep") || (p.adjustments.events === null) !== (p.key !== "hfep")
+    || (p.insertions.comparison_rows === null) !== (p.key === "hfep"));
+  check("absent groups are null, not zero: HFEP has no scope review or comparison-row counts; only HFEP carries column events", nullBad.length === 0, nullBad.map((p) => p.key).join(", "));
+  const S = (f: (p: CcProgram) => number) => P.reduce((t, p) => t + f(p), 0);
+  const T = cc.totals;
+  const want: CcTotals = {
+    programs: P.length,
+    insertions: { count: S((p) => p.insertions.count), amount_php: S((p) => p.insertions.amount_php) },
+    deletions: { count: S((p) => p.deletions.count), amount_php: S((p) => p.deletions.amount_php) },
+    unchanged: { count: S((p) => p.unchanged.count), amount_php: S((p) => p.unchanged.amount_php) },
+    increased: { count: S((p) => p.adjustments.increased_count), nep_php: S((p) => p.adjustments.increased_nep_php), house_php: S((p) => p.adjustments.increased_house_php), php: S((p) => p.adjustments.increased_php) },
+    decreased: { count: S((p) => p.adjustments.reduced_count), nep_php: S((p) => p.adjustments.reduced_nep_php), house_php: S((p) => p.adjustments.reduced_house_php), php: S((p) => p.adjustments.reduced_php) },
+    scope_review: { count: S((p) => p.scope_review?.count ?? 0), nep_php: S((p) => p.scope_review?.nep_php ?? 0), house_php: S((p) => p.scope_review?.house_php ?? 0), net_php: S((p) => p.scope_review?.net_php ?? 0) },
+    house: { count: S((p) => p.sources.house.count), amount_php: S((p) => p.sources.house.amount_php) },
+    nep: { count: S((p) => p.sources.nep.count), amount_php: S((p) => p.sources.nep.amount_php) },
+    delta_php: S((p) => p.delta_php),
+  };
+  check(`Total row is the sum of the ${P.length} programs, and its pesos reconcile: ${peso(T.insertions.amount_php)} − ${peso(T.deletions.amount_php)} + ${peso(T.increased.php)} − ${peso(T.decreased.php)} + ${peso(T.scope_review.net_php)} = ${peso(T.delta_php)} = House − NEP`,
+    JSON.stringify(T) === JSON.stringify(want)
+      && T.insertions.amount_php - T.deletions.amount_php + T.increased.php - T.decreased.php + T.scope_review.net_php === T.delta_php
+      && T.house.amount_php - T.nep.amount_php === T.delta_php,
+    JSON.stringify(T) === JSON.stringify(want) ? "identity fails" : "totals differ from the sum of programs");
 }
 
 main().catch((e) => {
