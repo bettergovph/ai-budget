@@ -23,6 +23,13 @@
  * Figures beside each district are the card's 2027 House bill amount: the
  * office's named projects, undivided. "Shared" marks an office that serves
  * other districts too (Tier B or mixed), so its total is not the district's.
+ *
+ * "Browse by: District · Office" (`by=office`) puts each region's districts
+ * under the office group that serves them (`officeGroups`): the office's name,
+ * its tier and its whole-office 2027 House bill amount, then its districts,
+ * which carry no figure of their own. Districts with no office sit in a "No
+ * district office" group. On the list an office row filters the cards to
+ * that group (`office=`); on a district page it opens that filtered list.
  */
 import {
   memo, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
@@ -30,10 +37,9 @@ import {
 } from 'react';
 import { Link } from 'react-router-dom';
 import * as fmt from '../lib/format';
-import { districtPath } from '../lib/hgab';
 import {
-  districtListHref, regionNames,
-  type RegionSectionKey, type SidebarDistrict, type SidebarRegion,
+  NO_OFFICE_GROUP_NAME, districtListHref, districtPageHref, officeGroupTierShort, officeListHref, regionNames,
+  type DistrictBrowse, type RegionSectionKey, type SidebarDistrict, type SidebarOffice, type SidebarRegion,
 } from '../lib/hgab-districts';
 import '../hgab-districts.css';
 
@@ -53,6 +59,7 @@ function useWide(): boolean {
 }
 
 const SHARED_TITLE = 'Tier B or mixed: the office serves several districts, so this figure is shared and not split.';
+const OFFICE_AMOUNT_TITLE = 'The office’s 2027 House bill amount, named projects only. It belongs to the whole office and is not split between its districts.';
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export interface DistrictSidebarProps {
@@ -81,10 +88,21 @@ export interface DistrictSidebarProps {
   onRegion?: (key: RegionSectionKey) => void;
   /** List: scroll to a district's card. */
   onDistrict?: (district: SidebarDistrict) => void;
+  /** How the tree is organised; in office mode `regions` carry `offices` (`sidebarOfficeRegions`). */
+  by?: DistrictBrowse;
+  /** Shows the "Browse by" switch. */
+  onBy?: (by: DistrictBrowse) => void;
+  /** List: the office group the cards are filtered to (`OfficeGroup.id`), marked in the tree. */
+  activeOffice?: string | null;
+  /** List: filter the cards to an office group and scroll to them. */
+  onOffice?: (office: SidebarOffice) => void;
 }
 
 export default function DistrictSidebar(props: DistrictSidebarProps) {
-  const { mode, regions, regionSize, query, onQuery, onCommit, selectedId, focusRegion, narrowed = false, track, onRegion, onDistrict } = props;
+  const {
+    mode, regions, regionSize, query, onQuery, onCommit, selectedId, focusRegion, narrowed = false, track, onRegion, onDistrict,
+    by = 'district', onBy, activeOffice = null, onOffice,
+  } = props;
   const wide = useWide();
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
 
@@ -270,6 +288,12 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
     onDistrict?.(d);
   }, [hold, modal, closeDialog, onDistrict]);
 
+  const pickOffice = useCallback((o: SidebarOffice, region: RegionSectionKey) => {
+    hold(region);
+    if (modal) closeDialog(false);
+    onOffice?.(o);
+  }, [hold, modal, closeDialog, onOffice]);
+
   /** Desktop list: a closed region opens and scrolls there; an open one closes. In the dialog and on a district page it only opens or closes. */
   const toggleRegion = useCallback((key: RegionSectionKey, isOpen: boolean) => {
     if (isOpen) {
@@ -286,16 +310,24 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
     const box = scrollRef.current;
     if (!box || box.scrollHeight <= box.clientHeight) return;
     const target = (selectedId && box.querySelector<HTMLElement>(`[data-district="${CSS.escape(selectedId)}"]`))
+      || (activeOffice && box.querySelector<HTMLElement>(`[data-office="${CSS.escape(activeOffice)}"]`))
       || (active && box.querySelector<HTMLElement>(`[data-region="${CSS.escape(active)}"]`));
     if (!target) return;
+    // A district under an office row brings that row into view with it.
+    const lead = target.matches('.hgab-dsb-d') ? target.closest<HTMLElement>('.hgab-dsb-o') ?? target : target;
     const r = target.getBoundingClientRect();
     const b = box.getBoundingClientRect();
-    if (r.top < b.top + 4 || r.bottom > b.bottom - 4) box.scrollTop += r.top - b.top - 48;
-  }, [active, selectedId, modal, wide]);
+    if (r.top < b.top + 4 || r.bottom > b.bottom - 4) box.scrollTop += lead.getBoundingClientRect().top - b.top - 48;
+  }, [active, selectedId, activeOffice, by, modal, wide]);
 
   const total = regions.reduce((n, r) => n + r.districts.length, 0);
   const titleId = `hgab-dsb-${uid}-title`;
-  const activeName = active ? regionNames(active).name : null;
+  const byOffice = by === 'office';
+  const activeOfficeName = byOffice && activeOffice
+    ? regions.flatMap((r) => r.offices ?? []).find((o) => o.id === activeOffice)?.name ?? null
+    : null;
+  const activeName = activeOfficeName ?? (active ? regionNames(active).name : null);
+  const title = byOffice ? 'Regions and offices' : 'Regions and districts';
 
   const panel = (
     <div
@@ -307,30 +339,38 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
       onKeyDown={modal ? onDialogKey : undefined}
     >
       <div className="hgab-dsb-head">
-        <h2 className="hgab-dsb-title" id={titleId}>Regions and districts</h2>
+        <h2 className="hgab-dsb-title" id={titleId}>{title}</h2>
         {modal && (
           <button type="button" className="hgab-dsb-close" ref={closeRef} onClick={() => closeDialog()}>
             Close
           </button>
         )}
       </div>
+      {onBy && <BrowseToggle by={by} onBy={onBy} />}
       <label className="hgab-dsb-find">
         <span>Find a district, member or office</span>
         <input
           type="search"
           className="text-input"
           value={query}
-          placeholder="e.g. Bulacan, Cebu 1st, Davao"
+          placeholder={byOffice ? 'e.g. Abra DEO, Cebu 1st, Davao' : 'e.g. Bulacan, Cebu 1st, Davao'}
           onChange={(e) => onQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') onCommit?.(); }}
         />
       </label>
-      <p className="hgab-dsb-key">
-        Beside each district: its office’s 2027 House bill amount.{' '}
-        <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span> means the office serves other districts too.
-      </p>
+      {byOffice ? (
+        <p className="hgab-dsb-key">
+          Each region lists its district engineering offices (DEOs) and the districts each serves. Amounts are the
+          office’s 2027 House bill total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
+        </p>
+      ) : (
+        <p className="hgab-dsb-key">
+          Beside each district: its office’s 2027 House bill amount.{' '}
+          <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span> means the office serves other districts too.
+        </p>
+      )}
       <div className="hgab-dsb-scroll" ref={scrollRef}>
-        <nav aria-label="Regions and districts">
+        <nav aria-label={title}>
           {total === 0 ? (
             <p className="hgab-dsb-empty">
               No district matches.{' '}
@@ -340,15 +380,18 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
             <Tree
               uid={uid}
               mode={mode}
+              by={by}
               dialog={modal}
               regions={regions}
               regionSize={regionSize}
               expanded={expanded}
               active={active}
               selectedId={selectedId}
+              activeOffice={activeOffice}
               onToggle={toggleRegion}
               onPickRegion={onRegion ? pickRegion : undefined}
               onPickDistrict={pickDistrict}
+              onPickOffice={onOffice ? pickOffice : undefined}
               onLeave={modal ? closeDialog : undefined}
             />
           )}
@@ -368,11 +411,37 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
         aria-expanded={dialogOpen}
         onClick={() => setDialogOpen(true)}
       >
-        <span>Browse regions and districts</span>
+        <span>{byOffice ? 'Browse regions and offices' : 'Browse regions and districts'}</span>
         {activeName && <small>{activeName}</small>}
       </button>
       {modal && panel}
     </aside>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "Browse by: District · Office"
+// ---------------------------------------------------------------------------
+
+/** Two pressed-state buttons: the tree (and, on the list, the cards) by district or under their office. */
+function BrowseToggle({ by, onBy }: { by: DistrictBrowse; onBy: (by: DistrictBrowse) => void }) {
+  return (
+    <div className="hgab-dsb-by" role="group" aria-label="Browse by">
+      <span className="hgab-dsb-by-label" aria-hidden="true">Browse by</span>
+      <span className="hgab-dsb-by-seg">
+        <button type="button" aria-pressed={by === 'district'} onClick={() => onBy('district')} title="Every district under its region">
+          District
+        </button>
+        <button
+          type="button"
+          aria-pressed={by === 'office'}
+          onClick={() => onBy('office')}
+          title="Districts under the district engineering office (DEO) that serves them"
+        >
+          Office
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -390,20 +459,25 @@ function plainClick(e: ReactMouseEvent): boolean {
  * open regions or the current item change.
  */
 const Tree = memo(function Tree({
-  uid, mode, dialog, regions, regionSize, expanded, active, selectedId, onToggle, onPickRegion, onPickDistrict, onLeave,
+  uid, mode, by, dialog, regions, regionSize, expanded, active, selectedId, activeOffice, onToggle, onPickRegion, onPickDistrict,
+  onPickOffice, onLeave,
 }: {
   uid: string;
   mode: 'list' | 'page';
+  by: DistrictBrowse;
   dialog: boolean;
   regions: readonly SidebarRegion[];
   regionSize?: ReadonlyMap<RegionSectionKey, number>;
   expanded: ReadonlySet<RegionSectionKey>;
   active: RegionSectionKey | null;
   selectedId: string | null;
+  activeOffice: string | null;
   onToggle: (key: RegionSectionKey, isOpen: boolean) => void;
   /** Absent in the flat list, which has no region sections to scroll to. */
   onPickRegion?: (key: RegionSectionKey) => void;
   onPickDistrict: (d: SidebarDistrict, region: RegionSectionKey) => void;
+  /** List: filter the cards to an office group. */
+  onPickOffice?: (o: SidebarOffice, region: RegionSectionKey) => void;
   /** In the dialog: a link that leaves the page closes it first. */
   onLeave?: (refocus?: boolean) => void;
 }) {
@@ -446,12 +520,26 @@ const Tree = memo(function Tree({
                   </a>
                 </li>
               )}
-              {open && r.districts.map((d) => (
-                <DistrictRow key={d.id} d={d} region={r.key} mode={mode} current={selectedId === d.id} onPick={onPickDistrict} onLeave={onLeave} />
-              ))}
+              {open && by === 'office' && r.offices
+                ? r.offices.map((o) => (
+                  <OfficeRow
+                    key={o.id}
+                    o={o}
+                    region={r.key}
+                    mode={mode}
+                    selectedId={selectedId}
+                    filtered={activeOffice === o.id}
+                    onPick={onPickOffice}
+                    onPickDistrict={onPickDistrict}
+                    onLeave={onLeave}
+                  />
+                ))
+                : open && r.districts.map((d) => (
+                  <DistrictRow key={d.id} d={d} region={r.key} mode={mode} by={by} current={selectedId === d.id} onPick={onPickDistrict} onLeave={onLeave} />
+                ))}
               {open && mode === 'page' && (
                 <li className="hgab-dsb-d is-go">
-                  <Link to={districtListHref(r.anchor)} onClick={() => onLeave?.(false)}>
+                  <Link to={districtListHref(r.anchor, by)} onClick={() => onLeave?.(false)}>
                     All {size.toLocaleString()} in {names.name}, as cards →
                   </Link>
                 </li>
@@ -476,10 +564,92 @@ function Amount({ d }: { d: SidebarDistrict }) {
   );
 }
 
-function DistrictRow({ d, region, mode, current, onPick, onLeave }: {
+/**
+ * An office group and the districts it serves. The row itself filters the
+ * list to the group (list) or opens that filtered list (district page); the
+ * districts under it behave like the district-mode rows, without a figure:
+ * the office's amount is the group's, not any one district's. The no-office
+ * group is a plain label over its districts.
+ */
+function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistrict, onLeave }: {
+  o: SidebarOffice;
+  region: RegionSectionKey;
+  mode: 'list' | 'page';
+  selectedId: string | null;
+  filtered: boolean;
+  onPick?: (o: SidebarOffice, region: RegionSectionKey) => void;
+  onPickDistrict: (d: SidebarDistrict, region: RegionSectionKey) => void;
+  onLeave?: (refocus?: boolean) => void;
+}) {
+  const current = selectedId != null && o.districts.some((d) => d.id === selectedId);
+  const cls = `hgab-dsb-o is-${o.tier ?? 'none'} ${filtered ? 'is-filter' : ''} ${current ? 'is-current' : ''}`.replace(/\s+/g, ' ').trim();
+  const n = o.size;
+  const amount = o.hgab3_php == null ? 'no House bill figure' : `2027 House bill ${fmt.php(o.hgab3_php)}, whole office${o.tier === 'B' ? ', not split' : ''}`;
+  const shown = o.districts.length < n ? `, ${o.districts.length} of ${n} shown` : '';
+  const body = (
+    <>
+      <span className="hgab-dsb-o-name" title={o.title}>{o.name}</span>
+      <span className="hgab-dsb-o-meta">
+        {o.tier && (
+          <span className="hgab-dsb-o-amt" title={o.hgab3_php == null ? 'No House bill figure' : `${OFFICE_AMOUNT_TITLE} ${fmt.php(o.hgab3_php, { unit: 'full' })}.`}>
+            {o.hgab3_php == null ? '—' : fmt.php(o.hgab3_php)}
+            <small>whole office</small>
+          </span>
+        )}
+        <span className={`hgab-dsb-o-tier is-${o.tier ?? 'none'}`}>{officeGroupTierShort(o.tier, n)}</span>
+      </span>
+    </>
+  );
+  const districts = (
+    <ul className="hgab-dsb-ds hgab-dsb-o-ds" aria-label={`Districts served by ${o.name}`}>
+      {o.districts.map((d) => (
+        <DistrictRow key={d.id} d={d} region={region} mode={mode} by="office" bare current={selectedId === d.id} onPick={onPickDistrict} onLeave={onLeave} />
+      ))}
+    </ul>
+  );
+  if (!o.tier || !o.param) {
+    return (
+      <li className={cls} data-office={o.id}>
+        <span className="hgab-dsb-o-go is-static" title="We found no district engineering office (DEO) for these districts, so there is no figure.">
+          <span className="hgab-dsb-o-name">{NO_OFFICE_GROUP_NAME}</span>
+          <span className="hgab-dsb-o-meta"><span className="hgab-dsb-o-tier is-none">no figure</span></span>
+        </span>
+        {districts}
+      </li>
+    );
+  }
+  const label = mode === 'page'
+    ? `${o.name}: see its ${n === 1 ? 'district' : `${n} districts`} as cards${current ? ' (this district’s office)' : ''}. ${amount}.`
+    : `${o.name}: show only ${n === 1 ? 'its district' : `its ${n} districts`}${shown}. ${amount}.`;
+  return (
+    <li className={cls} data-office={o.id}>
+      {mode === 'page' ? (
+        <Link className="hgab-dsb-o-go" to={officeListHref(o.param)} aria-label={label} onClick={() => onLeave?.(false)}>
+          {body}
+        </Link>
+      ) : (
+        <a
+          className="hgab-dsb-o-go"
+          href={officeListHref(o.param)}
+          aria-label={label}
+          aria-current={filtered ? 'true' : undefined}
+          onClick={(e) => { if (!plainClick(e) || !onPick) return; e.preventDefault(); onPick(o, region); }}
+        >
+          {body}
+        </a>
+      )}
+      {districts}
+    </li>
+  );
+}
+
+function DistrictRow({ d, region, mode, by, bare = false, current, onPick, onLeave }: {
   d: SidebarDistrict;
   region: RegionSectionKey;
   mode: 'list' | 'page';
+  by: DistrictBrowse;
+  /** Under an office row: no figure, which is the office's. */
+  bare?: boolean;
   current: boolean;
   onPick: (d: SidebarDistrict, region: RegionSectionKey) => void;
   onLeave?: (refocus?: boolean) => void;
@@ -488,9 +658,9 @@ function DistrictRow({ d, region, mode, current, onPick, onLeave }: {
   if (mode === 'page') {
     return (
       <li className={cls} data-district={d.id}>
-        <Link className="hgab-dsb-d-go" to={districtPath(d.id)} aria-current={current ? 'page' : undefined} onClick={() => onLeave?.(false)}>
+        <Link className="hgab-dsb-d-go" to={districtPageHref(d.id, by)} aria-current={current ? 'page' : undefined} onClick={() => onLeave?.(false)}>
           <span className="hgab-dsb-d-name">{d.label}</span>
-          <Amount d={d} />
+          {!bare && <Amount d={d} />}
         </Link>
       </li>
     );
@@ -504,11 +674,11 @@ function DistrictRow({ d, region, mode, current, onPick, onLeave }: {
         onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onPick(d, region); }}
       >
         <span className="hgab-dsb-d-name">{d.label}</span>
-        <Amount d={d} />
+        {!bare && <Amount d={d} />}
       </a>
       <Link
         className="hgab-dsb-d-open"
-        to={districtPath(d.id)}
+        to={districtPageHref(d.id, by)}
         aria-label={`Open the page for ${d.label}`}
         title="Open the district’s page"
         onClick={() => onLeave?.(false)}

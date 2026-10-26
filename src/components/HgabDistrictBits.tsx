@@ -630,6 +630,41 @@ function bridgeAmount(sign: string, rows: number, php: number): string {
 }
 
 /**
+ * NEP → House bill on the same named projects and the net change, tinted
+ * green when the House bill is higher and red when it is lower (the sign and
+ * the words say the same). The card's 2027 headline; `compact` is the one-line
+ * form an office heading in the list uses. `scope` is the hover text.
+ */
+export function Fy27Headline({ nep, hgab3, net, compact = false, scope = 'Same named projects in both documents' }: {
+  nep: number | null;
+  hgab3: number | null;
+  net: number | null;
+  compact?: boolean;
+  scope?: string;
+}) {
+  const tone = net == null ? 'is-flat' : net > 0 ? 'is-up' : net < 0 ? 'is-down' : 'is-flat';
+  return (
+    <div className={`hgab-dc-br-headline ${tone} ${compact ? 'is-compact' : ''}`.trim()} title={scope}>
+      <span className="hgab-dc-br-flow">
+        <span className="hgab-dc-br-stage">
+          <small>NEP</small>
+          <strong title={fmt.php(nep, { unit: 'full' })}>{fmt.php(nep)}</strong>
+        </span>
+        <span className="hgab-dc-br-arrow" aria-hidden="true">→</span>
+        <span className="hgab-dc-br-stage">
+          <small>House bill</small>
+          <strong title={fmt.php(hgab3, { unit: 'full' })}>{fmt.php(hgab3)}</strong>
+        </span>
+      </span>
+      <span className="hgab-dc-br-netbig" title={`House bill minus the NEP, same named projects: ${fmt.php(net, { unit: 'full' })}`}>
+        <small>Net change</small>
+        <SignedPhp value={net} />
+      </span>
+    </div>
+  );
+}
+
+/**
  * One office's 2027 comparison inside a district card: NEP → House bill on
  * the same named projects and the net change, a five-part bar of how much
  * money moved in each kind of change (cuts hatched, so it reads without
@@ -658,26 +693,7 @@ export function OfficeBridgePanel({ office, withName = false }: { office: Office
   return (
     <div className="hgab-dc-br">
       {name}
-      <div
-        className={`hgab-dc-br-headline ${b.net_php > 0 ? 'is-up' : b.net_php < 0 ? 'is-down' : 'is-flat'}`}
-        title="Same named projects in both documents"
-      >
-        <span className="hgab-dc-br-flow">
-          <span className="hgab-dc-br-stage">
-            <small>NEP</small>
-            <strong title={fmt.php(f.nep_php, { unit: 'full' })}>{fmt.php(f.nep_php)}</strong>
-          </span>
-          <span className="hgab-dc-br-arrow" aria-hidden="true">→</span>
-          <span className="hgab-dc-br-stage">
-            <small>House bill</small>
-            <strong title={fmt.php(f.hgab3_php, { unit: 'full' })}>{fmt.php(f.hgab3_php)}</strong>
-          </span>
-        </span>
-        <span className="hgab-dc-br-netbig" title={`House bill minus the NEP, same named projects: ${fmt.php(b.net_php, { unit: 'full' })}`}>
-          <small>Net change</small>
-          <SignedPhp value={b.net_php} />
-        </span>
-      </div>
+      <Fy27Headline nep={f.nep_php} hgab3={f.hgab3_php} net={b.net_php} />
       {moved > 0 && (
         <span className="hgab-dc-br-bar" role="img" aria-label={`How the House bill differs from the NEP: ${barLabel}`}>
           {moving.map((r) => {
@@ -795,8 +811,8 @@ function Figure({ v }: { v: number | null }) {
 export const DistrictCardView = memo(function DistrictCardView({ card, index, level = 3 }: {
   card: DistrictCard;
   index: HgabDistrictIndex;
-  /** 4 under a region heading (h3), 3 in the flat list. */
-  level?: 3 | 4;
+  /** 4 under a region heading (h3), 5 under an office heading (h4), 3 in the flat list. */
+  level?: 3 | 4 | 5;
 }) {
   const offices = cardOffices(card, index);
   const groups = cardRegionalGroups(card, index);
@@ -808,7 +824,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
   const h = card.headline;
   const fy27 = cardFy27(card, index);
   const hid = `hgab-dc-${card.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  const Heading = level === 4 ? 'h4' : 'h3';
+  const Heading = level === 5 ? 'h5' : level === 4 ? 'h4' : 'h3';
   const regionKey = districtRegionKey(card);
 
   return (

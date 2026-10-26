@@ -11,9 +11,16 @@
  *   links still open it): one card per legislative district with the
  *   representative who holds the seat in the 20th Congress, the office(s)
  *   that serve it and their budget by Congress and year. A sidebar lists
- *   regions → districts (`HgabDistrictSidebar`); search, region, tier, sort
- *   and grouping live in the URL; `#region-<key>` and `#d-<district>` say
- *   where the reader is, so a position is shareable and Back returns to it.
+ *   regions → districts (`HgabDistrictSidebar`); search, region, tier,
+ *   office, sort, grouping and browse mode live in the URL; `#region-<key>`
+ *   and `#d-<district>` say where the reader is, so a position is shareable
+ *   and Back returns to it.
+ *
+ *   Browse by office (`by=office`): the sidebar and the cards put each
+ *   region's districts under the office group that serves them, with the
+ *   office's whole 2027 figure on its heading, so a shared (Tier B) office's
+ *   districts sit together. `office=` filters the list to one group, in
+ *   either mode.
  *
  * The page groups money by office, not by district. DPWH lists the
  * implementing office on every project row; the DEO2LEG crosswalk says which
@@ -32,7 +39,7 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
 import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, SignedPhp } from '../components/HgabBits';
-import { ChartKeyRow, DistrictCardView, ResidualPanel } from '../components/HgabDistrictBits';
+import { ChartKeyRow, DistrictCardView, Fy27Headline, ResidualPanel } from '../components/HgabDistrictBits';
 import DistrictSidebar from '../components/HgabDistrictSidebar';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
@@ -42,14 +49,15 @@ import {
 } from '../lib/hgab';
 import { districtsView } from '../lib/hgab-ui';
 import {
-  DISTRICT_SORT_LABELS, FISCAL_STAGE_LONG, REGION_SECTION_ORDER, TIER_FILTER_LABELS, TIER_MEANING, bangsamoroDistricts,
+  DISTRICT_SORT_LABELS, FISCAL_STAGE_LONG, REGION_SECTION_ORDER, TIER_FILTER_LABELS, TIER_MEANING, andList, bangsamoroDistricts,
   districtAnchor, districtAnchorFromHash, districtFiltersFromParams, districtListHref, districtRegionKey,
-  filterDistricts, groupDistrictsByRegion, hasDistrictFilters, headlineResidual, isOfficeLedger,
+  filterDistricts, groupDistrictsByRegion, groupOfficeSectionsByRegion, hasDistrictFilters, headlineResidual, isOfficeLedger,
+  officeGroupTierText, officeGroupTitle, officeParquetLabel, officeProjectsHref, officeSections,
   paramsFromDistrictFilters, regionAnchor, regionFilterKey, regionFromHash, regionNames, regionOptionLabel,
-  regionTotals, regionsOf, residualShare, residualUnattributed, residualWhere, sidebarRegions, slotLabel,
-  sortDistricts, sortPhrase,
-  type DistrictFilters, type DistrictSortKey, type RegionGroup, type RegionSectionKey, type RegionTotals, type SidebarDistrict,
-  type TierFilter,
+  regionTotals, regionsOf, residualShare, residualUnattributed, residualWhere, resolveOfficeGroup, sidebarOfficeRegions,
+  sidebarRegions, slotLabel, sortDistricts, sortPhrase,
+  type DistrictBrowse, type DistrictFilters, type DistrictSortKey, type OfficeSection, type RegionGroup, type RegionSectionKey,
+  type RegionTotals, type SidebarDistrict, type SidebarOffice, type TierFilter,
 } from '../lib/hgab-districts';
 import '../hgab-districts.css';
 
@@ -312,11 +320,6 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
   );
 }
 
-/** "A", "A and B", "A, B and C". */
-function andList(items: readonly string[]): string {
-  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-}
-
 // ---------------------------------------------------------------------------
 // The list
 // ---------------------------------------------------------------------------
@@ -365,16 +368,37 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   };
 
   const regionOptions = useMemo(() => regionsOf(index), [index]);
-  const visible = useMemo(() => sortDistricts(filterDistricts(index, filters), index, filters.sort), [index, filters]);
+  const byOffice = filters.by === 'office';
+  const filtered = useMemo(() => filterDistricts(index, filters), [index, filters]);
+  // Office mode: the cards under their office groups, groups ranked by the
+  // group's own figure; flattened, that is also the flat list's order.
+  const sections = useMemo(() => (byOffice ? officeSections(filtered, index, filters.sort) : null), [byOffice, filtered, index, filters.sort]);
+  const visible = useMemo(
+    () => (sections ? sections.flatMap((s) => s.cards) : sortDistricts(filtered, index, filters.sort)),
+    [sections, filtered, index, filters.sort],
+  );
   const grouped = filters.group;
-  const groups = useMemo(() => (grouped ? groupDistrictsByRegion(visible) : []), [grouped, visible]);
+  const groups = useMemo<Array<RegionGroup & { sections?: OfficeSection[] }>>(
+    () => (!grouped ? [] : sections ? groupOfficeSectionsByRegion(sections) : groupDistrictsByRegion(visible)),
+    [grouped, sections, visible],
+  );
+  const officeCount = useMemo(() => (sections ? new Set(sections.flatMap((s) => s.group.offices.map((o) => o.id))).size : 0), [sections]);
+  // The office filter, resolved: its group is marked in the sidebar and named on its chip.
+  const activeGroup = useMemo(() => (filters.office ? resolveOfficeGroup(index, filters.office) : null), [index, filters.office]);
   // Every district per region, unfiltered: the "5 of 24 districts" in a region's summary and the sidebar.
   const regionSize = useMemo(() => {
     const m = new Map<RegionSectionKey, number>();
     for (const d of index.districts) m.set(districtRegionKey(d), (m.get(districtRegionKey(d)) ?? 0) + 1);
     return m;
   }, [index]);
-  const tree = useMemo(() => sidebarRegions(visible), [visible]);
+  // The sidebar ignores the office filter, so the reader can move from office
+  // to office; every other filter narrows it as it narrows the cards.
+  const treeFilters = useMemo(() => ({ ...filters, office: '' }), [filters]);
+  const treeCards = useMemo(() => (filters.office ? filterDistricts(index, treeFilters) : filtered), [filters.office, index, treeFilters, filtered]);
+  const tree = useMemo(
+    () => (byOffice ? sidebarOfficeRegions(treeCards, index) : sidebarRegions(treeCards)),
+    [byOffice, treeCards, index],
+  );
   const byAnchor = useMemo(() => new Map(index.districts.map((d) => [districtAnchor(d.id), d] as const)), [index]);
 
   // Where the reader is: `#region-<key>` or `#d-<district>`.
@@ -389,7 +413,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   // How many of `visible` are drawn in the flat list. Keyed to the filters so a
   // new search starts from the first page again without an effect-driven reset,
   // and never fewer than reach the district in the hash.
-  const filtersKey = `${filters.q}|${filters.region}|${filters.tier}|${filters.sort}`;
+  const filtersKey = `${filters.q}|${filters.region}|${filters.tier}|${filters.office}|${filters.sort}|${filters.by}`;
   const [reveal, setReveal] = useState({ key: filtersKey, limit: PAGE });
   const baseLimit = reveal.key === filtersKey ? reveal.limit : PAGE;
   const hashIdx = hashCard && !grouped ? visible.findIndex((c) => c.id === hashCard.id) : -1;
@@ -401,7 +425,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   // Which region sections show every card when grouped. Keyed to the filters
   // but not the sort, so re-sorting keeps an opened region open. The region in
   // the hash, and the region of the district in the hash, are always whole.
-  const openKey = `${filters.q}|${filters.region}|${filters.tier}`;
+  const openKey = `${filters.q}|${filters.region}|${filters.tier}|${filters.office}|${filters.by}`;
   const [open, setOpen] = useState<{ key: string; regions: RegionSectionKey[]; all: boolean }>({ key: openKey, regions: [], all: false });
   const opened = open.key === openKey ? open : { key: openKey, regions: [] as RegionSectionKey[], all: false };
   const openRegion = (k: RegionSectionKey) =>
@@ -474,6 +498,32 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
     navigate({ search: window.location.search, hash: d.anchor });
   }, [grouped, visible, baseLimit, filtersKey, navigate, scrollTo]);
 
+  // An office picked in the sidebar: filter the cards to its group, then
+  // scroll to the results and put focus on the office's heading (or the
+  // cards' heading). The scroll waits for the commit that draws the group.
+  // A link from elsewhere (a district page's office row) lands on the results too.
+  const pendingOffice = useRef(navType === 'PUSH' && Boolean(filters.office) && !hash);
+  const showResults = useCallback(() => {
+    const el = document.getElementById('hgab-dx-results');
+    if (el) scrollTo(el, false, true, false);
+    const head = document.querySelector<HTMLElement>('.hgab-dx-office-title') ?? document.getElementById('hgab-dx-cards-title');
+    head?.focus({ preventScroll: true });
+  }, [scrollTo]);
+  useEffect(() => {
+    if (!pendingOffice.current) return;
+    pendingOffice.current = false;
+    showResults();
+  }, [filters.office, showResults]);
+  const goOffice = useCallback((o: SidebarOffice) => {
+    if (districtFiltersFromParams(new URLSearchParams(window.location.search)).office === o.param) {
+      showResults();
+      return;
+    }
+    pendingOffice.current = true;
+    update({ office: o.param });
+  }, [showResults, update]);
+  const setBy = useCallback((by: DistrictBrowse) => update({ by }), [update]);
+
   // Before a link leaves for a district page, write that district's card into
   // the list's own address, so Back returns to the card.
   const rememberCard = (e: MouseEvent<HTMLElement>) => {
@@ -499,12 +549,32 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   const offices = Object.values(index.offices).filter(isOfficeLedger);
   const head = headlineResidual(index.residual);
   const share = head ? residualShare(head) : null;
-  const narrowed = hasDistrictFilters(filters) && (tree.length <= 3 || visible.length <= NARROW);
-  // Clears search, region and tier; the sort and the grouping are kept.
-  const clear = () => update({ q: '', region: '', tier: '' });
+  const narrowed = hasDistrictFilters(treeFilters) && (tree.length <= 3 || treeCards.length <= NARROW);
+  // Clears search, region, tier and office; the sort, the grouping and the browse mode are kept.
+  const clear = () => update({ q: '', region: '', tier: '', office: '' });
   const regionKey = regionFilterKey(filters.region);
   const regionValue = regionKey ? regionOptions.find((r) => regionKeyOf(r) === regionKey) ?? filters.region : filters.region;
   const term = (text: string) => <span className="hgab-dx-term" title={PLAIN_TERMS.candidate.meaning}>{text}</span>;
+
+  // Every active filter as a removable chip.
+  const chips: Array<{ key: string; label: string; value: string; title?: string; remove: () => void }> = [];
+  if (filters.q.trim()) chips.push({ key: 'q', label: 'Search', value: `“${filters.q.trim()}”`, remove: () => update({ q: '' }) });
+  if (filters.region) {
+    chips.push({ key: 'region', label: 'Region', value: regionKey ? regionNames(regionKey).name : filters.region, remove: () => update({ region: '' }) });
+  }
+  if (filters.tier) {
+    const tierChip = { A: 'Tier A', B: 'Tier B or mixed', none: 'No office found' }[filters.tier];
+    chips.push({ key: 'tier', label: 'Whose budget', value: tierChip, title: TIER_FILTER_LABELS[filters.tier], remove: () => update({ tier: '' }) });
+  }
+  if (filters.office) {
+    chips.push({
+      key: 'office',
+      label: 'Office',
+      value: activeGroup ? activeGroup.name : `“${filters.office}” not found`,
+      title: activeGroup ? `${officeGroupTitle(activeGroup)}. ${officeGroupTierText(activeGroup.tier, activeGroup.district_ids.length)}.` : 'No office matches this link.',
+      remove: () => update({ office: '' }),
+    });
+  }
 
   return (
     <>
@@ -553,11 +623,15 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
             onQuery={setDraft}
             onCommit={commitDraft}
             selectedId={hashCard?.id ?? null}
-            focusRegion={hashCardRegion ?? hashRegion}
+            focusRegion={hashCardRegion ?? hashRegion ?? activeGroup?.region ?? null}
             narrowed={narrowed}
             track={track}
             onRegion={grouped ? goRegion : undefined}
             onDistrict={goDistrict}
+            by={filters.by}
+            onBy={setBy}
+            activeOffice={activeGroup?.id ?? null}
+            onOffice={goOffice}
           />
 
           <div className="hgab-dx-content">
@@ -601,24 +675,47 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               </label>
               <label className="hgab-dx-toggle">
                 <input type="checkbox" checked={grouped} onChange={(e) => update({ group: e.target.checked })} />
-                <span>Group by region</span>
+                <span>{byOffice ? 'Group by region and office' : 'Group by region'}</span>
               </label>
             </div>
 
-            <p className="hgab-dx-count" role="status">
-              <span><strong>{visible.length.toLocaleString()}</strong> of {all.length.toLocaleString()} districts</span>
-              {grouped && groups.length > 0 && <span>· in {groups.length} {groups.length === 1 ? 'region' : 'regions'}</span>}
-              {previewing && (
-                <span>
-                  · the first {REGION_PREVIEW} in each region shown{' '}
-                  <button type="button" onClick={() => setOpen({ key: openKey, regions: opened.regions, all: true })}>Show every district</button>
-                </span>
+            <div className="hgab-dx-results" id="hgab-dx-results">
+              {chips.length > 0 && (
+                <div className="hgab-ds-chips hgab-dx-chips" role="group" aria-label="Active filters">
+                  {chips.map((c) => (
+                    <span key={c.key} className="hgab-ds-chip" title={c.title}>
+                      <em>{c.label}</em>
+                      {c.value}
+                      <button type="button" aria-label={`Remove the ${c.label.toLowerCase()} filter: ${c.value}`} title="Remove this filter" onClick={c.remove}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
               )}
-              {!grouped && hidden > 0 && <span>· showing the first {shown.length.toLocaleString()}</span>}
-              <span>· sorted by {sortPhrase(filters.sort)}{grouped ? ' within each region' : ''}</span>
-              {filters.sort !== 'name' && <span>· districts without a figure come last</span>}
-              {hasDistrictFilters(filters) && <button type="button" onClick={clear}>Clear filters</button>}
-            </p>
+              <p className="hgab-dx-count" role="status">
+                <span><strong>{visible.length.toLocaleString()}</strong> of {all.length.toLocaleString()} districts</span>
+                {byOffice && officeCount > 0 && (
+                  <span>
+                    · under {officeCount.toLocaleString()} {officeCount === 1 ? 'office' : 'offices'}
+                    {grouped && groups.length > 0 ? ` in ${groups.length} ${groups.length === 1 ? 'region' : 'regions'}` : ''}
+                  </span>
+                )}
+                {!byOffice && grouped && groups.length > 0 && <span>· in {groups.length} {groups.length === 1 ? 'region' : 'regions'}</span>}
+                {previewing && (
+                  <span>
+                    · {byOffice ? 'the first offices' : `the first ${REGION_PREVIEW}`} in each region shown{' '}
+                    <button type="button" onClick={() => setOpen({ key: openKey, regions: opened.regions, all: true })}>Show every district</button>
+                  </span>
+                )}
+                {!grouped && hidden > 0 && <span>· showing the first {shown.length.toLocaleString()}</span>}
+                {byOffice
+                  ? <span>· offices sorted by {sortPhrase(filters.sort)}{grouped ? ' within each region' : ''}, their districts by name</span>
+                  : <span>· sorted by {sortPhrase(filters.sort)}{grouped ? ' within each region' : ''}</span>}
+                {filters.sort !== 'name' && <span>· {byOffice ? 'offices' : 'districts'} without a figure come last</span>}
+                {hasDistrictFilters(filters) && <button type="button" onClick={clear}>Clear filters</button>}
+              </p>
+            </div>
 
             <p className="hgab-dx-lede">
               The NEP is the budget the President submits to Congress each August. A 2027 project “not in
@@ -634,7 +731,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               </p>
             )}
 
-            <h2 className="visually-hidden">District cards</h2>
+            <h2 className="visually-hidden" id="hgab-dx-cards-title" tabIndex={-1}>District cards</h2>
             {visible.length === 0 ? (
               <p className="hgab-dx-empty">
                 No district matches these filters.{' '}
@@ -698,9 +795,13 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
  * districts shown, the offices serving them and those offices' 2026 enacted
  * and 2027 House bill totals, each office summed once — and its cards in the
  * page's sort order. `limit` previews the first few with a "Show all" button.
+ *
+ * In office mode (`group.sections`) the cards sit under their office groups
+ * (`OfficeSectionView`), and a preview shows whole groups until it reaches
+ * `limit` cards, so a shared office's districts are never cut apart.
  */
 function RegionSection({ group, index, size, limit, onOpen }: {
-  group: RegionGroup;
+  group: RegionGroup & { sections?: OfficeSection[] };
   index: HgabDistrictIndex;
   /** Every district in the region, before filters. */
   size: number;
@@ -711,7 +812,18 @@ function RegionSection({ group, index, size, limit, onOpen }: {
   const anchor = regionAnchor(group.key);
   const t = useMemo(() => regionTotals(group.cards, index), [group.cards, index]);
   const barmm = useMemo(() => bangsamoroDistricts(group.cards, index), [group.cards, index]);
-  const cards: DistrictCard[] = limit == null ? group.cards : group.cards.slice(0, limit);
+  let sections = group.sections ?? null;
+  if (sections && limit != null) {
+    const out: OfficeSection[] = [];
+    let n = 0;
+    for (const s of sections) {
+      if (n >= limit) break;
+      out.push(s);
+      n += s.cards.length;
+    }
+    sections = out;
+  }
+  const cards: DistrictCard[] = sections ? sections.flatMap((s) => s.cards) : limit == null ? group.cards : group.cards.slice(0, limit);
   const rest = group.cards.length - cards.length;
   const n = group.cards.length;
   return (
@@ -736,9 +848,13 @@ function RegionSection({ group, index, size, limit, onOpen }: {
           </p>
         )}
       </header>
-      <div className="hgab-dx-grid">
-        {cards.map((card) => <DistrictCardView key={card.id} card={card} index={index} level={4} />)}
-      </div>
+      {sections ? (
+        sections.map((s) => <OfficeSectionView key={s.group.id} section={s} index={index} />)
+      ) : (
+        <div className="hgab-dx-grid">
+          {cards.map((card) => <DistrictCardView key={card.id} card={card} index={index} level={4} />)}
+        </div>
+      )}
       {rest > 0 && (
         <p className="hgab-dx-region-more">
           <button type="button" className="nep-more" onClick={onOpen}>
@@ -747,6 +863,72 @@ function RegionSection({ group, index, size, limit, onOpen }: {
           <span>{rest.toLocaleString()} more</span>
         </p>
       )}
+    </section>
+  );
+}
+
+/**
+ * One office group in office mode: the office name(s) with "DEO" spelled out
+ * on hover, its tier, its 2027 figures for the whole office (NEP → House bill
+ * and the net change, same named projects), a Projects link per office, and
+ * the cards of the districts it serves. A shared (Tier B) group is bracketed
+ * so its cards read as one office's, whose figure is never split.
+ */
+function OfficeSectionView({ section, index }: { section: OfficeSection; index: HgabDistrictIndex }) {
+  const g = section.group;
+  const n = g.district_ids.length;
+  const shown = section.cards.length;
+  const titleId = `hgab-dx-o-${g.id.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+  return (
+    <section className={`hgab-dx-office is-${g.tier ?? 'none'}`} aria-labelledby={titleId} data-office={g.id}>
+      <header className="hgab-dx-office-head">
+        <div className="hgab-dx-office-id">
+          <h4 className="hgab-dx-office-title" id={titleId} tabIndex={-1} title={officeGroupTitle(g)}>{g.name}</h4>
+          <p className="hgab-dx-office-meta">
+            {g.tier ? (
+              <span className={`hgab-tier is-${g.tier}`} title={officeGroupTierText(g.tier, n)}>
+                <span aria-hidden="true">Tier {g.tier}</span>
+                <small aria-hidden="true">{g.tier === 'A' ? 'only this district' : `shared by ${n} districts · not split`}</small>
+                <span className="visually-hidden">{officeGroupTierText(g.tier, n)}</span>
+              </span>
+            ) : (
+              <span className="hgab-tier is-none">No office<small>no figure</small></span>
+            )}
+            {g.offices.length > 1 && <span>Total of {g.offices.length} offices</span>}
+            {shown < n && <span>{shown} of {n} districts shown</span>}
+          </p>
+        </div>
+        {g.tier && (
+          <div className="hgab-dx-office-fig">
+            <span className="hgab-dx-office-cap">2027 · whole office{g.tier === 'B' ? ', not split' : ''}</span>
+            <Fy27Headline
+              compact
+              nep={g.nep_php}
+              hgab3={g.hgab3_php}
+              net={g.net_php}
+              scope={`The office’s figures, same named projects in both documents.${g.tier === 'B' ? ` Shared by its ${n} districts and not split.` : ''}`}
+            />
+          </div>
+        )}
+        {g.offices.length > 0 && (
+          <p className="hgab-dx-office-links">
+            {g.offices.map((o) => (
+              <Link key={o.id} className="hgab-cta" to={officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
+                Projects{g.offices.length > 1 ? ` · ${o.name}` : ''}
+              </Link>
+            ))}
+          </p>
+        )}
+        {!g.tier && (
+          <p className="hgab-dx-office-note">
+            We found no district engineering office (DEO) for these districts, so there is no figure. That is not
+            evidence of no funding.
+          </p>
+        )}
+      </header>
+      <div className="hgab-dx-grid">
+        {section.cards.map((card) => <DistrictCardView key={card.id} card={card} index={index} level={5} />)}
+      </div>
     </section>
   );
 }
@@ -804,7 +986,11 @@ function DistrictsDetails({ index }: { index: HgabDistrictIndex }) {
           <code>tier=A</code> attributable, <code>tier=B</code> shared or mixed, <code>tier=none</code> no office ledger;
           sort keys <code>hgab3</code>, <code>gaa2026</code>, <code>change</code> (fy2027 block, compared population),{' '}
           <code>growth</code> (mean annual GAA, 18th → 20th Congress), <code>name</code>; <code>group=none</code> for the
-          flat list; <code>#region-III</code> opens one region and <code>#d-bulacan-1st</code> one card.
+          flat list; <code>by=office</code> puts districts under their office group (union-find over ledger offices and
+          the districts they serve, as on the leaderboards; groups ranked on their summed office figures);{' '}
+          <code>office=</code> takes one group: its office ids without <code>office:</code>, joined by <code>+</code>, or
+          any one of them (<code>office=metro-manila-3rd-deo</code>); <code>#region-III</code> opens one region
+          and <code>#d-bulacan-1st</code> one card.
         </li>
       </ul>
     </HgabDetails>
