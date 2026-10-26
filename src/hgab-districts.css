@@ -1068,20 +1068,103 @@
   color: var(--ink-3);
 }
 .hgab-dc-br-empty { margin: 0; font-family: var(--font-body); font-size: 12px; color: var(--ink-mute); }
-.hgab-dc-br-totals {
+/* NEP → House bill and the net change: the card's headline figure, tinted
+   green when the House bill is higher and red when it is lower. The sign
+   (+/−) and the words carry the same meaning for readers who can't tell the
+   colours apart. */
+.hgab-dc-br-headline {
+  --br-tone: var(--ink-2);
+  --br-tone-bg: var(--paper-2);
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 2px 10px;
+  align-items: center;
+  gap: 8px 16px;
   margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 4px solid var(--br-tone);
+  background: var(--br-tone-bg);
   font-family: var(--font-body);
-  font-size: 12px;
+}
+.hgab-dc-br-headline.is-up { --br-tone: #1a7f37; --br-tone-bg: #e9f6ec; }
+.hgab-dc-br-headline.is-down { --br-tone: #c0251b; --br-tone-bg: #fdecea; }
+.hgab-dc-br-flow { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.hgab-dc-br-stage { display: flex; flex-direction: column; min-width: 0; }
+.hgab-dc-br-headline small {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-3);
 }
-.hgab-dc-br-totals strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.hgab-dc-br-net { font-weight: 600; color: var(--ink-2); white-space: nowrap; }
-.hgab-dc-br-net .hgab-delta { display: inline; margin: 0; font-size: 13px; font-weight: 700; }
+.hgab-dc-br-stage strong {
+  font-family: var(--font-hero);
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.hgab-dc-br-arrow { font-size: 18px; line-height: 1.2; color: var(--ink-3); }
+.hgab-dc-br-netbig { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.hgab-dc-br-netbig small { color: var(--br-tone); }
+.hgab-dc-br-netbig .hgab-delta {
+  display: block;
+  margin: 0;
+  font-family: var(--font-hero);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--br-tone);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 420px) {
+  .hgab-dc-br-stage strong { font-size: 17px; }
+  .hgab-dc-br-netbig .hgab-delta { font-size: 21px; }
+}
+
+/* "Shared" with the details on hover, focus or tap. */
+.hgab-dc-shared { position: relative; display: inline-block; }
+.hgab-dc-shared-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--hgab-tier-b);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--hgab-tier-b);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: help;
+}
+.hgab-dc-shared.is-open .hgab-dc-shared-btn,
+.hgab-dc-shared-btn:focus-visible { background: var(--hgab-tier-b); color: #fff; outline: none; }
+.hgab-dc-shared-pop {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  top: calc(100% + 6px);
+  width: min(320px, 80vw);
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: 0 8px 24px rgba(10, 20, 40, 0.14);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+.hgab-dc-shared-pop[hidden] { display: none; }
+.hgab-dc-shared-pop strong { color: var(--ink); }
+.hgab-dc-shared-list { display: block; margin-top: 6px; }
+.hgab-dc-shared-list a { color: var(--accent); }
 /* How much moved in each kind of change. Cuts and deletions are hatched, so
    the bar reads without telling the colours apart. */
 .hgab-dc-br-bar { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: var(--paper-3); }
