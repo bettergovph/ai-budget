@@ -1,8 +1,9 @@
 /**
- * `/hgab/2027/intro` — the HGAB section's landing page as a story deck: a
+ * `/hgab/2027/intro` — the Explainer: the HGAB section as a story deck, a
  * vertical run of short numbered chapters, one idea and one chart each, in
- * the manner of the FY2027 NEP deck (`Nep2027Story`). The dense dashboard it
- * replaces as the landing stays at `/hgab/2027/overview`.
+ * the manner of the FY2027 NEP deck (`Nep2027Story`). The section lands on
+ * the overview (`/hgab/2027/overview`); the sub-nav lists this page right
+ * after it.
  *
  * Every figure is computed here from `overview.json`, the four
  * `<dataset>/summary.json` files and, best-effort, `districts.json`; nothing
@@ -88,7 +89,7 @@ export default function HgabIntro() {
   }, [data, districts]);
 
   if (err) return <HgabError message={err} />;
-  if (!data) return <HgabLoading what="the FY2027 House bill introduction" heroBlend />;
+  if (!data) return <HgabLoading what="the FY2027 House bill explainer" heroBlend />;
 
   const { ov, summaries } = data;
   const byKey = new Map(ov.datasets.map((d) => [d.key, d]));
@@ -150,12 +151,13 @@ export default function HgabIntro() {
 
   return (
     <>
-      <HgabHeader crumb="Intro" heroBlend />
+      <HgabHeader crumb="Explainer" heroBlend />
 
       <main ref={rootRef} className="story hgab-intro">
         {/* ---- Hero ---- */}
         <section className="story-band story-hero hgi-hero">
           <div className="story-hero-inner">
+            <p className="story-kicker">Explainer</p>
             <h1 className="story-hero-title">House Budget Analysis</h1>
             <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
           </div>
@@ -501,7 +503,7 @@ export default function HgabIntro() {
                 <Link to={datasetPath(d.key, 'map')}>{DATASET_SHORT[d.key]}</Link>
               </span>
             ))}
-            {' '}· <Link to={`${HGAB_ROOT}/overview`}>Dashboard view →</Link>
+            {' '}· <Link to={`${HGAB_ROOT}/overview`}>Overview →</Link>
           </p>
           <p className="story-provenance">
             {built && `Built ${built.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · `}

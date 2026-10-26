@@ -46,10 +46,22 @@ or show:
 
 ## Landing page
 
-The intro hero (`/hgab/2027/intro`) shows only the title **House Budget
-Analysis**. Anything the old hero said that readers still need (that this
-covers four of the bill's programs, not the whole bill) moves into the first
-chapter as one short line.
+The section lands on the overview (`/hgab/2027/overview`; `/hgab` and
+`/hgab/2027` redirect there). Its hero shows only the title **House Budget
+Analysis**; what the old hero said (what the NEP is, that this covers four of
+the bill's programs, not the whole bill) opens the page under it.
+
+The story page (`/hgab/2027/intro`) is the **Explainer**: that is its sub-nav
+label, right after Overview, and its hero kicker over the same title.
+
+## Candidate changes
+
+The overview's "House bill vs. NEP: candidate changes" table uses the
+workbench's vocabulary with a plain gloss: **Insertion candidates** (in the
+House bill only), **Deletion candidates** (in the NEP only), **Unchanged**,
+**Increases**, **Decreases**, and **Scope review** for same-road pairs on
+different stretches. Every count names its record type; the Total row says its
+counts mix record types.
 
 ## Unchanged rules
 
