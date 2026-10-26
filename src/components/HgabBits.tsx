@@ -601,32 +601,56 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
 }
 
 /**
- * Where the House bill sits in the budget cycle: NEP → hearings → House bill →
- * Senate → bicameral → GAA. A plain list, no library; the current step is
- * marked, the ones still to come are dimmed. Every acronym is expanded.
+ * Where the House bill sits in the budget cycle, as a timeline: NEP → House
+ * hearings → House bill → Senate → bicameral → GAA. One track runs through a
+ * marker per stage: solid up to the current stage, dashed after it. Stages
+ * that happened carry their month; later ones say what comes next, never an
+ * invented date. Horizontal on wide screens, vertical on phones.
  */
+type StageState = 'done' | 'current' | 'future';
+const STAGE_STATE_TEXT: Record<StageState, string> = { done: 'Done', current: 'Current stage', future: 'Not yet' };
+
 export function HgabStageStrip() {
-  const stages: Array<{ name: string; meta: string; to?: string; state?: 'done' | 'current' | 'future' }> = [
-    { name: 'NEP', meta: 'Submitted by the President to Congress, August 2026', to: '/2027', state: 'done' },
-    { name: 'House hearings', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
-    { name: 'House bill', meta: 'HB 10858 · voted on twice (2nd and 3rd reading)', state: 'current' },
-    { name: 'Senate', meta: 'Its own committee, then a floor vote', state: 'future' },
-    { name: 'Bicameral', meta: 'Both chambers settle on one text', state: 'future' },
-    { name: 'Enacted budget (GAA)', meta: 'Signed into law · FY2020–2026 so far', to: '/gaa', state: 'future' },
+  const stages: Array<{ name: string; when: string; meta: string; to?: string; state: StageState }> = [
+    { name: 'NEP', when: 'Aug 2026', meta: 'Submitted by the President to Congress', to: '/2027', state: 'done' },
+    { name: 'House hearings', when: 'Aug–Sep 2026', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
+    { name: 'House bill', when: 'Now', meta: 'HB 10858, voted on at 2nd and 3rd reading', state: 'current' },
+    { name: 'Senate', when: 'Next', meta: 'Its own committee, then a floor vote', state: 'future' },
+    { name: 'Bicameral', when: 'Then', meta: 'Both chambers settle on one text', state: 'future' },
+    { name: 'Enacted budget (GAA)', when: 'Last', meta: 'Signed into law; FY2020–2026 so far', to: '/gaa', state: 'future' },
   ];
   return (
-    <ol className="hgab-stage-strip" aria-label="Steps of the budget process">
-      {stages.map((s) => (
-        <li key={s.name} className={s.state === 'current' ? 'is-current' : s.state === 'future' ? 'is-future' : ''}>
-          {s.to ? (
-            <Link className="hgab-stage-name" to={s.to}>{s.name} →</Link>
-          ) : (
-            <span className="hgab-stage-name">{s.name}</span>
-          )}
-          <span className="hgab-stage-meta">{s.meta}</span>
-          {s.state === 'current' && <span className="hgab-stage-here">You are here</span>}
-        </li>
-      ))}
-    </ol>
+    <section className="hgab-timeline" aria-labelledby="hgab-timeline-title">
+      <p className="hgab-timeline-kicker" id="hgab-timeline-title">Where the 2027 budget is now</p>
+      <ol className="hgab-timeline-track">
+        {stages.map((s) => (
+          <li
+            key={s.name}
+            className={`hgab-tl-step is-${s.state}`}
+            aria-current={s.state === 'current' ? 'step' : undefined}
+          >
+            <span className="hgab-tl-when">{s.when}</span>
+            <span className="hgab-tl-node" aria-hidden="true">
+              {s.state === 'done' && (
+                <svg viewBox="0 0 12 12" width="10" height="10"><path d="M2.5 6.2l2.3 2.3 4.7-4.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              )}
+            </span>
+            <span className="hgab-tl-body">
+              {s.to ? (
+                <Link className="hgab-tl-name" to={s.to}>{s.name} <span aria-hidden="true">→</span></Link>
+              ) : (
+                <span className="hgab-tl-name">{s.name}</span>
+              )}
+              <span className="hgab-tl-meta">{s.meta}</span>
+              {s.state === 'current' ? (
+                <span className="hgab-tl-here">You are here</span>
+              ) : (
+                <span className="visually-hidden">{STAGE_STATE_TEXT[s.state]}</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

@@ -46,67 +46,181 @@
 
 /* --- stage strip: where this document sits in the budget cycle ----------- */
 
-.hgab-stage-strip {
+/* --- budget-process timeline (overview) ---------------------------------
+   One track through a marker per stage: solid up to the current stage,
+   dashed after it. Columns on wide screens; a vertical line on phones. */
+
+.hgab-timeline {
+  --tl-node: 16px;          /* done and future markers */
+  --tl-node-current: 26px;  /* the current stage */
+  --tl-rail: 2px;
+  --tl-row: 30px;           /* height of the marker row */
+  margin: 4px 0 8px;
+  padding: 18px 0 6px;
+  border-top: 1px solid var(--ink);
+}
+.hgab-timeline-kicker {
+  margin: 0 0 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-timeline-track {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--ink);
-  counter-reset: hgab-stage;
 }
-.hgab-stage-strip li {
+.hgab-tl-step {
   position: relative;
+  display: grid;
+  grid-template-rows: auto var(--tl-row) auto;
+  align-content: start; /* shorter columns must not stretch the date row */
   min-width: 0;
-  padding: 14px 16px 16px;
-  border-right: 1px solid var(--rule);
-  counter-increment: hgab-stage;
+  padding-right: 18px;
 }
-.hgab-stage-strip li:last-child { border-right: none; }
-.hgab-stage-strip li::before {
-  content: counter(hgab-stage, decimal-leading-zero);
+/* The rail from this marker to the next one (the column to the right). */
+.hgab-tl-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--tl-node-current) / 2);
+  right: calc(-1 * var(--tl-node-current) / 2);
+  top: calc(var(--tl-when-h, 22px) + var(--tl-row) / 2 - var(--tl-rail) / 2);
+  height: var(--tl-rail);
+  background: var(--accent);
+  z-index: 0;
+}
+.hgab-tl-step.is-current:not(:last-child)::after,
+.hgab-tl-step.is-future:not(:last-child)::after {
+  background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 11px);
+}
+.hgab-tl-when {
   display: block;
+  height: var(--tl-when-h, 22px);
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  color: var(--ink-mute);
-  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 22px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.hgab-stage-strip li.is-current {
-  background: var(--accent-soft);
-  box-shadow: inset 0 3px 0 var(--accent);
+.hgab-tl-step.is-current .hgab-tl-when { color: var(--accent); font-weight: 600; }
+.hgab-tl-step.is-future .hgab-tl-when { color: var(--ink-mute); }
+
+/* Markers sit centred in a fixed-width slot so every rail starts at a centre. */
+.hgab-tl-node {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  justify-self: start;
+  display: grid;
+  place-items: center;
+  width: var(--tl-node);
+  height: var(--tl-node);
+  margin-left: calc((var(--tl-node-current) - var(--tl-node)) / 2);
+  border-radius: 50%;
+  box-sizing: border-box;
 }
-.hgab-stage-strip li.is-current::before { color: var(--accent); }
-.hgab-stage-strip li.is-future .hgab-stage-name,
-.hgab-stage-strip li.is-future .hgab-stage-meta { color: var(--ink-mute); }
-.hgab-stage-name {
+.hgab-tl-step.is-done .hgab-tl-node {
+  background: var(--accent);
+  color: #fff;
+}
+.hgab-tl-step.is-future .hgab-tl-node {
+  background: var(--paper);
+  border: 2px solid var(--rule);
+}
+.hgab-tl-step.is-current .hgab-tl-node {
+  width: var(--tl-node-current);
+  height: var(--tl-node-current);
+  margin-left: 0;
+  background: var(--paper);
+  border: 3px solid var(--accent);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+}
+.hgab-tl-step.is-current .hgab-tl-node::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hgab-tl-step.is-current .hgab-tl-node { animation: hgab-tl-pulse 2.4s ease-out infinite; }
+  @keyframes hgab-tl-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(11, 79, 217, 0.28); }
+    70% { box-shadow: 0 0 0 10px rgba(11, 79, 217, 0); }
+    100% { box-shadow: 0 0 0 6px var(--accent-soft); }
+  }
+}
+
+.hgab-tl-body { display: block; padding-top: 10px; min-width: 0; }
+.hgab-tl-name {
   display: block;
   font-family: var(--font-hero);
   font-weight: 700;
   font-size: 15px;
   letter-spacing: -0.01em;
+  line-height: 1.25;
   color: var(--ink);
-  line-height: 1.2;
 }
-a.hgab-stage-name { text-decoration: none; }
-a.hgab-stage-name:hover { color: var(--accent); }
-.hgab-stage-meta {
+a.hgab-tl-name { text-decoration: none; }
+a.hgab-tl-name:hover, a.hgab-tl-name:focus-visible { color: var(--accent); text-decoration: underline; }
+.hgab-tl-step.is-future .hgab-tl-name { color: var(--ink-3); }
+.hgab-tl-step.is-current .hgab-tl-name { color: var(--accent); font-size: 16px; }
+.hgab-tl-meta {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   font-family: var(--font-body);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 12.5px;
+  line-height: 1.45;
   color: var(--ink-3);
 }
-.hgab-stage-here {
+.hgab-tl-step.is-future .hgab-tl-meta { color: var(--ink-mute); }
+.hgab-tl-here {
   display: inline-block;
-  margin-top: 8px;
+  margin-top: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
   font-family: var(--font-mono);
   font-size: 9.5px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--accent);
+}
+
+/* Tablets and phones: a vertical timeline, rail on the left. */
+@media (max-width: 900px) {
+  .hgab-timeline-track { grid-template-columns: 1fr; }
+  .hgab-tl-step {
+    grid-template-columns: var(--tl-node-current) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    padding: 0 0 18px;
+  }
+  .hgab-tl-step:last-child { padding-bottom: 0; }
+  .hgab-tl-when { grid-column: 2; grid-row: 1; height: auto; line-height: 1.4; white-space: normal; }
+  .hgab-tl-node { grid-column: 1; grid-row: 1 / span 2; align-self: start; margin-top: 2px; }
+  .hgab-tl-step.is-current .hgab-tl-node { margin-top: -3px; }
+  .hgab-tl-body { grid-column: 2; grid-row: 2; padding-top: 2px; }
+  .hgab-tl-step:not(:last-child)::after {
+    left: calc(var(--tl-node-current) / 2 - var(--tl-rail) / 2);
+    right: auto;
+    top: 10px;
+    bottom: -10px;
+    width: var(--tl-rail);
+    height: auto;
+  }
+  .hgab-tl-step.is-current:not(:last-child)::after,
+  .hgab-tl-step.is-future:not(:last-child)::after {
+    background: repeating-linear-gradient(180deg, var(--rule) 0 6px, transparent 6px 11px);
+  }
 }
 
 /* --- dataset cards (overview) ------------------------------------------- */
@@ -877,10 +991,6 @@ a.hgab-stage-name:hover { color: var(--accent); }
 @media (max-width: 900px) {
   .hgab-bridge,
   .hgab-card .hgab-bridge { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .hgab-stage-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .hgab-stage-strip li { border-bottom: 1px solid var(--rule); }
-  .hgab-stage-strip li:nth-child(3n) { border-right: none; }
-  .hgab-stage-strip li:nth-last-child(-n + 3) { border-bottom: none; }
 }
 
 @media (max-width: 720px) {
@@ -889,9 +999,6 @@ a.hgab-stage-name:hover { color: var(--accent); }
   .hgab-amt { font-size: 20px; }
   .hgab-card-stage { padding: 10px 8px 10px 0; margin-left: 8px; }
   .hgab-card-stage dt { font-size: 9px; letter-spacing: 0.12em; }
-  .hgab-stage-strip li { padding: 10px 12px 12px; }
-  .hgab-stage-name { font-size: 13.5px; }
-  .hgab-stage-meta { font-size: 11px; }
   .hgab-cta { padding: 7px 11px; font-size: 12px; }
   .hgab-prose section[id] { scroll-margin-top: 120px; }
 }
@@ -899,11 +1006,6 @@ a.hgab-stage-name:hover { color: var(--accent); }
 @media (max-width: 560px) {
   .hgab-bridge,
   .hgab-card .hgab-bridge { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hgab-stage-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hgab-stage-strip li:nth-child(3n) { border-right: 1px solid var(--rule); }
-  .hgab-stage-strip li:nth-child(2n) { border-right: none; }
-  .hgab-stage-strip li:nth-last-child(-n + 3) { border-bottom: 1px solid var(--rule); }
-  .hgab-stage-strip li:nth-last-child(-n + 2) { border-bottom: none; }
   .hgab-card-stages { grid-template-columns: 1fr; }
   .hgab-card-stage {
     margin-left: 0;
