@@ -33,7 +33,7 @@ import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadHgabLeaderboard, type RegionKey } from '../lib/hgab';
 import {
   BOARDS, BOARD_SECTIONS, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
-  leaderboardPath, rankEntries, rankMembers, rankRegions,
+  leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
 import '../nep2027.css';
@@ -58,6 +58,15 @@ function isRegionKey(v: string | null): v is RegionKey {
 function sentence(s: string | null | undefined): string {
   const t = (s ?? '').trim();
   return !t ? '' : /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
+/** The board's money in no district, or null; an older data file without the residual fields gives null, not an error. */
+function residualText(data: LeaderboardData, board: BoardDef): string | null {
+  try {
+    return residualLine(data, board);
+  } catch {
+    return null;
+  }
 }
 
 /** Boards that show representatives (and so their photos and the roster credit). */
@@ -196,8 +205,8 @@ function Gallery({
         title="Leaderboards"
         dek={
           <>
-            DPWH district offices ranked by their money in the 2027 House bill, the NEP and enacted budgets
-            since 2020. {NEP_MEANS} Each board opens as an image to download and share.
+            DPWH district offices ranked by their budgets in the 2027 House bill and the NEP, and by enacted
+            budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.
           </>
         }
         note="Amounts belong to DPWH district offices, not to people. The representative shown holds the district’s seat in the 20th Congress. The documents do not say who asked for any project."
@@ -243,7 +252,7 @@ function Gallery({
           {sentence(data.credits.portraits)} {sentence(data.credits.representatives)}{' '}
           <Link to={`${HGAB_ROOT}/methodology`}>How the figures are built</Link>
         </p>
-        <DisclaimerNotice compact />
+        <DisclaimerNotice compact offices />
       </main>
       <SiteFooter source={SOURCE_LINE} />
     </>
@@ -364,7 +373,7 @@ function BoardPage({
         crumb={<><Link to={leaderboardPath(undefined, { region })}>Leaderboards</Link> › {board.title}</>}
         compiledMeta={headerMeta(data)}
       />
-      <HgabHero compact crumb={crumb} title={titled} dek={board.subtitle} />
+      <HgabHero compact crumb={crumb} title={titled} dek={board.subtitle} note={residualText(data, board) ?? undefined} />
 
       <main className="nep-main hgab-lb-main">
         <div className="hgab-lb-board" ref={boardRef}>
@@ -418,6 +427,9 @@ function BoardPage({
               {problem ?? (api ? `PNG, ${api.width.toLocaleString()} × ${api.height.toLocaleString()} pixels` : 'Drawing the image…')}
             </p>
 
+            {/* Right beside the actions: what a shared image must not be read as saying. */}
+            <DisclaimerNotice compact offices heading="Before you share" className="hgab-lb-share-note" />
+
             <section className="hgab-lb-about" aria-labelledby="hgab-lb-about-h">
               <h2 id="hgab-lb-about-h">About this board</h2>
               <ul>
@@ -438,7 +450,6 @@ function BoardPage({
         <BoardTable key={`${board.id}|${region ?? ''}`} data={data} board={board} region={region} />
 
         <BoardPager board={board} region={region} format={format} />
-        <DisclaimerNotice compact />
       </main>
       <SiteFooter source={SOURCE_LINE} />
     </>
@@ -469,7 +480,7 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
     case 'congress':
       heading = 'Each top five, with every district served';
       line = `District offices${where}, by enacted DPWH budgets added up per Congress. ${SEAT_NOW}`;
-      table = <CongressTables data={data} region={region} />;
+      table = <CongressTables data={data} board={board} region={region} />;
       break;
     case 'shift':
       heading = 'By type of office';

@@ -23,6 +23,8 @@
  * - Integer pesos; null is "no figure", never zero.
  */
 
+import { CARD_DISCLAIMER } from './hgab-disclaimers';
+
 export const LEADERBOARD_SCHEMA = 1 as const;
 export const LEADERBOARD_ROOT = '/hgab/2027/leaderboard';
 /** R2 key (under the data base URL) of the leaderboard file. */
@@ -108,6 +110,16 @@ export interface LeaderEntry {
   reorganised: boolean;
   /** The office notes that set `reorganised`, verbatim from districts.json. */
   reorganised_notes: string[];
+
+  // Upstream uncertainty annotations carried per group (never folded into the figures above)
+  /**
+   * Paired lines touching this group's offices whose NEP and House bill sides name
+   * different office groups (or one side names no district office). They are held
+   * out of every group and counted in `totals.by_office_kind.office_change`.
+   */
+  office_change_rows: number;
+  /** Lines in segment-scope review (same road, different stretch): counted in the totals, never as an increase or a cut. */
+  scope_rows: number;
 }
 
 /** The same FY2027 figures summed for one slice (an office kind, a region, the whole dataset). */
@@ -140,7 +152,24 @@ export interface LeaderboardData {
     /** The whole DPWH compared population. */
     all: LeaderSlice;
     /** District engineering offices (incl. sub-district offices), Central Office, regional offices. */
-    by_office_kind: { deo: LeaderSlice; central: LeaderSlice; regional: LeaderSlice };
+    by_office_kind: {
+      deo: LeaderSlice;
+      central: LeaderSlice;
+      regional: LeaderSlice;
+      /** Paired lines whose two sides name different office groups, or one side no district office: held out of every group. */
+      office_change: LeaderSlice & { rows: number };
+      /**
+       * Lines the source reads as naming no office (the side lists one, its grouped records do not): residual
+       * as upstream, in no group. deo + central + regional + no_office + office_change = all.
+       */
+      no_office: LeaderSlice & { rows: number };
+    };
+    /**
+     * Enacted budgets by year: the DPWH total and the part no district office
+     * carries (Central Office, regional offices, operating units linked to no
+     * district), copied from districts.json `residual`.
+     */
+    gaa_residual: { fy: number; total_php: number; deo_php: number; central_office_php: number; regional_offices_php: number; unmatched_php: number }[];
     units: number;
     units_tier_a: number;
     units_tier_b: number;
@@ -164,7 +193,7 @@ export type BoardSection = 'fy2027' | 'history' | 'members' | 'picture';
 export type ValueKind = 'php' | 'signed_php' | 'count' | 'pct' | 'share';
 
 export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; blurb: string }> = [
-  { key: 'picture', label: 'The big picture', blurb: 'Where the DPWH money sits in the NEP and in the House bill.' },
+  { key: 'picture', label: 'The big picture', blurb: 'Where the DPWH budget sits in the NEP and in the House bill.' },
   { key: 'fy2027', label: '2027: the House bill against the NEP', blurb: 'DPWH projects by district office, as listed in each document.' },
   { key: 'history', label: '2020 to 2026: enacted budgets', blurb: 'What each district office received in the enacted budgets.' },
   { key: 'members', label: 'The members', blurb: 'The representatives themselves, from their legislative records.' },
@@ -198,12 +227,13 @@ export interface BoardDef {
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH district office serving each district. The documents do not say who asked for any project.';
 /** Printed on every share card that shows people when the board's first note is not PEOPLE_NOTE. */
-export const PEOPLE_LINE = 'Amounts belong to district offices, not people. The documents do not say who asked for any project.';
+/** Printed on every share image that shows people beside amounts (see hgab-disclaimers.ts). */
+export const PEOPLE_LINE = CARD_DISCLAIMER;
 const ADDED_NOTE = '“Added” means no matching line was found in the NEP: a candidate, not a confirmed insertion. Projects whose NEP match is unconfirmed are left out.';
 const SHARED_NOTE = 'An office that serves several districts is shown with every district it serves. Its amount is not split.';
 const GAA_NOTE = 'Enacted budgets list the whole office. New or renamed offices have fewer years; earlier years stay with their old office.';
 
-const REORG_NOTE = 'Offices created, renamed or carved out since 2020 are left out: part of their earlier money sits with another office.';
+const REORG_NOTE = 'Offices created, renamed or carved out since 2020 are left out: part of their earlier budget sits with another office.';
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -218,7 +248,7 @@ export const BOARDS: readonly BoardDef[] = [
   {
     id: 'shift', section: 'picture', kind: 'shift', value: 'php', order: 'desc',
     kicker: '2027 · DPWH projects · NEP and House bill',
-    title: 'Where the DPWH project money sits',
+    title: 'Where the DPWH project budget sits',
     subtitle: 'DPWH project lines by type of office, in the NEP and in the House bill (third reading).',
     notes: ['Same project lists in both documents. The NEP and the House bill are compared, not added.', PEOPLE_NOTE],
     regionFilter: false,
@@ -227,7 +257,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'regions-added', section: 'picture', kind: 'regions', value: 'php', order: 'desc',
     kicker: '2027 · DPWH projects · by region',
     title: 'Projects the House added, by region',
-    subtitle: 'Money in House bill projects with no matching line in the NEP, summed over each region’s district offices.',
+    subtitle: 'Budget for House bill projects with no matching line in the NEP, summed over each region’s district offices.',
     regionMetric: (r) => r.added_php,
     notes: [ADDED_NOTE, 'Central Office and regional office projects are not in any region’s total.'],
     regionFilter: false,
@@ -254,9 +284,9 @@ export const BOARDS: readonly BoardDef[] = [
     regionFilter: true,
   },
   {
-    id: 'added-money', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
+    id: 'added-budget', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
     kicker: '2027 House bill · DPWH projects',
-    title: 'Most money in projects the House added',
+    title: 'Largest budget in projects the House added',
     subtitle: 'House bill projects with no matching line in the NEP, by district office.',
     metric: (e) => e.added_php,
     keep: (e) => e.added_rows > 0,
@@ -305,13 +335,13 @@ export const BOARDS: readonly BoardDef[] = [
     metric: (e) => e.delta_php,
     keep: (e) => (e.delta_php ?? 0) < 0,
     detail: (e) => (e.nep_php != null && e.hgab3_php != null ? `${formatValue(e.nep_php, 'php')} → ${formatValue(e.hgab3_php, 'php')}` : null),
-    notes: ['Few district offices lost money. The largest cut is in Central Office projects; see “Where the DPWH project money sits”.', PEOPLE_NOTE, SHARED_NOTE],
+    notes: ['Few district offices have a smaller budget. The largest cut is in Central Office projects; see “Where the DPWH project budget sits”.', PEOPLE_NOTE, SHARED_NOTE],
     regionFilter: true,
   },
   {
     id: 'dropped', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
     kicker: '2027 · DPWH projects · NEP only',
-    title: 'Most money in NEP projects the House bill does not list',
+    title: 'Largest budget in NEP projects the House bill does not list',
     subtitle: 'NEP projects with no matching line in the House bill, by district office.',
     metric: (e) => e.dropped_php,
     keep: (e) => e.dropped_rows > 0,
@@ -623,4 +653,91 @@ export function officeLabel(entry: Pick<LeaderEntry, 'tier' | 'offices' | 'peopl
   if (plain.length === 1) return plain[0];
   const stems = plain.map((p) => p.replace(/ (sub-)?district office$/, ''));
   return `${stems.slice(0, -1).join(', ')} and ${stems[stems.length - 1]} district offices`;
+}
+
+// ---------------------------------------------------------------------------
+// Attribution tier and residual (required on every office-based view)
+// ---------------------------------------------------------------------------
+
+/** "Tier A · only this district" / "Tier B · shared by 3 districts, not split". */
+export function tierText(entry: Pick<LeaderEntry, 'tier' | 'people'>, short = false): string {
+  if (entry.tier === 'A') return short ? 'Tier A' : 'Tier A · only this district';
+  const n = entry.people.length;
+  return short ? `Tier B · ${n} districts` : `Tier B · shared by ${n} districts, not split`;
+}
+
+const pctOf = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : '—');
+
+type ResidualKind = 'central' | 'regional' | 'no_office' | 'office_change';
+
+function sliceSum(d: LeaderboardData, f: (s: LeaderSlice) => number, kinds: ResidualKind[]): number {
+  return kinds.reduce((a, k) => a + f(d.totals.by_office_kind[k]), 0);
+}
+
+/**
+ * The unattributable residual for a board, in one plain sentence, or null
+ * where none applies (members, shift — the shift board is the residual).
+ * Every office-based card and page prints it so district rows never read as
+ * the whole budget.
+ */
+export function residualLine(d: LeaderboardData, board: BoardDef): string | null {
+  const allKinds: ResidualKind[] = ['central', 'regional', 'no_office', 'office_change'];
+  const unpaired: ResidualKind[] = ['central', 'regional', 'no_office'];
+  const outside = 'Central Office, regional offices, lines with no office and lines that changed office';
+  switch (board.id) {
+    case 'house-bill-largest': {
+      const r = sliceSum(d, (s) => s.hgab3_php, allKinds);
+      return `Not in any district: ${formatValue(r, 'php')} (${pctOf(r, d.totals.all.hgab3_php)}) of the DPWH House bill project budget, under ${outside}.`;
+    }
+    case 'added-budget': case 'added-count': case 'added-share': case 'regions-added': {
+      const r = sliceSum(d, (s) => s.added_php, unpaired);
+      const n = sliceSum(d, (s) => s.added_rows, unpaired);
+      return `Not in any district: ${formatValue(r, 'php')} in ${n.toLocaleString('en-US')} added projects under Central Office, regional offices or no office.`;
+    }
+    case 'dropped': {
+      const r = sliceSum(d, (s) => s.dropped_php, unpaired);
+      return `Not in any district: ${formatValue(r, 'php')} in NEP projects missing from the House bill, under Central Office, regional offices or no office.`;
+    }
+    case 'increase': case 'increase-pct': case 'cuts': case 'regions-change': {
+      const r = sliceSum(d, (s) => s.hgab3_php - s.nep_php, allKinds);
+      return `Not in any district: ${formatValue(r, 'signed_php')} change under ${outside}.`;
+    }
+    case 'enacted-total': case 'by-congress': case 'growth': case 'decline': {
+      const years = d.totals.gaa_residual.filter((y) => y.fy >= 2020 && y.fy <= 2026);
+      const total = years.reduce((a, y) => a + y.total_php, 0);
+      const r = years.reduce((a, y) => a + (y.total_php - y.deo_php), 0);
+      return `Not in any district: ${formatValue(r, 'php')} (${pctOf(r, total)}) of DPWH enacted budgets 2020–2026, under Central Office, regional offices or units linked to no district.`;
+    }
+    case 'enacted-2026': {
+      const y = d.totals.gaa_residual.find((x) => x.fy === 2026);
+      if (!y) return null;
+      const r = y.total_php - y.deo_php;
+      return `Not in any district: ${formatValue(r, 'php')} (${pctOf(r, y.total_php)}) of the 2026 DPWH enacted budget, under Central Office, regional offices or units linked to no district.`;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * A row's headline is always a place, never a person: the district for a
+ * one-district group ("Ilocos Norte, 1st District"), the office for a shared
+ * group ("Metro Manila 1st district office"). Upstream forbids presenting an
+ * office total as a representative's own insertions or changes.
+ */
+export function entryTitle(entry: Pick<LeaderEntry, 'tier' | 'offices' | 'people' | 'key'>): string {
+  return officeLabel(entry) ?? entry.people[0]?.district ?? entry.key;
+}
+
+/**
+ * The seat holder(s), shown under the headline beside the photo:
+ * "Rep. JB Bernos"; a shared office lists every name ("Reps. A · B · C");
+ * a seat listing two members keeps both. `max` caps the names (then "+N").
+ */
+export function seatHolders(entry: Pick<LeaderEntry, 'people'>, max = Infinity): string {
+  const names = entry.people.map((p) => displayName(p.name));
+  if (!names.length) return '';
+  const shown = names.slice(0, max);
+  const more = names.length - shown.length;
+  return `${names.length > 1 ? 'Reps.' : 'Rep.'} ${shown.join(' · ')}${more > 0 ? ` +${more}` : ''}`;
 }
