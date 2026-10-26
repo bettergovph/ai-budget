@@ -598,11 +598,11 @@ const SPECS: Record<Exclude<ShareFormat, 'landscape'>, Spec> = {
     foot: 22, logo: 40, footPad: 0.85,
   },
   square: {
-    W: 1080, H: 1080, pad: 56, heroTop: 42, heroBottom: 26,
+    W: 1080, H: 1080, pad: 56, heroTop: 46, heroBottom: 30,
     kicker: 22, titleMax: 58, titleMin: 40, sub: 24, subLines: 3,
     rowName: 27, rowSub: 22, rowValue: 31, rowDetail: 22, rank: 28, avatar: 60, rowMin: 70, rowMax: 108,
     spot: null,
-    foot: 22, logo: 38, heroTight: true,
+    foot: 22, logo: 38,
   },
   story: {
     // Stories: the app's profile bar covers the top ~120px and the reply field the bottom ~150px.
@@ -633,19 +633,86 @@ interface HeroText {
   count: string | null;
   /** Drawn white, right-aligned on the count line (link previews). */
   url?: string | null;
-  /** "As of October 26, 2026": a row of its own under the count line (or the subtitle). */
+  /** "As of October 26, 2026": on the count row ("Top 7 of 190 district offices · As of …"), or alone where the count would be. */
   asOf: string;
+  /** "As of Oct 26, 2026", for a count row that is too narrow for the long date. */
+  asOfShort: string;
+  /** Width the count row may take (link previews keeping the link beside a shortened row). */
+  rowMax?: number;
 }
 
-/** asOfText(data) for the card being drawn (set by drawShareCard). */
+/** asOfText(data) for the card being drawn, and its short form (set by drawShareCard). */
 let cardAsOf = '';
-/** Set during a draw when the as-of row is missing or does not fit its line. */
+let cardAsOfShort = '';
+/** Set during a draw when the date is missing or does not fit on the count row. */
 let asOfMissing = false;
-/** Set when the as-of row has been drawn whole. */
+/** Set when the date has been drawn whole on the count row (or alone where the count would be). */
 let asOfDrawn = false;
 
 function heroText(board: BoardDef, region: string | null, count: string | null): HeroText {
-  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count, asOf: cardAsOf };
+  return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count, asOf: cardAsOf, asOfShort: cardAsOfShort };
+}
+
+/** "Top 7 of 190 district offices" → "Top 7 of 190"; "Top 2 shown for each Congress" → "Top 2 per Congress". */
+function shortCount(count: string): string {
+  return count
+    .replace(/ shown for each Congress$/, ' per Congress')
+    .replace(/ (district offices|district office|representatives|representative|regions)$/, '');
+}
+
+interface CountRow {
+  /** Runs in drawing order (count, separator, date). */
+  parts: { text: string; color: string }[];
+  width: number;
+  tracking: number;
+  /** The date is on the row (whole). */
+  dated: boolean;
+}
+
+/**
+ * The count row: "Top 7 of 190 district offices · As of October 26, 2026" on
+ * ONE line. Narrower rows take the short date, then the short count, then no
+ * letter-spacing, but never split the count and the date. Null when the card
+ * has neither; `dated: false` when even the shortest form is too wide.
+ */
+function countRow(ctx: Ctx, s: Spec, t: HeroText, w: number): CountRow | null {
+  const cc = 'rgba(255,255,255,0.68)';
+  const dc = 'rgba(255,255,255,0.58)';
+  const forms: { text: string; color: string }[][] = [];
+  if (t.count && t.asOf) {
+    const topN = /^Top \d+/.exec(t.count)?.[0];
+    const pairs = [[t.count, t.asOf], [t.count, t.asOfShort], [shortCount(t.count), t.asOfShort], ...(topN ? [[topN, t.asOfShort]] : [])];
+    for (const [c, d] of pairs) {
+      forms.push([{ text: c, color: cc }, { text: ' · ', color: dc }, { text: d, color: dc }]);
+    }
+  } else if (t.asOf) {
+    forms.push([{ text: t.asOf, color: dc }], [{ text: t.asOfShort, color: dc }]);
+  } else if (t.count) {
+    forms.push([{ text: t.count, color: cc }], [{ text: shortCount(t.count), color: cc }]);
+  } else return null;
+  const measure = (parts: { text: string }[], tracking: number) => {
+    setFont(ctx, 500, s.kicker, F.mono, tracking);
+    return tw(ctx, parts.map((p) => p.text).join(''));
+  };
+  // The least-shortened form that fits, letter-spaced if it can be.
+  for (const parts of forms) {
+    for (const tracking of [s.kicker * 0.08, 0]) {
+      const width = measure(parts, tracking);
+      if (width <= w) return { parts, width, tracking, dated: !!t.asOf };
+    }
+  }
+  const parts = forms[forms.length - 1];
+  return { parts, width: measure(parts, 0), tracking: 0, dated: false };
+}
+
+/** The link's width beside the count row (mono, else Inter); null when it does not fit there. */
+function urlBeside(ctx: Ctx, s: Spec, row: CountRow | null, url: string, w: number): { weight: number; family: string; width: number } | null {
+  for (const [weight, family] of [[500, F.mono], [600, F.body]] as const) {
+    setFont(ctx, weight, s.kicker, family, 0);
+    const width = tw(ctx, url);
+    if ((row ? row.width + s.kicker * 1.5 : 0) + width <= w) return { weight, family, width };
+  }
+  return null;
 }
 
 /** Kicker, region pill, title, subtitle and count line, white on the band. */
@@ -684,33 +751,18 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
   setFont(ctx, 700, titleSize, F.display, -titleSize * 0.02);
   const pillAfterTitle = !!t.region && !pillInline && tLines.length === 1 && tw(ctx, tLines[0]) + titleSize * 0.4 + pillW <= w;
   const pillH = t.region && !pillInline && !pillAfterTitle ? s.kicker * 1.7 : 0;
-  // The link (link previews) goes at the right of the count line (mono, else Inter), or on a line of its own.
-  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-  const cLines = t.count ? wrap(ctx, t.count, w, 2) : [];
-  const lastCW = cLines.length ? tw(ctx, cLines[cLines.length - 1]) : 0;
-  let urlFont = { weight: 500, family: F.mono };
-  setFont(ctx, 500, s.kicker, F.mono, 0);
-  let urlW = t.url ? tw(ctx, t.url) : 0;
-  if (t.url && lastCW + s.kicker * 1.5 + urlW > w) {
-    urlFont = { weight: 600, family: F.body };
-    setFont(ctx, 600, s.kicker, F.body, 0);
-    urlW = tw(ctx, t.url);
-  }
-  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-  const urlInline = !!t.url && cLines.length > 0 && lastCW + s.kicker * 1.5 + urlW <= w;
-  if (t.url && !urlInline) cLines.push('');
-  const urlFits = !t.url || urlW <= w;
+  // The count row (count · date, one line) and, on link previews, the link beside it.
+  const row = countRow(ctx, s, t, Math.min(w, t.rowMax ?? w));
+  const urlAt = t.url ? urlBeside(ctx, s, row, t.url, w) : null;
+  const urlFits = !t.url || !!urlAt;
+  const dateFits = !t.asOf || (!!row && row.dated);
   const cLH = s.kicker * (s.heroTight ? 1.32 : 1.45);
   const gap = s.kicker * (s.heroTight ? 0.55 : 0.7);
-  // The as-of row: its own line, mono like the count line, never cut.
-  setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-  const asOfFits = !!t.asOf && tw(ctx, t.asOf) <= w;
-  const asOfLH = s.kicker * (s.heroTight ? 1.26 : 1.34);
-  const asOfH = t.asOf ? (cLines.length ? 0 : gap * 0.6) + asOfLH : 0;
-  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + (cLines.length ? gap * 0.6 + cLines.length * cLH : 0) + asOfH;
+  const rowH = row ? gap * 0.6 + cLH : 0;
+  const h = kLines.length * kLH + gap + (pillH ? pillH + gap : 0) + tLines.length * tLH + gap * 0.9 + sLines.length * sLH + rowH;
   return {
     h,
-    fits: kFits && tFits && sFits && urlFits && (asOfFits || !t.asOf),
+    fits: kFits && tFits && sFits && urlFits && dateFits,
     draw(y0) {
       let y = y0;
       if (logo) drawLogo(ctx, logo.images, SHARE_LOGO_WHITE, x + w, y + s.kicker * 0.62 - logo.h / 2, logo.h, 'right', true);
@@ -737,21 +789,23 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
       y += gap * 0.9;
       setFont(ctx, 400, s.sub, F.body);
       for (const l of sLines) { text(ctx, l, x, y + s.sub * 0.98, 'rgba(255,255,255,0.86)'); y += sLH; }
-      if (cLines.length) {
+      if (row) {
         y += gap * 0.6;
-        setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-        for (const l of cLines) { text(ctx, l, x, y + s.kicker * 1.05, 'rgba(255,255,255,0.68)'); y += cLH; }
-        if (t.url) {
-          setFont(ctx, urlFont.weight, s.kicker, urlFont.family, 0);
-          text(ctx, t.url, x + w, y - cLH + s.kicker * 1.05, '#ffffff', 'right');
+        const by = y + s.kicker * 1.05;
+        setFont(ctx, 500, s.kicker, F.mono, row.tracking);
+        let cx = x;
+        for (const p of row.parts) {
+          text(ctx, p.text, cx, by, p.color);
+          cx += tw(ctx, p.text);
         }
-      }
-      if (t.asOf) {
-        if (!cLines.length) y += gap * 0.6;
-        setFont(ctx, 500, s.kicker, F.mono, s.kicker * 0.08);
-        if (asOfFits) asOfDrawn = true;
-        else asOfMissing = true;
-        text(ctx, t.asOf, x, y + s.kicker * 1.05, 'rgba(255,255,255,0.6)');
+        if (t.asOf) {
+          if (row.dated) asOfDrawn = true;
+          else asOfMissing = true;
+        }
+        if (t.url && urlAt) {
+          setFont(ctx, urlAt.weight, s.kicker, urlAt.family, 0);
+          text(ctx, t.url, x + w, by, '#ffffff', 'right');
+        }
       }
       ctx.letterSpacing = '0px';
     },
@@ -1059,12 +1113,13 @@ function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Bloc
   };
 }
 
-function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPeople, fs: number): Block {
+/** `urlInHero`: the link is on the count row of the title band, so the footer leaves it out. */
+function verticalFooter(ctx: Ctx, s: Spec, input: ShareCardInput, people: CardPeople, fs: number, urlInHero = false): Block {
   const pad = s.footPad ?? 1;
   return footerBlock(ctx, {
     x: s.pad, w: s.W - s.pad * 2, bgX: 0, bgW: s.W, H: s.H,
     fs, lh: fs * (s.urlInHero ? 1.25 : 1.34), padT: fs * pad, padB: fs * (s.urlInHero ? 0.8 : 1.15) * pad + (s.footBottom ?? 0), gap: fs * 0.45,
-    urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: s.urlInHero,
+    urlMax: fs + 2, urlMin: Math.min(fs, 22), noUrl: urlInHero,
   }, footerText(input.data, input.board, people), shareUrl(input.board, input.region ?? null));
 }
 
@@ -1406,28 +1461,49 @@ function layoutVertical(ctx: Ctx, s: Spec, input: ShareCardInput, t: HeroText, b
   const x = s.pad;
   const w = s.W - s.pad * 2;
   const footMin = s.footMin ?? 22;
-  const footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => verticalFooter(ctx, s, input, people, s.foot - i));
-  if (s.urlInHero) t = { ...t, url: shareUrl(input.board, input.region ?? null) };
+  // Link previews: the link sits beside the full count row when it fits there; else in the footer's last
+  // row; and only if the card cannot fit that way, beside a shortened count row (count and date stay together).
+  type Mode = { t: HeroText; urlInHero: boolean };
+  const modes: Mode[] = [{ t, urlInHero: false }];
+  if (s.urlInHero) {
+    const url = shareUrl(input.board, input.region ?? null);
+    if (urlBeside(ctx, s, countRow(ctx, s, t, w), url, w)) modes.splice(0, 1, { t: { ...t, url }, urlInHero: true });
+    else {
+      // The link in Inter (its narrower face) leaves the count row the most room.
+      setFont(ctx, 600, s.kicker, F.body, 0);
+      const uw = tw(ctx, url);
+      if (uw < w * 0.7) modes.push({ t: { ...t, url, rowMax: w - uw - s.kicker * 1.5 }, urlInHero: true });
+    }
+  }
   const heroHeight = (hero: Block, parts: { extra: Block | null }) => s.heroTop + hero.h + s.heroBottom + (parts.extra ? parts.extra.h + s.heroBottom * 1.6 : 0);
   type Choice = { hero: Block; parts: { extra: Block | null; body: Body }; heroH: number; footer: Block };
   let chosen: Choice | null = null;
   let fallback: Choice | null = null;
-  search: for (let squeeze = 0; squeeze <= 3; squeeze++) {
-    const parts = body(squeeze);
-    if (parts.body.fits === false || parts.extra?.fits === false) continue;
-    for (const f of footers) {
-      for (let size = s.titleMax; size >= s.titleMin; size -= 2) {
-        // The subtitle may drop a pixel or two (never below the format's floor) where that saves a line.
-        const subFloor = Math.min(s.sub, Math.max(s.footMin ?? 22, s.sub - 2));
-        for (let sub = s.sub; sub >= subFloor; sub--) {
-          const hero = heroBlock(ctx, sub === s.sub ? s : { ...s, sub }, t, size, x, w, s.subLines, { images, h: s.logo });
-          const heroH = heroHeight(hero, parts);
-          if (!hero.fits) continue;
-          if (!fallback || heroH + f.h < fallback.heroH + fallback.footer.h) fallback = { hero, parts, heroH, footer: f };
-          if (s.H - heroH - f.h >= parts.body.minH) { chosen = { hero, parts, heroH, footer: f }; break search; }
+  let footers: Block[] = [];
+  for (const mode of modes) {
+    t = mode.t;
+    footers = Array.from({ length: Math.max(1, s.foot - footMin + 1) }, (_, i) => verticalFooter(ctx, s, input, people, s.foot - i, mode.urlInHero));
+    if (searchMode()) break;
+  }
+  function searchMode(): boolean {
+    search: for (let squeeze = 0; squeeze <= 3; squeeze++) {
+      const parts = body(squeeze);
+      if (parts.body.fits === false || parts.extra?.fits === false) continue;
+      for (const f of footers) {
+        for (let size = s.titleMax; size >= s.titleMin; size -= 2) {
+          // The subtitle may drop a pixel or two (never below the format's floor) where that saves a line.
+          const subFloor = Math.min(s.sub, Math.max(s.footMin ?? 22, s.sub - 2));
+          for (let sub = s.sub; sub >= subFloor; sub--) {
+            const hero = heroBlock(ctx, sub === s.sub ? s : { ...s, sub }, t, size, x, w, s.subLines, { images, h: s.logo });
+            const heroH = heroHeight(hero, parts);
+            if (!hero.fits) continue;
+            if (!fallback || heroH + f.h < fallback.heroH + fallback.footer.h) fallback = { hero, parts, heroH, footer: f };
+            if (s.H - heroH - f.h >= parts.body.minH) { chosen = { hero, parts, heroH, footer: f }; break search; }
+          }
         }
       }
     }
+    return !!chosen;
   }
   if (dry) return !!chosen;
   if (!chosen) {
@@ -2289,6 +2365,10 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   layoutSparse = false;
   residualMissing = false;
   cardAsOf = asOfText(input.data);
+  const built = new Date(input.data.built_at);
+  cardAsOfShort = cardAsOf && !Number.isNaN(built.getTime())
+    ? `As of ${built.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}`
+    : cardAsOf;
   asOfMissing = !cardAsOf;
   asOfDrawn = false;
   const { board, format } = input;

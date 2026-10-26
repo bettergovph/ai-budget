@@ -174,7 +174,7 @@ async function main() {
     const problems: string[] = [];
     if (size.width !== want.width || size.height !== want.height) problems.push(`size ${size.width}×${size.height}, want ${want.width}×${want.height}`);
     if (res.inked < 0.05 || res.colours < 24) problems.push(`looks blank (inked ${(res.inked * 100).toFixed(1)}%, ${res.colours} colours)`);
-    if (!res.fits) problems.push("layout did not fit (text, a district list, the residual or the as-of row cut or missing, or rows squeezed)");
+    if (!res.fits) problems.push("layout did not fit (text, a district list or the residual cut, the date missing or not on the count row, or rows squeezed)");
     if (res.sparse) sparse.push(job.file);
     const miss = res.images - res.imagesLoaded;
     missingImages += miss;
