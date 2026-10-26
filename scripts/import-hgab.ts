@@ -37,6 +37,7 @@ import {
   appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { resolve } from "node:path";
+import { SENATE_BUDGET_PORTAL, SENATE_COPIES } from "../src/lib/hgab-citations";
 
 // ---------------------------------------------------------------------------
 // Contract (mirrors src/lib/hgab.ts; the verifier re-reads that file)
@@ -99,7 +100,18 @@ interface HgabDatasetMeta {
   totals: { nep_php: number; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null };
   counts: { nep: number; hgab2: number | null; hgab3: number | null; api: number | null };
   printed: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null;
-  bridge: Bridge; documents: { nep: string[]; house: string[] }; controls_label: string; has_readings: boolean; has_map: boolean;
+  bridge: Bridge; documents: DatasetDocuments; controls_label: string; has_readings: boolean; has_map: boolean;
+}
+/**
+ * src/lib/hgab.ts HgabDatasetDocuments. `controls`: the House document each
+ * reading's program totals are published in (house_pages are pages of it).
+ * `same_pages`: the one-list programs' second-reading copy (read) and the
+ * identical third-reading copy that rows and totals link to at the same page.
+ */
+interface DatasetDocuments {
+  nep: string[]; house: string[];
+  controls: { hgab2: string | null; hgab3: string | null };
+  same_pages: { extracted: string; third: string; pages: number } | null;
 }
 interface ReconciliationRow {
   dataset: DatasetKey; check: string; ours_php: number | null; theirs_php: number | null; diff_php: number | null;
@@ -567,7 +579,7 @@ function buildDpwh(src: string, mainWs: MainWorkspace): { meta: HgabDatasetMeta;
   const rows = hydrate(detail.projects);
   log(`  dpwh: ${rows.length.toLocaleString()} unified rows`);
 
-  const docPages: Record<string, number[]> = { [DOC.ic2]: [], [DOC.ic3]: [], [DOC.nepIIB]: [], [DOC.ib2]: [], [DOC.ib3]: [] };
+  const docPages: Record<string, number[]> = { [DOC.ic2]: [], [DOC.ic3]: [], [DOC.nepIIB]: [] };
   const built: Built[] = rows.map((r) => {
     const house = r.third ?? r.second ?? null;
     const office = recordedOffice(house) || recordedOffice(r.nep) || null;
@@ -636,10 +648,14 @@ function buildDpwh(src: string, mainWs: MainWorkspace): { meta: HgabDatasetMeta;
     && overview.readingSummary.second.new_appropriations === EXPECTED.dpwh.printed_house, "dpwh printed new appropriations drifted");
 
   // PAP controls: source_comparison paps joined to the reading ledger by the workbench (unifiedComparison.js).
+  // The program totals are published in Volume I-C, with the project list, at the same page in both
+  // readings: one `house_pages` list serves both readings' copies (documents.controls).
   const controls = overview.paps.map(controlRow);
   for (const p of overview.paps) {
-    docPages[DOC.ib2].push(...(p.second_pages ?? p.house_pages ?? []));
-    docPages[DOC.ib3].push(...(p.third_pages ?? []));
+    const second = p.second_pages ?? p.house_pages ?? [], third = p.third_pages ?? [];
+    ensure(!second.length || !third.length || second.join(",") === third.join(","), `PAP ${p.id}: program total on different pages in the two readings (${second} / ${third})`);
+    docPages[DOC.ic2].push(...second);
+    docPages[DOC.ic3].push(...third);
     if (p.nep_page) docPages[DOC.nepIIB].push(p.nep_page);
   }
   // Every PAP with a House control must have been joined to both readings.
@@ -689,7 +705,10 @@ function buildDpwh(src: string, mainWs: MainWorkspace): { meta: HgabDatasetMeta;
     ],
     grain: "Named project allocation with chainage, region and implementing office (grouped repeated House keys stay one row and count their members)",
     scope: "DPWH operations allocations published in NEP Volume II-B and House Bill 10858 Volume I-C, local and foreign-assisted, compared at the third reading; GAS, support to operations (personnel services and MOOE) and automatic appropriations sit outside the compared population, so agency new appropriations are broader. Foreign-assisted projects are carried under a single PAP control and program group.",
-    totals, counts, printed, bridge, documents: { nep: [DOC.nepIIB], house: [DOC.ic3, DOC.ic2, DOC.ib3, DOC.ib2] },
+    totals, counts, printed, bridge,
+    // Volume I-C carries the project list and its program totals; Volume I-B, DPWH's section of the bill, carries
+    // the department's published new appropriations (`printed`), which no row or total links to a page of.
+    documents: { nep: [DOC.nepIIB], house: [DOC.ic3, DOC.ic2, DOC.ib3, DOC.ib2], controls: { hgab2: DOC.ic2, hgab3: DOC.ic3 }, same_pages: null },
     controls_label: "Program totals", has_readings: true, has_map: true,
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
@@ -731,6 +750,21 @@ function traceFor(status: AnnexComparison["status"], house: number | null, nep: 
   ensure(house != null && nep != null, "paired annex row missing a side");
   return house === nep ? "amount_same" : house > nep ? "candidate_increase" : "candidate_decrease";
 }
+/**
+ * The one-list programs' documents: read from the second-reading Volume I-B,
+ * whose list pages the source found identical to the third-reading copy, so
+ * rows and totals link to the third-reading copy (Senate-published) at the
+ * same page.
+ */
+function oneListDocuments(nepDoc: string, identicalPages: number): DatasetDocuments {
+  return {
+    nep: [nepDoc], house: [DOC.ib3, DOC.ib2],
+    controls: { hgab2: DOC.ib2, hgab3: DOC.ib3 },
+    same_pages: { extracted: DOC.ib2, third: DOC.ib3, pages: identicalPages },
+  };
+}
+const SAME_PAGE_SCOPE = `Rows and totals link to the third-reading copy, as published on the ${SENATE_BUDGET_PORTAL.name}, at the same PDF page; the second-reading copy stays cited as the copy read.`;
+
 function readingIdentity(stage: AnnexStage, key: string): number {
   const a = stage.audit_summary;
   ensure(a.reading_comparison_identical_pages && a.reading_comparison_identical_pages === a.reading_comparison_total_pages,
@@ -743,7 +777,7 @@ function buildAnnex(key: "fmr" | "nia", data: AnnexWorkbench, nepDoc: string, ma
   const index = { house: new Map(data.stages.house.projects.map((p) => [p.id, p])), nep: new Map(data.stages.nep.projects.map((p) => [p.id, p])) };
   const subLabel = new Map((data.subprogram_controls ?? []).map((c) => [c.key, c.label]));
   const identicalPages = readingIdentity(data.stages.house, key);
-  const docPages: Record<string, number[]> = { [DOC.ib2]: [], [nepDoc]: [] };
+  const docPages: Record<string, number[]> = { [DOC.ib2]: [], [DOC.ib3]: [], [nepDoc]: [] };
 
   const built: Built[] = data.comparison.map((c) => {
     const house = c.house_id ? index.house.get(c.house_id) ?? null : null;
@@ -761,7 +795,7 @@ function buildAnnex(key: "fmr" | "nia", data: AnnexWorkbench, nepDoc: string, ma
       if (c.status !== "paired" && c.variant_mark_kind && NIA_UNRESOLVED.has(c.variant_mark_kind)) flags.push("unresolved");
     }
     const housePage = intOrNull(house?.source?.pdf_page), nepPage = intOrNull(nep?.source?.pdf_page);
-    if (housePage) docPages[DOC.ib2].push(housePage);
+    if (housePage) { docPages[DOC.ib2].push(housePage); docPages[DOC.ib3].push(housePage); }
     if (nepPage) docPages[nepDoc].push(nepPage);
     const program = key === "fmr" ? lead.path_labels?.[0] ?? null : subLabel.get(c.subprogram_key ?? lead.subprogram_key ?? "") ?? lead.subprogram_label ?? null;
     const pap = key === "nia" ? lead.program_group ?? null : null;
@@ -837,10 +871,10 @@ function buildAnnex(key: "fmr" | "nia", data: AnnexWorkbench, nepDoc: string, ma
         "The House list is identical at second and third reading.",
       ],
     grain: key === "fmr" ? "One FMR project allocation as published, counted once across its coordinate segments" : "One irrigation project allocation as published, under one of six sub-programs",
-    scope: `${scopeBase} The House side is the second-reading Volume I-B annex (PDF pages ${housePages?.[0]}–${housePages?.[1]}), verified text-identical to the third-reading copy across all ${identicalPages} pages, so the second- and third-reading versions of the House bill carry the same amounts.`,
+    scope: `${scopeBase} The House side is the second-reading Volume I-B annex (PDF pages ${housePages?.[0]}–${housePages?.[1]}), verified text-identical to the third-reading copy across all ${identicalPages} pages, so the second- and third-reading versions of the House bill carry the same amounts. ${SAME_PAGE_SCOPE}`,
     totals: { nep_php: nepTotal, hgab2_php: houseTotal, hgab3_php: houseTotal, api_php: null },
     counts: { nep: data.stages.nep.projects.length, hgab2: data.stages.house.projects.length, hgab3: data.stages.house.projects.length, api: null },
-    printed: null, bridge, documents: { nep: [nepDoc], house: [DOC.ib2] },
+    printed: null, bridge, documents: oneListDocuments(nepDoc, identicalPages),
     controls_label: key === "fmr" ? "Regions" : "Sub-programs", has_readings: false, has_map: key === "fmr",  // NIA prints no region or coordinates; its Map tab says so
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
@@ -968,7 +1002,7 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
     ensure(represented.length === components.length && sum(represented, (r) => r[`${side}_value`]) === stage.facility_ledger.total, `hfep ${side} record partition`);
   }
 
-  const docPages: Record<string, number[]> = { [DOC.ib2]: [], [DOC.nepHfep]: [] };
+  const docPages: Record<string, number[]> = { [DOC.ib2]: [], [DOC.ib3]: [], [DOC.nepHfep]: [] };
   const built: Built[] = records.map((r) => {
     const pair = pairOf.get(r.id) ?? null;
     const house = r.side === "house" || r.event === "dropped" ? houseById.get(r.facility_id) ?? null : pair ? houseById.get(pair.house_id) ?? null : null;
@@ -986,7 +1020,7 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
     const lead = (r.side === "house" ? house : nep) ?? house ?? nep;
     ensure(lead, `hfep record ${r.id} has no facility`);
     const housePage = house ? intOrNull(house.source?.pdf_page) : null, nepPage = nep ? hfepNepPage(nep) : null;
-    if (housePage) docPages[DOC.ib2].push(housePage);
+    if (housePage) { docPages[DOC.ib2].push(housePage); docPages[DOC.ib3].push(housePage); }
     if (nepPage) docPages[DOC.nepHfep].push(nepPage);
     const sc = scopeOf(lead);
     const row: OutRow = {
@@ -1075,11 +1109,11 @@ function buildHfep(data: HfepWorkbench, mainWs: MainWorkspace): { meta: HgabData
       "The House list is identical at second and third reading.",
     ],
     grain: "One funding-column cell (Infrastructure, Medical equipment or Motor vehicle) of one facility, as published; facility totals are controls, so a facility can appear as up to three rows",
-    scope: `HFEP capital outlays (DOH activity 350202100002000) as published in the NEP Volume II-A annex and House Bill 10858 Volume I-B; both schedules include national and LGU facilities, and the ₱67,173,000 MOOE of the activity sits outside the annex. Totals are the facility ledgers the bridge is measured on: the NEP ledger is ₱14,472,519,000 while the NEP annex control as published is ₱14,472,659,000, ₱140,000 higher because of a documented error in a Metro Manila medical-equipment line of the published list (the published control is kept in the controls table); the House ledger and published control agree at ₱10,021,659,000. The House side is the second-reading Volume I-B annex (PDF pages 877–893), verified text-identical to the third-reading copy across all ${identicalPages} pages.`,
+    scope: `HFEP capital outlays (DOH activity 350202100002000) as published in the NEP Volume II-A annex and House Bill 10858 Volume I-B; both schedules include national and LGU facilities, and the ₱67,173,000 MOOE of the activity sits outside the annex. Totals are the facility ledgers the bridge is measured on: the NEP ledger is ₱14,472,519,000 while the NEP annex control as published is ₱14,472,659,000, ₱140,000 higher because of a documented error in a Metro Manila medical-equipment line of the published list (the published control is kept in the controls table); the House ledger and published control agree at ₱10,021,659,000. The House side is the second-reading Volume I-B annex (PDF pages 877–893), verified text-identical to the third-reading copy across all ${identicalPages} pages. ${SAME_PAGE_SCOPE}`,
     totals: { nep_php: N.facility_ledger.total, hgab2_php: H.facility_ledger.total, hgab3_php: H.facility_ledger.total, api_php: null },
     counts: { nep: mw.sources.nep.count, hgab2: mw.sources.house.count, hgab3: mw.sources.house.count, api: null },
     printed: { nep_new_appropriations_php: N.agency_check?.total_php ?? null, house_new_appropriations_php: H.agency_check?.total_php ?? null },
-    bridge, documents: { nep: [DOC.nepHfep], house: [DOC.ib2] }, controls_label: "Categories", has_readings: false, has_map: true,
+    bridge, documents: oneListDocuments(DOC.nepHfep, identicalPages), controls_label: "Categories", has_readings: false, has_map: true,
   };
   const top: Partial<Record<BridgeGroup, ProjectRow[]>> = {};
   for (const g of BRIDGE_ORDER) top[g] = topBy(built, g);
@@ -1265,12 +1299,21 @@ function buildDocuments(src: string, used: Record<string, number[]>): HgabDocume
     return { sha256: sha256(path), bytes: statSync(path).size };
   };
   const houseUrl = "https://www.congress.gov.ph/cso";
-  const ibNote = "Page numbers are positions in this file, not the page numbers shown on the pages. This volume carries the DPWH program totals (the project list is in Volume I-C) and the lists of farm-to-market roads (pages 667–726), health facilities (877–893) and irrigation projects (896–941).";
+  // The third-reading volumes are the copies the Senate publishes. The notes say so, so the build stops if ours differ.
+  for (const [key, pin] of Object.entries(SENATE_COPIES)) {
+    const got = info(key);
+    ensure(got.sha256 === pin.sha256 && got.bytes === pin.bytes,
+      `${key}: not the copy published on the ${SENATE_BUDGET_PORTAL.name} (sha256 ${got.sha256}, ${got.bytes} bytes; expected ${pin.sha256}, ${pin.bytes})`);
+  }
+  const senate = `Identical to the copy published on the ${SENATE_BUDGET_PORTAL.name} (same SHA-256 fingerprint).`;
+  const filePages = "Page numbers are positions in this file, not the page numbers shown on the pages.";
+  const ibLists = "It lists farm-to-market roads (pages 667–726), health facilities (877–893) and irrigation projects (896–941), each with its totals. It also carries DPWH's section of the bill, with the department's total new appropriations. The DPWH project list and its program totals are in Volume I-C.";
+  const icList = (reading: string) => `The DPWH project list and its program totals, as published for ${reading} reading. Page numbers are positions in this file.`;
   return [
-    { key: DOC.ib2, title: "House Bill 10858, Volume I-B: program totals and the three project lists, second reading", stage: "house", reading: 2, volume: "I-B", pages: range(used[DOC.ib2]), ...info(DOC.ib2), source_url: houseUrl, notes: `${ibNote} The list pages are word-for-word identical in the third-reading copy, so list rows link to this copy.` },
-    { key: DOC.ic2, title: "House Bill 10858, Volume I-C: DPWH project list, second reading", stage: "house", reading: 2, volume: "I-C", pages: range(used[DOC.ic2]), ...info(DOC.ic2), source_url: houseUrl, notes: "The DPWH project list as published for second reading. Page numbers are positions in this file. Project rows link here; program totals link to Volume I-B." },
-    { key: DOC.ib3, title: "House Bill 10858, Volume I-B: program totals and the three project lists, third reading", stage: "house", reading: 3, volume: "I-B", pages: range(used[DOC.ib3]), ...info(DOC.ib3), source_url: houseUrl, notes: `${ibNote} The list pages are identical to the second-reading copy, at the same positions.` },
-    { key: DOC.ic3, title: "House Bill 10858, Volume I-C: DPWH project list, third reading", stage: "house", reading: 3, volume: "I-C", pages: range(used[DOC.ic3]), ...info(DOC.ic3), source_url: houseUrl, notes: "The DPWH project list as published for third reading. Page numbers are positions in this file. Project rows link here; program totals link to Volume I-B." },
+    { key: DOC.ib2, title: "House Bill 10858, Volume I-B: the three project lists, second reading", stage: "house", reading: 2, volume: "I-B", pages: range(used[DOC.ib2]), ...info(DOC.ib2), source_url: houseUrl, notes: `${filePages} ${ibLists} The three lists were read from this copy. The third-reading copy publishes the same pages word for word, so rows and totals link there.` },
+    { key: DOC.ic2, title: "House Bill 10858, Volume I-C: DPWH project list and program totals, second reading", stage: "house", reading: 2, volume: "I-C", pages: range(used[DOC.ic2]), ...info(DOC.ic2), source_url: houseUrl, notes: `${icList("second")} Second-reading project rows and program totals link here.` },
+    { key: DOC.ib3, title: "House Bill 10858, Volume I-B: the three project lists, third reading", stage: "house", reading: 3, volume: "I-B", pages: range(used[DOC.ib3]), ...info(DOC.ib3), source_url: SENATE_BUDGET_PORTAL.url, notes: `${filePages} ${ibLists} ${senate} Its list pages match the second-reading copy word for word, page for page, so rows and totals link here.` },
+    { key: DOC.ic3, title: "House Bill 10858, Volume I-C: DPWH project list and program totals, third reading", stage: "house", reading: 3, volume: "I-C", pages: range(used[DOC.ic3]), ...info(DOC.ic3), source_url: SENATE_BUDGET_PORTAL.url, notes: `${icList("third")} Third-reading project rows and program totals link here. ${senate}` },
     { key: DOC.nepIIB, title: "NEP 2027, Volume II-B: DPWH", stage: "nep", reading: null, volume: "II-B", pages: range(used[DOC.nepIIB]), ...info(DOC.nepIIB), source_url: "https://www.dbm.gov.ph/wp-content/uploads/NEP2027/DPWH/DPWH.pdf", notes: "A 722-page scanned copy with machine-read text, the copy the source analysis worked from. Page numbers are positions in this file and do not match the DBM-published extract linked under Original." },
     { key: DOC.nepFmr, title: "NEP 2027: farm-to-market roads list, Department of Agriculture", stage: "nep", reading: null, volume: "Annex (NEP Volume I, page numbers 1511–1557 as shown on the pages)", pages: range(used[DOC.nepFmr]), ...info(DOC.nepFmr), source_url: null, notes: "A 47-page list supplied with the source analysis. Page numbers are positions in this file." },
     { key: DOC.nepNia, title: "NEP 2027: irrigation projects list, National Irrigation Administration", stage: "nep", reading: null, volume: "Annex", pages: range(used[DOC.nepNia]), ...info(DOC.nepNia), source_url: null, notes: "A 30-page scanned list with machine-read text. Page numbers are positions in this file." },

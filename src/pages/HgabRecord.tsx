@@ -31,9 +31,10 @@ import {
   type HgabDatasetMeta, type HgabOverview, type ProjectRecord, type StageKey,
 } from '../lib/hgab';
 import {
-  apiPresenceInfo, coerceRow, flagLabel, matchLabel, papLabel, pickHouseDoc, recordSql, recordSqlLiteral, splitFlags,
+  apiPresenceInfo, coerceRow, flagLabel, matchLabel, papLabel, recordSql, recordSqlLiteral, splitFlags,
   zoneLabel,
 } from '../lib/hgab-query';
+import { houseCitations, pickHouseDoc } from '../lib/hgab-citations';
 import { DATASET_SHORT } from '../lib/hgab-ui';
 import '../hgab-dataset.css';
 
@@ -78,6 +79,10 @@ interface Card {
   page: number | null;
   doc: string | null;
   side: Side | null;
+  /** A second copy of the same page (one-list programs: the second-reading copy the line was read from). */
+  alt?: { label: string; doc: string; page: number } | null;
+  /** One plain sentence under the amount. */
+  note?: string | null;
 }
 
 export default function HgabRecord() {
@@ -185,7 +190,7 @@ export default function HgabRecord() {
         sub: STAGE_LABELS.hgab2.label,
         amount: row.hgab2_php,
         page: row.hgab2_page,
-        doc: row.hgab2_doc ?? pickHouseDoc(docs, datasetMeta, 2, 'projects'),
+        doc: row.hgab2_doc ?? pickHouseDoc(docs, datasetMeta, 2),
         side: sideSecond ?? (sideThird ? null : sideHouse),
       },
       {
@@ -194,19 +199,28 @@ export default function HgabRecord() {
         sub: STAGE_LABELS.hgab3.label,
         amount: row.hgab3_php,
         page: row.hgab3_page,
-        doc: row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 3, 'projects'),
+        doc: row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 3),
         side: sideThird ?? sideHouse,
       },
     );
   } else {
+    // One list, identical at both readings: link the third-reading copy (as
+    // published on the Senate portal) at the page the line was read from in
+    // the second-reading copy, and keep that copy one click away.
+    const cites = houseCitations(row, datasetMeta, docs);
+    const read = cites.find((c) => c.basis === 'read') ?? null;
+    const same = cites.find((c) => c.basis === 'same_page') ?? null;
+    const main = same ?? read;
     cards.push({
       stage: 'hgab2',
       label: 'House bill',
       sub: 'House Bill 10858 · the second and third reading publish the same list',
       amount: houseAmount(row),
-      page: row.hgab2_page ?? row.hgab3_page,
-      doc: row.hgab2_doc ?? row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 2, 'projects'),
+      page: main?.page ?? row.hgab2_page ?? row.hgab3_page,
+      doc: main?.doc ?? row.hgab2_doc ?? row.hgab3_doc ?? pickHouseDoc(docs, datasetMeta, 2),
       side: sideHouse ?? sideSecond ?? sideThird,
+      alt: same && read?.doc ? { label: 'Second-reading copy', doc: read.doc, page: read.page } : null,
+      note: same ? `Both House readings publish this list word for word, so page ${same.page} is the same in both.` : null,
     });
   }
   if (row.api_php != null || sideApi) {
@@ -554,6 +568,7 @@ function StageCard({
             : ''}.
         </p>
       )}
+      {card.note && <p className="hgab-rec-card-title">{card.note}</p>}
       <div className="hgab-rec-card-actions">
         {card.doc && card.page ? (
           <>
@@ -563,6 +578,11 @@ function StageCard({
             <button type="button" aria-expanded={open} onClick={onToggle}>
               {open ? 'Hide the page' : 'Show the page here'}
             </button>
+            {card.alt && (
+              <a href={pdfUrl(card.alt.doc, card.alt.page)} target="_blank" rel="noopener" title={docTitle(card.alt.doc) ?? undefined}>
+                {card.alt.label} ↗
+              </a>
+            )}
           </>
         ) : card.stage === 'api' ? (
           <span className="hgab-ds-null">Website listing · no page</span>

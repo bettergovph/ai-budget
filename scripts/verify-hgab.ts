@@ -13,6 +13,21 @@
  *     row counts that match the summaries;
  *   - every document key a row or dataset cites exists in the registry (and on
  *     disk unless --no-pdf);
+ *   - the third-reading volumes are the copies published on the Senate Budget
+ *     Transparency Portal (SHA-256 and size pinned in src/lib/hgab-citations.ts
+ *     SENATE_COPIES, registry and file), and each dataset records the House
+ *     volume its program totals are published in (DPWH: Volume I-C; the three
+ *     lists: Volume I-B) and, for the one-list programs, the identical
+ *     third-reading copy rows and totals link to at the same page;
+ *   - with `pdftotext` installed and the PDFs present: every House amount
+ *     appears on the page the site links, through the site's own rule
+ *     (controlCitations / houseCitations in src/lib/hgab-citations.ts):
+ *     every program total in each reading's copy, every DPWH row on its
+ *     Volume I-C page in its reading's copy (the two grouped repeated-key rows
+ *     whose sum is not published as one figure excepted, by id), and every
+ *     farm-to-market road, health facility and irrigation row on its page in
+ *     the third-reading Volume I-B and in the second-reading copy read.
+ *     Skipped, and reported, when pdftotext is absent or with --no-pdf;
  *   - the reconciliation against our FY2027 NEP tree has no mismatch;
  *   - the candidate-change table (overview.json `candidate_changes`, carried
  *     from main_overview_2027.json): field for field against the checkout,
@@ -56,16 +71,20 @@
  */
 
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import {
   BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
   type LeaderEntry, type LeaderSlice, type LeaderboardData,
 } from "../src/lib/hgab-leaderboard";
 import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
+import {
+  SENATE_BUDGET_PORTAL, SENATE_COPIES, controlCitations, houseCitations, isSenatePortal, type HouseCitation,
+} from "../src/lib/hgab-citations";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -103,13 +122,22 @@ interface Meta {
   totals: { nep_php: number; hgab2_php: number | null; hgab3_php: number | null; api_php: number | null };
   counts: { nep: number; hgab2: number | null; hgab3: number | null; api: number | null };
   printed: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null;
-  bridge: Bridge; documents: { nep: string[]; house: string[] };
+  bridge: Bridge; documents: DatasetDocuments;
 }
-interface Doc { key: string; sha256: string; bytes: number; stage: string; reading: number | null; pages: { from: number; to: number } | null }
+/** src/lib/hgab.ts HgabDatasetDocuments. */
+interface DatasetDocuments {
+  nep: string[]; house: string[];
+  controls?: { hgab2: string | null; hgab3: string | null };
+  same_pages?: { extracted: string; third: string; pages: number } | null;
+}
+interface Doc {
+  key: string; sha256: string; bytes: number; stage: string; reading: 2 | 3 | null; volume: string | null; pages: { from: number; to: number } | null;
+  source_url: string | null; notes: string | null;
+}
 interface Recon { dataset: DatasetKey; check: string; status: string; ours_php: number | null; theirs_php: number | null; diff_php: number | null; note: string }
 interface Overview { fiscal_year: number; source_commit: string; datasets: Meta[]; documents: Doc[]; reconciliation: Recon[] }
 interface Summary {
-  dataset: Meta; controls: Array<{ label: string; nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; reading_delta_php: number | null }>;
+  dataset: Meta; controls: Array<{ id: string; label: string; nep_php: number | null; hgab2_php: number | null; hgab3_php: number | null; reading_delta_php: number | null; house_pages: number[] }>;
   dims: Record<string, Array<{ nep_php: number; house_php: number }>>; top: Partial<Record<BridgeGroup, Array<{ trace: string; id: string }>>>;
   readings: { second_php: number; third_php: number; delta_php: number; status_counts: Record<string, number>; third_only: unknown[]; changed_controls: unknown[] } | null;
 }
@@ -153,6 +181,15 @@ const DISTRICT_SLOTS: Array<{ fy: number; stage: FiscalStage }> = [
   { fy: 2027, stage: "nep" }, { fy: 2027, stage: "hgab3" },
 ];
 const EXPECTED_DISTRICTS = { nep_total: 643_953_276_000, hgab3_total: 587_075_661_000, districts: 254, min_matched: 250 };
+/** List pages the workbench found identical between the second- and third-reading Volume I-B, per one-list program. */
+const SAME_PAGES: Record<Exclude<DatasetKey, "dpwh">, number> = { fmr: 60, hfep: 17, nia: 46 };
+/**
+ * DPWH rows whose House amount is not published as one figure on the cited page: grouped
+ * repeated-key rows (house-reading:8092's members add up to it; house-reading:15005 runs on to
+ * the next pages). Exactly these may miss, in both readings.
+ */
+const GROUPED_PAGE_EXCEPTIONS = new Set(["house-reading:8092", "house-reading:15005"]);
+const execFileAsync = promisify(execFile);
 
 interface MainWorkspace {
   key: string; delta_php: number;
@@ -242,6 +279,30 @@ async function main(): Promise<void> {
   const docKeys = new Set(overview.documents.map((d) => d.key));
   check("document registry has the eight expected keys", docKeys.size === 8 && ["hb10858-2r-vol-ib", "hb10858-2r-vol-ic", "hb10858-3r-vol-ib", "hb10858-3r-vol-ic", "nep2027-vol-iib", "nep2027-fmr", "nep2027-nia", "nep2027-hfep"].every((k) => docKeys.has(k)), [...docKeys].join(","));
   check("every dataset document key is registered", overview.datasets.every((d) => [...d.documents.nep, ...d.documents.house].every((k) => docKeys.has(k))));
+  // The third-reading volumes are the Senate-published copies: registry hash and size, the file on disk, source and note.
+  for (const [key, pin] of Object.entries(SENATE_COPIES)) {
+    const d = overview.documents.find((x) => x.key === key);
+    const file = resolve(OUT, "pdf", `${key}.pdf`);
+    const fileHash = CHECK_PDF && existsSync(file) ? createHash("sha256").update(readFileSync(file)).digest("hex") : null;
+    check(`${key} is the copy published on the ${SENATE_BUDGET_PORTAL.name} (Volume ${pin.volume}, SHA-256 ${pin.sha256.slice(0, 12)}…, ${pin.bytes.toLocaleString("en-US")} bytes; ${fileHash ? "registry and file" : "registry"}), cited as its source`,
+      !!d && d.reading === 3 && d.volume === pin.volume && d.sha256 === pin.sha256 && d.bytes === pin.bytes && (fileHash == null || fileHash === pin.sha256)
+        && isSenatePortal(d.source_url) && d.source_url === SENATE_BUDGET_PORTAL.url && (d.notes ?? "").includes(SENATE_BUDGET_PORTAL.name),
+      d ? `registry ${d.sha256} (${d.bytes} bytes)${fileHash ? `, file ${fileHash}` : ""}, source_url ${d.source_url}` : "not registered");
+  }
+  const docOf = (k: string | null | undefined) => overview.documents.find((x) => x.key === k);
+  const totalsVolume = (d: Meta) => d.key === "dpwh" ? "I-C" : "I-B";
+  const badTotals = overview.datasets.filter((d) => !d.documents.controls || !([2, 3] as const).every((r) => {
+    const doc = docOf(d.documents.controls?.[r === 3 ? "hgab3" : "hgab2"]);
+    return doc?.stage === "house" && doc.reading === r && doc.volume === totalsVolume(d) && d.documents.house.includes(doc.key);
+  }));
+  check("program totals cite the volume they are published in, in each reading: DPWH Volume I-C; farm-to-market roads, health facilities and irrigation Volume I-B",
+    badTotals.length === 0, badTotals.map((d) => `${d.key}: ${JSON.stringify(d.documents.controls ?? null)}`).join("; "));
+  const badSame = overview.datasets.filter((d) => d.key === "dpwh"
+    ? d.documents.same_pages != null
+    : !(d.documents.house[0] === "hb10858-3r-vol-ib" && d.documents.house.includes("hb10858-2r-vol-ib") && d.documents.same_pages?.extracted === "hb10858-2r-vol-ib"
+      && d.documents.same_pages.third === "hb10858-3r-vol-ib" && d.documents.same_pages.pages === SAME_PAGES[d.key]));
+  check(`one-list programs list the third-reading Volume I-B first and link to it at the page read in the second-reading copy (same_pages: FMR ${SAME_PAGES.fmr}, HFEP ${SAME_PAGES.hfep}, NIA ${SAME_PAGES.nia} identical pages); DPWH has none`,
+    badSame.length === 0, badSame.map((d) => `${d.key}: house ${d.documents.house.join(",")} same_pages ${JSON.stringify(d.documents.same_pages ?? null)}`).join("; "));
   if (CHECK_PDF) {
     const missing = overview.documents.filter((d) => { const p = resolve(OUT, "pdf", `${d.key}.pdf`); return !existsSync(p) || statSync(p).size !== d.bytes; });
     check("every registered PDF exists with the registered size", missing.length === 0, missing.map((d) => d.key).join(", "));
@@ -411,6 +472,8 @@ async function main(): Promise<void> {
     check("every dimension conserves both stage totals", dimBad.length === 0, dimBad.map(([k]) => k).join(", "));
     check(`controls present (${meta.controls_label})`, summary.controls.length > 0);
   }
+
+  await verifyHousePages(overview, c);
 
   process.stdout.write("\nreconciliation against our FY2027 NEP tree\n");
   const R = overview.reconciliation;
@@ -1553,6 +1616,85 @@ interface CcTotals {
   house: { count: number; amount_php: number }; nep: { count: number; amount_php: number }; delta_php: number;
 }
 interface CcBlock { source_file: string; source_sha256: string; source_built_at: string; direction: string; programs: CcProgram[]; totals: CcTotals }
+
+/**
+ * Every House amount on the page the site links. Text comes from `pdftotext -layout` (pages split on form
+ * feeds, so page N is the PDF's Nth page, what #page=N opens); an amount matches as its comma-grouped
+ * digits, not inside a longer number. Links come from src/lib/hgab-citations.ts, the module the pages,
+ * the API and the MCP tools use, so this checks the links readers actually get.
+ */
+async function verifyHousePages(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nHouse amounts on the pages the site links (pdftotext)\n");
+  if (!CHECK_PDF) { process.stdout.write("  · skipped (--no-pdf)\n"); return; }
+  try {
+    execFileSync("pdftotext", ["-v"], { stdio: "ignore" });
+  } catch {
+    process.stdout.write("  · skipped: pdftotext is not installed (poppler-utils). Install it to check every House amount against the page the site links.\n");
+    return;
+  }
+  const houseDocs = overview.documents.filter((d) => d.stage === "house");
+  const absent = houseDocs.filter((d) => !existsSync(resolve(OUT, "pdf", `${d.key}.pdf`)));
+  if (absent.length) { process.stdout.write(`  · skipped: ${absent.map((d) => d.key).join(", ")} not in ${OUT}/pdf (run the import without --no-pdf)\n`); return; }
+  const text = new Map<string, string[]>();
+  await Promise.all(houseDocs.map(async (d) => {
+    const { stdout } = await execFileAsync("pdftotext", ["-layout", resolve(OUT, "pdf", `${d.key}.pdf`), "-"], { maxBuffer: 512 * 1024 * 1024 });
+    text.set(d.key, stdout.split("\f"));
+  }));
+  process.stdout.write(`  ${houseDocs.map((d) => `${d.key} ${(text.get(d.key)!.length - 1).toLocaleString("en-US")} pp.`).join(" · ")}\n`);
+  const on = (doc: string | null, page: number, amount: number | null): boolean => {
+    const pages = doc ? text.get(doc) : undefined;
+    if (!pages || amount == null || page < 1 || page > pages.length) return false;
+    // "14,395,583,000", not inside "114,395,583,000" or "14,395,583,0001".
+    return new RegExp(`(?<![\\d,.])${amount.toLocaleString("en-US")}(?!\\d|,\\d)`).test(pages[page - 1]);
+  };
+  const docOf = (k: string | null) => overview.documents.find((x) => x.key === k);
+  const where = (cs: HouseCitation[]) => [...new Set(cs.map((x) => x.doc ?? "no document"))].join(" + ");
+
+  for (const meta of overview.datasets) {
+    const key = meta.key;
+    const summary = readJson<Summary>(resolve(OUT, key, "summary.json"));
+    // Program totals: each reading's amount, at each cited page, in the document controlCitations names.
+    const cites = summary.controls.flatMap((ctl) => controlCitations(ctl, meta, overview.documents).map((cite) => ({ ctl, cite })));
+    const missed = cites.filter(({ ctl, cite }) => !on(cite.doc, cite.page, cite.reading === 3 ? ctl.hgab3_php : ctl.hgab2_php));
+    const wrongVolume = cites.filter(({ cite }) => docOf(cite.doc)?.volume !== (key === "dpwh" ? "I-C" : "I-B") || docOf(cite.doc)?.reading !== cite.reading);
+    check(`${key}: every program total is on the page the site links (${cites.length} links, ${where(cites.map((x) => x.cite))})`,
+      cites.length > 0 && missed.length === 0 && wrongVolume.length === 0,
+      [...missed, ...wrongVolume].slice(0, 6).map(({ ctl, cite }) => `${ctl.id} "${ctl.label}" ${cite.reading}R ${cite.doc} p.${cite.page} ${peso(cite.reading === 3 ? ctl.hgab3_php : ctl.hgab2_php)}`).join("; "));
+
+    // Project rows: houseCitations, the rule PageLinks, the record page and pdf_url use.
+    const P = `read_parquet('${q(resolve(OUT, key, "projects.parquet"))}')`;
+    const list = (await (await c.runAndReadAll(`SELECT id, reading_status, hgab2_php, hgab3_php, hgab2_page, hgab3_page, hgab2_doc, hgab3_doc FROM ${P} ORDER BY id`)).getRows())
+      .map(([id, status, h2, h3, p2, p3, d2, d3]) => ({
+        id: String(id), reading_status: status == null ? null : String(status),
+        hgab2_php: h2 == null ? null : num(h2), hgab3_php: h3 == null ? null : num(h3),
+        hgab2_page: p2 == null ? null : num(p2), hgab3_page: p3 == null ? null : num(p3),
+        hgab2_doc: d2 == null ? null : String(d2), hgab3_doc: d3 == null ? null : String(d3),
+      }));
+    const rowCites = list.flatMap((r) => houseCitations(r, meta, overview.documents).map((cite) => ({ r, cite })));
+    const amountOf = ({ r, cite }: (typeof rowCites)[number]) => (cite.reading === 3 ? r.hgab3_php : r.hgab2_php);
+    // A link can come without an amount (a health-facility column blank in the House list): nothing to find on the page.
+    const pageOnly = rowCites.filter((x) => amountOf(x) == null).length;
+    const rowMissed = rowCites.filter((x) => amountOf(x) != null && !on(x.cite.doc, x.cite.page, amountOf(x)));
+    const fmt = (xs: typeof rowMissed) => xs.slice(0, 6).map(({ r, cite }) => `${r.id} ${cite.reading}R ${cite.doc} p.${cite.page} ${peso(cite.reading === 3 ? r.hgab3_php : r.hgab2_php)}`).join("; ");
+    if (key === "dpwh") {
+      const offVolume = rowCites.filter(({ cite }) => docOf(cite.doc)?.volume !== "I-C" || docOf(cite.doc)?.reading !== cite.reading || cite.basis !== "read");
+      const unexpected = rowMissed.filter(({ r }) => !GROUPED_PAGE_EXCEPTIONS.has(r.id) || r.reading_status !== "repeated_key");
+      const excused = [...new Set(rowMissed.filter((m) => !unexpected.includes(m)).map(({ r }) => r.id))];
+      check(`dpwh: every project amount is on its Volume I-C page in its reading's copy (${rowCites.length.toLocaleString("en-US")} links; ${excused.length} grouped repeated-key row${excused.length === 1 ? "" : "s"} excepted by id: ${excused.join(", ") || "none"})`,
+        rowCites.length > 0 && unexpected.length === 0 && offVolume.length === 0, `${fmt(unexpected)}${offVolume.length ? ` · ${offVolume.length} links not to their reading's Volume I-C` : ""}`);
+    } else {
+      const paged = list.filter((r) => r.hgab2_page != null);
+      const unpagedAmounts = list.filter((r) => r.hgab2_php != null && r.hgab2_page == null).length;
+      const third = rowCites.filter(({ cite }) => cite.reading === 3);
+      const read = rowCites.filter(({ cite }) => cite.reading === 2);
+      const thirdOk = third.length === paged.length && third.every(({ cite }) => cite.basis === "same_page" && cite.doc === "hb10858-3r-vol-ib");
+      const readOk = read.length === paged.length && read.every(({ cite }) => cite.basis === "read" && cite.doc === "hb10858-2r-vol-ib");
+      check(`${key}: every list row's amount is on its page in the third-reading Volume I-B the site links (${third.length.toLocaleString("en-US")} links) and in the second-reading copy read (${read.length.toLocaleString("en-US")})${pageOnly ? `; ${pageOnly / 2} rows have a page and no House amount` : ""}`,
+        paged.length > 0 && unpagedAmounts === 0 && thirdOk && readOk && rowMissed.length === 0,
+        `${fmt(rowMissed)}${thirdOk ? "" : ` · ${third.length} third-reading links for ${paged.length} rows with a page`}${readOk ? "" : ` · ${read.length} second-reading links`}${unpagedAmounts ? ` · ${unpagedAmounts} House amounts without a page` : ""}`);
+    }
+  }
+}
 
 async function verifyCandidateChanges(c: DuckDBConnection): Promise<void> {
   process.stdout.write("\ncandidate changes (overview.json candidate_changes)\n");

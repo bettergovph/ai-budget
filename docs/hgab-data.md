@@ -53,9 +53,10 @@ The same split applies to the other strings the importer and the districts
 builder emit for readers:
 
 - Document `title` and `notes`: plain names, with the volume and the reading
-  kept ("House Bill 10858, Volume I-C: DPWH project list, second reading").
-  `volume` is never reworded — `pickHouseDoc()` in `src/lib/hgab-query.ts`
-  selects documents on it.
+  kept ("House Bill 10858, Volume I-C: DPWH project list and program totals,
+  second reading"). `volume` and `reading` are never reworded — the Sources
+  and Documents tables show them, and `src/lib/hgab-citations.ts` falls back
+  on `reading` when a dataset has no `documents.controls`.
 - Reconciliation `check` and `note` (the Methodology table): one plain
   sentence each, numbers exact, fund and program codes in parentheses at the
   end. "Our data" is this portal's FY2027 NEP import (the DBM CSV, `ours_php`);
@@ -195,25 +196,45 @@ Per dataset, what each column is carried from:
 
 Annex House amounts are the second-reading Volume I-B extraction; the
 workbench verified the annex pages text-identical to the third-reading
-printing (FMR 60, HFEP 17, NIA 46 pages), so `hgab3_php = hgab2_php` and only
-`hb10858-2r-vol-ib` is cited (`hgab3_doc`/`hgab3_page` are null).
+printing (FMR 60, HFEP 17, NIA 46 pages), so `hgab3_php = hgab2_php`. The
+parquet cites the copy read, `hb10858-2r-vol-ib` (`hgab3_doc`/`hgab3_page` are
+null); the dataset records the identical third-reading copy in
+`documents.same_pages = { extracted: hb10858-2r-vol-ib, third:
+hb10858-3r-vol-ib, pages }`, and the pages, the API (`pdf_url.hgab3`) and the
+MCP tools link rows and totals to the third-reading copy (the one published
+on the Senate Budget Transparency Portal) at the same page, through
+`houseCitations()` / `controlCitations()` in `src/lib/hgab-citations.ts`.
+`documents.house` lists `hb10858-3r-vol-ib` first.
 
 ## Document registry
 
 | Key | File in the clone | Pages used |
 | --- | --- | --- |
-| `hb10858-2r-vol-ib` | `HB_BUDGET/2 - HB 10858 VOL IB.pdf` | DPWH PAP controls; FMR 667–726, HFEP 877–893, NIA 896–941 |
-| `hb10858-2r-vol-ic` | `HB_BUDGET/3 - HB 10858 VOL IC.pdf` | DPWH project rows, second reading |
-| `hb10858-3r-vol-ib` | `HB_BUDGET_3rd_reading/2- HB 10858 FOR 3RD READING VOL I-B.pdf` | DPWH PAP controls, third reading |
-| `hb10858-3r-vol-ic` | `HB_BUDGET_3rd_reading/3- HB 10858 FOR 3RD READING VOL I-C .pdf` | DPWH project rows, third reading |
+| `hb10858-2r-vol-ib` | `HB_BUDGET/2 - HB 10858 VOL IB.pdf` | FMR 667–726, HFEP 877–893, NIA 896–941 (lists and their totals; the copy read) |
+| `hb10858-2r-vol-ic` | `HB_BUDGET/3 - HB 10858 VOL IC.pdf` | DPWH project rows and PAP controls, second reading |
+| `hb10858-3r-vol-ib` | `HB_BUDGET_3rd_reading/2- HB 10858 FOR 3RD READING VOL I-B.pdf` | FMR, HFEP, NIA at the same pages (the copy rows and totals link to) |
+| `hb10858-3r-vol-ic` | `HB_BUDGET_3rd_reading/3- HB 10858 FOR 3RD READING VOL I-C .pdf` | DPWH project rows and PAP controls, third reading |
 | `nep2027-vol-iib` | `dbm-nep-data/NEP-2027-VOLUME-2B_OCR.pdf` | DPWH NEP rows and PAP controls (one-based pages of the OCR copy) |
 | `nep2027-fmr` | `dbm-other-nep-line-data/FMR.pdf` | 1–47 |
 | `nep2027-nia` | `dbm-other-nep-line-data/NIA.pdf` | 1–30 |
 | `nep2027-hfep` | `dbm-other-nep-line-data/HFEP_2.pdf` | 1–13 (Volume II-A pages 727–739) |
 
-All pages are one-based PDF file pages. `ControlRow.house_pages` cite Volume
-I-B (`hb10858-3r-vol-ib` for DPWH, `hb10858-2r-vol-ib` for annexes) and
-`nep_page` the dataset's NEP document.
+All pages are one-based PDF file pages. `ControlRow.house_pages` are pages of
+the document `documents.controls` names per reading: Volume I-C for DPWH
+(`hgab2: hb10858-2r-vol-ic`, `hgab3: hb10858-3r-vol-ic`; the PAP totals sit
+with the project list, on the same page in both readings, which the importer
+asserts), Volume I-B for the annexes (`hgab2: hb10858-2r-vol-ib`, `hgab3:
+hb10858-3r-vol-ib`). `nep_page` cites the dataset's NEP document. Volume I-B
+stays on DPWH's list for the department's published new appropriations
+(`printed`), which no row or total links to.
+
+The two third-reading volumes are the copies published on the Senate Budget
+Transparency Portal (General Appropriations Bill, 2027): the importer stops
+unless they hash to the SHA-256s pinned in `SENATE_COPIES`
+(`src/lib/hgab-citations.ts`), records the portal as their `source_url`, and
+says so in their notes. The verifier pins the same hashes and, when
+`pdftotext` is installed, finds every House amount on the page the site
+links.
 
 ## Reconciliation (our DBM CSV tree vs their PDF extraction)
 
@@ -789,10 +810,12 @@ Without the flag the verifier runs exactly as before.
 - Annex `house_match` values (`title_and_coordinates`, `title`,
   `coordinates`, `ai_corrected`, `title_similarity`) and the HFEP flags are not
   in `MATCH_LABELS`; unknown keys render as their raw text.
-- `ControlRow` has no document key; the UI must link `house_pages` to the
-  Volume I-B document of the dataset and `nep_page` to its NEP document.
-- The `source_url` for the House volumes is the congress.gov.ph CSO page and
-  for NEP II-B the DBM department extract, whose pagination differs from the
-  retained OCR copy; the registry notes say so.
+- `ControlRow` has no document key; link `house_pages` through
+  `controlCitations()` (`documents.controls`: Volume I-C for DPWH, Volume I-B
+  for the annexes) and `nep_page` to the dataset's NEP document.
+- The `source_url` for the second-reading House volumes is the congress.gov.ph
+  CSO page; for the third-reading volumes, the Senate Budget Transparency
+  Portal's 2027 documents page; for NEP II-B the DBM department extract, whose
+  pagination differs from the retained OCR copy. The registry notes say so.
 - The workbench's matching is provisional (`comparison_ready: false`,
   `reviewed_pairs: 0`); candidate vocabulary must stay candidate vocabulary.

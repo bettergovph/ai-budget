@@ -20,7 +20,7 @@
  */
 import {
   BRIDGE_ORDER, MATCH_LABELS, PROJECT_COLUMNS, TRACE_LABELS, traceInfo,
-  type BridgeGroup, type DatasetKey, type HgabDatasetMeta, type HgabDocument, type ProjectRow,
+  type BridgeGroup, type DatasetKey, type HgabDatasetMeta, type ProjectRow,
 } from './hgab';
 
 // ---------------------------------------------------------------------------
@@ -278,58 +278,6 @@ export const API_PRESENCE_LABELS: Record<string, { label: string; help: string }
 export function apiPresenceInfo(v: string | null | undefined): { label: string; help: string } | null {
   if (!v) return null;
   return API_PRESENCE_LABELS[v] ?? { label: v.replace(/_/g, ' '), help: '' };
-}
-
-// ---------------------------------------------------------------------------
-// Documents
-// ---------------------------------------------------------------------------
-
-/**
- * The House document a page number belongs to. Project rows carry their own
- * `*_doc`; this is the fallback for them and the rule for controls, whose
- * `house_pages` are bare numbers. Controls print in Volume I-B, projects in
- * I-C; `prefer` picks between them when both are in the dataset's list.
- */
-export function pickHouseDoc(
-  docs: readonly HgabDocument[] | null | undefined,
-  dataset: Pick<HgabDatasetMeta, 'documents'>,
-  reading: 2 | 3,
-  prefer: 'controls' | 'projects',
-): string | null {
-  const keys = dataset.documents.house;
-  const wantVol = prefer === 'controls' ? /\bi-?b\b|vol-?ib/i : /\bi-?c\b|vol-?ic/i;
-  const candidates = (docs ?? [])
-    .filter((d) => keys.includes(d.key) && d.stage === 'house' && d.reading === reading);
-  const preferred = candidates.find((d) => wantVol.test(d.volume ?? '') || wantVol.test(d.key));
-  if (preferred) return preferred.key;
-  if (candidates[0]) return candidates[0].key;
-  // No document catalogue yet: fall back to the key convention.
-  const byKey = keys.find((k) => k.includes(`${reading}r`) && wantVol.test(k)) ?? keys.find((k) => k.includes(`${reading}r`));
-  return byKey ?? keys[0] ?? null;
-}
-
-/**
- * The one Volume I-B document a dataset's control pages cite. The importer
- * cites the latest reading's I-B that is in the dataset's list: the 3rd
- * reading for DPWH, the 2nd for the annexes (whose text is identical across
- * readings and is cited once).
- */
-export function controlHouseDoc(
-  docs: readonly HgabDocument[] | null | undefined,
-  dataset: Pick<HgabDatasetMeta, 'documents'>,
-): { key: string; reading: 2 | 3 } | null {
-  for (const reading of [3, 2] as const) {
-    const listed = dataset.documents.house.some((k) => k.includes(`${reading}r`));
-    const inCatalogue = (docs ?? []).some(
-      (d) => dataset.documents.house.includes(d.key) && d.stage === 'house' && d.reading === reading,
-    );
-    if (listed || inCatalogue) {
-      const key = pickHouseDoc(docs, dataset, reading, 'controls');
-      if (key) return { key, reading };
-    }
-  }
-  const key = dataset.documents.house[0];
-  return key ? { key, reading: 3 } : null;
 }
 
 // ---------------------------------------------------------------------------

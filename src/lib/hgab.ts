@@ -248,6 +248,32 @@ export interface HgabDocument {
   notes: string | null;
 }
 
+/**
+ * The documents one dataset cites. `controls` and `same_pages` are written by
+ * the importer (absent in files built before them); `src/lib/hgab-citations.ts`
+ * turns them into links, for the pages, the API and the verifier alike.
+ */
+export interface HgabDatasetDocuments {
+  nep: string[];
+  /** House documents, third reading first, the volume with the project list before the others. */
+  house: string[];
+  /**
+   * The House document each reading's program totals (`controls[].house_pages`)
+   * are published in. DPWH: Volume I-C, with its project list. Farm-to-market
+   * roads, health facilities, irrigation: Volume I-B, with their lists. The
+   * pages are the same in both readings.
+   */
+  controls?: { hgab2: string | null; hgab3: string | null };
+  /**
+   * One-list programs: the lines were read from `extracted` (the
+   * second-reading copy); the source checked all `pages` list pages against
+   * `third` (the third-reading copy, as published on the Senate Budget
+   * Transparency Portal) and found them identical. Rows and totals link to
+   * `third` at the same page; `extracted` stays cited as the copy read.
+   */
+  same_pages?: { extracted: string; third: string; pages: number } | null;
+}
+
 export interface HgabDatasetMeta {
   key: DatasetKey;
   /** Long label: "DPWH national infrastructure". */
@@ -282,8 +308,8 @@ export interface HgabDatasetMeta {
   /** Agency-level printed controls above the compared population, when the documents print them. */
   printed: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null;
   bridge: Bridge;
-  /** Document keys this dataset's evidence opens. */
-  documents: { nep: string[]; house: string[] };
+  /** Document keys this dataset's evidence opens, and which House document each kind of figure cites. */
+  documents: HgabDatasetDocuments;
   /** What the controls table on the hub is called: "PAP controls", "Regions", "Sub-programs", "Categories". */
   controls_label: string;
   has_readings: boolean;
