@@ -15,7 +15,7 @@
  * detail (matched labels, crosswalk ids, parquet paths) is not rendered here;
  * the detail page keeps it in a "Details for analysts" block.
  */
-import { memo, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
@@ -165,7 +165,7 @@ export function RepresentativeBlock({ rep, large = false, showProfile = false }:
             </a>
           )}
           {showProfile && rep.juris_url && !bills && (
-            <a href={rep.juris_url} target="_blank" rel="noopener noreferrer">bills.juris.ph ↗</a>
+            <a href={rep.juris_url} target="_blank" rel="noopener noreferrer" title="Bills and profile on bills.juris.ph">More Info ↗</a>
           )}
           {showProfile && rep.profile_url && (
             <a href={rep.profile_url} target="_blank" rel="noopener noreferrer" title="Official roster entry">congress.gov.ph ↗</a>
@@ -550,6 +550,64 @@ export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: H
 }
 
 /**
+ * "Shared" with the details on hover, focus or tap: the office's total is not
+ * split, and which other districts it serves (links). Keeps the co-served
+ * districts one step away instead of a paragraph on every card.
+ */
+export function SharedLabel({ ids, index }: { ids: readonly string[]; index: HgabDistrictIndex }) {
+  const [open, setOpen] = useState(false);
+  const popId = useId();
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent | TouchEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  const n = ids.length + 1;
+  return (
+    <span
+      className={`hgab-dc-shared ${open ? 'is-open' : ''}`.trim()}
+      ref={wrapRef}
+      // Hover opens it only for a real mouse; a tap would fire both hover and click and cancel itself.
+      onPointerEnter={(e) => { if (e.pointerType !== 'mouse') return; window.clearTimeout(closeTimer.current); setOpen(true); }}
+      onPointerLeave={(e) => { if (e.pointerType !== 'mouse') return; closeTimer.current = window.setTimeout(() => setOpen(false), 150); }}
+    >
+      <button
+        type="button"
+        className="hgab-dc-shared-btn"
+        aria-expanded={open}
+        aria-controls={popId}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Shared <span aria-hidden="true">ⓘ</span>
+        <span className="visually-hidden">: office total not split; show the {n} districts it serves</span>
+      </button>
+      <span id={popId} className="hgab-dc-shared-pop" role="note" hidden={!open}>
+        <strong>Shared office total, not split.</strong> This office serves {n} districts. Its figures are the
+        whole office’s; do not add the cards together.
+        {ids.length > 0 && (
+          <span className="hgab-dc-shared-list">
+            Also serves: <CoServedLinks ids={ids} index={index} />
+          </span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+/**
  * The 2027 groups as the card's first tab shows them: what each is called,
  * what it means in a few words, and the sign it contributes to House − NEP.
  * Insertion and deletion candidates lead because they are what readers ask
@@ -600,15 +658,26 @@ export function OfficeBridgePanel({ office, withName = false }: { office: Office
   return (
     <div className="hgab-dc-br">
       {name}
-      <p className="hgab-dc-br-totals">
-        <span title="Same named projects in both documents">
-          NEP <strong title={fmt.php(f.nep_php, { unit: 'full' })}>{fmt.php(f.nep_php)}</strong> → House bill{' '}
-          <strong title={fmt.php(f.hgab3_php, { unit: 'full' })}>{fmt.php(f.hgab3_php)}</strong>
+      <div
+        className={`hgab-dc-br-headline ${b.net_php > 0 ? 'is-up' : b.net_php < 0 ? 'is-down' : 'is-flat'}`}
+        title="Same named projects in both documents"
+      >
+        <span className="hgab-dc-br-flow">
+          <span className="hgab-dc-br-stage">
+            <small>NEP</small>
+            <strong title={fmt.php(f.nep_php, { unit: 'full' })}>{fmt.php(f.nep_php)}</strong>
+          </span>
+          <span className="hgab-dc-br-arrow" aria-hidden="true">→</span>
+          <span className="hgab-dc-br-stage">
+            <small>House bill</small>
+            <strong title={fmt.php(f.hgab3_php, { unit: 'full' })}>{fmt.php(f.hgab3_php)}</strong>
+          </span>
         </span>
-        <span className="hgab-dc-br-net" title={`House bill minus the NEP, same named projects: ${fmt.php(b.net_php, { unit: 'full' })}`}>
-          Net <SignedPhp value={b.net_php} />
+        <span className="hgab-dc-br-netbig" title={`House bill minus the NEP, same named projects: ${fmt.php(b.net_php, { unit: 'full' })}`}>
+          <small>Net change</small>
+          <SignedPhp value={b.net_php} />
         </span>
-      </p>
+      </div>
       {moved > 0 && (
         <span className="hgab-dc-br-bar" role="img" aria-label={`How the House bill differs from the NEP: ${barLabel}`}>
           {moving.map((r) => {
@@ -772,7 +841,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
 
       {undivided && (
         <p className="hgab-dc-undivided">
-          Shared office total, not split · also serves <CoServedLinks ids={coServed} index={index} />
+          <SharedLabel ids={coServed} index={index} />
         </p>
       )}
       {!undivided && offices.length > 1 && (
@@ -842,7 +911,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           </Link>
         ))}
         {!ambiguous && rep?.juris_url && (
-          <a className="hgab-cta hgab-cta-quiet" href={rep.juris_url} target="_blank" rel="noopener noreferrer">bills.juris.ph ↗</a>
+          <a className="hgab-cta hgab-cta-quiet" href={rep.juris_url} target="_blank" rel="noopener noreferrer" title="Bills and profile on bills.juris.ph">More Info ↗</a>
         )}
       </footer>
     </article>
