@@ -24,7 +24,7 @@ import {
 } from './hgab';
 
 // ---------------------------------------------------------------------------
-// URL state (`?view=list&q=…&region=…&tier=…&sort=…&group=none`)
+// URL state (`?view=list&q=…&region=…&tier=…&office=…&sort=…&group=none&by=office`)
 // ---------------------------------------------------------------------------
 
 export type DistrictSortKey = 'hgab3' | 'gaa2026' | 'change' | 'growth' | 'name';
@@ -55,15 +55,30 @@ export const TIER_FILTER_LABELS: Record<Exclude<TierFilter, ''>, string> = {
   none: 'No office found',
 };
 
+/** How the list and the sidebar are organised: by district (the default) or under the office that serves each district. */
+export type DistrictBrowse = 'district' | 'office';
+
 export interface DistrictFilters {
   /** Free text over district, representative, candidates, region and office names. */
   q: string;
   region: string;
   tier: TierFilter;
+  /**
+   * One office group: its `param` (office ids without `office:`, joined by
+   * "+"), its full id, or any one of its office ids. See `resolveOfficeGroup`.
+   */
+  office: string;
   sort: DistrictSortKey;
   /** Cards grouped under region headings (the default); `group=none` in the URL gives the flat sorted list. */
   group: boolean;
+  /** `by=office`: districts under the office that serves them, in the sidebar and the list. A view, not a filter. */
+  by: DistrictBrowse;
 }
+
+/** The list's default view: every district, by district, grouped by region. */
+export const DEFAULT_DISTRICT_FILTERS: DistrictFilters = {
+  q: '', region: '', tier: '', office: '', sort: DEFAULT_DISTRICT_SORT, group: true, by: 'district',
+};
 
 function isSortKey(v: string | null): v is DistrictSortKey {
   return v != null && v in DISTRICT_SORT_LABELS;
@@ -77,9 +92,16 @@ export function districtFiltersFromParams(params: URLSearchParams): DistrictFilt
     q: params.get('q') ?? '',
     region: params.get('region') ?? '',
     tier: tier === 'A' || tier === 'B' || tier === 'none' ? tier : '',
+    office: (params.get('office') ?? '').trim(),
     sort: isSortKey(sort) ? sort : DEFAULT_DISTRICT_SORT,
     group: params.get('group') !== 'none',
+    by: browseFromParams(params),
   };
+}
+
+/** `by=office` → office; anything else (or nothing) → district, so older links keep their view. */
+export function browseFromParams(params: URLSearchParams): DistrictBrowse {
+  return params.get('by') === 'office' ? 'office' : 'district';
 }
 
 /**
@@ -92,14 +114,16 @@ export function paramsFromDistrictFilters(f: DistrictFilters): URLSearchParams {
   if (f.q.trim()) p.set('q', f.q.trim());
   if (f.region) p.set('region', f.region);
   if (f.tier) p.set('tier', f.tier);
+  if (f.office) p.set('office', f.office);
   if (f.sort !== DEFAULT_DISTRICT_SORT) p.set('sort', f.sort);
   if (!f.group) p.set('group', 'none');
+  if (f.by === 'office') p.set('by', 'office');
   return p;
 }
 
-/** True when search, region or tier narrows the list. Sort and grouping are views, not filters. */
+/** True when search, region, tier or office narrows the list. Sort, grouping and browse mode are views, not filters. */
 export function hasDistrictFilters(f: DistrictFilters): boolean {
-  return Boolean(f.q.trim() || f.region || f.tier);
+  return Boolean(f.q.trim() || f.region || f.tier || f.office);
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +378,11 @@ export function coServedIds(card: DistrictCard, index: HgabDistrictIndex): strin
  * offices as undivided totals; null when either term has no figure.
  */
 export function cardGrowth(card: DistrictCard, index: HgabDistrictIndex): number | null {
-  const offices = cardOffices(card, index);
+  return officesGrowth(cardOffices(card, index));
+}
+
+/** `cardGrowth` over any set of offices (a card's, or an office group's), summed as undivided totals. */
+export function officesGrowth(offices: readonly OfficeHistory[]): number | null {
   const meanAnnual = (congress: number): number | null => {
     const term = CONGRESS_TERMS.find((t) => t.congress === congress);
     if (!term) return null;
@@ -388,11 +416,16 @@ export interface Fy27Compare {
 }
 
 export function cardFy27(card: DistrictCard, index: HgabDistrictIndex): Fy27Compare {
+  return officesFy27(cardOffices(card, index));
+}
+
+/** `cardFy27` over any set of offices (a card's, or an office group's): their `fy2027` blocks, summed undivided. */
+export function officesFy27(offices: readonly OfficeHistory[]): Fy27Compare {
   let nep: number | null = null;
   let h3: number | null = null;
   let delta: number | null = null;
   let n = 0;
-  for (const o of cardOffices(card, index)) {
+  for (const o of offices) {
     const f = o.fy2027;
     if (!f) continue;
     n += 1;
@@ -450,10 +483,13 @@ export function regionFilterKey(value: string): RegionSectionKey | null {
   return regionKeyOf(value);
 }
 
-export function filterDistricts(index: HgabDistrictIndex, f: DistrictFilters): DistrictCard[] {
+export function filterDistricts(index: HgabDistrictIndex, f: Pick<DistrictFilters, 'q' | 'region' | 'tier' | 'office'>): DistrictCard[] {
   const words = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const regionKey = regionFilterKey(f.region);
+  // An office that cannot be resolved (a stale link) matches no district, so the reader sees why the list is empty.
+  const office = f.office ? new Set(resolveOfficeGroup(index, f.office)?.district_ids ?? []) : null;
   return index.districts.filter((card) => {
+    if (office && !office.has(card.id)) return false;
     if (f.region && (regionKey ? districtRegionKey(card) !== regionKey : (card.region ?? '') !== f.region)) return false;
     if (f.tier === 'A' && card.attribution !== 'A') return false;
     if (f.tier === 'B' && card.attribution !== 'B' && card.attribution !== 'mixed') return false;
@@ -602,12 +638,284 @@ export function regionTotals(cards: readonly DistrictCard[], index: HgabDistrict
 export const REGION_SECTION_ORDER: readonly RegionSectionKey[] = [...REGION_ORDER, 'other'];
 
 // ---------------------------------------------------------------------------
+// Office groups: the offices that build together and every district they serve
+// ---------------------------------------------------------------------------
+
+/**
+ * One unit of "browse by office": a connected group of district engineering
+ * offices and every district they serve, the same unit the leaderboards rank.
+ * Most groups are one office serving one district (Tier A). An office serving
+ * several districts makes a Tier B group, listed whole with every district
+ * and never split; a district served by two offices joins them in one group.
+ * Districts with no office (attribution `none`) get one group per region, so
+ * they can still be found; regional groupings (BARMM) are never offices.
+ */
+export interface OfficeGroup {
+  /** Stable: the sorted ledger office ids joined by "+" (`office:a+office:b`); `none:<region>` for districts with no office. */
+  id: string;
+  /** The `office=` URL value: the office ids without `office:`, joined by "+". Empty for a no-office group. */
+  param: string;
+  /** Ledger offices, by name. Empty for a no-office group. */
+  offices: OfficeHistory[];
+  /** Every district the offices serve, by label ("2nd" before "10th"). */
+  district_ids: string[];
+  region: RegionSectionKey;
+  /** A: the offices serve one district. B: several; the figures are shared and not split. Null: no district office. */
+  tier: 'A' | 'B' | null;
+  /** "Abra DEO", "Apayao 1st DEO and Apayao 2nd DEO", "No district office". */
+  name: string;
+  /** 2027 on the compared population (the offices' `fy2027` blocks), summed undivided; null when no office has a figure, never 0. */
+  nep_php: number | null;
+  hgab3_php: number | null;
+  /** House bill minus the NEP, same named projects, over offices with both figures; null when none has both. */
+  net_php: number | null;
+}
+
+export interface OfficeGroupIndex {
+  /** Office groups, then the no-office groups; each list in region order, then by name. */
+  groups: OfficeGroup[];
+  byId: ReadonlyMap<string, OfficeGroup>;
+  byDistrict: ReadonlyMap<string, OfficeGroup>;
+  byOffice: ReadonlyMap<string, OfficeGroup>;
+}
+
+export const NO_OFFICE_GROUP_NAME = 'No district office';
+
+const byLabelNumeric = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
+
+/** "A", "A and B", "A, B and C". */
+export function andList(items: readonly string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+const OFFICE_GROUPS = new WeakMap<HgabDistrictIndex, OfficeGroupIndex>();
+
+/**
+ * The office groups of an index: union-find over each district's
+ * `office_ids` and each office's `district_ids`, ledger offices only.
+ * Memoised per index: the list, the sidebar and the filter all read it.
+ */
+export function officeGroups(index: HgabDistrictIndex): OfficeGroupIndex {
+  const hit = OFFICE_GROUPS.get(index);
+  if (hit) return hit;
+
+  const cards = new Map(index.districts.map((d) => [d.id, d] as const));
+  const ledger = Object.values(index.offices).filter(isOfficeLedger);
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    let y = x;
+    while (parent.get(y) !== r) { const next = parent.get(y)!; parent.set(y, r); y = next; }
+    return r;
+  };
+  const union = (a: string, b: string) => { const ra = find(a); const rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  for (const o of ledger) parent.set(`o:${o.id}`, `o:${o.id}`);
+  for (const d of index.districts) parent.set(`d:${d.id}`, `d:${d.id}`);
+  for (const o of ledger) for (const id of o.district_ids) if (cards.has(id)) union(`o:${o.id}`, `d:${id}`);
+  for (const d of index.districts) for (const id of d.office_ids) if (parent.has(`o:${id}`)) union(`d:${d.id}`, `o:${id}`);
+
+  const parts = new Map<string, { offices: OfficeHistory[]; districts: DistrictCard[] }>();
+  const at = (k: string) => {
+    const r = find(k);
+    let g = parts.get(r);
+    if (!g) { g = { offices: [], districts: [] }; parts.set(r, g); }
+    return g;
+  };
+  for (const o of ledger) at(`o:${o.id}`).offices.push(o);
+  for (const d of index.districts) at(`d:${d.id}`).districts.push(d);
+
+  const groups: OfficeGroup[] = [];
+  const unplaced = new Map<RegionSectionKey, DistrictCard[]>();
+  for (const { offices, districts } of parts.values()) {
+    districts.sort((a, b) => byLabelNumeric(a.label, b.label));
+    if (!offices.length) {
+      for (const d of districts) {
+        const k = districtRegionKey(d);
+        const list = unplaced.get(k);
+        if (list) list.push(d);
+        else unplaced.set(k, [d]);
+      }
+      continue;
+    }
+    offices.sort((a, b) => byLabelNumeric(a.name, b.name));
+    const ids = offices.map((o) => o.id).sort();
+    const fy = officesFy27(offices);
+    groups.push({
+      id: ids.join('+'),
+      param: ids.map((id) => id.replace(/^office:/, '')).join('+'),
+      offices,
+      district_ids: districts.map((d) => d.id),
+      region: districts.length ? districtRegionKey(districts[0]) : regionKeyOf(offices[0].region) ?? 'other',
+      tier: districts.length > 1 ? 'B' : 'A',
+      name: andList(offices.map((o) => o.name)),
+      nep_php: fy.nep_php,
+      hgab3_php: fy.hgab3_php,
+      net_php: fy.delta_php,
+    });
+  }
+  const rank = (k: RegionSectionKey) => REGION_SECTION_ORDER.indexOf(k);
+  groups.sort((a, b) => rank(a.region) - rank(b.region) || byLabelNumeric(a.name, b.name));
+  for (const k of REGION_SECTION_ORDER) {
+    const districts = unplaced.get(k);
+    if (!districts) continue;
+    districts.sort((a, b) => byLabelNumeric(a.label, b.label));
+    groups.push({
+      id: `none:${k}`, param: '', offices: [], district_ids: districts.map((d) => d.id), region: k, tier: null,
+      name: NO_OFFICE_GROUP_NAME, nep_php: null, hgab3_php: null, net_php: null,
+    });
+  }
+
+  const byId = new Map(groups.map((g) => [g.id, g] as const));
+  const byDistrict = new Map<string, OfficeGroup>();
+  const byOffice = new Map<string, OfficeGroup>();
+  for (const g of groups) {
+    for (const id of g.district_ids) byDistrict.set(id, g);
+    for (const o of g.offices) byOffice.set(o.id, g);
+  }
+  const out: OfficeGroupIndex = { groups, byId, byDistrict, byOffice };
+  OFFICE_GROUPS.set(index, out);
+  return out;
+}
+
+/**
+ * The group an `office=` value names: a group's `param` or `id`, or any one
+ * of its office ids, with or without the `office:` prefix. "+" may arrive
+ * as a space (a hand-typed link), so spaces and commas also separate ids.
+ * Null when nothing matches; no-office groups are never named this way.
+ */
+export function resolveOfficeGroup(index: HgabDistrictIndex, value: string): OfficeGroup | null {
+  const ids = value.split(/[+\s,]+/).filter(Boolean).map((p) => (p.startsWith('office:') ? p : `office:${p}`));
+  if (!ids.length) return null;
+  const og = officeGroups(index);
+  const exact = og.byId.get([...ids].sort().join('+'));
+  if (exact) return exact;
+  for (const id of ids) {
+    const g = og.byOffice.get(id);
+    if (g) return g;
+  }
+  return null;
+}
+
+/** Hover text of a group's name, spelling out "DEO" once: "Abra DEO: a district engineering office (DEO) of DPWH". */
+export function officeGroupTitle(group: Pick<OfficeGroup, 'offices' | 'name'>): string {
+  if (!group.offices.length) return 'No district engineering office (DEO) was found for these districts.';
+  if (group.offices.length === 1) {
+    const o = group.offices[0];
+    return `${o.name}: a DPWH ${o.kind === 'sub_district_engineering_office' ? 'sub-district engineering office' : 'district engineering office (DEO)'}`;
+  }
+  return `${group.name}: ${group.offices.length} DPWH district engineering offices (DEOs), shown together`;
+}
+
+/** "Tier A · only this district", "Tier B · shared by 5 districts, not split", "No district office". */
+export function officeGroupTierText(tier: OfficeGroup['tier'], districts: number): string {
+  if (tier === 'A') return 'Tier A · only this district';
+  if (tier === 'B') return `Tier B · shared by ${districts} districts, not split`;
+  return NO_OFFICE_GROUP_NAME;
+}
+
+/** The sidebar's short mark: "Tier A", "Tier B · 5 districts", "no office". */
+export function officeGroupTierShort(tier: OfficeGroup['tier'], districts: number): string {
+  if (tier === 'A') return 'Tier A';
+  if (tier === 'B') return `Tier B · ${districts} districts`;
+  return 'no office';
+}
+
+/** The figure a sort key ranks a group on: the offices' figures, undivided; null sinks to the bottom. */
+export function officeGroupMetric(group: OfficeGroup, key: DistrictSortKey): number | null {
+  switch (key) {
+    case 'hgab3': return group.hgab3_php;
+    case 'gaa2026': {
+      let sum: number | null = null;
+      for (const o of group.offices) {
+        const v = yearAmount(o, 2026, 'gaa');
+        if (v != null) sum = (sum ?? 0) + v;
+      }
+      return sum;
+    }
+    case 'change': return group.net_php;
+    case 'growth': return officesGrowth(group.offices);
+    default: return null;
+  }
+}
+
+/** One office group in the list: the group and those of its districts the filters leave, by label. */
+export interface OfficeSection {
+  group: OfficeGroup;
+  cards: DistrictCard[];
+}
+
+/**
+ * The cards under their office groups, groups ranked by `key` on the group's
+ * own figure (no-office groups last, ties and `name` by group name) and each
+ * group's districts by label. Flattened, this is the flat list's order in
+ * office mode, so a shared office's districts always sit together.
+ */
+export function officeSections(cards: readonly DistrictCard[], index: HgabDistrictIndex, key: DistrictSortKey): OfficeSection[] {
+  const og = officeGroups(index);
+  const by = new Map<OfficeGroup, DistrictCard[]>();
+  for (const c of cards) {
+    const g = og.byDistrict.get(c.id);
+    if (!g) continue;
+    const list = by.get(g);
+    if (list) list.push(c);
+    else by.set(g, [c]);
+  }
+  const out = [...by].map(([group, cs]) => ({
+    group,
+    cards: cs.sort((a, b) => byLabelNumeric(a.label, b.label)),
+    metric: key === 'name' ? null : officeGroupMetric(group, key),
+  }));
+  out.sort((a, b) => {
+    const an = a.group.tier == null;
+    const bn = b.group.tier == null;
+    if (an !== bn) return an ? 1 : -1;
+    if (key !== 'name') {
+      if (a.metric == null && b.metric != null) return 1;
+      if (b.metric == null && a.metric != null) return -1;
+      if (a.metric != null && b.metric != null && a.metric !== b.metric) return b.metric - a.metric;
+    }
+    return byLabelNumeric(a.group.name, b.group.name) || REGION_SECTION_ORDER.indexOf(a.group.region) - REGION_SECTION_ORDER.indexOf(b.group.region);
+  });
+  return out.map(({ group, cards: cs }) => ({ group, cards: cs }));
+}
+
+export interface RegionOfficeGroup extends RegionGroup {
+  /** The region's office sections, in `officeSections` order; `cards` is them flattened. */
+  sections: OfficeSection[];
+}
+
+/** Office sections by region, in `REGION_ORDER` with "other" last; empty regions are left out. */
+export function groupOfficeSectionsByRegion(sections: readonly OfficeSection[]): RegionOfficeGroup[] {
+  const by = new Map<RegionSectionKey, OfficeSection[]>();
+  for (const s of sections) {
+    const list = by.get(s.group.region);
+    if (list) list.push(s);
+    else by.set(s.group.region, [s]);
+  }
+  return REGION_SECTION_ORDER.filter((k) => by.has(k)).map((k) => {
+    const list = by.get(k)!;
+    return { key: k, sections: list, cards: list.flatMap((s) => s.cards) };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // The list's addresses: `?view=list`, `#region-<key>`, `#d-<district>`
 // ---------------------------------------------------------------------------
 
-/** `/hgab/2027/districts?view=list`, with `#<anchor>` when given: the list, opened at a region or a card. */
-export function districtListHref(anchor?: string): string {
-  return `${districtPath()}?view=list${anchor ? `#${anchor}` : ''}`;
+/** `/hgab/2027/districts?view=list`, with `by=office` and `#<anchor>` when given: the list, opened at a region or a card. */
+export function districtListHref(anchor?: string, by: DistrictBrowse = 'district'): string {
+  return `${districtPath()}?view=list${by === 'office' ? '&by=office' : ''}${anchor ? `#${anchor}` : ''}`;
+}
+
+/** The list in office mode, showing one office group's districts: `?view=list&office=<param>&by=office`. */
+export function officeListHref(param: string): string {
+  return `${districtPath()}?${paramsFromDistrictFilters({ ...DEFAULT_DISTRICT_FILTERS, office: param, by: 'office' })}`;
+}
+
+/** A district's page, keeping the sidebar's office mode (`?by=office`). */
+export function districtPageHref(id: string, by: DistrictBrowse = 'district'): string {
+  return `${districtPath(id)}${by === 'office' ? '?by=office' : ''}`;
 }
 
 /**
@@ -645,6 +953,8 @@ export interface SidebarRegion {
   key: RegionSectionKey;
   anchor: string;
   districts: SidebarDistrict[];
+  /** Office mode only (`sidebarOfficeRegions`): the same districts under their office groups. */
+  offices?: SidebarOffice[];
 }
 
 /** Districts by region in `REGION_ORDER`, each region's districts by name ("2nd" before "10th"). Empty regions are left out. */
@@ -663,6 +973,51 @@ export function sidebarRegions(cards: readonly DistrictCard[]): SidebarRegion[] 
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'en', { numeric: true })),
   }));
+}
+
+/** An office group in the sidebar: its name, tier and whole-office figure, then the districts it serves. */
+export interface SidebarOffice {
+  /** `OfficeGroup.id`. */
+  id: string;
+  /** The `office=` URL value; empty for the no-office group, which is not a filter. */
+  param: string;
+  name: string;
+  /** `officeGroupTitle`: the name with "DEO" spelled out. */
+  title: string;
+  tier: 'A' | 'B' | null;
+  /** Every district the group serves, before filters. */
+  size: number;
+  /** The offices' 2027 House bill total (named projects), undivided; null when none. */
+  hgab3_php: number | null;
+  /** The districts the filters leave, by name. */
+  districts: SidebarDistrict[];
+}
+
+/**
+ * Regions → office groups → districts, for the sidebar's office mode: the
+ * same regions as `sidebarRegions`, each with `offices` by name and the
+ * no-office group last. Districts keep their order by name inside a group.
+ */
+export function sidebarOfficeRegions(cards: readonly DistrictCard[], index: HgabDistrictIndex): SidebarRegion[] {
+  const regions = sidebarRegions(cards);
+  const og = officeGroups(index);
+  return regions.map((r) => {
+    const by = new Map<OfficeGroup, SidebarDistrict[]>();
+    for (const d of r.districts) {
+      const g = og.byDistrict.get(d.id);
+      if (!g) continue;
+      const list = by.get(g);
+      if (list) list.push(d);
+      else by.set(g, [d]);
+    }
+    const offices = [...by]
+      .sort(([a], [b]) => (a.tier == null ? 1 : 0) - (b.tier == null ? 1 : 0) || byLabelNumeric(a.name, b.name))
+      .map(([g, districts]): SidebarOffice => ({
+        id: g.id, param: g.param, name: g.name, title: officeGroupTitle(g), tier: g.tier, size: g.district_ids.length,
+        hgab3_php: g.hgab3_php, districts,
+      }));
+    return { ...r, offices };
+  });
 }
 
 /**

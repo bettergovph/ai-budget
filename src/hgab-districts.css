@@ -7,7 +7,8 @@
    vocabulary (hgab-dataset.css → nep2027.css) and the shared tokens. Scoped to:
      .hgab-dx-*      both views: overview region table and call-outs; the list's
                      frame, region sections and cards grid
-     .hgab-dsb-*     the regions → districts sidebar (and its phone dialog)
+     .hgab-dsb-*     the regions → districts sidebar (and its phone dialog);
+                     .hgab-dsb-o-* its office rows (`by=office`)
      .hgab-dc-*      one district card
      .hgab-hc-*      the inline-SVG history chart
      .hgab-keyrow-*  the one-line chart key
@@ -391,6 +392,8 @@
   font-weight: 600;
 }
 .hgab-dsb-r-btn:focus-visible,
+.hgab-dsb-o-go:focus-visible,
+.hgab-dsb-by-seg button:focus-visible,
 .hgab-dsb-d-go:focus-visible,
 .hgab-dsb-d-open:focus-visible,
 .hgab-dsb-d.is-go > a:focus-visible,
@@ -400,6 +403,99 @@
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+
+/* "Browse by: District · Office": a two-part switch at the top of the sidebar. */
+.hgab-dsb-by {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+}
+.hgab-dsb-by-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.hgab-dsb-by-seg {
+  display: inline-flex;
+  flex: 1;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hgab-dsb-by-seg button {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 28px;
+  padding: 4px 10px;
+  text-align: center;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--paper);
+}
+.hgab-dsb-by-seg button + button { border-left: 1px solid var(--ink); }
+.hgab-dsb-by-seg button:hover { background: var(--paper-2); color: var(--ink); }
+.hgab-dsb-by-seg button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
+
+/* Office mode: an office row (name; whole-office amount and tier) over the
+   districts it serves. Tier B rows carry the violet rule of the tier badge. */
+.hgab-dsb-o { margin: 2px 0 4px; }
+.hgab-dsb-o-go {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  border-left: 3px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  text-decoration: none;
+}
+a.hgab-dsb-o-go:hover { background: var(--paper-2); }
+.hgab-dsb-o.is-A > .hgab-dsb-o-go { border-left-color: color-mix(in srgb, var(--hgab-tier-a) 55%, transparent); }
+.hgab-dsb-o.is-B > .hgab-dsb-o-go { border-left-color: var(--hgab-tier-b); }
+.hgab-dsb-o.is-none > .hgab-dsb-o-go { border-left-style: dashed; color: var(--ink-3); font-weight: 500; font-style: italic; }
+.hgab-dsb-o.is-current > .hgab-dsb-o-go,
+.hgab-dsb-o.is-filter > .hgab-dsb-o-go { background: var(--accent-soft); }
+.hgab-dsb-o.is-filter > .hgab-dsb-o-go { box-shadow: inset 0 0 0 1px var(--accent); }
+.hgab-dsb-o-name { overflow-wrap: anywhere; }
+.hgab-dsb-o-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.hgab-dsb-o-amt small {
+  margin-left: 4px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.hgab-dsb-o-tier {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-dsb-o-tier.is-A { color: var(--hgab-tier-a); }
+.hgab-dsb-o-tier.is-B { color: var(--hgab-tier-b); }
+.hgab-dsb-o-ds { padding: 0 0 2px 12px; }
+.hgab-dsb-o-ds .hgab-dsb-d-go { padding-top: 4px; padding-bottom: 4px; font-size: 12px; }
 
 /* Below 1024 px: a button above the cards, and the tree in a full-height dialog. */
 .hgab-dsb-opener {
@@ -464,6 +560,9 @@
 .hgab-dsb-panel.is-dialog .hgab-dsb-d-go { padding: 9px 8px; font-size: 14px; }
 .hgab-dsb-panel.is-dialog .hgab-dsb-d-open { width: 44px; }
 .hgab-dsb-panel.is-dialog .hgab-dsb-d.is-go > a { padding: 10px 8px; font-size: 13.5px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-by-seg button { min-height: 40px; font-size: 14px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-o-go { padding: 8px 8px; font-size: 14px; }
+.hgab-dsb-panel.is-dialog .hgab-dsb-o-ds .hgab-dsb-d-go { padding-top: 8px; padding-bottom: 8px; font-size: 13.5px; }
 
 @media (max-width: 1023.98px) {
   .hgab-dx-layout { display: block; margin-top: 16px; }
@@ -479,6 +578,11 @@
 }
 .hgab-dc-district:focus { outline: none; }
 .hgab-dc-district:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* The filters in force, each removable; and where an office pick scrolls to. */
+.hgab-dx-results { scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 16px); }
+.hgab-dx-chips { margin-top: 14px; }
+.hgab-dx-chips + .hgab-dx-count { margin-top: 10px; }
 
 /* --- overview: the region table, how to read, the way to the list ---------- */
 
@@ -589,6 +693,66 @@
   color: var(--ink-mute);
 }
 .hgab-dx-region-more .nep-more { margin-top: 0; }
+
+/* --- office mode: one office group and its cards inside a region ----------- */
+
+.hgab-dx-office { margin-top: 26px; }
+.hgab-dx-region-head + .hgab-dx-office { margin-top: 0; }
+/* A shared office's cards are bracketed: one office, one undivided figure. */
+.hgab-dx-office.is-B {
+  padding-left: 14px;
+  border-left: 3px solid color-mix(in srgb, var(--hgab-tier-b) 60%, transparent);
+}
+.hgab-dx-office-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin-bottom: 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.hgab-dx-office-id { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.hgab-dx-office-title {
+  margin: 0;
+  font-family: var(--font-hero);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--ink);
+  cursor: help;
+}
+.hgab-dx-office-title:focus { outline: none; }
+.hgab-dx-office-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.hgab-dx-office-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.hgab-dx-office-fig { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hgab-dx-office-cap {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-dx-office-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.hgab-dx-office-links .hgab-cta { padding: 6px 12px; font-size: 12.5px; }
+.hgab-dx-office-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
 
 .hgab-dx-grid {
   display: grid;
@@ -1123,6 +1287,12 @@
   .hgab-dc-br-stage strong { font-size: 17px; }
   .hgab-dc-br-netbig .hgab-delta { font-size: 21px; }
 }
+/* The one-line form on an office heading in the list. */
+.hgab-dc-br-headline.is-compact { gap: 6px 18px; padding: 6px 12px; border-radius: 4px; }
+.hgab-dc-br-headline.is-compact .hgab-dc-br-stage strong { font-size: 15px; }
+.hgab-dc-br-headline.is-compact .hgab-dc-br-arrow { font-size: 15px; }
+.hgab-dc-br-headline.is-compact .hgab-dc-br-netbig .hgab-delta { font-size: 18px; }
+.hgab-dc-br-headline.is-compact small { font-size: 9.5px; }
 
 /* "Shared" with the details on hover, focus or tap. */
 .hgab-dc-shared { position: relative; display: inline-block; }

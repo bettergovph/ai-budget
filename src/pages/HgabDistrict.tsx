@@ -20,7 +20,7 @@
  * matched on, crosswalk ids and data scopes sit in "Details for analysts".
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
@@ -42,10 +42,11 @@ import {
   type ProjectRow,
 } from '../lib/hgab';
 import {
-  ATTRIBUTION_LABELS, DEFAULT_DISTRICT_SORT, FISCAL_STAGE_LONG, FISCAL_STAGE_SHORT, cardOffices, cardRegionalGroups,
+  ATTRIBUTION_LABELS, DEFAULT_DISTRICT_FILTERS, FISCAL_STAGE_LONG, FISCAL_STAGE_SHORT, cardOffices, cardRegionalGroups,
   coServedIds, districtListHref, districtRegionKey, filterDistricts, fiscalYearRange, findDistrict, gaaSubtotal,
   historySlots, officeKindText, officeParquetLabel, officeProjectsHref, officeTierText, regionAnchor, regionNames,
-  sidebarRegions, slotLabel,
+  browseFromParams, sidebarOfficeRegions, sidebarRegions, slotLabel,
+  type DistrictBrowse,
 } from '../lib/hgab-districts';
 import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-query';
 import '../hgab-districts.css';
@@ -86,12 +87,20 @@ export default function HgabDistrict() {
     if (!hash) window.scrollTo(0, 0);
   }, [id, hash]);
 
-  // The sidebar's own filter (this page has no list filters in its URL).
+  // The sidebar's own filter (this page has no list filters in its URL), and
+  // its browse mode, which is: `?by=office` keeps the tree under the offices
+  // as the reader moves from district to district.
   const [find, setFind] = useState('');
-  const tree = useMemo(
-    () => (index ? sidebarRegions(filterDistricts(index, { q: find, region: '', tier: '', sort: DEFAULT_DISTRICT_SORT, group: true })) : []),
-    [index, find],
-  );
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const by = browseFromParams(params);
+  const setBy = (next: DistrictBrowse) =>
+    navigate({ search: next === 'office' ? '?by=office' : '', hash: window.location.hash }, { replace: true });
+  const tree = useMemo(() => {
+    if (!index) return [];
+    const cards = filterDistricts(index, { ...DEFAULT_DISTRICT_FILTERS, q: find });
+    return by === 'office' ? sidebarOfficeRegions(cards, index) : sidebarRegions(cards);
+  }, [index, find, by]);
   const regionSize = useMemo(() => {
     const m = new Map<ReturnType<typeof districtRegionKey>, number>();
     for (const d of index?.districts ?? []) m.set(districtRegionKey(d), (m.get(districtRegionKey(d)) ?? 0) + 1);
@@ -191,6 +200,8 @@ export default function HgabDistrict() {
             selectedId={card.id}
             focusRegion={regionKey}
             narrowed={find.trim() !== '' && tree.reduce((n, r) => n + r.districts.length, 0) <= 40}
+            by={by}
+            onBy={setBy}
           />
           <div className="hgab-dx-content hgab-dd-content">
             {/* ---- representative ---- */}
