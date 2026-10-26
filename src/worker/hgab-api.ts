@@ -38,12 +38,15 @@ import { ApiError } from "./public-api";
 import {
   BRIDGE_LABELS, BRIDGE_ORDER, PLAIN_TERMS, READING_LABELS, REGION_LABELS, REGION_ORDER, STAGE_LABELS, traceInfo,
   type Bridge, type BridgeCell, type BridgeGroup, type DatasetKey, type DistrictCard, type DistrictRepresentative,
-  type FiscalStage, type HgabDatasetMeta, type HgabDistrictIndex, type HgabDocument, type OfficeHistory,
+  type FiscalStage, type HgabDatasetDocuments, type HgabDatasetMeta, type HgabDistrictIndex, type HgabDocument, type OfficeHistory,
   type RegionKey, type ResidualYear, type YearAmount,
 } from "../lib/hgab";
 import {
-  apiPresenceInfo, controlHouseDoc, flagLabel, matchLabel, papLabel, splitFlags, zoneLabel,
+  apiPresenceInfo, flagLabel, matchLabel, papLabel, splitFlags, zoneLabel,
 } from "../lib/hgab-query";
+import {
+  SENATE_BUDGET_PORTAL, controlCitations, controlDoc, controlHouseDoc, houseCitations, isSenatePortal, type Reading,
+} from "../lib/hgab-citations";
 import {
   ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, TIER_MEANING,
   cardFy27, cardOffices, cardRegionalGroups, coServedIds, officeKindText, officeParquetLabel, officeTierText,
@@ -411,6 +414,41 @@ function docRef(key: string) {
   return { key, pdf_url: pdfUrl(key, null) };
 }
 
+/** `hgab_datasets.documents_json`: the dataset's document keys and which House document each kind of figure cites. */
+function datasetDocuments(d: Pick<DatasetRow, "documents_json">): HgabDatasetDocuments {
+  const j = parseJson<Partial<HgabDatasetDocuments>>(d.documents_json, {});
+  return { ...j, nep: j.nep ?? [], house: j.house ?? [] };
+}
+
+/** The `documents` block of a full dataset entry: keys with pdf_url, the program-totals volume per reading, and the same-page copy. */
+function publicDatasetDocuments(documents: HgabDatasetDocuments) {
+  const same = documents.same_pages ?? null;
+  const totalsDoc = (reading: Reading) => {
+    const key = controlDoc(null, { documents }, reading);
+    return key ? docRef(key) : null;
+  };
+  return {
+    nep: documents.nep.map(docRef),
+    house: documents.house.map(docRef),
+    controls: { hgab2: totalsDoc(2), hgab3: totalsDoc(3) },
+    controls_note:
+      "The House document each reading's program totals are published in: Volume I-C for DPWH (with its project " +
+      "list), Volume I-B for farm-to-market roads, health facilities and irrigation (with their lists).",
+    same_pages: same
+      ? {
+          extracted: docRef(same.extracted),
+          third: docRef(same.third),
+          pages: same.pages,
+          note:
+            `The House list was read from the second-reading copy (extracted). The source compared all ${same.pages} list ` +
+            `pages with the third-reading copy (third, as published on the ${SENATE_BUDGET_PORTAL.name}) and found them ` +
+            "identical, so rows and totals cite the third-reading copy at the same page: pdf_url.hgab3 opens it, " +
+            "pdf_url.hgab2 opens the copy the line was read from.",
+        }
+      : null,
+  };
+}
+
 function datasetEntry(d: DatasetRow, held: HeldStat[], full: boolean) {
   const key = d.key as DatasetKey;
   const bridge = parseJson<Bridge | null>(d.bridge_json, null);
@@ -446,7 +484,7 @@ function datasetEntry(d: DatasetRow, held: HeldStat[], full: boolean) {
     },
   };
   if (!full) return base;
-  const documents = parseJson<{ nep: string[]; house: string[] }>(d.documents_json, { nep: [], house: [] });
+  const documents = datasetDocuments(d);
   return {
     ...base,
     caveats: parseJson<string[]>(d.caveats_json, []),
@@ -457,7 +495,7 @@ function datasetEntry(d: DatasetRow, held: HeldStat[], full: boolean) {
     has_map: !!d.has_map,
     placeable: !!d.placeable,
     printed: parseJson<HgabDatasetMeta["printed"]>(d.printed_json, null),
-    documents: { nep: (documents.nep ?? []).map(docRef), house: (documents.house ?? []).map(docRef) },
+    documents: publicDatasetDocuments(documents),
   };
 }
 
@@ -502,6 +540,7 @@ function publicDocument(r: DocumentRow, usedBy: string[]) {
     sha256: r.sha256,
     bytes: r.bytes,
     source_url: r.source_url,
+    source_name: isSenatePortal(r.source_url) ? SENATE_BUDGET_PORTAL.name : null,
     notes: r.notes,
     pdf_url: r.pdf_url || pdfUrl(r.key, null),
     used_by: usedBy,
@@ -718,9 +757,19 @@ const PROJECT_COLS = `dataset, id, title, program, pap, region, region_key, offi
   nep_page, hgab2_page, hgab3_page, nep_doc, hgab2_doc, hgab3_doc,
   length_m, flags, suggestions, lon, lat`;
 
-function publicProject(r: ProjectDbRow) {
+/**
+ * One project row as the API returns it. `documents` (the dataset's) lets
+ * pdf_url.hgab3 follow the pages' rule: a one-list row opens the third-reading
+ * copy at the page it was read from in the second-reading copy.
+ */
+function publicProject(r: ProjectDbRow, documents: HgabDatasetDocuments) {
   const key = r.dataset as DatasetKey;
   const t = traceInfo(r.trace);
+  const cites = houseCitations(r, { documents }, null);
+  const houseUrl = (reading: Reading) => {
+    const c = cites.find((x) => x.reading === reading);
+    return c ? pdfUrl(c.doc, c.page) : null;
+  };
   const group = (r.bridge_group ?? t.group) as BridgeGroup | null;
   return {
     id: r.id,
@@ -756,8 +805,8 @@ function publicProject(r: ProjectDbRow) {
     hgab3_doc: r.hgab3_doc,
     pdf_url: {
       nep: pdfUrl(r.nep_doc, r.nep_page),
-      hgab2: pdfUrl(r.hgab2_doc, r.hgab2_page),
-      hgab3: pdfUrl(r.hgab3_doc, r.hgab3_page),
+      hgab2: houseUrl(2),
+      hgab3: houseUrl(3),
     },
     length_m: r.length_m,
     flags: splitFlags(r.flags),
@@ -824,8 +873,8 @@ export async function hgabDataset(env: Env, rawKey: string) {
   ]);
   const entry = datasetEntry(d, held, true);
   const docsMeta = asHgabDocuments(docs);
-  const documents = parseJson<{ nep: string[]; house: string[] }>(d.documents_json, { nep: [], house: [] });
-  const nepDoc = documents.nep?.[0] ?? null;
+  const documents = datasetDocuments(d);
+  const nepDoc = documents.nep[0] ?? null;
   const houseDoc = controlHouseDoc(docsMeta, { documents });
 
   const dimsOut: Record<string, unknown[]> = {};
@@ -842,7 +891,7 @@ export async function hgabDataset(env: Env, rawKey: string) {
   const topOut: Record<string, unknown[]> = {};
   for (const g of BRIDGE_ORDER) topOut[g] = [];
   for (const r of top.sort((a, b) => a.rn - b.rn)) {
-    if (r.bridge_group && topOut[r.bridge_group]) topOut[r.bridge_group].push(publicProject(r));
+    if (r.bridge_group && topOut[r.bridge_group]) topOut[r.bridge_group].push(publicProject(r, documents));
   }
 
   let readings: unknown = null;
@@ -879,6 +928,9 @@ export async function hgabDataset(env: Env, rawKey: string) {
       ...entry,
       controls: controls.map((c) => {
         const housePages = parseJson<number[]>(c.house_pages_json, []);
+        const cites = controlCitations({ hgab2_php: c.hgab2_php, hgab3_php: c.hgab3_php, house_pages: housePages }, { documents }, docsMeta);
+        const urls = (reading: Reading) =>
+          cites.filter((x) => x.reading === reading && x.doc).map((x) => pdfUrl(x.doc, x.page) as string);
         return {
           id: c.id,
           label: c.label,
@@ -892,12 +944,16 @@ export async function hgabDataset(env: Env, rawKey: string) {
           nep_page: c.nep_page,
           house_pages: housePages,
           nep_pdf_url: c.nep_page ? pdfUrl(nepDoc, c.nep_page) : null,
-          house_pdf_urls: houseDoc ? housePages.map((p) => pdfUrl(houseDoc.key, p)) : [],
+          house_doc: houseDoc?.key ?? null,
+          house_pdf_urls: houseDoc ? urls(houseDoc.reading) : [],
+          pdf_urls: { hgab2: urls(2), hgab3: urls(3) },
         };
       }),
       controls_note:
         "The subtotals published in each document for these projects, side by side; delta_php is the latest House " +
-        "reading minus the NEP. Columns are versions: compare them, never add them.",
+        "reading minus the NEP. Columns are versions: compare them, never add them. house_pages are pages of house_doc, " +
+        "the latest reading's copy of the volume the totals are published in (Volume I-C for DPWH, Volume I-B for the " +
+        "other three programs); house_pdf_urls open it, and pdf_urls gives each reading's copy at the same pages.",
       dims: dimsOut,
       dims_note: "House bill against the NEP by each source's own recorded label (house_php is the latest House reading).",
       regions: regionsBlock(d, regions),
@@ -1081,7 +1137,8 @@ export async function hgabProjects(env: Env, rawKey: string, o: HgabProjectsOpts
     key === "dpwh" && typeof filters.office === "string" ? officeLens(env, filters.office) : Promise.resolve(null),
   ]);
   const total = Number(sums?.n ?? 0);
-  const out = page.map(publicProject);
+  const documents = datasetDocuments(d);
+  const out = page.map((r) => publicProject(r, documents));
   return {
     meta: {
       ...baseMeta(m),
@@ -1241,7 +1298,8 @@ export async function hgabProject(env: Env, rawKey: string, id: string) {
     firstRow<{ record_json: string }>(env, `SELECT record_json FROM hgab_records WHERE dataset = ? AND id = ?`, key, id),
   ]);
   if (!row) throw new ApiError(404, "not_found", `No ${key} project "${clip(id)}"`);
-  const p = publicProject(row);
+  const documents = datasetDocuments(d);
+  const p = publicProject(row, documents);
   const t = traceInfo(row.trace);
   const api = apiPresenceInfo(row.api_presence);
   return {
@@ -1252,7 +1310,11 @@ export async function hgabProject(env: Env, rawKey: string, id: string) {
       note:
         "One comparison record: the row, plain labels for every code, a pdf_url per version that opens the source " +
         "page, and the source workbench's full record (`record`, shape as the workbench writes it). " +
-        "The status is a candidate, not a confirmed change.",
+        "The status is a candidate, not a confirmed change." +
+        (documents.same_pages
+          ? " This program's House list is identical at both readings: pdf_url.hgab3 opens the third-reading copy at the " +
+            "page the line was read from in the second-reading copy (hgab2_page), which pdf_url.hgab2 opens."
+          : ""),
     },
     disclaimers: COMPARISON,
     data: {

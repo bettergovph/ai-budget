@@ -29,10 +29,11 @@ import {
 } from '../lib/hgab';
 import {
   PAGE_SIZES, SORT_LABELS, coerceFacets, coerceRow, coerceSummary, defaultSort, exportSql, facetsSql,
-  filtersFromParams, flagLabel, hasActiveFilters, matchLabel, papLabel, paramsFromFilters, pickHouseDoc,
+  filtersFromParams, flagLabel, hasActiveFilters, matchLabel, papLabel, paramsFromFilters,
   projectsCsv, projectsSql, regionFilterName, splitFlags, summarySql, zoneLabel,
   type FacetRow, type FilterSummary, type ProjectFilters, type SortKey,
 } from '../lib/hgab-query';
+import { shownHouseCitations } from '../lib/hgab-citations';
 import { HgabDetails, StatusChip } from './HgabBits';
 import { SkeletonRows } from './Nep2027Bits';
 import '../hgab-districts.css';
@@ -75,7 +76,11 @@ export function DeltaCell({ delta, base }: { delta: number | null | undefined; b
   );
 }
 
-/** "NEP p.112 · 3R p.5" — one link per stage that has a page, opening the PDF at that page. */
+/**
+ * "NEP p.112 · 3R p.5" — one link per stage that has a page, opening the PDF at
+ * that page. House links follow `shownHouseCitations`: both readings for DPWH;
+ * the third-reading copy at the same page for the one-list programs.
+ */
 export function PageLinks({
   row,
   dataset,
@@ -89,12 +94,7 @@ export function PageLinks({
   if (row.nep_page) {
     items.push({ label: STAGE_LABELS.nep.short, page: row.nep_page, doc: row.nep_doc ?? dataset.documents.nep[0] ?? null });
   }
-  if (row.hgab2_page) {
-    items.push({ label: '2R', page: row.hgab2_page, doc: row.hgab2_doc ?? pickHouseDoc(docs, dataset, 2, 'projects') });
-  }
-  if (row.hgab3_page) {
-    items.push({ label: '3R', page: row.hgab3_page, doc: row.hgab3_doc ?? pickHouseDoc(docs, dataset, 3, 'projects') });
-  }
+  for (const c of shownHouseCitations(row, dataset, docs)) items.push({ label: `${c.reading}R`, page: c.page, doc: c.doc });
   if (!items.length) return <span className="hgab-ds-null" title="No page is recorded for this line">—</span>;
   const title = (key: string | null) => docs?.find((d) => d.key === key)?.title ?? key ?? '';
   return (

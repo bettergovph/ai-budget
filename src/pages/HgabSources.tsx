@@ -22,6 +22,7 @@ import {
   projectsParquetUrl, type HgabOverview,
 } from '../lib/hgab';
 import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
+import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
@@ -49,6 +50,8 @@ export default function HgabSources() {
   const commit = ov.source_commit ?? '';
   const built = ov.built_at ? new Date(ov.built_at) : null;
   const example = docs.find((d) => d.stage === 'house') ?? docs[0];
+  // The volumes whose official copy is the Senate portal's (the third reading); the importer checks the fingerprints.
+  const senateDocs = docs.filter((d) => isSenatePortal(d.source_url));
 
   return (
     <>
@@ -105,7 +108,13 @@ export default function HgabSources() {
                       {d.source_url && (
                         <>
                           {' '}
-                          <a className="hgab-doc-open" href={d.source_url} target="_blank" rel="noopener noreferrer" title="Where the original was published">Original ↗</a>
+                          {isSenatePortal(d.source_url) ? (
+                            <a className="hgab-doc-open" href={d.source_url} target="_blank" rel="noopener noreferrer" title={`Official copy: ${SENATE_BUDGET_PORTAL.name}, General Appropriations Bill 2027`}>
+                              {SENATE_BUDGET_PORTAL.short} ↗
+                            </a>
+                          ) : (
+                            <a className="hgab-doc-open" href={d.source_url} target="_blank" rel="noopener noreferrer" title="Where the original was published">Original ↗</a>
+                          )}
                         </>
                       )}
                     </td>
@@ -114,6 +123,13 @@ export default function HgabSources() {
               </tbody>
             </table>
           </div>
+          {senateDocs.length > 0 && (
+            <p className="hgab-recon-note" style={{ marginTop: 14 }}>
+              The third-reading volumes are published on the{' '}
+              <a href={SENATE_BUDGET_PORTAL.url} target="_blank" rel="noopener noreferrer">{SENATE_BUDGET_PORTAL.name} ↗</a>.
+              {' '}Our copies are identical to the Senate’s: each has the same fingerprint.
+            </p>
+          )}
           <HgabDetails>
             <p>
               Pages are one-based PDF file pages, not the page numbers shown on the pages; they are not
@@ -190,6 +206,16 @@ LIMIT 25;`}</pre>
                   {' '}— the extraction and matching workbench. Every status, pairing and amount here is carried from its builders; this portal does not re-derive matches.
                 </td>
               </tr>
+              {senateDocs.length > 0 && (
+                <tr>
+                  <th>House bill, third reading</th>
+                  <td>
+                    <a href={SENATE_BUDGET_PORTAL.url} target="_blank" rel="noopener noreferrer">{SENATE_BUDGET_PORTAL.name} ↗</a>
+                    {' '}— the official source of the third-reading volumes ({senateDocs.map((d) => d.volume ? `Volume ${d.volume}` : d.key).join(', ')}),
+                    {' '}listed under General Appropriations Bill, 2027. The copies here have the same SHA-256 fingerprint.
+                  </td>
+                </tr>
+              )}
               <tr>
                 <th>Pinned commit</th>
                 <td>

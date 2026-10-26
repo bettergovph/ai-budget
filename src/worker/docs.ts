@@ -578,7 +578,8 @@ of every term, the rules, and the stage order NEP → House → Senate → GAA.<
   &nbsp;·&nbsp; <code>/datasets/{key}</code></div>
 <p><code>/datasets</code> lists the four programs, compact. <code>/datasets/{key}</code> returns one program in
 full: everything in its overview entry plus <code>controls</code> (the totals published in each document, with
-<code>nep_pdf_url</code> / <code>house_pdf_urls</code>), <code>dims</code> (House against the NEP by region,
+<code>nep_pdf_url</code> / <code>house_pdf_urls</code>; <code>house_doc</code> names the volume they are published
+in, Volume I-C for DPWH and Volume I-B for the other three), <code>dims</code> (House against the NEP by region,
 office kind, program and program line, as each program records them), <code>regions</code>,
 <code>readings</code> (DPWH only: second against third reading), and <code>top</code>: the 10 largest rows
 in each group by that group's amount, unconfirmed matches left out. Unknown keys return <code>404</code>.</p>
@@ -635,7 +636,9 @@ curl "${O}/api/v1/hgab/2027/datasets/fmr/projects?has_coordinates=1"</code></pre
 <div class="ep" id="hgab-project"><span class="method">GET</span><code>/api/v1/hgab/2027/datasets/{key}/projects/{id}</code></div>
 <p>One row in full: its amounts, plain labels for its status (with what it means), how the pairing was made,
 second against third reading, the DPWH website listing, zone and every review flag; a <code>pdf_url</code>
-per version; the row's page <code>url</code>; and <code>record</code>, the source workbench's full record as
+per version (for farm-to-market roads, health facilities and irrigation, whose House list is identical at both
+readings, <code>hgab3</code> opens the third-reading copy at the page the line was read from); the row's page
+<code>url</code>; and <code>record</code>, the source workbench's full record as
 the workbench writes it. Percent-encode the id (ids can contain <code>:</code> and <code>|</code>).</p>
 <pre><code>curl ${O}/api/v1/hgab/2027/datasets/dpwh/projects/house-reading%3A0
 curl ${O}/api/v1/hgab/2027/datasets/hfep/projects/ib%3Ap877%3Ar12%7Cinfrastructure</code></pre>
@@ -650,7 +653,8 @@ is placed from place names. The irrigation lists give no region, so all of NIA i
 <div class="ep" id="hgab-documents"><span class="method">GET</span><code>/api/v1/hgab/2027/documents</code>
   &nbsp;·&nbsp; <code>/reconciliation</code></div>
 <p><code>/documents</code>: the eight source PDFs (NEP and House bill volumes) with <code>pdf_url</code>,
-the page range used, sha256, size, and which programs cite each. Page numbers everywhere are positions in
+the page range used, sha256, size, and which programs cite each. The third-reading volumes are the copies
+published on the Senate Budget Transparency Portal (same sha256). Page numbers everywhere are positions in
 the file, not the page numbers shown on the pages. <code>/reconciliation</code>: the 69 checks of the source's
 figures against this portal's own FY2027 NEP data (<code>ours_php</code>, from the DBM CSV) and the
 source's extraction from the PDFs (<code>theirs_php</code>); filter with <code>dataset</code> and

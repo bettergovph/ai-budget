@@ -33,7 +33,10 @@ import {
   type BridgeGroup, type ControlRow, type DimKey, type DimRow, type HgabDatasetSummary,
   type HgabDocument, type HgabOverview, type ProjectRow,
 } from '../lib/hgab';
-import { controlHouseDoc, papLabel } from '../lib/hgab-query';
+import { papLabel } from '../lib/hgab-query';
+import {
+  SENATE_BUDGET_PORTAL, controlCitations, isSenatePortal, shownCitations, type HouseCitation,
+} from '../lib/hgab-citations';
 import {
   COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetCaveats, datasetSummary, hubViews, plainControlsLabel,
   sentenceCase, type HubView,
@@ -262,6 +265,19 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
 
 type CtlSort = 'label' | 'nep' | 'hgab2' | 'hgab3' | 'delta' | 'reading';
 
+/** "2R p.110 · 3R p.110": one link per House citation of a published total, opening the PDF at that page. */
+function HousePageLinks({ cites, docTitle }: { cites: HouseCitation[]; docTitle: (k: string | null) => string }) {
+  return (
+    <>
+      {cites.map((c) => c.doc ? (
+        <a key={`${c.reading}:${c.page}`} href={pdfUrl(c.doc, c.page)} target="_blank" rel="noopener" title={`${docTitle(c.doc)} — PDF page ${c.page}`}>
+          {c.reading}R p.{c.page}
+        </a>
+      ) : <span key={`${c.reading}:${c.page}`}>House p.{c.page}</span>)}
+    </>
+  );
+}
+
 function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }) {
   const d = s.dataset;
   const [sort, setSort] = useState<CtlSort>('nep');
@@ -279,7 +295,6 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
     [houseKey],
   );
   const nepDoc = d.documents.nep[0] ?? null;
-  const houseDoc = controlHouseDoc(docs, d);
   const docTitle = (k: string | null) => docs.find((x) => x.key === k)?.title ?? k ?? '';
 
   const shown = useMemo(() => {
@@ -420,11 +435,7 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
                         {STAGE_LABELS.nep.short} p.{r.nep_page}
                       </a>
                     )}
-                    {r.house_pages.map((p) => houseDoc ? (
-                      <a key={p} href={pdfUrl(houseDoc.key, p)} target="_blank" rel="noopener" title={`${docTitle(houseDoc.key)} — PDF page ${p}`}>
-                        {houseDoc.reading}R p.{p}
-                      </a>
-                    ) : <span key={p}>House p.{p}</span>)}
+                    <HousePageLinks cites={shownCitations(controlCitations(r, d, docs), d)} docTitle={docTitle} />
                     {!r.nep_page && !r.house_pages.length && <span>—</span>}
                   </span>
                 </td>
@@ -685,7 +696,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
   if (!r) return <p className="nep-empty">The House published this program once; there is no second version to compare.</p>;
   const pct = pctChange(r.third_php, r.second_php);
   const statuses = Object.entries(r.status_counts).sort((a, b) => b[1] - a[1]);
-  const houseDoc = controlHouseDoc(docs, d);
+  const docTitle = (k: string | null) => docs.find((x) => x.key === k)?.title ?? k ?? '';
   const nepDoc = d.documents.nep[0] ?? null;
   return (
     <>
@@ -758,9 +769,7 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
                       <td>
                         <span className="hgab-ds-pages">
                           {c.nep_page && nepDoc && <a href={pdfUrl(nepDoc, c.nep_page)} target="_blank" rel="noopener">{STAGE_LABELS.nep.short} p.{c.nep_page}</a>}
-                          {c.house_pages.map((p) => houseDoc && (
-                            <a key={p} href={pdfUrl(houseDoc.key, p)} target="_blank" rel="noopener">{houseDoc.reading}R p.{p}</a>
-                          ))}
+                          <HousePageLinks cites={controlCitations(c, d, docs)} docTitle={docTitle} />
                         </span>
                       </td>
                     </tr>
@@ -830,7 +839,11 @@ function DocumentsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[]
                 <td>
                   <span className="hgab-ds-pages">
                     <a href={pdfUrl(doc.key, doc.pages?.from ?? null)} target="_blank" rel="noopener">Open PDF ↗</a>
-                    {doc.source_url && <a href={doc.source_url} target="_blank" rel="noopener">Original ↗</a>}
+                    {doc.source_url && (
+                      <a href={doc.source_url} target="_blank" rel="noopener" title={isSenatePortal(doc.source_url) ? `Official copy: ${SENATE_BUDGET_PORTAL.name}` : 'Where the original was published'}>
+                        {isSenatePortal(doc.source_url) ? SENATE_BUDGET_PORTAL.short : 'Original'} ↗
+                      </a>
+                    )}
                   </span>
                 </td>
               </tr>

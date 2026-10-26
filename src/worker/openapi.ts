@@ -541,7 +541,14 @@ const HGAB_SCHEMAS = {
       counts: { type: "object", additionalProperties: { type: ["integer", "null"] } },
       unconfirmed_rows: { type: "integer" },
       bridge: { $ref: "#/components/schemas/HgabBridge" },
-      documents: { type: "object", additionalProperties: true },
+      documents: {
+        type: "object",
+        additionalProperties: true,
+        description:
+          "nep / house: the document keys this dataset cites (third reading first), each with pdf_url. controls: the House " +
+          "document each reading's program totals are published in. same_pages (the one-list programs): the second-reading " +
+          "copy the list was read from and the identical third-reading copy that rows and totals cite at the same page; null for DPWH.",
+      },
       url: { type: "string" },
       links: { type: "object", additionalProperties: { type: "string" } },
     },
@@ -561,9 +568,15 @@ const HGAB_SCHEMAS = {
       delta_php: pesosOrNull("Latest House reading minus the NEP."),
       reading_delta_php: pesosOrNull("Third minus second reading."),
       nep_page: { type: ["integer", "null"] },
-      house_pages: { type: "array", items: { type: "integer" } },
+      house_pages: { type: "array", items: { type: "integer" }, description: "PDF pages of house_doc; the same pages in both readings' copies." },
       nep_pdf_url: { type: ["string", "null"] },
-      house_pdf_urls: { type: "array", items: { type: "string" } },
+      house_doc: { type: ["string", "null"], description: "The latest reading's copy of the volume the totals are published in: Volume I-C for DPWH, Volume I-B for the other three programs." },
+      house_pdf_urls: { type: "array", items: { type: "string" }, description: "house_doc opened at each of house_pages." },
+      pdf_urls: {
+        type: "object",
+        properties: { hgab2: { type: "array", items: { type: "string" } }, hgab3: { type: "array", items: { type: "string" } } },
+        description: "Per House reading: that reading's copy opened at each of house_pages (empty when the reading has no amount).",
+      },
     },
   },
   HgabDim: {
@@ -641,7 +654,7 @@ const HGAB_SCHEMAS = {
       nep_doc: { type: ["string", "null"] },
       hgab2_doc: { type: ["string", "null"] },
       hgab3_doc: { type: ["string", "null"] },
-      pdf_url: { type: "object", additionalProperties: { type: ["string", "null"] }, description: "Per version: the source PDF opened at the page (#page=N)." },
+      pdf_url: { type: "object", additionalProperties: { type: ["string", "null"] }, description: "Per version: the source PDF opened at the page (#page=N). For the one-list programs hgab3 opens the third-reading copy at hgab2_page (the list pages are identical in both readings)." },
       length_m: { type: ["number", "null"] },
       flags: { type: "array", items: { type: "string" } },
       suggestions: { type: "integer" },
@@ -687,7 +700,8 @@ const HGAB_SCHEMAS = {
       pages: { type: ["object", "null"], properties: { from: { type: "integer" }, to: { type: "integer" } } },
       sha256: { type: "string" },
       bytes: { type: "integer" },
-      source_url: { type: ["string", "null"] },
+      source_url: { type: ["string", "null"], description: "Where the original is published. The third-reading volumes: the Senate Budget Transparency Portal." },
+      source_name: { type: ["string", "null"], description: "The publisher of source_url when it is the Senate Budget Transparency Portal; null otherwise." },
       notes: { type: ["string", "null"] },
       pdf_url: { type: "string" },
       used_by: { type: "array", items: { type: "string" } },
