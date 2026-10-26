@@ -34,6 +34,7 @@ import {
   type FacetRow, type FilterSummary, type ProjectFilters, type SortKey,
 } from '../lib/hgab-query';
 import { shownHouseCitations } from '../lib/hgab-citations';
+import { csvFileName } from '../lib/hgab-csv';
 import { HgabDetails, StatusChip } from './HgabBits';
 import { SkeletonRows } from './Nep2027Bits';
 import '../hgab-districts.css';
@@ -144,10 +145,13 @@ type Tagged<T> = { sql: string } & T;
 export default function HgabProjects({
   dataset,
   docs,
+  onTotal,
 }: {
   dataset: HgabDatasetMeta;
   /** Document catalogue from the overview; used for PDF titles and doc fallbacks. */
   docs: readonly HgabDocument[] | null;
+  /** Told the number of rows the current filters match (null while counting); the hub's Download CSV menu shows it. */
+  onTotal?: (n: number | null) => void;
 }) {
   const key = dataset.key;
   const url = useMemo(() => projectsParquetUrl(key), [key]);
@@ -258,6 +262,7 @@ export default function HgabProjects({
 
   // A stale link can point past the last page; clamp rather than show nothing.
   const total = sum?.n ?? null;
+  useEffect(() => { onTotal?.(total); }, [onTotal, total]);
   const pageCount = total != null ? Math.max(1, Math.ceil(total / filters.size)) : null;
   useEffect(() => {
     if (pageCount != null && filters.page > pageCount) update({ page: pageCount });
@@ -269,7 +274,7 @@ export default function HgabProjects({
     try {
       const res = await runQuery(exportSql(url, filters));
       const all = res.rows.map((r) => coerceRow(r as Record<string, unknown>));
-      downloadCsv(`hgab-2027-${key}-projects${hasActiveFilters(filters) ? '-filtered' : ''}.csv`, projectsCsv(all, key));
+      downloadCsv(csvFileName(key, hasActiveFilters(filters) ? 'projects-filtered' : 'projects'), projectsCsv(all, key), { excelBom: true });
     } catch (e) {
       setError({ sql, message: `CSV export failed: ${String((e as Error)?.message || e)}` });
     } finally {

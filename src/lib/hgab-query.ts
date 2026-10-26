@@ -19,7 +19,7 @@
  *     headline bridge counts exclude them.
  */
 import {
-  BRIDGE_ORDER, MATCH_LABELS, PROJECT_COLUMNS, TRACE_LABELS, traceInfo,
+  BRIDGE_ORDER, MATCH_LABELS, PROJECT_COLUMNS, READING_LABELS, TRACE_LABELS, traceInfo,
   type BridgeGroup, type DatasetKey, type HgabDatasetMeta, type ProjectRow,
 } from './hgab';
 
@@ -465,42 +465,18 @@ export function coerceFacets(rows: Record<string, unknown>[]): FacetRow[] {
 // CSV
 // ---------------------------------------------------------------------------
 
-const CSV_COLUMNS: ReadonlyArray<{ key: string; pick: (r: ProjectRow, dataset: DatasetKey) => unknown }> = [
-  { key: 'id', pick: (r) => r.id },
-  { key: 'dataset', pick: (_r, d) => d },
-  { key: 'title', pick: (r) => r.title },
-  { key: 'program', pick: (r) => r.program },
-  { key: 'pap', pick: (r) => r.pap },
-  { key: 'region', pick: (r) => r.region },
-  { key: 'office', pick: (r) => r.office },
-  { key: 'office_kind', pick: (r) => r.office_kind },
-  { key: 'zone', pick: (r) => r.zone },
-  { key: 'trace', pick: (r) => r.trace },
-  { key: 'status_label', pick: (r) => traceInfo(r.trace).label },
-  { key: 'bridge_group', pick: (r) => traceInfo(r.trace).group },
-  { key: 'held', pick: (r) => (traceInfo(r.trace).held ? 'yes' : '') },
-  { key: 'house_match', pick: (r) => r.house_match },
-  { key: 'reading_status', pick: (r) => r.reading_status },
-  { key: 'api_presence', pick: (r) => r.api_presence },
-  { key: 'confidence', pick: (r) => r.confidence },
-  { key: 'nep_php', pick: (r) => r.nep_php },
-  { key: 'hgab2_php', pick: (r) => r.hgab2_php },
-  { key: 'hgab3_php', pick: (r) => r.hgab3_php },
-  { key: 'api_php', pick: (r) => r.api_php },
-  { key: 'delta_house_minus_nep_php', pick: (r) => r.delta_php },
-  { key: 'nep_page', pick: (r) => r.nep_page },
-  { key: 'hgab2_page', pick: (r) => r.hgab2_page },
-  { key: 'hgab3_page', pick: (r) => r.hgab3_page },
-  { key: 'nep_doc', pick: (r) => r.nep_doc },
-  { key: 'hgab2_doc', pick: (r) => r.hgab2_doc },
-  { key: 'hgab3_doc', pick: (r) => r.hgab3_doc },
-  { key: 'length_m', pick: (r) => r.length_m },
-  { key: 'flags', pick: (r) => r.flags },
-  { key: 'suggestions', pick: (r) => r.suggestions },
-];
+/** One CSV column: a snake_case header and how to read the cell from a row. */
+export interface CsvColumn<T> {
+  key: string;
+  pick: (r: T) => unknown;
+}
 
-function csvCell(v: unknown): string {
-  // Null is blank, never 0: an absent stage is not a zero allocation.
+/**
+ * One RFC 4180 cell. Null is blank, never 0: an absent stage is not a zero
+ * allocation. Numbers are written as plain digits (integer pesos as
+ * published: no peso sign, no thousands separators).
+ */
+export function csvCell(v: unknown): string {
   if (v == null) return '';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
   if (typeof v === 'bigint') return v.toString();
@@ -508,11 +484,72 @@ function csvCell(v: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** A header row and one line per row, LF-separated (as `downloadCsv` has always written). */
+export function tableCsv<T>(cols: readonly CsvColumn<T>[], rows: readonly T[]): string {
+  const head = cols.map((c) => c.key).join(',');
+  const body = rows.map((r) => cols.map((c) => csvCell(c.pick(r))).join(','));
+  return [head, ...body].join('\n');
+}
+
+/** `reading_status` → plain label (DPWH); unknown codes are humanised, never hidden. */
+export function readingLabel(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return READING_LABELS[v] ?? v.replace(/_/g, ' ');
+}
+
+/**
+ * The project columns, in order: every list column, exact pesos with one
+ * column per version, and a plain label beside each status code. The Projects
+ * tab's export, the hub's "All projects" download and the project rows inside
+ * other downloads (largest changes, new at third reading) all use these.
+ */
+export function projectCsvColumns(dataset: DatasetKey): CsvColumn<ProjectRow>[] {
+  return [
+    { key: 'id', pick: (r) => r.id },
+    { key: 'dataset', pick: () => dataset },
+    { key: 'title', pick: (r) => r.title },
+    { key: 'program', pick: (r) => r.program },
+    { key: 'pap', pick: (r) => r.pap },
+    { key: 'region', pick: (r) => r.region },
+    { key: 'office', pick: (r) => r.office },
+    { key: 'office_kind', pick: (r) => r.office_kind },
+    { key: 'zone', pick: (r) => r.zone },
+    { key: 'trace', pick: (r) => r.trace },
+    { key: 'status_label', pick: (r) => traceInfo(r.trace).label },
+    { key: 'bridge_group', pick: (r) => traceInfo(r.trace).group },
+    { key: 'held', pick: (r) => (traceInfo(r.trace).held ? 'yes' : '') },
+    { key: 'house_match', pick: (r) => r.house_match },
+    { key: 'house_match_label', pick: (r) => matchLabel(r.house_match) },
+    { key: 'reading_status', pick: (r) => r.reading_status },
+    { key: 'reading_status_label', pick: (r) => readingLabel(r.reading_status) },
+    { key: 'api_presence', pick: (r) => r.api_presence },
+    { key: 'api_presence_label', pick: (r) => apiPresenceInfo(r.api_presence)?.label },
+    { key: 'confidence', pick: (r) => r.confidence },
+    { key: 'nep_php', pick: (r) => r.nep_php },
+    { key: 'hgab2_php', pick: (r) => r.hgab2_php },
+    { key: 'hgab3_php', pick: (r) => r.hgab3_php },
+    { key: 'api_php', pick: (r) => r.api_php },
+    { key: 'delta_house_minus_nep_php', pick: (r) => r.delta_php },
+    { key: 'nep_page', pick: (r) => r.nep_page },
+    { key: 'hgab2_page', pick: (r) => r.hgab2_page },
+    { key: 'hgab3_page', pick: (r) => r.hgab3_page },
+    { key: 'nep_doc', pick: (r) => r.nep_doc },
+    { key: 'hgab2_doc', pick: (r) => r.hgab2_doc },
+    { key: 'hgab3_doc', pick: (r) => r.hgab3_doc },
+    { key: 'length_m', pick: (r) => r.length_m },
+    { key: 'flags', pick: (r) => r.flags },
+    { key: 'suggestions', pick: (r) => r.suggestions },
+  ];
+}
+
 /** Exact pesos, one column per stage, blank for null. */
 export function projectsCsv(rows: readonly ProjectRow[], dataset: DatasetKey): string {
-  const head = CSV_COLUMNS.map((c) => c.key).join(',');
-  const body = rows.map((r) => CSV_COLUMNS.map((c) => csvCell(c.pick(r, dataset))).join(','));
-  return [head, ...body].join('\n');
+  return tableCsv(projectCsvColumns(dataset), rows);
+}
+
+/** Every project row's id and listed region, for joining the map's dots to a region. */
+export function idRegionSql(url: string): string {
+  return `SELECT id, region FROM ${parquetSource(url)}`;
 }
 
 /** The printed region labels a `region=` filter value stands for ("A|B" → ["A", "B"]). */

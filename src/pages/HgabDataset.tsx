@@ -26,11 +26,12 @@ import {
   HgabLoading, StageAmounts, StatusChip, WhatThisMeans,
 } from '../components/HgabBits';
 import HgabProjects, { Amt, DeltaCell, PageLinks } from '../components/HgabProjects';
+import HgabDownloads from '../components/HgabDownloads';
 import * as fmt from '../lib/format';
 import {
   BRIDGE_LABELS, HGAB_ROOT, HGAB_SOURCE_REPO, PLAIN_TERMS, READING_LABELS, STAGE_LABELS,
   datasetPath, formatPct, isDatasetKey, loadHgabDataset, loadHgabOverview, pctChange, pdfUrl, recordPath,
-  type BridgeGroup, type ControlRow, type DimKey, type DimRow, type HgabDatasetSummary,
+  type ControlRow, type DimKey, type DimRow, type HgabDatasetSummary,
   type HgabDocument, type HgabOverview, type ProjectRow,
 } from '../lib/hgab';
 import { papLabel } from '../lib/hgab-query';
@@ -38,8 +39,8 @@ import {
   SENATE_BUDGET_PORTAL, controlCitations, isSenatePortal, shownCitations, type HouseCitation,
 } from '../lib/hgab-citations';
 import {
-  COMPARE_NOT_ADD, DATASET_SHORT, PLAIN, datasetCaveats, datasetSummary, hubViews, plainControlsLabel,
-  sentenceCase, type HubView,
+  CHANGE_LIST_GROUPS, COMPARE_NOT_ADD, DATASET_SHORT, DIM_TABS, PLAIN, datasetCaveats, datasetSummary, hubViews,
+  plainControlsLabel, sentenceCase, type HubView,
 } from '../lib/hgab-ui';
 import '../hgab-dataset.css';
 
@@ -62,6 +63,8 @@ export default function HgabDataset() {
   // Keyed by dataset so a slow fetch for the previous route can never paint
   // over the current one.
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Rows the Projects view currently shows, for the Download CSV menu's label.
+  const [projectsTotal, setProjectsTotal] = useState<number | null>(null);
 
   useEffect(() => {
     if (!isDatasetKey(key)) return;
@@ -120,7 +123,18 @@ export default function HgabDataset() {
         crumb={isOverview ? d.agency : <>{d.agency}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{tabLabel}</span></>}
         title={d.label}
         dek={plainSummary}
-      />
+      >
+        <div className="hgab-ds-headtools">
+          <HgabDownloads
+            key={d.key}
+            summary={summary}
+            docs={overview.documents}
+            view={tab}
+            projectsTotal={projectsTotal}
+            tone={isOverview ? 'dark' : 'light'}
+          />
+        </div>
+      </HgabHero>
 
       <main className="nep-main">
         {isOverview && (
@@ -179,7 +193,7 @@ export default function HgabDataset() {
 
         <section className="nep-section" aria-label={tabLabel}>
           {tab === 'overview' && <OverviewTab s={summary} docs={overview.documents} />}
-          {tab === 'projects' && <HgabProjects dataset={d} docs={overview.documents} />}
+          {tab === 'projects' && <HgabProjects dataset={d} docs={overview.documents} onTotal={setProjectsTotal} />}
           {tab === 'changes' && <ChangesTab s={summary} docs={overview.documents} />}
           {tab === 'map' && (
             <Suspense fallback={<p className="nep-empty" role="status" aria-busy="true">Loading the map…</p>}>
@@ -475,18 +489,11 @@ function ControlsTable({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[
   );
 }
 
-const DIMS: ReadonlyArray<{ key: DimKey; label: string; param: string; help?: string }> = [
-  { key: 'region', label: 'Region', param: 'region' },
-  { key: 'office_kind', label: 'Type of office', param: 'office', help: PLAIN_TERMS.deo.meaning },
-  { key: 'program', label: 'Program', param: 'program' },
-  { key: 'pap', label: 'Program line', param: 'pap', help: PLAIN_TERMS.pap.meaning },
-];
-
 type DimSort = 'label' | 'nep' | 'house' | 'delta';
 
 function DimTable({ s }: { s: HgabDatasetSummary }) {
   const d = s.dataset;
-  const present = DIMS.filter((x) => (s.dims[x.key]?.length ?? 0) > 0);
+  const present = DIM_TABS.filter((x) => (s.dims[x.key]?.length ?? 0) > 0);
   const [dimKey, setDimKey] = useState<DimKey>(present[0]?.key ?? 'region');
   const [sort, setSort] = useState<DimSort>('house');
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
@@ -599,8 +606,6 @@ function DimTable({ s }: { s: HgabDatasetSummary }) {
 // Changes
 // ---------------------------------------------------------------------------
 
-const CHANGE_GROUPS: readonly BridgeGroup[] = ['house_only', 'nep_only', 'increased', 'decreased', 'scope_review'];
-
 function ChangesTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }) {
   const d = s.dataset;
   return (
@@ -611,7 +616,7 @@ function ChangesTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }
         dek={`The largest lines in each group, by the amount that group counts. Unconfirmed matches are left out of these lists; see them under Projects with “Unconfirmed only”.`}
       />
       <WhatThisMeans>{PLAIN.candidateMeans}</WhatThisMeans>
-      {CHANGE_GROUPS.map((g) => {
+      {CHANGE_LIST_GROUPS.map((g) => {
         const rows = s.top[g] ?? [];
         const cell = d.bridge[g];
         const meta = BRIDGE_LABELS[g];
