@@ -55,6 +55,8 @@ import {
   HGAB_HELD_MODES,
   HGAB_ORDERS,
   HGAB_PROJECT_SORTS,
+  HGAB_DEO_RESTRICTIONS_UPSTREAM_URL,
+  HGAB_DEO_RESTRICTIONS_URL,
   HGAB_REGION_KEYS,
   hgabDataset,
   hgabDistrict,
@@ -63,6 +65,7 @@ import {
   hgabProject,
   hgabProjects,
 } from "./hgab-api";
+import { OFFICE_VIEW_DISCLAIMERS, disclaimerText } from "../lib/hgab-disclaimers";
 
 const SERVER_INFO = {
   name: "ph-budget-data",
@@ -104,9 +107,16 @@ up to net_php, and each group's unconfirmed_rows / unconfirmed_php says how much
 Districts: DPWH money by district engineering office, with the congressional districts each office
 serves. A Tier A office serves one district; a Tier B office is shared and its money is never
 split, so a shared district headline is a range, not that district's own; money under the Central
-Office and regional offices is on no district card (the residual). Start with
+Office and regional offices is on no district card (the residual). District results are office
+associations: when you report one, keep its tier, never split a shared total, report the residual
+beside it, keep unconfirmed matches apart, and never attribute a project or amount to a
+representative. Start with
 get_hgab_2027_overview, then get_hgab_2027_dataset or search_hgab_2027_projects. Cite each row's
 'url' (its page on the site) and 'pdf_url' (the source page) when you use it.
+Disclaimers: every House bill result carries 'disclaimers' (id, title, body, url); keep them with any
+figure you present, and quote them when you republish. Both, verbatim:
+${disclaimerText(OFFICE_VIEW_DISCLAIMERS)}
+DEO mapping restrictions: ${HGAB_DEO_RESTRICTIONS_URL} (upstream: ${HGAB_DEO_RESTRICTIONS_UPSTREAM_URL}).
 
 All amounts are exact Philippine pesos (PHP). GAA and NEP department ids differ:
 GAA uses two digits ("07" = DepEd); NEP adds synthetic "SPF" (special purpose funds)
@@ -598,7 +608,10 @@ const TOOLS: Tool[] = [
       "(House minus NEP), the plain status_label beside the raw trace code, held (true = unconfirmed match), " +
       "url (the row's page) and pdf_url per version (the source page). Statuses are candidates, not confirmed " +
       "changes. Returns total (all matched rows) and per-version sums over every matched row, which are never to " +
-      "be added across versions. At most 50 rows per call: when total is larger, page with offset (next_offset).",
+      "be added across versions. At most 50 rows per call: when total is larger, page with offset (next_offset). " +
+      "Filtered to one DPWH office, the result is an office view: office_lens names the office's tier and every " +
+      "district it is associated with (no row is assigned to any one of them; a Tier B office's sums are never " +
+      "split), and disclaimers carries both paragraphs.",
     inputSchema: {
       type: "object",
       properties: {
@@ -671,9 +684,15 @@ const TOOLS: Tool[] = [
       "bills link), the DPWH district engineering offices that serve the district with their tier, and headline " +
       "amounts (FY2026 enacted, FY2027 NEP, FY2027 House bill). Tier A = the office serves only this district; " +
       "Tier B = shared, and its money is never split, so a shared headline (shared_office_total: true) is a range, " +
-      "not the district's own. fy2027_vs_proposal is the like-for-like 2027 change. Always returns the residual: " +
-      "DPWH money on no district card (Central Office, regional offices), per year. Nothing here says a " +
-      "representative requested or controlled any amount.",
+      "not the district's own. fy2027_vs_proposal is the like-for-like 2027 change, with unconfirmed_rows / " +
+      "unconfirmed_php (unconfirmed matches inside it). Always returns the residual: DPWH money on no district card " +
+      "(Central Office, regional offices), per year. " +
+      "These results are office associations, not district budgets: every figure belongs to a DPWH engineering " +
+      "office, and the district is one that office serves; no project is assigned to a district. When you report " +
+      "a figure, keep its tier; never split a shared (Tier B) total among the districts it serves, report it " +
+      "undivided with the co-served districts; report the residual beside district figures; keep unconfirmed " +
+      "matches apart. Nothing here attributes any project or amount to a representative, or says one requested, " +
+      "sponsored or controlled it. Keep the disclaimers the result carries.",
     inputSchema: {
       type: "object",
       properties: {
@@ -709,8 +728,14 @@ const TOOLS: Tool[] = [
     description:
       "One district: its card and representative, plus the full history of every office that serves it: FY2020–2026 " +
       "enacted budgets and the FY2027 NEP (whole office) and House bill (named projects only), totals per " +
-      "Congress, the FY2027 six-group comparison, notes, and links to the office's DPWH project rows. A shared " +
-      "(Tier B) office's figures are the whole office's and are not split. null = not found that year, never zero.",
+      "Congress, the FY2027 six-group comparison with the source's uncertainty annotations (unconfirmed matches, " +
+      "different-stretch rows, reading markers, and lines held out because their office changed), notes, links to " +
+      "the office's DPWH project rows, and the residual (DPWH money on no district card), per year. A shared " +
+      "(Tier B) office's figures are the whole office's and are not split. null = not found that year, never zero. " +
+      "These results are office associations: the district is one the office serves, and no project is assigned " +
+      "to it. When you report a figure, keep its tier; never split a shared total among the co-served districts; " +
+      "report the residual beside it; keep the annotations apart rather than folding them in. Nothing here " +
+      "attributes any project or amount to the representative. Keep the disclaimers the result carries.",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string", description: "District id from list_hgab_2027_districts, e.g. 'leg:abra:lone'" } },

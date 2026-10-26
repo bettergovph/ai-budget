@@ -5,6 +5,10 @@
  * bundle with zero build steps.
  */
 
+import {
+  DEO_RESTRICTIONS_PATH, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_OFFICES,
+} from "../lib/hgab-disclaimers";
+
 const yearsMap = {
   type: "object",
   description:
@@ -113,6 +117,17 @@ const HGAB_BRIDGE_WORDING =
   "unconfirmed_rows / unconfirmed_php says how much of it is unconfirmed. The 10 largest per group leave " +
   "unconfirmed matches out.";
 
+/** The two paragraphs every House bill response carries in `disclaimers`, quoted (src/lib/hgab-disclaimers.ts). */
+const HGAB_DEO_RESTRICTIONS = `https://budget.bettergov.ph${DEO_RESTRICTIONS_PATH}`;
+const HGAB_DISCLAIMERS_MD =
+  "**Disclaimers.** Every House bill response carries `disclaimers`, an array of `{ id, title, body, url }`: " +
+  "the no-allegations paragraph on every route, and the office-and-district paragraph as well on office-based " +
+  "views (`/districts`, `/districts/{id}`, and DPWH project lists filtered with `office`). Keep them with any " +
+  "figure you republish. Verbatim:\n\n" +
+  `> **${DISCLAIMER_OFFICES.title}** ${DISCLAIMER_OFFICES.body}\n\n` +
+  `> **${DISCLAIMER_NO_ALLEGATIONS.title}** ${DISCLAIMER_NO_ALLEGATIONS.body}\n\n` +
+  `DEO mapping restrictions: [our summary](${HGAB_DEO_RESTRICTIONS}) · [upstream](${DEO_RESTRICTIONS_UPSTREAM_URL}).`;
+
 const hgabKeyParam = {
   name: "key",
   in: "path",
@@ -127,8 +142,12 @@ const hgabOk = (data: Record<string, unknown>, desc = "OK") => ({
     "application/json": {
       schema: {
         type: "object",
-        properties: { meta: { $ref: "#/components/schemas/HgabMeta" }, data },
-        required: ["meta", "data"],
+        properties: {
+          meta: { $ref: "#/components/schemas/HgabMeta" },
+          disclaimers: { type: "array", items: { $ref: "#/components/schemas/HgabDisclaimer" } },
+          data,
+        },
+        required: ["meta", "disclaimers", "data"],
       },
     },
   },
@@ -229,7 +248,9 @@ const HGAB_PATHS = {
       description:
         "One row per comparison record. Filters combine with AND; one WHERE clause drives the page, `total` and the " +
         "per-version `sums`, which cover every matched row and are never to be added across versions. Rows with no " +
-        "amount on the sorted column always sort last; ties break by id.",
+        "amount on the sorted column always sort last; ties break by id. Filtered with `office` (DPWH), the list is " +
+        "one office's ledger, an office-based view: `office_lens` names the office's tier and every district it is " +
+        "associated with, and `disclaimers` carries both paragraphs.",
       parameters: [
         hgabKeyParam,
         { name: "q", in: "query", schema: { type: "string" }, description: "Words (space-separated) that must all appear in the title, program, program line, region or office." },
@@ -256,6 +277,7 @@ const HGAB_PATHS = {
           properties: {
             total: { type: "integer", description: "Rows matched by the filters." },
             sums: { $ref: "#/components/schemas/HgabVersionSums" },
+            office_lens: { $ref: "#/components/schemas/HgabOfficeLens" },
             rows: { type: "array", items: { $ref: "#/components/schemas/HgabProject" } },
             next_offset: { type: ["integer", "null"] },
           },
@@ -320,7 +342,9 @@ const HGAB_PATHS = {
       description:
         "District cards with the serving offices and their tier, and the residual (money on no district card) for all " +
         "nine year slots. A shared (Tier B) office's money is never divided: when attribution is B or mixed the " +
-        "headline carries `shared_office_total: true` and the co-served district ids.",
+        "headline carries `shared_office_total: true` and the co-served district ids. These are office " +
+        "associations: no project is assigned to a district, and nothing attributes a project or amount to a " +
+        "representative. Carries both `disclaimers`.",
       parameters: [
         { name: "region", in: "query", schema: { type: "string" }, description: `Region key (${HGAB_REGIONS.join(", ")}) or a region label as published.` },
         { name: "q", in: "query", schema: { type: "string" }, description: "Words that must all appear in the district, representative or office name." },
@@ -337,6 +361,7 @@ const HGAB_PATHS = {
             districts: { type: "array", items: { $ref: "#/components/schemas/HgabDistrictCard" } },
             next_offset: { type: ["integer", "null"] },
             residual: { type: "array", items: { $ref: "#/components/schemas/HgabResidual" } },
+            residual_note: { type: "string" },
           },
           required: ["total", "districts", "residual"],
         }),
@@ -350,6 +375,10 @@ const HGAB_PATHS = {
       tags: ["hgab-2027"],
       operationId: "getHgab2027District",
       summary: "One district and its offices' full history",
+      description:
+        "The card, the representative, every serving office's full history with the source's uncertainty " +
+        "annotations (`fy2027.annotations`), and the residual (money on no district card) for all nine year slots. " +
+        "Office associations: a Tier B office's figures are the whole office's and are not split. Carries both `disclaimers`.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "District id, e.g. `leg:abra:lone` (percent-encode `:` if your client requires it)." }],
       responses: {
         "200": hgabOk({
@@ -360,6 +389,8 @@ const HGAB_PATHS = {
               properties: {
                 co_served_districts: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, url: { type: "string" } } } },
                 offices: { type: "array", items: { $ref: "#/components/schemas/HgabOffice" } },
+                residual: { type: "array", items: { $ref: "#/components/schemas/HgabResidual" } },
+                residual_note: { type: "string" },
               },
             },
           ],
@@ -371,6 +402,60 @@ const HGAB_PATHS = {
 } as const;
 
 const HGAB_SCHEMAS = {
+  HgabDisclaimer: {
+    type: "object",
+    description:
+      "One of the House bill section's disclaimers, word for word as the pages print it. Office-based views carry " +
+      `\`${DISCLAIMER_OFFICES.id}\` and \`${DISCLAIMER_NO_ALLEGATIONS.id}\`; every other route carries \`${DISCLAIMER_NO_ALLEGATIONS.id}\`.`,
+    properties: {
+      id: { type: "string", enum: [DISCLAIMER_OFFICES.id, DISCLAIMER_NO_ALLEGATIONS.id], description: "Its anchor on the Methodology page." },
+      title: { type: "string" },
+      body: { type: "string" },
+      url: { type: "string", description: "The paragraph on the Methodology page." },
+      restrictions_url: { type: "string", description: `${DISCLAIMER_OFFICES.id} only: our summary of the DEO mapping restrictions.` },
+      upstream_restrictions_url: { type: "string", description: `${DISCLAIMER_OFFICES.id} only: the restrictions upstream (DEO2LEG/README.md).` },
+    },
+    required: ["id", "title", "body", "url"],
+  },
+  HgabOfficeLens: {
+    type: "object",
+    description:
+      "DPWH project lists filtered with `office`: the office the rows are printed under, its tier and every district " +
+      "the DEO mapping associates it with. No row is assigned to any one district; a Tier B office's sums are never split.",
+    properties: {
+      printed_office: { type: "string" },
+      offices: {
+        type: "array",
+        description: "Empty when the printed office is on no district card (Central Office, regional offices): its money is in the residual.",
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            kind: { type: "string" },
+            kind_label: { type: "string" },
+            tier: { type: "string", enum: ["A", "B"] },
+            tier_text: { type: "string" },
+            districts: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, url: { type: "string" }, api_url: { type: "string" } } } },
+            office_change: {
+              type: "object",
+              description: "Present when the office has lines held out of its district-card figures because their office changed.",
+              properties: { rows: { type: "integer" }, row_ids: { type: "array", items: { type: "string" } }, note: { type: "string" } },
+            },
+          },
+        },
+      },
+      no_office: {
+        type: "object",
+        description: "Present when lines printed under this office have grouped records naming no office: in no office's district-card figures (residual no_office_php), but still among this list's rows and sums.",
+        properties: { rows: { type: "integer" }, row_ids: { type: "array", items: { type: "string" } }, note: { type: "string" } },
+      },
+      shared_office_total: { type: "boolean" },
+      tier_meaning: { type: "string" },
+      note: { type: "string" },
+      residual_api: { type: "string" },
+    },
+  },
   HgabMeta: {
     type: "object",
     description: "Every House bill response's meta. `notice` is the disclaimer paragraph; quote it when republishing.",
@@ -669,6 +754,8 @@ const HGAB_SCHEMAS = {
           hgab3_php: pesosOrNull(""),
           delta_php: pesosOrNull(""),
           offices: { type: "integer" },
+          unconfirmed_rows: { type: "integer", description: "Unconfirmed (fuzzy or ambiguous) matches among the serving offices' rows, counted in hgab3_php." },
+          unconfirmed_php: { type: "integer", description: "Their House amount, included in hgab3_php." },
         },
         additionalProperties: true,
       },
@@ -699,7 +786,45 @@ const HGAB_SCHEMAS = {
         },
       },
       by_congress: { type: "array", items: { type: "object", additionalProperties: true } },
-      fy2027: { type: ["object", "null"], additionalProperties: true },
+      fy2027: {
+        type: ["object", "null"],
+        description: "FY2027 House bill against the NEP on the office's rows: totals per version and the six-group bridge (each group with unconfirmed_rows / unconfirmed_php).",
+        properties: {
+          annotations: {
+            type: "object",
+            description: "The source's uncertainty markers on the office's rows, kept apart: unconfirmed matches (inside house_only and hgab3_php), different-stretch rows, and second-to-third-reading markers.",
+            properties: {
+              unconfirmed_rows: { type: "integer" },
+              unconfirmed_php: { type: "integer" },
+              scope_review_rows: { type: "integer" },
+              reading_markers: { type: "array", items: { type: "object", properties: { code: { type: "string" }, label: { type: "string" }, rows: { type: "integer" } } } },
+              note: { type: "string" },
+            },
+          },
+          office_change: {
+            type: "object",
+            description: "Present when the office has any: the paired lines naming this office whose other side names a different office group (or no district office). Held out of every figure on the card; counted in the residual's office_change_php.",
+            properties: {
+              rows: { type: "integer" },
+              nep_php: { type: "integer" },
+              hgab3_php: { type: "integer" },
+              lines: { type: "array", items: { type: "object", properties: { id: { type: "string" }, url: { type: "string" }, api_url: { type: "string" } } } },
+              note: { type: "string" },
+            },
+          },
+          no_office: {
+            type: "object",
+            description: "Present when the House bill prints lines under this office whose grouped records name no office: in no figure on the card; counted in the residual's no_office_php.",
+            properties: {
+              rows: { type: "integer" },
+              hgab3_php: { type: "integer" },
+              lines: { type: "array", items: { type: "object", properties: { id: { type: "string" }, url: { type: "string" }, api_url: { type: "string" } } } },
+              note: { type: "string" },
+            },
+          },
+        },
+        additionalProperties: true,
+      },
       notes: { type: "array", items: { type: "string" } },
       projects_url: { type: "string" },
       projects_api: { type: "string" },
@@ -718,7 +843,22 @@ const HGAB_SCHEMAS = {
       regional_offices_php: { type: "integer" },
       unmatched_php: { type: "integer" },
       unmatched_labels: { type: "array", items: { type: "string" } },
-      not_on_any_district_php: { type: "integer" },
+      office_change_php: {
+        type: "integer",
+        description:
+          "FY2027 House bill only (0 elsewhere): paired lines whose NEP and House bill sides name different office groups, " +
+          "or one side no district office, held out of every office and district card. deo + central_office + " +
+          "regional_offices + unmatched + no_office + office_change = total. Absent on a deployment whose data predates the bucket.",
+      },
+      office_change_rows: { type: "integer" },
+      no_office_php: {
+        type: "integer",
+        description:
+          "FY2027 House bill only (0 elsewhere): lines whose grouped records name no office (the source's no_office " +
+          "bucket), held out of every office and district card. Absent on a deployment whose data predates the bucket.",
+      },
+      no_office_rows: { type: "integer" },
+      not_on_any_district_php: { type: "integer", description: "central_office + regional_offices + unmatched + no_office + office_change." },
       share_not_on_any_district: { type: ["number", "null"] },
     },
     additionalProperties: true,
@@ -769,7 +909,7 @@ export const OPENAPI_SPEC = {
         "FY2027 House bill (House Bill 10858) against the NEP (the budget the President submits to Congress each " +
         "August), project by project for DPWH, farm-to-market roads, health facilities and irrigation, plus DPWH " +
         "money by district. Pairings are " +
-        "candidates; versions are compared, never added. " + HGAB_BRIDGE_WORDING,
+        "candidates; versions are compared, never added. " + HGAB_BRIDGE_WORDING + "\n\n" + HGAB_DISCLAIMERS_MD,
     },
   ],
   paths: {

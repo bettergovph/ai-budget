@@ -6,6 +6,22 @@
  * JS framework — the page must work even when the SPA bundle doesn't.
  */
 
+import {
+  DEO_RESTRICTIONS_PATH, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_OFFICES,
+  type Disclaimer,
+} from "../lib/hgab-disclaimers";
+
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+const SITE = "https://budget.bettergov.ph";
+
+/** One House bill disclaimer, word for word, as a quoted paragraph. */
+function disclaimerHtml(d: Disclaimer): string {
+  return `<blockquote id="hgab-${esc(d.id)}"><b>${esc(d.title)}</b> ${esc(d.body)}</blockquote>`;
+}
+
 export function docsHtml(origin: string): string {
   const O = origin;
   return `<!doctype html>
@@ -70,6 +86,7 @@ export function docsHtml(origin: string): string {
   .ep .method { font: 700 12px/1 ui-monospace, monospace; color: #fff; background: var(--badge-get); padding: 4px 8px; border-radius: 5px; }
   .ep .method.post { background: var(--badge-post); }
   .ep code { font-size: 15px; background: none; padding: 0; }
+  blockquote { margin: 12px 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--warn-line); max-width: 812px; }
   .note { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 12px 16px; max-width: 828px; margin: 16px 0; }
   .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 8px; }
   .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
@@ -137,6 +154,7 @@ export function docsHtml(origin: string): string {
   <a href="#hearings-timeline">Timeline &amp; transcript</a>
   <h4>House bill FY2027</h4>
   <a href="#hgab-rules">Rules &amp; terms</a>
+  <a href="#hgab-disclaimers">Disclaimers</a>
   <a href="#hgab-overview">Overview</a>
   <a href="#hgab-datasets">Programs</a>
   <a href="#hgab-projects">Project rows</a>
@@ -498,9 +516,23 @@ include unconfirmed matches (so the six groups add up to <code>net_php</code>); 
 largest per group leave unconfirmed matches out.
 (5)&nbsp;District figures carry their tier. A shared (Tier B) office's money is never split between the
 districts it serves, and the money no district card shows (the residual) comes with every district list.
-(6)&nbsp;Every response's <code>meta</code> carries the disclaimer <code>notice</code>. Rows with a page on the
+(6)&nbsp;Every response's <code>meta</code> carries the disclaimer <code>notice</code>, and every response
+carries <code>disclaimers</code> (<a href="#hgab-disclaimers">below</a>). Rows with a page on the
 site carry <code>url</code>; document page references carry <code>pdf_url</code>, which opens the source PDF
 at that page (<code>#page=N</code>).</div>
+
+<h3 id="hgab-disclaimers">Disclaimers</h3>
+<p>Every House bill response carries <code>disclaimers</code>, an array of
+<code>{ "id", "title", "body", "url" }</code> beside <code>meta</code> and <code>data</code>: the House bill
+section's own paragraphs, word for word as the pages print them. Every route carries
+<code>${esc(DISCLAIMER_NO_ALLEGATIONS.id)}</code>. Office-based views (<code>/districts</code>,
+<code>/districts/{id}</code>, and DPWH project lists filtered with <code>office</code>) carry
+<code>${esc(DISCLAIMER_OFFICES.id)}</code> as well, with <code>restrictions_url</code> and
+<code>upstream_restrictions_url</code>. Keep them with any figure you republish. The MCP tools return the same field.</p>
+${disclaimerHtml(DISCLAIMER_OFFICES)}
+${disclaimerHtml(DISCLAIMER_NO_ALLEGATIONS)}
+<p>DEO mapping restrictions: <a href="${SITE}${esc(DEO_RESTRICTIONS_PATH)}">our summary</a> ·
+<a href="${esc(DEO_RESTRICTIONS_UPSTREAM_URL)}">upstream (DEO2LEG/README.md)</a>.</p>
 
 <p><b>The six groups (the bridge).</b> Every row falls in exactly one:
 <code>house_only</code> (in the House bill only: insertion candidates),
@@ -523,6 +555,11 @@ of every term, the rules, and the stage order NEP → House → Senate → GAA.<
   "meta": { "dataset": "hgab", "fiscal_year": 2027, "currency": "PHP", "scale": "pesos",
             "source_commit": "a0caa77…", "built_at": "2026-10-25T08:01:58.449Z",
             "notice": "Independent and unofficial. …" },
+  "disclaimers": [
+    { "id": "disclaimer-no-allegations", "title": "No allegations.",
+      "body": "An insertion, deletion, or amount-change candidate describes a provisional comparison …",
+      "url": "https://budget.bettergov.ph/hgab/2027/methodology#disclaimer-no-allegations" }
+  ],
   "data": {
     "datasets": [
       { "key": "dpwh", "label": "DPWH national infrastructure", "house_stage": "hgab3",
@@ -551,7 +588,9 @@ curl ${O}/api/v1/hgab/2027/datasets/hfep</code></pre>
 <div class="ep" id="hgab-projects"><span class="method">GET</span><code>/api/v1/hgab/2027/datasets/{key}/projects</code></div>
 <p>Filter, sort and page one program's rows. Filters combine with AND. <code>total</code> counts every matched
 row and <code>sums</code> adds each version over every matched row, not just the page; never add the sums
-across versions. Rows with no amount in the sorted column always sort last.</p>
+across versions. Rows with no amount in the sorted column always sort last. Filtered with <code>office</code>
+(DPWH), the list is one office's ledger, so it also returns <code>office_lens</code> (the office's tier and
+every district it is associated with; no row is assigned to any one of them) and both disclaimers.</p>
 <table>
   <tr><th>Param</th><th>Values</th><th>Description</th></tr>
   <tr><td><code>q</code></td><td>words</td><td>Every word must appear in the title, program, program line, region or office</td></tr>
@@ -631,7 +670,9 @@ bill (named projects only); <code>fy2027_vs_proposal</code> is the like-for-like
 project rows. Every list also returns <code>residual</code>: for all nine year slots, the DPWH money under
 the Central Office, regional offices and unplaced office names, which no district card shows.
 Representatives are listed so a reader can find their district; nothing here says a representative
-requested or controlled any amount.</p>
+requested or controlled any amount. These are <b>office associations</b>: keep each figure's tier, never split
+a shared total, and report the residual beside district figures. Both routes carry both
+<a href="#hgab-disclaimers">disclaimers</a>.</p>
 <table>
   <tr><th>Param</th><th>Values</th><th>Description</th></tr>
   <tr><td><code>region</code></td><td>key or label</td><td>Region key (e.g. <code>III</code>) or a region label as published</td></tr>
@@ -642,7 +683,16 @@ requested or controlled any amount.</p>
 </table>
 <p><code>/districts/{id}</code> returns one card, its representative, and every serving office's full
 history: FY2020–2026 enacted, the FY2027 NEP and House bill, totals per Congress, the 2027 six-group
-comparison, notes, and links to the office's DPWH project rows.</p>
+comparison, notes, and links to the office's DPWH project rows. Each office's <code>fy2027.annotations</code>
+keeps the source's uncertainty markers apart: unconfirmed matches (<code>unconfirmed_rows</code> /
+<code>unconfirmed_php</code>, also on each bridge group and on the card's <code>fy2027_vs_proposal</code>),
+different-stretch rows and second-to-third-reading markers; <code>fy2027.office_change</code> lists the office's
+paired lines whose other side names a different office group, which are in no figure on the card. The page also
+returns the <code>residual</code>, whose FY2027 House bill slot carries those lines as
+<code>office_change_php</code> / <code>office_change_rows</code>, and lines whose grouped records name no office as
+<code>no_office_php</code> / <code>no_office_rows</code> (an office's own such lines are its <code>fy2027.no_office</code>).
+Both are counted in <code>not_on_any_district_php</code>: deo + central office + regional offices + unmatched +
+no_office + office_change = total.</p>
 <pre><code>curl "${O}/api/v1/hgab/2027/districts?region=III&amp;sort=change&amp;limit=5"
 curl "${O}/api/v1/hgab/2027/districts?q=bulacan"
 curl ${O}/api/v1/hgab/2027/districts/leg%3Aabra%3Alone</code></pre>
@@ -757,7 +807,11 @@ cite it when quoting, and verify figures against the video or official documents
 deletion candidate. The NEP and the House bill are compared, never added. Bridge figures
 include unconfirmed matches (so the six groups add up to <code>net_php</code>); each group's
 <code>unconfirmed_rows</code> / <code>unconfirmed_php</code> says how much of it is unconfirmed. The 10
-largest per group leave unconfirmed matches out. Cite each row's <code>url</code> and <code>pdf_url</code>.</p>
+largest per group leave unconfirmed matches out. Cite each row's <code>url</code> and <code>pdf_url</code>.
+District results are office associations: keep each figure's tier, never split a shared total, report the
+residual, and attribute nothing to a representative. Every House bill tool result carries the same
+<a href="#hgab-disclaimers"><code>disclaimers</code></a> as the REST response, and the server instructions
+quote both paragraphs.</p>
 
 <h3 id="mcp-examples">Example prompts</h3>
 <p>Once connected, ask your assistant things like:</p>

@@ -21,10 +21,13 @@
  *     `unconfirmed_php` breakdown per group; the "largest per group" lists
  *     leave them out;
  *   - district figures carry their tier; a shared (Tier B) office's money is
- *     never divided, and the unassigned residual comes with every list;
- *   - every response carries `meta` (with the disclaimer `notice`), every row
- *     with a page on the site carries `url`, and every document page
- *     reference carries a `pdf_url` that opens the PDF at that page.
+ *     never divided, and the unassigned residual comes with every district
+ *     list and district page;
+ *   - every response carries `meta` (with the disclaimer `notice`) and
+ *     `disclaimers` (the pages' own paragraphs, from src/lib/hgab-disclaimers.ts:
+ *     both on office-based views, the no-allegations one everywhere else);
+ *     every row with a page on the site carries `url`, and every document
+ *     page reference carries a `pdf_url` that opens the PDF at that page.
  *
  * The labels are imported from `src/lib` (the modules the pages use), so the
  * API and the pages cannot drift apart. Those modules are pure: nothing they
@@ -47,6 +50,10 @@ import {
   repName, residualShare, residualUnattributed, sortDistricts,
 } from "../lib/hgab-districts";
 import { RECON_STATUS_LABEL } from "../lib/hgab-ui";
+import {
+  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_PATH, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_OFFICES,
+  OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+} from "../lib/hgab-disclaimers";
 
 /** Canonical site host: every `url` points here. */
 const SITE = "https://budget.bettergov.ph";
@@ -100,6 +107,9 @@ const RULES: string[] = [
     "serves, and money under the DPWH Central Office and regional offices, which is on no district card, is " +
     "returned as the residual.",
   "Rows with a page on the site carry url; document page references carry pdf_url, which opens the source PDF at that page.",
+  "Every response carries disclaimers (id, title, body, url): the no-allegations paragraph everywhere, and the " +
+    "office-and-district paragraph as well on office-based views (the district routes and DPWH project lists " +
+    "filtered to one office). Keep them with any figure you republish.",
 ];
 
 const STAGE_ORDER_INFO = [
@@ -138,6 +148,32 @@ const HEADLINE_SCOPE = {
   fy2027_nep_php: `${FISCAL_STAGE_LONG.nep} Covers ${FISCAL_STAGE_SCOPE.nep}.`,
   fy2027_hgab3_php: `${FISCAL_STAGE_LONG.hgab3} Covers ${FISCAL_STAGE_SCOPE.hgab3}, so it is smaller than the whole-office figures; use fy2027_vs_proposal for a like-for-like change.`,
 };
+
+// ---------------------------------------------------------------------------
+// Disclaimers: the pages' paragraphs, verbatim (src/lib/hgab-disclaimers.ts)
+// ---------------------------------------------------------------------------
+
+/** Our summary of the DEO-to-district mapping's restrictions, and the upstream original. */
+export const HGAB_DEO_RESTRICTIONS_URL = `${SITE}${DEO_RESTRICTIONS_PATH}`;
+export const HGAB_DEO_RESTRICTIONS_UPSTREAM_URL = DEO_RESTRICTIONS_UPSTREAM_URL;
+
+function publicDisclaimer(d: Disclaimer) {
+  return {
+    id: d.id,
+    title: d.title,
+    body: d.body,
+    url: `${ROOT}/methodology#${d.id}`,
+    // The office paragraph ends "See the DEO mapping restrictions."
+    ...(d.id === DISCLAIMER_OFFICES.id
+      ? { restrictions_url: HGAB_DEO_RESTRICTIONS_URL, upstream_restrictions_url: HGAB_DEO_RESTRICTIONS_UPSTREAM_URL }
+      : {}),
+  };
+}
+
+/** `disclaimers` on office-based views: the district routes and DPWH project lists filtered to one office. */
+const OFFICE_VIEW = OFFICE_VIEW_DISCLAIMERS.map(publicDisclaimer);
+/** `disclaimers` on every other House bill response. */
+const COMPARISON = COMPARISON_DISCLAIMERS.map(publicDisclaimer);
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -508,6 +544,7 @@ export async function hgabDocuments(env: Env) {
         "The source PDFs every page reference opens. Page numbers are positions in the file (what #page=N uses), " +
         "not the page numbers shown on the pages. sha256 and bytes identify the exact file.",
     },
+    disclaimers: COMPARISON,
     data: docs.map((d) => publicDocument(d, usedBy(d.key))),
   };
 }
@@ -542,6 +579,7 @@ export async function hgabOverview(env: Env) {
       .map((d) => d.key);
   return {
     meta: baseMeta(m),
+    disclaimers: COMPARISON,
     data: {
       title: "FY2027 House bill (House Bill 10858) against the NEP",
       summary:
@@ -589,6 +627,7 @@ export async function hgabDatasets(env: Env) {
   ]);
   return {
     meta: { ...baseMeta(m), total: datasets.length, note: `${COMPARE_RULE} ${HGAB_BRIDGE_NOTE}` },
+    disclaimers: COMPARISON,
     data: datasets.map((d) => datasetEntry(d, held, false)),
   };
 }
@@ -835,6 +874,7 @@ export async function hgabDataset(env: Env, rawKey: string) {
 
   return {
     meta: { ...baseMeta(m), dataset_key: key, note: `${COMPARE_RULE} ${HGAB_BRIDGE_NOTE}` },
+    disclaimers: COMPARISON,
     data: {
       ...entry,
       controls: controls.map((c) => {
@@ -884,6 +924,7 @@ export async function hgabRegions(env: Env, rawKey: string) {
         "null where a document lists nothing there). Amounts listed as nationwide or with no region are in " +
         "not_on_map. Nothing is geocoded from place names.",
     },
+    disclaimers: COMPARISON,
     data: regionsBlock(d, regions),
   };
 }
@@ -1006,7 +1047,7 @@ export async function hgabProjects(env: Env, rawKey: string, o: HgabProjectsOpts
   const limit = clampInt(o.limit, 50, 1, 200);
   const offset = clampInt(o.offset, 0, 0, 1_000_000);
 
-  const [m, d, page, sums] = await Promise.all([
+  const [m, d, page, sums, lens] = await Promise.all([
     metaRow(env),
     datasetRow(env, key),
     rows<ProjectDbRow>(
@@ -1036,6 +1077,8 @@ export async function hgabProjects(env: Env, rawKey: string, o: HgabProjectsOpts
          FROM hgab_projects WHERE ${where}`,
       ...binds,
     ),
+    // One printed office's rows: an office-based view, so it names the office's tier and districts.
+    key === "dpwh" && typeof filters.office === "string" ? officeLens(env, filters.office) : Promise.resolve(null),
   ]);
   const total = Number(sums?.n ?? 0);
   const out = page.map(publicProject);
@@ -1056,6 +1099,7 @@ export async function hgabProjects(env: Env, rawKey: string, o: HgabProjectsOpts
         "candidates, not confirmed changes; held = true marks an unconfirmed match. sums are per version over " +
         `every matched row (not just this page). ${COMPARE_RULE}`,
     },
+    disclaimers: lens ? OFFICE_VIEW : COMPARISON,
     data: {
       total,
       sums: {
@@ -1072,9 +1116,118 @@ export async function hgabProjects(env: Env, rawKey: string, o: HgabProjectsOpts
         unconfirmed_rows: Number(sums?.held_rows ?? 0),
         not_additive_across_versions: true as const,
       },
+      ...(lens ? { office_lens: lens } : {}),
       rows: out,
       next_offset: offset + out.length < total ? offset + out.length : null,
     },
+  };
+}
+
+interface OfficeLensRow extends OfficeDbRow {
+  years_json: string;
+}
+
+/**
+ * What a DPWH list filtered to one printed office is: that office's ledger.
+ * The DEO mapping associates the office with districts; it assigns no row to
+ * any of them, so the view carries the tier, every associated district and a
+ * pointer to the residual, as the mapping's restrictions require.
+ */
+async function officeLens(env: Env, printed: string) {
+  const all = await rows<OfficeLensRow>(
+    env,
+    `SELECT id, name, kind, region, region_key, tier, district_ids_json, years_json, NULL AS fy2027_json FROM hgab_offices`,
+  );
+  const offices = all.map(asOffice);
+  const exact = offices.filter((o) => officeParquetLabel(o) === printed);
+  const matched = exact.length ? exact : offices.filter((o) => o.name === printed);
+  const ids = [...new Set(matched.flatMap((o) => o.district_ids))];
+  const [labels, fy27, marked, bucket] = await Promise.all([
+    ids.length
+      ? rows<{ id: string; label: string }>(
+          env,
+          `SELECT id, label FROM hgab_districts WHERE id IN (${ids.map(() => "?").join(", ")})`,
+          ...ids,
+        )
+      : Promise.resolve([]),
+    matched.length
+      ? rows<{ id: string; fy2027_json: string | null }>(
+          env,
+          `SELECT id, fy2027_json FROM hgab_offices WHERE id IN (${matched.map(() => "?").join(", ")})`,
+          ...matched.map((o) => o.id),
+        )
+      : Promise.resolve([]),
+    // No-office lines have a grouped side, so they are among the repeated (marked) lines.
+    rows<{ id: string; grouped_record: string | null }>(
+      env,
+      `SELECT p.id, ${GROUPED_RECORD_SQL} AS grouped_record
+         FROM hgab_projects p JOIN hgab_records r ON r.dataset = p.dataset AND r.id = p.id
+        WHERE p.dataset = 'dpwh' AND p.office = ?
+          AND p.reading_status IS NOT NULL AND p.reading_status NOT IN ('same_amount', 'no_house_record')`,
+      printed,
+    ),
+    hasNoOfficeBucket(env),
+  ]);
+  const noOfficeIds = bucket ? marked.filter((r) => namesNoOffice(r.grouped_record)).map((r) => r.id) : [];
+  const labelOf = new Map(labels.map((r) => [r.id, r.label] as const));
+  // Lines held out of an office's figures because their office changed (present once the data carries them).
+  const changeOf = new Map(
+    fy27.map((r) => [r.id, parseJson<OfficeHistory["fy2027"]>(r.fy2027_json, null)?.office_change ?? null] as const),
+  );
+  return {
+    printed_office: printed,
+    offices: matched.map((o) => ({
+      id: o.id,
+      name: o.name,
+      kind: o.kind,
+      kind_label: officeKindText(o),
+      tier: o.tier,
+      tier_text:
+        o.tier === "A"
+          ? "Tier A · serves one district"
+          : `Tier B · shared by ${o.district_ids.length} districts, not split`,
+      districts: o.district_ids.map((id) => ({
+        id,
+        label: labelOf.get(id) ?? id,
+        url: districtUrl(id),
+        api_url: `${API}/districts/${encodeURIComponent(id)}`,
+      })),
+      ...(changeOf.get(o.id)
+        ? {
+            office_change: {
+              rows: changeOf.get(o.id)?.rows ?? 0,
+              row_ids: changeOf.get(o.id)?.row_ids ?? [],
+              note:
+                "Paired lines naming this office on one side and a different office group (or no district office) " +
+                "on the other. They are held out of the office's district-card figures and counted in the FY2027 " +
+                "House bill residual (office_change_php); those printed under this office are still among this list's rows and sums.",
+            },
+          }
+        : {}),
+    })),
+    ...(noOfficeIds.length
+      ? {
+          no_office: {
+            rows: noOfficeIds.length,
+            row_ids: noOfficeIds,
+            note:
+              "Lines printed under this office whose grouped records name no office: the source's lens reads them as " +
+              "naming none, so they are in no office's district-card figures and are counted in the FY2027 House bill " +
+              "residual (no_office_php). They are still among this list's rows and sums.",
+          },
+        }
+      : {}),
+    shared_office_total: matched.some((o) => o.tier === "B"),
+    tier_meaning: TIER_MEANING,
+    note: matched.length
+      ? "These are the rows the documents print under this office. The office is associated with the districts " +
+        "listed; no row is assigned to any one of them, and a Tier B office's sums are never split between its " +
+        "districts. Lines in office_change (their NEP and House bill sides name different offices) and in " +
+        "no_office are held out of the office's district-card figures. Money on no district card is the residual " +
+        "in the districts list."
+      : "This printed office is on no district card (the Central Office, a regional office, or a name that " +
+        "matched no district office). Its money is part of the residual in the districts list.",
+    residual_api: `${API}/districts`,
   };
 }
 
@@ -1101,6 +1254,7 @@ export async function hgabProject(env: Env, rawKey: string, id: string) {
         "page, and the source workbench's full record (`record`, shape as the workbench writes it). " +
         "The status is a candidate, not a confirmed change.",
     },
+    disclaimers: COMPARISON,
     data: {
       ...p,
       labels: {
@@ -1180,6 +1334,7 @@ export async function hgabReconciliation(env: Env, o: HgabReconOpts = {}) {
         "portal's NEP import (the DBM CSV); theirs_php is the workbench's extraction from the PDFs; diff_php = " +
         "ours − theirs. exact = equal; explained = differs for the reason in note; info = context, not a check.",
     },
+    disclaimers: COMPARISON,
     data: list.map((r) => ({
       dataset: r.dataset,
       check: r.check_name,
@@ -1241,6 +1396,12 @@ interface ResidualDbRow {
   regional_offices_php: number;
   unmatched_php: number;
   unmatched_labels_json: string;
+  /** Present once the D1 build carries the FY2027 office-change bucket. */
+  office_change_php?: number | null;
+  office_change_rows?: number | null;
+  /** Present once the D1 build carries the FY2027 no-office bucket. */
+  no_office_php?: number | null;
+  no_office_rows?: number | null;
 }
 
 const DISTRICT_COLS = `id, sort, label, jurisdiction, district_label, region, region_key, attribution,
@@ -1312,13 +1473,20 @@ function publicRep(rep: DistrictRepresentative | null): Record<string, unknown> 
   };
 }
 
-function publicCard(card: DistrictCard, index: HgabDistrictIndex, regionKey: string | null) {
+function publicCard(card: DistrictCard, index: HgabDistrictIndex, regionKey: string | null, marks: OfficeMarks) {
   const offices = cardOffices(card, index);
   const groups = cardRegionalGroups(card, index);
   const shared = card.attribution === "B" || card.attribution === "mixed";
   const coServed = coServedIds(card, index);
   const att = ATTRIBUTION_LABELS[card.attribution];
   const fy27 = cardFy27(card, index);
+  const unconfirmed = offices.reduce(
+    (a, o) => {
+      const u = officeUnconfirmed(marks, o);
+      return { rows: a.rows + u.rows, php: a.php + u.php };
+    },
+    { rows: 0, php: 0 },
+  );
   return {
     id: card.id,
     label: card.label,
@@ -1361,6 +1529,8 @@ function publicCard(card: DistrictCard, index: HgabDistrictIndex, regionKey: str
     },
     fy2027_vs_proposal: {
       ...fy27,
+      unconfirmed_rows: unconfirmed.rows,
+      unconfirmed_php: unconfirmed.php,
       not_additive_across_versions: true as const,
       note:
         "The 2027 House bill against the NEP on the same project rows of the serving offices (named projects " +
@@ -1373,6 +1543,9 @@ function publicCard(card: DistrictCard, index: HgabDistrictIndex, regionKey: str
 }
 
 function publicResidual(r: ResidualDbRow) {
+  // A D1 loaded before the office-change bucket existed has no such columns: say nothing rather than 0.
+  const hasOfficeChange = r.office_change_php !== undefined;
+  const hasNoOffice = r.no_office_php !== undefined;
   const y: ResidualYear = {
     fy: r.fy,
     stage: r.stage as FiscalStage,
@@ -1382,9 +1555,16 @@ function publicResidual(r: ResidualDbRow) {
     regional_offices_php: r.regional_offices_php,
     unmatched_php: r.unmatched_php,
     unmatched_labels: parseJson<string[]>(r.unmatched_labels_json, []),
+    office_change_php: Number(r.office_change_php ?? 0),
+    office_change_rows: Number(r.office_change_rows ?? 0),
+    no_office_php: Number(r.no_office_php ?? 0),
+    no_office_rows: Number(r.no_office_rows ?? 0),
   };
+  const { office_change_php, office_change_rows, no_office_php, no_office_rows, ...rest } = y;
   return {
-    ...y,
+    ...rest,
+    ...(hasNoOffice ? { no_office_php, no_office_rows } : {}),
+    ...(hasOfficeChange ? { office_change_php, office_change_rows } : {}),
     stage_label: FISCAL_STAGE_SHORT[y.stage] ?? y.stage,
     scope: FISCAL_STAGE_SCOPE[y.stage] ?? null,
     not_on_any_district_php: residualUnattributed(y),
@@ -1392,14 +1572,190 @@ function publicResidual(r: ResidualDbRow) {
   };
 }
 
+/**
+ * The source's own uncertainty markers on the DPWH rows, per printed office:
+ * unconfirmed (held) matches and second-to-third-reading markers. Office-based
+ * views carry them so a roll-up never folds them back in.
+ */
+interface MarkRow {
+  id: string;
+  office: string;
+  bridge_group: string | null;
+  held: number;
+  nep_php: number | null;
+  house_php: number | null;
+  delta_php: number | null;
+  reading_status: string | null;
+  /** The source record, only for rows with a grouped (`records`) side. */
+  grouped_record?: string | null;
+  /** True when the source's lens reads the line as naming no office (see `namesNoOffice`). */
+  no_office?: boolean;
+}
+
+/** Marked rows by the office the House bill prints. */
+interface OfficeMarks {
+  byOffice: Map<string, MarkRow[]>;
+  /** The loaded data has the FY2027 `no_office` residual bucket (those lines are in no office's figures). */
+  noOfficeBucket: boolean;
+}
+
+/** SQL: the row's source record when a side is grouped (`records`), else NULL. */
+const GROUPED_RECORD_SQL = `CASE WHEN json_type(r.record_json, '$.third.records') = 'array'
+       OR json_type(r.record_json, '$.nep.records') = 'array' THEN r.record_json END`;
+
+interface LensSide {
+  office?: string | null;
+  office_canonical?: string | null;
+  records?: LensSide[];
+}
+
+/**
+ * The source lens's `no_office` verdict (buildCongressIndex.mjs `sideOffices` /
+ * `classifyRow`): a grouped side is read from its records only, and a line none
+ * of whose sides names an office is in no office's figures (residual).
+ */
+function namesNoOffice(recordJson: string | null | undefined): boolean {
+  if (!recordJson) return false;
+  const rec = parseJson<{ third?: LensSide | null; nep?: LensSide | null } | null>(recordJson, null);
+  if (!rec) return false;
+  const sides = [rec.third, rec.nep].filter((s): s is LensSide => Boolean(s));
+  const names = sides.flatMap((s) => (s.records ?? [s]).map((x) => x.office_canonical ?? x.office ?? "").filter(Boolean));
+  return sides.length > 0 && names.length === 0;
+}
+
+/** Whether the loaded data has the FY2027 `no_office` residual bucket. */
+async function hasNoOfficeBucket(env: Env): Promise<boolean> {
+  const r = await firstRow<Record<string, unknown>>(env, `SELECT * FROM hgab_residual WHERE stage = 'hgab3' LIMIT 1`);
+  return r != null && "no_office_php" in r;
+}
+
+async function officeMarks(env: Env, printed?: string[]): Promise<OfficeMarks> {
+  const out: OfficeMarks = { byOffice: new Map(), noOfficeBucket: false };
+  if (printed && !printed.length) return out;
+  // No-office lines have a grouped side, so they are repeated (marked) lines: the candidates below cover them.
+  const [list, bucket] = await Promise.all([
+    rows<MarkRow>(
+      env,
+      `SELECT p.id, p.office, p.bridge_group, p.held, p.nep_php, p.house_php, p.delta_php, p.reading_status,
+              ${GROUPED_RECORD_SQL} AS grouped_record
+         FROM hgab_projects p LEFT JOIN hgab_records r ON r.dataset = p.dataset AND r.id = p.id
+        WHERE p.dataset = 'dpwh' AND p.office IS NOT NULL
+          AND (p.held = 1 OR (p.reading_status IS NOT NULL AND p.reading_status NOT IN ('same_amount', 'no_house_record')))
+          ${printed ? `AND p.office IN (${printed.map(() => "?").join(", ")})` : ""}`,
+      ...(printed ?? []),
+    ),
+    hasNoOfficeBucket(env),
+  ]);
+  out.noOfficeBucket = bucket;
+  for (const r of list) {
+    const row: MarkRow = { ...r, no_office: namesNoOffice(r.grouped_record) };
+    delete row.grouped_record;
+    out.byOffice.set(r.office, [...(out.byOffice.get(r.office) ?? []), row]);
+  }
+  return out;
+}
+
+/** An office's 2027 office-change lines (held out of its figures), when the loaded data has them. */
+function officeChangeOf(o: OfficeHistory) {
+  return o.fy2027?.office_change ?? null;
+}
+
+/** Lines printed under the office that the data holds out of every office as naming no office. */
+function officeNoOfficeRows(marks: OfficeMarks, o: OfficeHistory): MarkRow[] {
+  if (!marks.noOfficeBucket) return [];
+  return (marks.byOffice.get(officeParquetLabel(o)) ?? []).filter((r) => r.no_office);
+}
+
+/**
+ * One office's marked rows: those printed under it, minus the lines held out
+ * of its figures (office changes, and no-office lines when the data has them).
+ */
+function officeMarkRows(marks: OfficeMarks, o: OfficeHistory): MarkRow[] {
+  const heldOut = new Set(officeChangeOf(o)?.row_ids ?? []);
+  return (marks.byOffice.get(officeParquetLabel(o)) ?? []).filter(
+    (r) => !heldOut.has(r.id) && !(marks.noOfficeBucket && r.no_office),
+  );
+}
+
+function isGroup(g: string | null): g is BridgeGroup {
+  return g != null && (BRIDGE_ORDER as readonly string[]).includes(g);
+}
+
+/** Unconfirmed matches among the rows, per bridge group, on each group's money basis. */
+function unconfirmedByGroup(list: MarkRow[]): Map<BridgeGroup, { rows: number; php: number }> {
+  const out = new Map<BridgeGroup, { rows: number; php: number }>();
+  for (const r of list) {
+    if (!r.held || !isGroup(r.bridge_group)) continue;
+    const g = r.bridge_group;
+    const cur = out.get(g) ?? { rows: 0, php: 0 };
+    const php = basis(g, { nep: r.nep_php, house: r.house_php, delta: r.delta_php, abs_delta: r.delta_php == null ? null : Math.abs(r.delta_php) });
+    out.set(g, { rows: cur.rows + 1, php: cur.php + php });
+  }
+  return out;
+}
+
+function officeUnconfirmed(marks: OfficeMarks, o: OfficeHistory): { rows: number; php: number } {
+  let rowsN = 0;
+  let php = 0;
+  for (const c of unconfirmedByGroup(officeMarkRows(marks, o)).values()) {
+    rowsN += c.rows;
+    php += c.php;
+  }
+  return { rows: rowsN, php };
+}
+
+const ANNOTATIONS_NOTE =
+  "The source's own uncertainty markers on this office's 2027 rows, kept apart rather than folded into the " +
+  "totals' reading. unconfirmed_rows / unconfirmed_php: unconfirmed (fuzzy or ambiguous) matches, counted under " +
+  "'In the House bill only' and included in hgab3_php. scope_review_rows: a different stretch of the same road, " +
+  "not counted as a change. reading_markers: rows by their second-to-third-reading status. List them via projects_api. " +
+  "office_change and no_office, when present, list the lines held out of this office's figures altogether.";
+
+const NO_OFFICE_NOTE =
+  "Lines the House bill prints under this office whose grouped records name no office, so the source's lens reads " +
+  "them as naming none. They are in no figure above or on any district card; they are in the FY2027 House bill " +
+  "residual (no_office_php).";
+
+const OFFICE_CHANGE_NOTE =
+  "Paired lines held out of this office's figures because the NEP and House bill sides name different office " +
+  "groups, or one side names no district office. None of these amounts is in any figure above or on any district " +
+  "card; they are in the FY2027 House bill residual (office_change_php). A line naming two offices is listed under both.";
+
 async function residualRows(env: Env) {
   return (await rows<ResidualDbRow>(env, `SELECT * FROM hgab_residual ORDER BY sort`)).map(publicResidual);
+}
+
+/** RESIDUAL_NOTE, plus the FY2027 House bill buckets the loaded data has, and the identity they add up to. */
+function residualNote(residual: ReturnType<typeof publicResidual>[]): string {
+  const noOffice = residual.some((y) => "no_office_php" in y);
+  const officeChange = residual.some((y) => "office_change_php" in y);
+  if (!noOffice && !officeChange) return RESIDUAL_NOTE;
+  const parts = [
+    ...(noOffice ? ["no_office"] : []),
+    ...(officeChange ? ["office_change"] : []),
+  ];
+  return [
+    RESIDUAL_NOTE,
+    "For the FY2027 House bill only (0 for the enacted years and the NEP):",
+    ...(noOffice ? [RESIDUAL_NO_OFFICE_NOTE] : []),
+    ...(officeChange ? [RESIDUAL_OFFICE_CHANGE_NOTE] : []),
+    `${parts.length > 1 ? "Both are" : "It is"} held out of every office and every district card and counted in ` +
+      `not_on_any_district_php. ` +
+      `deo + central_office + regional_offices + unmatched + ${parts.join(" + ")} = total.`,
+  ].join(" ");
 }
 
 const RESIDUAL_NOTE =
   "Every year's DPWH total split into money under offices that appear on a district card (deo_php) and money on no " +
   "district card: the Central Office, regional offices, and office names that matched nothing " +
   "(not_on_any_district_php). Nine slots: FY2020–2026 enacted, FY2027 NEP, FY2027 House bill.";
+
+const RESIDUAL_OFFICE_CHANGE_NOTE =
+  "office_change_php / office_change_rows are paired lines whose NEP and House bill sides name different office " +
+  "groups (or one side names no district office).";
+
+const RESIDUAL_NO_OFFICE_NOTE =
+  "no_office_php / no_office_rows are lines whose grouped records name no office (the source's no_office bucket).";
 
 export interface HgabDistrictsOpts {
   region?: string;
@@ -1437,15 +1793,16 @@ export async function hgabDistricts(env: Env, o: HgabDistrictsOpts = {}) {
   const limit = clampInt(o.limit, 50, 1, 254);
   const offset = clampInt(o.offset, 0, 0, 100_000);
 
-  const [m, districtRows, officeRows, residual] = await Promise.all([
+  const [m, districtRows, officeRows, residual, marks] = await Promise.all([
     metaRow(env),
     rows<DistrictDbRow>(
       env,
       `SELECT ${DISTRICT_COLS} FROM hgab_districts ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY sort`,
       ...binds,
     ),
-    rows<OfficeDbRow>(env, `SELECT id, name, kind, region, region_key, tier, district_ids_json, fy2027_json FROM hgab_offices`),
+    rows<OfficeDbRow>(env, `SELECT id, name, kind, region, region_key, tier, district_ids_json, years_json, fy2027_json FROM hgab_offices`),
     residualRows(env),
+    officeMarks(env),
   ]);
 
   const cards = districtRows.map(asCard);
@@ -1472,19 +1829,35 @@ export async function hgabDistricts(env: Env, o: HgabDistrictsOpts = {}) {
         "office serves. No project is assigned to a district; a shared office's money is never divided. Headline " +
         "amounts are the undivided totals of the serving offices. Money on no district card is in residual.",
     },
+    disclaimers: OFFICE_VIEW,
     data: {
       total: sorted.length,
-      districts: pageCards.map((c) => publicCard(c, index, regionKeyOfCard.get(c.id) ?? null)),
+      districts: pageCards.map((c) => publicCard(c, index, regionKeyOfCard.get(c.id) ?? null, marks)),
       next_offset: offset + pageCards.length < sorted.length ? offset + pageCards.length : null,
       residual,
-      residual_note: RESIDUAL_NOTE,
+      residual_note: residualNote(residual),
     },
   };
 }
 
-function publicOfficeFy2027(f: OfficeHistory["fy2027"]) {
+function publicOfficeFy2027(f: OfficeHistory["fy2027"], marked: MarkRow[], noOffice: MarkRow[]) {
   if (!f) return null;
   const b = f.bridge;
+  const held = unconfirmedByGroup(marked);
+  const heldIn = (g: BridgeGroup) => held.get(g);
+  let unconfirmedRows = 0;
+  let unconfirmedPhp = 0;
+  for (const c of held.values()) {
+    unconfirmedRows += c.rows;
+    unconfirmedPhp += c.php;
+  }
+  const readings = new Map<string, number>();
+  for (const r of marked) {
+    if (r.reading_status && r.reading_status !== "same_amount" && r.reading_status !== "no_house_record") {
+      readings.set(r.reading_status, (readings.get(r.reading_status) ?? 0) + 1);
+    }
+  }
+  const oc = f.office_change ?? null;
   return {
     nep_php: f.nep_php,
     hgab2_php: f.hgab2_php,
@@ -1499,6 +1872,7 @@ function publicOfficeFy2027(f: OfficeHistory["fy2027"]) {
           groups: Object.fromEntries(
             BRIDGE_ORDER.map((g) => {
               const c = b[g] ?? { rows: 0, php: 0 };
+              const h = heldIn(g);
               return [g, {
                 group: g,
                 label: BRIDGE_LABELS[g].label,
@@ -1507,20 +1881,64 @@ function publicOfficeFy2027(f: OfficeHistory["fy2027"]) {
                 php: c.php,
                 nep_php: c.nep_php ?? null,
                 house_php: c.house_php ?? null,
+                unconfirmed_rows: h?.rows ?? 0,
+                unconfirmed_php: h?.php ?? 0,
               }];
             }),
           ),
           note: "This office's 2027 project rows in the six groups, as the office ledger stores them; the groups add up to net_php.",
         }
       : null,
+    annotations: {
+      unconfirmed_rows: unconfirmedRows,
+      unconfirmed_php: unconfirmedPhp,
+      scope_review_rows: b?.scope_review?.rows ?? 0,
+      reading_markers: [...readings].sort(([x], [y]) => x.localeCompare(y)).map(([code, n]) => ({
+        code,
+        label: READING_LABELS[code] ?? humanise(code),
+        rows: n,
+      })),
+      note: ANNOTATIONS_NOTE,
+    },
+    ...(oc
+      ? {
+          office_change: {
+            rows: oc.rows,
+            nep_php: oc.nep_php,
+            hgab3_php: oc.hgab3_php,
+            not_additive_across_versions: true as const,
+            lines: (oc.row_ids ?? []).map((rid) => ({
+              id: rid,
+              url: recordUrl("dpwh", rid),
+              api_url: `${API}/datasets/dpwh/projects/${encodeURIComponent(rid)}`,
+            })),
+            note: OFFICE_CHANGE_NOTE,
+          },
+        }
+      : {}),
+    ...(noOffice.length
+      ? {
+          no_office: {
+            rows: noOffice.length,
+            hgab3_php: noOffice.reduce((a, r) => a + Number(r.house_php ?? 0), 0),
+            lines: noOffice.map((r) => ({
+              id: r.id,
+              url: recordUrl("dpwh", r.id),
+              api_url: `${API}/datasets/dpwh/projects/${encodeURIComponent(r.id)}`,
+            })),
+            note: NO_OFFICE_NOTE,
+          },
+        }
+      : {}),
   };
 }
 
 export async function hgabDistrict(env: Env, id: string) {
   if (!id || id.length > 120) throw new ApiError(400, "bad_request", "id must be a district id from the districts list, e.g. leg:abra:lone");
-  const [m, row] = await Promise.all([
+  const [m, row, residual] = await Promise.all([
     metaRow(env),
     firstRow<DistrictDbRow>(env, `SELECT ${DISTRICT_COLS} FROM hgab_districts WHERE id = ?`, id),
+    residualRows(env),
   ]);
   if (!row) throw new ApiError(404, "not_found", `No district "${clip(id)}"; list them via ${API}/districts`);
   const card = asCard(row);
@@ -1546,7 +1964,8 @@ export async function hgabDistrict(env: Env, id: string) {
   const labelOf = new Map(relatedRows.map((r) => [r.id, r.label] as const));
   const ref = (did: string) => ({ id: did, label: labelOf.get(did) ?? did, url: districtUrl(did) });
 
-  const pub = publicCard(card, index, row.region_key);
+  const marks = await officeMarks(env, cardOffices(card, index).map(officeParquetLabel));
+  const pub = publicCard(card, index, row.region_key, marks);
   const fullOffices = cardOffices(card, index).map((o) => {
     const others = o.district_ids.filter((x) => x !== card.id);
     const printed = officeParquetLabel(o);
@@ -1574,7 +1993,7 @@ export async function hgabDistrict(env: Env, id: string) {
         "compared, never added.",
       by_congress: o.by_congress,
       by_congress_note: "Enacted (GAA) totals per Congress term; the FY2027 NEP and House bill are never part of a subtotal.",
-      fy2027: publicOfficeFy2027(o.fy2027),
+      fy2027: publicOfficeFy2027(o.fy2027, officeMarkRows(marks, o), officeNoOfficeRows(marks, o)),
       notes: o.notes,
       aliases_used: o.aliases_used,
       projects_url: `${ROOT}/dpwh?view=projects&deo=${encodeURIComponent(printed)}`,
@@ -1591,11 +2010,14 @@ export async function hgabDistrict(env: Env, id: string) {
         "One district: its card, its representative, and the full history of every office that serves it. A shared " +
         "(Tier B) office's figures are the whole office's and are not split between the districts it serves.",
     },
+    disclaimers: OFFICE_VIEW,
     data: {
       ...pub,
       co_served_districts: [...related].map(ref),
       offices: fullOffices,
       regional_groupings: pub.regional_groupings,
+      residual,
+      residual_note: residualNote(residual),
     },
   };
 }
