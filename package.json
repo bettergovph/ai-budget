@@ -17,6 +17,7 @@
     "build:hgab-d1": "tsx scripts/build-hgab-d1.ts",
     "build:hgab-share": "tsx scripts/build-hgab-share-images.ts",
     "build:hgab-changes-list": "tsx scripts/build-hgab-changes-list.ts",
+    "build:hgab-poster": "tsx scripts/build-hgab-poster.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",
