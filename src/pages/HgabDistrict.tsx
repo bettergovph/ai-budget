@@ -25,7 +25,7 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
 import {
-  BridgeStrip, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, StageAmounts, StatusChip,
+  BridgeStrip, DeoBadges, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, StageAmounts, StatusChip,
 } from '../components/HgabBits';
 import { DeltaCell, PageLinks } from '../components/HgabProjects';
 import {
@@ -43,12 +43,13 @@ import {
 } from '../lib/hgab';
 import {
   ATTRIBUTION_LABELS, DEFAULT_DISTRICT_FILTERS, FISCAL_STAGE_LONG, FISCAL_STAGE_SHORT, cardOffices, cardRegionalGroups,
-  coServedIds, districtListHref, districtRegionKey, filterDistricts, fiscalYearRange, findDistrict, gaaSubtotal,
+  coServedIds, districtListHref, districtRegionKey, dpwhOfficeName, filterDistricts, fiscalYearRange, findDistrict, gaaSubtotal,
   historySlots, officeKindText, officeParquetLabel, officeProjectsHref, officeTierText, regionAnchor, regionNames,
   browseFromParams, sidebarOfficeRegions, sidebarRegions, slotLabel,
   type DistrictBrowse,
 } from '../lib/hgab-districts';
 import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-query';
+import { DEO_MEANING } from '../lib/hgab-leaderboard';
 import '../hgab-districts.css';
 
 const TOP_N = 15;
@@ -99,7 +100,7 @@ export default function HgabDistrict() {
   const tree = useMemo(() => {
     if (!index) return [];
     const cards = filterDistricts(index, { ...DEFAULT_DISTRICT_FILTERS, q: find });
-    return by === 'office' ? sidebarOfficeRegions(cards, index) : sidebarRegions(cards);
+    return by === 'office' ? sidebarOfficeRegions(cards, index) : sidebarRegions(cards, index);
   }, [index, find, by]);
   const regionSize = useMemo(() => {
     const m = new Map<ReturnType<typeof districtRegionKey>, number>();
@@ -139,7 +140,7 @@ export default function HgabDistrict() {
             <Link to={districtPath()}>Districts</Link> › <Link to={regionHref}>{region.name}</Link> › {card.label}
           </>
         }
-        compiledMeta={`${offices.length} ${offices.length === 1 ? 'office' : 'offices'} · ${attribution.label}`}
+        compiledMeta={`${offices.length} DPWH ${offices.length === 1 ? 'office' : 'offices'} · ${attribution.label}`}
       />
 
       <HgabHero
@@ -153,21 +154,21 @@ export default function HgabDistrict() {
             <span className="hgab-crumb-here">{card.label}</span>
           </>
         }
-        title={card.label}
+        title={<>{card.label}<DeoBadges offices={offices.map((o) => o.name)} jurisdiction={card.jurisdiction} /></>}
         dek={
           <>
             {regionKey === 'other'
               ? <>The office-to-district map gives no region we recognise for this district ({card.region ?? 'none recorded'}).</>
-              : <>A congressional district in {region.name} ({region.short}).</>}{' '}
+              : <>A legislative district in {region.name} ({region.short}).</>}{' '}
             {offices.length === 0 && attribution.help}
             {one && (
               <>
-                It is served by {one.name}, its district engineering office (DEO).{' '}
+                Its DPWH office is the {one.name}.{' '}
                 {officeTierText(one.tier, Math.max(0, one.district_ids.length - 1))}.
               </>
             )}
             {offices.length > 1 && (
-              <>It is served by {offices.length} district engineering offices (DEOs). Each is shown on its own. {attribution.label}.</>
+              <>It is served by {offices.length} DPWH offices: {offices.map((o) => o.name).join(' and ')}. Each office is shown on its own. {attribution.label}.</>
             )}
             {offices.length > 0 && (
               <>
@@ -180,7 +181,8 @@ export default function HgabDistrict() {
         note={
           <>
             This page follows the office, not the district. It shows which districts an office serves, never
-            which district a project is in. Figures are the office’s, as each document publishes them.
+            which district a project is in. Figures are the office’s, as each document publishes them.{' '}
+            {offices.length > 0 && DEO_MEANING}
           </>
         }
       >
@@ -226,14 +228,14 @@ export default function HgabDistrict() {
               />
               {coServed.length > 0 && (
                 <p className="hgab-dd-coserved">
-                  <strong>Other districts {offices.length === 1 ? 'this office serves' : 'these offices serve'}:</strong>{' '}
+                  <strong>Other legislative districts {offices.length === 1 ? 'this DPWH office serves' : 'these DPWH offices serve'}:</strong>{' '}
                   <CoServedLinks ids={coServed} index={index} />. Their
                   cards show the same office figures. Do not add the cards together, or the money is counted twice.
                 </p>
               )}
               {groups.map((g) => (
                 <p className="hgab-dd-coserved" key={g.id}>
-                  {g.name} is a regional grouping, not a district office. Its money is not assigned to a district and
+                  {g.name} is a regional grouping, not a DPWH district engineering office (DEO). Its money is not assigned to a district and
                   appears on no card.
                 </p>
               ))}
@@ -351,10 +353,10 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
   return (
     <section className="hgab-dd-office" aria-labelledby={`${sid}-title`}>
       <p className="hgab-dd-office-eyebrow">
-        The office that builds here{position ? ` · ${position.n} of ${position.of}` : ''}
+        The DPWH office that serves this legislative district{position ? ` · ${position.n} of ${position.of}` : ''}
       </p>
       <div className="hgab-dd-office-head">
-        <h2 id={`${sid}-title`}>{office.name}</h2>
+        <h2 id={`${sid}-title`}>{dpwhOfficeName(office.name)}</h2>
         <TierBadge tier={office.tier} sharedWith={others.length} />
         <span className="hgab-dd-office-kind">
           {officeKindText(office)}{regionKey !== 'other' ? ` · ${regionNames(regionKey).name}` : office.region ? ` · ${office.region}` : ''}
@@ -362,7 +364,7 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
       </div>
       <p className="hgab-dd-coserved">
         {office.tier === 'A' ? (
-          <>This office serves only {card.label}, so every figure below can be read as the district’s.</>
+          <>This DPWH office serves only one legislative district, {card.label}, so every figure below can be read as the district’s.</>
         ) : (
           <>
             <strong>Shared office total, not split.</strong> This office also serves <CoServedLinks ids={others} index={index} />.

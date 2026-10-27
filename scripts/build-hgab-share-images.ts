@@ -18,7 +18,8 @@
  *
  * Output names: `<board>.png` for the default run; `<board>[-<region>]-<format>.png`
  * once --formats or --regions is given. Exits non-zero when a PNG is the wrong
- * size or looks blank.
+ * size or looks blank, or when the renderer reports a layout that did not fit
+ * (including a one-district row whose DEO badge is missing or cut).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -67,8 +68,10 @@ interface RenderResult {
   colours: number;
   images: number;
   imagesLoaded: number;
-  /** The renderer's own check: false when a layout fell back (text, a district list or the residual cut; rows squeezed). */
+  /** The renderer's own check: false when a layout fell back (text, a district list, a DEO badge or the residual cut; rows squeezed). */
   fits: boolean;
+  /** One-district rows drawn, and those whose DEO badge was drawn whole; a legislative district (or a shared office named nowhere else) cut. */
+  badges: { expected: number; shown: number; placeCut: boolean };
   /** Fewer rows than usual fitted; the card says "Top K of N". Reported, not a failure. */
   sparse: boolean;
 }
@@ -136,7 +139,7 @@ async function main() {
   for (const job of jobs) {
     const res: RenderResult = await page.evaluate(async ({ id, format, region }) => {
       type Mod = {
-        renderShareCard: (c: HTMLCanvasElement, o: object) => Promise<{ fits: boolean; sparse: boolean } | null>;
+        renderShareCard: (c: HTMLCanvasElement, o: object) => Promise<{ fits: boolean; sparse: boolean; badges: { expected: number; shown: number; placeCut: boolean } } | null>;
         shareCardImageUrls: (d: unknown, b: unknown, f: string, r: string | null) => string[];
         loadShareImages: (u: string[]) => Promise<Map<string, unknown>>;
       };
@@ -166,6 +169,7 @@ async function main() {
         imagesLoaded: loaded.size,
         fits: report.fits,
         sparse: report.sparse,
+        badges: report.badges,
       };
     }, job);
     const buf = Buffer.from(res.png.slice(res.png.indexOf(",") + 1), "base64");
@@ -174,13 +178,16 @@ async function main() {
     const problems: string[] = [];
     if (size.width !== want.width || size.height !== want.height) problems.push(`size ${size.width}×${size.height}, want ${want.width}×${want.height}`);
     if (res.inked < 0.05 || res.colours < 24) problems.push(`looks blank (inked ${(res.inked * 100).toFixed(1)}%, ${res.colours} colours)`);
-    if (!res.fits) problems.push("layout did not fit (text, a district list or the residual cut, the date missing or not on the count row, or rows squeezed)");
+    const off = res.badges;
+    if (off.shown !== off.expected) problems.push(`DEO badge missing or cut on ${off.expected - off.shown} of ${off.expected} one-district rows`);
+    if (off.placeCut) problems.push("a row's legislative district or shared office cut");
+    if (!res.fits && off.shown === off.expected && !off.placeCut) problems.push("layout did not fit (text, a district list or the residual cut, the date missing or not on the count row, or rows squeezed)");
     if (res.sparse) sparse.push(job.file);
     const miss = res.images - res.imagesLoaded;
     missingImages += miss;
     writeFileSync(resolve(opts.out, job.file), buf);
     const tag = problems.length ? "FAIL" : "ok  ";
-    console.log(`  ${tag} ${job.file.padEnd(44)} ${size.width}×${size.height} ${(buf.length / 1024).toFixed(0).padStart(5)} KB  images ${res.imagesLoaded}/${res.images}${res.sparse ? "  sparse" : ""}${problems.length ? `  ${problems.join("; ")}` : ""}`);
+    console.log(`  ${tag} ${job.file.padEnd(44)} ${size.width}×${size.height} ${(buf.length / 1024).toFixed(0).padStart(5)} KB  images ${res.imagesLoaded}/${res.images}  badges ${off.shown}/${off.expected}${res.sparse ? "  sparse" : ""}${problems.length ? `  ${problems.join("; ")}` : ""}`);
     if (problems.length) failures.push(`${job.file}: ${problems.join("; ")}`);
   }
   await browser.close();

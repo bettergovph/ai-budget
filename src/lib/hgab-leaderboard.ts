@@ -194,8 +194,8 @@ export type ValueKind = 'php' | 'signed_php' | 'count' | 'pct' | 'share';
 
 export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; blurb: string }> = [
   { key: 'picture', label: 'The big picture', blurb: 'Where the DPWH budget sits in the NEP and in the House bill.' },
-  { key: 'fy2027', label: '2027: the House bill against the NEP', blurb: 'DPWH projects by district office, as listed in each document.' },
-  { key: 'history', label: '2020 to 2026: enacted budgets', blurb: 'What each district office received in the enacted budgets.' },
+  { key: 'fy2027', label: '2027: the House bill against the NEP', blurb: 'DPWH projects by DPWH office (DEO), as listed in each document.' },
+  { key: 'history', label: '2020 to 2026: enacted budgets', blurb: 'What each DPWH office (DEO) received in the enacted budgets.' },
   { key: 'members', label: 'The members', blurb: 'The representatives themselves, from their legislative records.' },
 ];
 
@@ -225,12 +225,12 @@ export interface BoardDef {
   regionFilter: boolean;
 }
 
-const PEOPLE_NOTE = 'Amounts are for the DPWH district office serving each district. The documents do not say who asked for any project.';
+const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
 /** Printed on every share card that shows people when the board's first note is not PEOPLE_NOTE. */
 /** Printed on every share image that shows people beside amounts (see hgab-disclaimers.ts). */
 export const PEOPLE_LINE = CARD_DISCLAIMER;
 const ADDED_NOTE = '“Added” means no matching line was found in the NEP: a candidate, not a confirmed insertion. Projects whose NEP match is unconfirmed are left out.';
-const SHARED_NOTE = 'An office that serves several districts is shown with every district it serves. Its amount is not split.';
+const SHARED_NOTE = 'A DPWH office that serves several legislative districts is shown with all of them. Its amount is not split.';
 const GAA_NOTE = 'Enacted budgets list the whole office. New or renamed offices have fewer years; earlier years stay with their old office.';
 
 const REORG_NOTE = 'Offices created, renamed or carved out since 2020 are left out: part of their earlier budget sits with another office.';
@@ -257,7 +257,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'regions-added', section: 'picture', kind: 'regions', value: 'php', order: 'desc',
     kicker: '2027 · DPWH projects · by region',
     title: 'Projects the House added, by region',
-    subtitle: 'Budget for House bill projects with no matching line in the NEP, summed over each region’s district offices.',
+    subtitle: 'Budget for House bill projects with no matching line in the NEP, summed over each region’s DEOs.',
     regionMetric: (r) => r.added_php,
     notes: [ADDED_NOTE, 'Central Office and regional office projects are not in any region’s total.'],
     regionFilter: false,
@@ -266,7 +266,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'regions-change', section: 'picture', kind: 'regions', value: 'signed_php', order: 'desc',
     kicker: '2027 · DPWH projects · by region',
     title: 'Change from the NEP, by region',
-    subtitle: 'House bill minus the NEP on the same DPWH project lists, summed over each region’s district offices.',
+    subtitle: 'House bill minus the NEP on the same DPWH project lists, summed over each region’s DEOs.',
     regionMetric: (r) => r.delta_php,
     notes: ['Central Office and regional office projects are not in any region’s total.', SHARED_NOTE],
     regionFilter: false,
@@ -277,7 +277,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'house-bill-largest', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
     kicker: '2027 House bill · DPWH projects',
     title: 'Largest DPWH amounts in the House bill',
-    subtitle: 'District offices ranked by their DPWH project total in House Bill 10858, third reading.',
+    subtitle: 'DPWH offices ranked by their project total in House Bill 10858, third reading.',
     metric: (e) => e.hgab3_php,
     detail: (e) => (e.hgab3_rows != null ? `in ${plural(e.hgab3_rows, 'budget line', 'budget lines')}` : null),
     notes: [PEOPLE_NOTE, SHARED_NOTE],
@@ -287,7 +287,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'added-budget', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
     kicker: '2027 House bill · DPWH projects',
     title: 'Largest budget in projects the House added',
-    subtitle: 'House bill projects with no matching line in the NEP, by district office.',
+    subtitle: 'House bill projects with no matching line in the NEP, by DPWH office.',
     metric: (e) => e.added_php,
     keep: (e) => e.added_rows > 0,
     detail: (e) => `in ${plural(e.added_rows, 'project', 'projects')}`,
@@ -298,7 +298,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'added-count', section: 'fy2027', kind: 'ranking', value: 'count', order: 'desc',
     kicker: '2027 House bill · DPWH projects',
     title: 'Most projects the House added',
-    subtitle: 'Number of House bill projects with no matching line in the NEP, by district office.',
+    subtitle: 'Number of House bill projects with no matching line in the NEP, by DPWH office.',
     metric: (e) => e.added_rows,
     keep: (e) => e.added_rows > 0,
     detail: (e) => `worth ${formatValue(e.added_php, 'php')}`,
@@ -309,7 +309,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'increase', section: 'fy2027', kind: 'ranking', value: 'signed_php', order: 'desc',
     kicker: '2027 · DPWH projects · House bill minus NEP',
     title: 'Biggest increases over the NEP',
-    subtitle: 'House bill minus the NEP on the same DPWH project lists, by district office.',
+    subtitle: 'House bill minus the NEP on the same DPWH project lists, by DPWH office.',
     metric: (e) => e.delta_php,
     keep: (e) => (e.delta_php ?? 0) > 0,
     detail: (e) => (e.nep_php != null && e.hgab3_php != null ? `${formatValue(e.nep_php, 'php')} → ${formatValue(e.hgab3_php, 'php')}` : null),
@@ -320,7 +320,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'increase-pct', section: 'fy2027', kind: 'ranking', value: 'pct', order: 'desc',
     kicker: '2027 · DPWH projects · House bill against NEP',
     title: 'Biggest increases over the NEP, in percent',
-    subtitle: 'Percent change from the NEP to the House bill, for district offices with at least ₱500 million in the NEP.',
+    subtitle: 'Percent change from the NEP to the House bill, for DPWH offices with at least ₱500 million in the NEP.',
     metric: (e) => e.delta_pct,
     keep: (e) => (e.nep_php ?? 0) >= 500_000_000 && (e.delta_pct ?? 0) > 0,
     detail: (e) => (e.nep_php != null && e.hgab3_php != null ? `${formatValue(e.nep_php, 'php')} → ${formatValue(e.hgab3_php, 'php')}` : null),
@@ -331,18 +331,18 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'cuts', section: 'fy2027', kind: 'ranking', value: 'signed_php', order: 'asc',
     kicker: '2027 · DPWH projects · House bill minus NEP',
     title: 'Biggest cuts from the NEP',
-    subtitle: 'District offices whose DPWH project total is lower in the House bill than in the NEP.',
+    subtitle: 'DPWH offices whose project total is lower in the House bill than in the NEP.',
     metric: (e) => e.delta_php,
     keep: (e) => (e.delta_php ?? 0) < 0,
     detail: (e) => (e.nep_php != null && e.hgab3_php != null ? `${formatValue(e.nep_php, 'php')} → ${formatValue(e.hgab3_php, 'php')}` : null),
-    notes: ['Few district offices have a smaller budget. The largest cut is in Central Office projects; see “Where the DPWH project budget sits”.', PEOPLE_NOTE, SHARED_NOTE],
+    notes: ['Few DPWH offices have a smaller budget. The largest cut is in Central Office projects; see “Where the DPWH project budget sits”.', PEOPLE_NOTE, SHARED_NOTE],
     regionFilter: true,
   },
   {
     id: 'dropped', section: 'fy2027', kind: 'ranking', value: 'php', order: 'desc',
     kicker: '2027 · DPWH projects · NEP only',
     title: 'Largest budget in NEP projects the House bill does not list',
-    subtitle: 'NEP projects with no matching line in the House bill, by district office.',
+    subtitle: 'NEP projects with no matching line in the House bill, by DPWH office.',
     metric: (e) => e.dropped_php,
     keep: (e) => e.dropped_rows > 0,
     detail: (e) => `in ${plural(e.dropped_rows, 'project', 'projects')}`,
@@ -366,7 +366,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'enacted-total', section: 'history', kind: 'ranking', value: 'php', order: 'desc',
     kicker: 'Enacted budgets (GAA) · 2020 to 2026 · DPWH',
     title: 'Largest enacted DPWH budgets, 2020 to 2026',
-    subtitle: 'Seven enacted budgets added up, by district office.',
+    subtitle: 'Seven enacted budgets added up, by DPWH office.',
     metric: (e) => e.gaa_total_php,
     detail: (e) => (e.gaa_years.length && e.gaa_years.length < 7 ? `${e.gaa_years.length} of 7 years` : null),
     notes: [GAA_NOTE, PEOPLE_NOTE, SHARED_NOTE],
@@ -376,7 +376,7 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'enacted-2026', section: 'history', kind: 'ranking', value: 'php', order: 'desc',
     kicker: 'Enacted budget (GAA) · 2026 · DPWH',
     title: 'Largest enacted DPWH budgets in 2026',
-    subtitle: 'The 2026 enacted budget of each district office.',
+    subtitle: 'The 2026 enacted budget of each DPWH office.',
     metric: (e) => e.gaa['2026'] ?? null,
     notes: [PEOPLE_NOTE, SHARED_NOTE],
     regionFilter: true,
@@ -637,22 +637,45 @@ export function shortDistrict(p: Pick<LeaderPerson, 'jurisdiction' | 'district_l
 }
 
 /**
- * The headline for a group, in plain words. A shared (Tier B) group is named by
- * its office(s), never by one representative, so a shared total never reads as
- * one person's: "Metro Manila 1st district office", "North Manila and South
- * Manila district offices". A one-district group returns null (show the person).
+ * What "DEO" means, said once wherever offices and legislative districts
+ * appear together. A DEO's number is its own: the Davao de Oro 1st DEO
+ * serves the province's 2nd legislative district.
+ */
+export const DEO_MEANING =
+  'DEO: district engineering office, the DPWH unit that carries out projects in its area. Its number is its own and need not match the legislative district it serves.';
+
+/** The label put before an office name wherever it could be read as a legislative district. */
+export const OFFICE_PREFIX = 'DPWH office';
+
+/**
+ * The DPWH office(s) a group's amounts are listed under, named as DPWH
+ * offices so they are never read as legislative districts:
+ * "DPWH Davao de Oro 1st DEO"; two offices: "DPWH Ifugao 1st DEO + Ifugao 2nd DEO".
+ */
+export function officeName(entry: Pick<LeaderEntry, 'offices'>): string {
+  const names = entry.offices.map((o) => o.name.replace(/\bDistrict Engineering Office\b/i, 'DEO'));
+  return names.length ? `DPWH ${names.join(' + ')}` : '';
+}
+
+/**
+ * "DPWH office: Davao de Oro 1st DEO" — the line under a one-district row, so
+ * the legislative district (the headline) and the office it is served by
+ * always appear together.
+ */
+export function officeLine(entry: Pick<LeaderEntry, 'offices'>): string {
+  const names = entry.offices.map((o) => o.name.replace(/\bDistrict Engineering Office\b/i, 'DEO'));
+  return names.length ? `${OFFICE_PREFIX}${names.length > 1 ? 's' : ''}: ${names.join(' + ')}` : '';
+}
+
+/**
+ * The headline for a shared group, in plain words: its DPWH office(s), never
+ * one representative, so a shared total never reads as one person's
+ * ("DPWH Isabela 4th DEO"). A one-district group returns null (the headline
+ * is the legislative district; see entryTitle).
  */
 export function officeLabel(entry: Pick<LeaderEntry, 'tier' | 'offices' | 'people'>): string | null {
   if (entry.tier === 'A' && entry.people.length <= 1) return null;
-  const plain = entry.offices.map((o) =>
-    o.name
-      .replace(/\bSub-DEO\b/, 'sub-district office')
-      .replace(/\bDEO\b/, 'district office')
-      .replace(/\bDistrict Engineering Office\b/i, 'district office'),
-  );
-  if (plain.length === 1) return plain[0];
-  const stems = plain.map((p) => p.replace(/ (sub-)?district office$/, ''));
-  return `${stems.slice(0, -1).join(', ')} and ${stems[stems.length - 1]} district offices`;
+  return officeName(entry);
 }
 
 // ---------------------------------------------------------------------------
@@ -720,10 +743,11 @@ export function residualLine(d: LeaderboardData, board: BoardDef): string | null
 }
 
 /**
- * A row's headline is always a place, never a person: the district for a
- * one-district group ("Ilocos Norte, 1st District"), the office for a shared
- * group ("Metro Manila 1st district office"). Upstream forbids presenting an
- * office total as a representative's own insertions or changes.
+ * A row's headline is always a place, never a person: the legislative
+ * district for a one-district group ("Ilocos Norte, 1st District", with
+ * `officeLine` under it), the DPWH office for a shared group ("DPWH Isabela
+ * 4th DEO"). Upstream forbids presenting an office total as a
+ * representative's own insertions or changes.
  */
 export function entryTitle(entry: Pick<LeaderEntry, 'tier' | 'offices' | 'people' | 'key'>): string {
   return officeLabel(entry) ?? entry.people[0]?.district ?? entry.key;
@@ -751,4 +775,32 @@ export function asOfText(data: Pick<LeaderboardData, 'built_at'>): string {
   const d = new Date(data.built_at);
   if (Number.isNaN(d.getTime())) return '';
   return `As of ${d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' })}`;
+}
+
+/**
+ * The small badge beside a legislative district: the DPWH office that serves
+ * it, short. The office name loses the province when it matches the
+ * district's ("Davao de Oro 1st DEO" beside "Davao de Oro, 2nd District" →
+ * "1st DEO"), so a crossed number shows at a glance; otherwise it stays whole
+ * ("Abra DEO", "North Manila DEO", "Metro Manila 3rd DEO").
+ */
+export function deoBadge(officeName: string, jurisdiction?: string | null): string {
+  const name = officeName.replace(/\bDistrict Engineering Office\b/i, 'DEO').trim();
+  const j = (jurisdiction ?? '').trim();
+  if (j && name.toLowerCase().startsWith(`${j.toLowerCase()} `)) {
+    const rest = name.slice(j.length + 1);
+    if (/^\d+(st|nd|rd|th)\b/i.test(rest) || /^sub-deo$/i.test(rest)) return rest;
+  }
+  return name;
+}
+
+/** The badge's tooltip: the full office name and why the badge is there. */
+export function deoBadgeTitle(officeName: string): string {
+  const name = officeName.replace(/\bDistrict Engineering Office\b/i, 'DEO').trim();
+  return `DPWH ${name}: the district engineering office that serves this legislative district. A DEO's number is its own and need not match the district's.`;
+}
+
+/** Badges for an entry's office(s), given the district they sit beside. */
+export function entryDeoBadges(entry: Pick<LeaderEntry, 'offices'>, jurisdiction?: string | null): { text: string; title: string }[] {
+  return entry.offices.map((o) => ({ text: deoBadge(o.name, jurisdiction), title: deoBadgeTitle(o.name) }));
 }

@@ -1131,3 +1131,27 @@ a.hgab-tl-name:hover, a.hgab-tl-name:focus-visible { color: var(--accent); text-
    for in-page tab rows). The program dropdowns are buttons, so without this
    they would render smaller than the plain links beside them. */
 .primary-subnav .view-tabs.section-tabs .hgab-subnav-item > button { font-size: 14px !important; }
+
+/* The DPWH office beside a legislative district, as a small badge ("1st
+   DEO"): inline after the district's name, so it adds no line. A DEO's number
+   is its own; the badge keeps it in sight without taking a row (DeoBadges). */
+.hgab-deo {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 3px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--rule));
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--paper));
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0;
+  line-height: 1.5;
+  text-transform: none;
+  color: var(--ink-2);
+  white-space: nowrap;
+  vertical-align: 0.12em;
+  cursor: help;
+}
+.page-title .hgab-deo { vertical-align: middle; }

@@ -574,7 +574,7 @@ async function main(): Promise<void> {
     },
     // Reader-facing: plain sentences of at most 20 words (docs/hgab-copy.md; the verifier enforces it).
     notes: [
-      "Amounts belong to DPWH district offices, not to representatives; the documents do not say who asked for any project.",
+      "Amounts belong to DPWH offices (DEOs), not to representatives; the documents do not say who asked for any project.",
       "“Added” means no matching NEP project was found for a House bill project: a candidate, not a confirmed insertion.",
       `House bill projects whose NEP match is unconfirmed (${all.held_rows.toLocaleString("en-US")}, worth ${peso(all.held_php)}) are not counted as added.`,
       "Enacted budgets for 2020 to 2026 cover each office’s whole budget; the 2027 figures cover listed projects only.",

@@ -39,6 +39,32 @@ or show:
 "PDF page" stays for the position in the file. "Print" in its everyday sense
 (print this page) is fine.
 
+## DPWH offices and legislative districts
+
+A DPWH district engineering office (DEO) has its own number. It need not match
+the legislative district it serves: the Davao de Oro 1st DEO serves the
+province's 2nd legislative district. A reader who sees one without the other
+will mix them up.
+
+- Always pair a DPWH office with the legislative district it serves. Show
+  both, side by side, never one only on hover.
+- Name an office as "DPWH … DEO": "DPWH Isabela 4th DEO". Beside a district,
+  show it as a small badge right after the district's name ("Davao de Oro,
+  2nd District [1st DEO]", `DeoBadges`). The badge drops the province when it
+  matches. Its tooltip and screen-reader text give the full name. Where a
+  district's name fills its line, the badge may sit on the line below it.
+- Never call an office a "district office". That reads as a legislative
+  district, or a representative's own office.
+- Call the districts legislative districts at least once in every view.
+- Say what DEO means once per page, quietly: in the page note or under the
+  table (`DEO_MEANING` in `src/lib/hgab-leaderboard.ts`).
+
+| Say | Not |
+| --- | --- |
+| Davao de Oro, 2nd District [1st DEO] | Davao de Oro, 2nd District (office on hover only) |
+| DPWH Isabela 4th DEO (shared row headline) | Isabela 4th district office |
+| DPWH offices, DEOs | district offices |
+
 ## Removed
 
 - "What one row is" — no longer shown anywhere. The technical `grain` stays

@@ -344,6 +344,8 @@
   color: var(--ink-3);
 }
 .hgab-dsb-amt.is-none { color: var(--ink-mute); font-style: italic; }
+/* The office badge sits on the figure's line, so it adds no height. */
+.hgab-dsb-amt .hgab-deo { margin-left: 0; font-size: 9px; line-height: 11px; vertical-align: baseline; }
 .hgab-dsb-shared {
   padding: 0 4px;
   border: 1px solid color-mix(in srgb, var(--hgab-tier-b) 45%, transparent);
@@ -724,6 +726,9 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
   cursor: help;
 }
 .hgab-dx-office-title:focus { outline: none; }
+/* "· serves the Davao de Oro 2nd legislative district": the office and the
+   district it serves read together, the district a step quieter. */
+.hgab-dx-office-serves { font-family: var(--font-body); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--ink-2); }
 .hgab-dx-office-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .hgab-dx-office-meta {
   display: flex;
@@ -1086,22 +1091,6 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
   padding: 0;
   list-style: none;
 }
-.hgab-dc-office {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  max-width: 100%;
-  padding: 4px 9px 4px 5px;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--paper-2);
-  font-family: var(--font-body);
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink);
-}
-.hgab-dc-office a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
-.hgab-dc-office a:hover { color: var(--accent); border-color: var(--accent); }
 .hgab-dc-nooffice {
   font-family: var(--font-body);
   font-size: 12.5px;

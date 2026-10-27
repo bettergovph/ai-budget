@@ -15,11 +15,13 @@
  *   we-are-not-ignorant-24x36.png    preview at 150 dpi (3600 × 5400)
  *   we-are-not-ignorant-1080x1350.png  feed post (4:5)
  *   we-are-not-ignorant-1080x1920.png  story (9:16)
+ *   we-are-not-ignorant-1200x630.png   link preview (og:image) for the page
+ *   we-are-not-ignorant-fb-cover-1640x624.png  Facebook cover (centre band safe for phones)
  * The print poster fits all 7,465 projects (the font size is solved so the
  * list exactly fills the page). The social sizes keep the wall readable when
  * zoomed and say how many of the projects they show.
  *
- * Usage: npm run build:hgab-poster -- [--art=art.png] [--art-story=art.png] [--out=dir] [--only=print,post,story]
+ * Usage: npm run build:hgab-poster -- [--art=art.png] [--art-story=art.png] [--out=dir] [--only=print,post,story,og,cover]
  * Needs network access for Google Fonts (Anton, Inter, JetBrains Mono).
  */
 import { chromium } from "playwright-core";
@@ -88,7 +90,14 @@ const FORMATS: Format[] = [
   { key: "print", file: "we-are-not-ignorant-24x36", w: 2304, h: 3456, wall: "all", pdf: { width: "24in", height: "36in" }, scale: 3600 / 2304 },
   { key: "post", file: "we-are-not-ignorant-1080x1350", w: 1080, h: 1350, wall: 7.2, scale: 1 },
   { key: "story", file: "we-are-not-ignorant-1080x1920", w: 1080, h: 1920, wall: 7.2, scale: 1 },
+  // Link preview (og:image) for /hgab/2027/we-are-not-ignorant: landscape, headline left, fist right.
+  { key: "og", file: "we-are-not-ignorant-1200x630", w: 1200, h: 630, wall: 5.6, scale: 1 },
+  // Facebook cover: 1640 x 624 (desktop shows 820 x 312 at 2x). Phones crop the sides to the centre
+  // ~1110 px and the profile photo covers the lower left, so everything that matters sits in the centre.
+  { key: "cover", file: "we-are-not-ignorant-fb-cover-1640x624", w: 1640, h: 624, wall: 5.2, scale: 1 },
 ];
+/** The centre band a Facebook cover keeps on phones (x from, x to), in CSS px of the 1640-wide cover. */
+const COVER_SAFE: [number, number] = [265, 1375];
 
 function html(f: Format): string {
   const u = f.w / 100; // 1 unit = 1% of the poster width
@@ -130,7 +139,26 @@ function html(f: Format): string {
   .foot .url { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: ${2.15 * u}px; color: #fff; }
   .foot .fine { font-size: ${1.12 * u}px; line-height: 1.35; color: rgba(243, 238, 228, 0.82); }
   .foot .fine strong { color: #fff; font-weight: 600; }
-</style></head><body><div class="poster" style="--foot: ${f.h / f.w > 1.6 ? 17 * u : 14.5 * u}px; --hs: ${f.h / f.w > 1.6 ? 17.5 * u : 15.5 * u}px">
+${f.key === "cover" ? `  /* Facebook cover: headline and fist inside the phone-safe centre band; a slim footer. */
+  .head { left: ${COVER_SAFE[0] + 10}px; right: auto; width: 640px; top: 30px; }
+  h1 span + span { margin-top: 6px; }
+  .sub { margin-top: 14px; max-width: 100%; font-size: 25px; }
+  .art { left: auto; right: ${1640 - COVER_SAFE[1]}px; transform: none; width: auto; height: calc(100% - var(--foot) + 40px); bottom: calc(var(--foot) - 40px); }
+  /* One row: address · notice · logo, starting clear of the profile photo (lower left). */
+  .foot { grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; padding: 0 ${1640 - COVER_SAFE[1] + 10}px 0 330px; gap: 0 22px; }
+  .foot .url { order: 1; grid-row: auto; white-space: nowrap; font-size: 18px; }
+  .foot .fine { order: 2; grid-row: auto; font-size: 12px; line-height: 1.3; }
+  .foot img { order: 3; grid-row: auto; height: 26px; }
+` : f.w > f.h ? `  /* Landscape (link preview): headline on the left half, the fist on the right. */
+  .head { right: auto; width: 60%; top: ${2.6 * u}px; }
+  h1 span + span { margin-top: ${0.5 * u}px; }
+  .sub { margin-top: ${1.4 * u}px; max-width: 100%; font-size: ${2.35 * u}px; }
+  .art { left: auto; right: ${1 * u}px; transform: none; width: auto; height: calc(100% - var(--foot) + ${3 * u}px); bottom: calc(var(--foot) - ${3 * u}px); }
+  .foot { padding: ${1.1 * u}px ${2.6 * u}px; gap: ${0.3 * u}px ${2 * u}px; }
+  .foot img { height: ${2.6 * u}px; }
+  .foot .url { font-size: ${1.7 * u}px; }
+  .foot .fine { font-size: ${0.95 * u}px; }
+` : ""}</style></head><body><div class="poster" style="--foot: ${f.key === "cover" ? 74 : f.w > f.h ? 10 * u : f.h / f.w > 1.6 ? 17 * u : 14.5 * u}px; --hs: ${f.key === "cover" ? 138 : f.w > f.h ? 8.6 * u : f.h / f.w > 1.6 ? 17.5 * u : 15.5 * u}px">
   <div class="wall" id="wall"></div>
   ${(f.key === "story" ? ARTURI_STORY : ARTURI) ? `<img class="art" src="${f.key === "story" ? ARTURI_STORY : ARTURI}" alt="">` : ""}
   <div class="head">
@@ -182,6 +210,13 @@ async function main(): Promise<void> {
           `Insertions and adjustments are candidates found by comparing the two documents, not findings of wrongdoing. The documents do not say who asked for any project. ${asOf}.`;
         return { font, shown, fits: fits() };
       }, { entries: ENTRIES, mode: f.wall, total: TOTAL, asOf });
+      if (f.key === "cover") {
+        // A cover is seen at a glance: one line, the essentials of the disclaimer.
+        await page.evaluate((asOfText) => {
+          document.getElementById("fine")!.innerHTML =
+            `Insertions and adjustments in House Bill 10858 against the 2027 NEP are candidates found by comparing the two documents, not findings of wrongdoing. ${asOfText}.`;
+        }, asOf);
+      }
       ensure(fit.fits, `${f.key}: the wall overflows`);
       if (f.wall === "all") ensure(fit.shown === ENTRIES.length, `${f.key}: not every project fits`);
       const png = join(OUT, `${f.file}.png`);

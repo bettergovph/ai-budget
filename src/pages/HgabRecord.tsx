@@ -53,6 +53,9 @@ const EVIDENCE_LABELS: Record<string, string> = {
 
 type Side = Record<string, unknown>;
 
+/** A DPWH line's office, named as a DPWH office so its number is never read as a legislative district's. */
+const officeField = (dataset: string, office: string): string => (dataset === 'dpwh' ? `DPWH office: ${office}` : office);
+
 const obj = (v: unknown): Side | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Side) : null);
 const arr = (v: unknown): unknown[] | null => (Array.isArray(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : typeof v === 'number' ? String(v) : null);
@@ -305,7 +308,7 @@ export default function HgabRecord() {
           </p>
           <h1 className="hgab-rec-title">{row.title}</h1>
           <p className="hgab-rec-meta">
-            {[row.program, row.pap, row.region, row.office].filter(Boolean).join(' · ') || datasetMeta.label}
+            {[row.program, row.pap, row.region, row.office && officeField(row.dataset, row.office)].filter(Boolean).join(' · ') || datasetMeta.label}
             <span className="nep-code" title="Line reference, for citing this line">{row.id}</span>
           </p>
           <div className="hgab-rec-labels">
@@ -508,7 +511,7 @@ function StageCard({
   const kv: Array<[string, string]> = [];
   const put = (k: string, v: unknown) => { const t = str(v); if (t) kv.push([k, t]); };
   put('Region', s?.region ?? (card.stage === 'nep' || !s ? row.region : null));
-  put('Office', s?.office ?? (!s ? row.office : null));
+  put(row.dataset === 'dpwh' ? 'DPWH office' : 'Office', s?.office ?? (!s ? row.office : null));
   put('Program', s?.program ?? s?.program_group);
   put(row.dataset === 'nia' ? 'Sub-program' : 'Program line', s?.pap ?? s?.subprogram_label ?? s?.sub_program ?? (!s ? row.pap : null));
   put('Funding', zoneLabel(str(s?.zone) ?? (!s ? row.zone : null)));

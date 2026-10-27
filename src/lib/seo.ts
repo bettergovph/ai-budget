@@ -275,6 +275,11 @@ export function pageMeta(pathname: string): PageMeta {
         "different amount: DPWH infrastructure, farm-to-market roads, health facilities and irrigation, with " +
         "the amounts as published, the DPWH office that carries each out, the districts it serves and their " +
         "representatives. One page, downloadable as CSV. Matches are candidates, not findings.",
+      // The campaign poster's link-preview size (npm run build:hgab-poster, published with upload:hgab).
+      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/we-are-not-ignorant-1200x630.png",
+      imageWidth: "1200",
+      imageHeight: "630",
+      imageAlt: "WE ARE NOT IGNORANT: 7,465 inserted and adjusted projects in the 2027 House budget bill, over the list of the projects themselves.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"
@@ -282,9 +287,9 @@ export function pageMeta(pathname: string): PageMeta {
   // image on R2; an unknown board id falls back to the gallery.
   if (p === LEADERBOARD_ROOT || p.startsWith(`${LEADERBOARD_ROOT}/`)) {
     const gallery: PageMeta = {
-      title: `House Budget Analysis 2027 Leaderboards — DPWH District Offices and House Members Ranked · ${SITE}`,
+      title: `House Budget Analysis 2027 Leaderboards — DPWH Offices and House Members Ranked · ${SITE}`,
       description:
-        "DPWH district offices ranked by their budgets in the FY 2027 House bill and the NEP, and by " +
+        "DPWH district engineering offices (DEOs) ranked by their budgets in the FY 2027 House bill and the NEP, and by " +
         "enacted budgets from 2020 to 2026; district representatives ranked by bills authored. " +
         "Each board is an image to download and share. Amounts belong to offices, not people.",
     };

@@ -21,6 +21,7 @@ import {
 import ts from "typescript";
 import { DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers.ts";
 import { pageMeta } from "../src/lib/seo.ts";
+import { DEO_MEANING, deoBadge } from "../src/lib/hgab-leaderboard.ts";
 
 function ensure(cond: unknown, msg: string): asserts cond {
   if (!cond) { console.error(`build-hgab-not-ignorant: ${msg}`); process.exit(1); }
@@ -72,31 +73,46 @@ function regionText(r: string | null | undefined): string | null {
   return k ? REGION_LABELS[k].short : r;
 }
 
-/** program · detail · region · province · office · [shared …] · districts served — and the representatives (same rule as the page had). */
-function metaText(r: ChangesListRow): { lead: string; reps: string } {
+/**
+ * The muted line under a title, as HTML: program · detail · region · province,
+ * then where the money sits. A one-district DPWH row reads "Davao de Oro 2nd
+ * [1st DEO]": the legislative district with a small badge for the DPWH office
+ * that serves it (a DEO's number is its own). A shared office leads with the
+ * office: "DPWH Isabela 4th DEO · shared by 2 districts, not split · serves …".
+ */
+function metaHtml(r: ChangesListRow): string {
   const parts: string[] = [CHANGE_PROGRAM_LABELS[r.p]];
   if (r.pa) parts.push(r.pa);
   const region = regionText(r.r);
   if (region) parts.push(region);
   if (r.pv) parts.push(r.pv);
-  if (r.o && r.w !== "central") parts.push(shortOffice(r.o));
-  if (r.w === "office" && r.ds) {
-    if (r.tr === "B") parts.push(`shared by ${r.rp?.length ?? 0} districts, not split`);
-    parts.push(`serves ${r.ds}`);
-  } else if (r.w && r.w !== "office") parts.push(NO_DISTRICT_TEXT[r.w]);
-  return { lead: parts.join(" · "), reps: r.w === "office" ? seatHoldersText(r.rp) : "" };
+  const html = parts.map(esc);
+  if (r.w === "office" && r.ds && r.o) {
+    const office = shortOffice(r.o);
+    const n = r.rp?.length ?? 1;
+    if (r.tr === "B") {
+      html.push(`DPWH ${esc(office)}`, `shared by ${n} districts, not split`, `serves ${esc(r.ds)}`);
+    } else {
+      const jurisdiction = r.ds.replace(/\s+(\d+(st|nd|rd|th)|\(lone\))$/i, "");
+      html.push(`${esc(r.ds)} <span class="hgab-wani-deo" title="DPWH ${esc(office)}">${esc(deoBadge(office, jurisdiction))}</span>`);
+    }
+  } else {
+    if (r.o && r.w !== "central") html.push(`DPWH ${esc(shortOffice(r.o))}`);
+    if (r.w && r.w !== "office") html.push(esc(NO_DISTRICT_TEXT[r.w]));
+  }
+  const reps = r.w === "office" ? seatHoldersText(r.rp) : "";
+  return html.join(" · ") + (reps ? ` · <span class="hgab-wani-reps">${esc(reps)}</span>` : "");
 }
 
 function item(r: ChangesListRow, n: number): string {
   const cls = r.k === "inserted" ? "is-in" : r.k === "increased" ? "is-up" : "is-down";
-  const { lead, reps } = metaText(r);
   const amt = r.k === "inserted"
     ? `<b>${peso(r.h ?? 0)}</b>${r.m ? `<span class="hgab-wani-kind"> · listed as ${r.m} lines</span>` : ""}`
     : `<b><span class="hgab-wani-num">${r.n == null ? "none" : peso(r.n)}</span> <span aria-hidden="true">→</span><span class="hgab-wani-sr"> to </span> <span class="hgab-wani-num">${r.h == null ? "none" : peso(r.h)}</span></b> <span class="hgab-wani-chg">(${signedPeso(r.d ?? 0)})</span>`;
   return `<li class="hgab-wani-item ${cls}"><span class="hgab-wani-n" aria-hidden="true">${n.toLocaleString("en-US")}</span><span class="hgab-wani-tag ${cls}">${r.k}</span> `
     + `<span class="hgab-wani-amt">${amt}${r.u ? '<span class="hgab-wani-flag">unconfirmed match</span>' : ""}</span>`
     + `<a class="hgab-wani-ttl" href="${esc(r.x)}">${esc(r.t)}</a>`
-    + `<span class="hgab-wani-meta">${esc(lead)}${reps ? ` · <span class="hgab-wani-reps">${esc(reps)}</span>` : ""}</span></li>`;
+    + `<span class="hgab-wani-meta">${metaHtml(r)}</span></li>`;
 }
 
 const chunks: string[] = [];
@@ -129,8 +145,15 @@ const html = `<!doctype html>
 <meta property="og:title" content="${esc(meta.title)}">
 <meta property="og:description" content="${esc(meta.description)}">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${CHANGES_LIST_SITE}/og.png">
+<meta property="og:image" content="${esc(meta.image ?? `${CHANGES_LIST_SITE}/og.png`)}">
+<meta property="og:image:width" content="${esc(meta.imageWidth ?? "1200")}">
+<meta property="og:image:height" content="${esc(meta.imageHeight ?? "630")}">
+<meta property="og:image:alt" content="${esc(meta.imageAlt ?? meta.title)}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(meta.title)}">
+<meta name="twitter:description" content="${esc(meta.description)}">
+<meta name="twitter:image" content="${esc(meta.image ?? `${CHANGES_LIST_SITE}/og.png`)}">
+<meta name="twitter:image:alt" content="${esc(meta.imageAlt ?? meta.title)}">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -150,7 +173,7 @@ ${css}
 <a href="/hgab/2027/overview" class="hgab-wani-logo" aria-label="BetterGov.ph House Budget Analysis"><img src="/brand/bettergov-horizontal-primary.png" alt="BetterGov.ph" width="800" height="206"></a>
 <h1 class="hgab-wani-h1" aria-label="${esc(CHANGES_LIST_TITLE)}"><span aria-hidden="true">We are</span><span aria-hidden="true" class="is-red">not</span><span aria-hidden="true">ignorant</span></h1>
 <p class="hgab-wani-sub">${total.toLocaleString("en-US")} inserted and adjusted projects in the 2027 House budget bill. We read every single one.</p>
-<p class="hgab-wani-count">DPWH, farm-to-market roads, health facilities and irrigation. Inserted first, then increased, then decreased, largest first.</p>
+<p class="hgab-wani-count">DPWH, farm-to-market roads, health facilities and irrigation. Inserted first, then increased, then decreased, largest first. ${esc(DEO_MEANING)}</p>
 <p class="hgab-wani-dl"><a href="${DATA_HOST}/${CHANGES_LIST_CSV_PATH}" download="${CHANGES_LIST_CSV_NAME}">Download the full list (CSV)</a></p>
 </div>
 </header>

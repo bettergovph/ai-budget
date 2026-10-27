@@ -11,16 +11,22 @@
  *
  * Integrity carried from the contract (hgab-leaderboard.ts): the cards rank
  * district offices and show who holds each seat; a shared office is shown with
- * every district it serves and is never split; wording comes from the board
- * definitions, extra text follows docs/hgab-copy.md.
+ * every district it serves and is never split; a one-district row's
+ * legislative district carries a small badge naming the DPWH office (DEO) it
+ * is served by ("1st DEO"), since a DEO's number is its own (the Davao de Oro
+ * 1st DEO serves the 2nd district);
+ * wording comes from the board definitions, extra text follows docs/hgab-copy.md.
  */
 
 import {
+  DEO_MEANING,
   SHARE_FORMATS,
   displayName,
+  entryDeoBadges,
   formatValue,
   leaderboardPath,
   officeLabel,
+  officeName,
   rankByCongress,
   rankEntries,
   rankMembers,
@@ -278,6 +284,176 @@ function sharedLabel(n: number): string {
   return `Shared by ${n} districts · not split`;
 }
 
+/**
+ * What a shared row says about the districts it serves, richest first:
+ * "serves Isabela 4th, 6th legislative districts", "serves Isabela 4th, 6th",
+ * "Isabela 4th, 6th". Callers take the richest that costs no extra line.
+ */
+function servesForms(people: LeaderPerson[]): string[] {
+  const list = districtsSummary(people);
+  const oneProvince = new Set(people.map((p) => p.jurisdiction)).size === 1;
+  return [oneProvince ? `serves ${list} legislative districts` : `serves legislative districts ${list}`, `serves ${list}`, list];
+}
+
+/** The first of `forms` (richest first) whose layout takes no more lines than the last (plainest) one. */
+function richestForm<T>(forms: T[], linesOf: (f: T) => number): T {
+  const floor = linesOf(forms[forms.length - 1]);
+  return forms.find((f) => linesOf(f) <= floor) ?? forms[forms.length - 1];
+}
+
+/** The DEO note a portrait or story footer carries where it costs no row. */
+const DEO_SHORT = 'DEO = DPWH district engineering office; its number need not match the district it serves.';
+
+/** Which DEO note a card's footer carries. */
+type DeoNote = 'short' | null;
+
+function deoText(form: DeoNote): string | null {
+  return form === 'short' ? DEO_SHORT : null;
+}
+
+/**
+ * officeName with two or more offices of one name folded together:
+ * "DPWH Ifugao 1st + 2nd DEOs", "DPWH North + South Manila DEOs". Offices that
+ * do not fold read as officeName. Used where a shared office's headline would
+ * otherwise be cut.
+ */
+function foldedOffice(it: Pick<Item, 'offices'>): string {
+  const names = it.offices.map((o) => o.name.replace(/\bDistrict Engineering Office\b/i, 'DEO'));
+  if (names.length < 2) return officeName(it);
+  // Same place, numbered: "Ifugao 1st DEO", "Ifugao 2nd DEO".
+  const numbered = names.map((n) => /^(.*) (\d+(?:st|nd|rd|th)) DEO$/.exec(n));
+  if (numbered.every(Boolean) && new Set(numbered.map((m) => m![1])).size === 1) {
+    return `DPWH ${numbered[0]![1]} ${numbered.map((m) => m![2]).join(' + ')} DEOs`;
+  }
+  // Same place, a word apart: "North Manila DEO", "South Manila DEO".
+  const split = names.map((n) => /^(\S+) (.+ DEO)$/.exec(n));
+  if (split.every(Boolean) && new Set(split.map((m) => m![2])).size === 1) {
+    return `DPWH ${split.map((m) => m![1]).join(' + ')} ${split[0]![2]}s`;
+  }
+  return officeName(it);
+}
+
+// ---------------------------------------------------------------------------
+// DEO badges: the DPWH office beside a one-district row's legislative district
+// ---------------------------------------------------------------------------
+
+/**
+ * The badge of a one-district row: "1st DEO" where the office is named after
+ * the district's province, else the office's short full name ("Abra DEO",
+ * "North Manila DEO"). A district served by two offices gets one badge:
+ * "3rd + 4th DEOs", or "2nd DEO + Nueva Vizcaya DEO". Empty for shared rows
+ * and people.
+ */
+function badgeTexts(it: Item): string[] {
+  if (it.personFirst || isGroup(it) || !it.offices.length) return [];
+  const texts = entryDeoBadges({ offices: it.offices }, it.people[0]?.jurisdiction).map((b) => b.text);
+  if (texts.length < 2) return texts;
+  const ords = texts.map((t) => /^(\d+(?:st|nd|rd|th)) DEO$/i.exec(t));
+  if (ords.every(Boolean)) return [`${ords.map((m) => m![1]).join(' + ')} DEOs`];
+  return [texts.join(' + ')];
+}
+
+/** True for rows that must carry a DEO badge: one district, on a ranking or by-Congress card. */
+function needsBadge(it: Item): boolean {
+  return !it.personFirst && !isGroup(it);
+}
+
+/** Badge text size for a headline of `nameSize`: small, about 60% of it. */
+function badgeSize(nameSize: number): number {
+  return Math.max(14, Math.round(nameSize * 0.6));
+}
+
+interface BadgeStyle { fg: string; bg: string; border: string }
+const BADGE_ROW: BadgeStyle = { fg: C.hero, bg: C.accentSoft, border: '#c9d6f5' };
+const BADGE_ON_BAND: BadgeStyle = { fg: '#ffffff', bg: 'rgba(255,255,255,0.12)', border: 'rgba(255,255,255,0.6)' };
+
+function badgeMetrics(size: number): { padX: number; h: number; gap: number } {
+  return { padX: size * 0.5, h: Math.round(size * 1.5), gap: Math.round(size * 0.5) };
+}
+
+/** Width the badges take after a headline, the gap before each included. */
+function badgesWidth(ctx: Ctx, texts: string[], size: number): number {
+  if (!texts.length) return 0;
+  const m = badgeMetrics(size);
+  setFont(ctx, 500, size, F.mono, 0);
+  return texts.reduce((a, t) => a + m.gap + tw(ctx, t) + m.padX * 2, 0);
+}
+
+/** Draw the badges from `x` (the end of the headline), centred on `cy`. */
+function drawBadges(ctx: Ctx, texts: string[], x: number, cy: number, size: number, st: BadgeStyle): void {
+  const m = badgeMetrics(size);
+  let bx = x;
+  for (const t of texts) {
+    setFont(ctx, 500, size, F.mono, 0);
+    bx += m.gap;
+    const w = tw(ctx, t) + m.padX * 2;
+    roundRect(ctx, bx, cy - m.h / 2, w, m.h, m.h / 2);
+    ctx.fillStyle = st.bg;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = st.border;
+    ctx.stroke();
+    ctx.textBaseline = 'middle';
+    text(ctx, t, bx + m.padX, cy + size * 0.06, st.fg);
+    ctx.textBaseline = 'alphabetic';
+    bx += w;
+  }
+}
+
+/**
+ * Every one-district row or cell drawn on a ranking or by-Congress card
+ * counts once in `badgeExpected`, and once in `badgeShown` when its DEO
+ * badge(s) were drawn whole. A mismatch fails the card's fit check.
+ */
+let badgeExpected = 0;
+let badgeShown = 0;
+
+function countBadge(it: Item, whole: boolean): void {
+  if (!needsBadge(it)) return;
+  badgeExpected++;
+  if (whole && badgeTexts(it).length) badgeShown++;
+}
+
+/**
+ * The headline at `size` with the row's DEO badge(s) after it, within `max`:
+ * the headline shrinks or takes its short form ("Davao de Oro · 2nd") before
+ * it is cut; the badge is never dropped. Draws both; `baseline` is the
+ * headline's.
+ */
+function drawHeadlineWithBadges(ctx: Ctx, it: Item, x: number, baseline: number, size: number, max: number, color: string, prefix = '', namedElsewhere = false): void {
+  const badges = badgeTexts(it);
+  const bSize = badgeSize(size);
+  const bW = badgesWidth(ctx, badges, bSize);
+  const head = fitHeadline(ctx, it, size, Math.max(0, max - bW), prefix, namedElsewhere);
+  text(ctx, head, x, baseline, color);
+  const hw = tw(ctx, head);
+  if (badges.length) drawBadges(ctx, badges, x + hw, baseline - size * 0.35, bSize, BADGE_ROW);
+  countBadge(it, bW <= max);
+}
+
+/**
+ * A by-Congress cell header on two lines: the place, then its DEO badge(s)
+ * under it (a shared office's name may take both lines instead).
+ */
+function drawTwoLineHead(ctx: Ctx, it: Item, x: number, baseline: number, size: number, max: number, prefix: string, namedElsewhere: boolean): void {
+  const lh = size * 1.2;
+  const badges = badgeTexts(it);
+  if (isGroup(it)) {
+    setFont(ctx, 600, size, F.body, -size * 0.005);
+    const full = wrap(ctx, prefix + headline(it), max);
+    const lines = full.length <= 2 ? full : null;
+    if (lines) lines.forEach((l, i) => text(ctx, l, x, baseline + i * lh, C.ink));
+    else text(ctx, fitHeadline(ctx, it, size, max, prefix, namedElsewhere), x, baseline, C.ink);
+    return;
+  }
+  text(ctx, fitHeadline(ctx, it, size, max, prefix, namedElsewhere), x, baseline, C.ink);
+  const bSize = badgeSize(size);
+  const bW = badgesWidth(ctx, badges, bSize);
+  const gap = badgeMetrics(bSize).gap;
+  if (badges.length) drawBadges(ctx, badges, x - gap, baseline + lh - size * 0.35, bSize, BADGE_ROW);
+  countBadge(it, bW - gap <= max);
+}
+
 // ---------------------------------------------------------------------------
 // Rows (what a card shows)
 // ---------------------------------------------------------------------------
@@ -294,6 +470,8 @@ interface Item {
   tier: 'A' | 'B';
   /** officeLabel(entry): the headline of a shared group (never one person's name); null for one district. */
   office: string | null;
+  /** The group's DPWH office(s); a one-district row prints them beside the legislative district. */
+  offices: { id: string; name: string }[];
   value: number;
   detail: string | null;
 }
@@ -345,18 +523,18 @@ function rankingItems(data: LeaderboardData, board: BoardDef, region: string | n
     const { rows, eligible } = rankMembers(data, { region, limit });
     return {
       eligible,
-      items: rows.map((r) => ({ rank: r.rank, key: r.person.district_id, personFirst: true, people: [r.person], tier: 'A' as const, office: null, value: r.value, detail: r.value === 1 ? 'bill' : 'bills' })),
+      items: rows.map((r) => ({ rank: r.rank, key: r.person.district_id, personFirst: true, people: [r.person], tier: 'A' as const, office: null, offices: [], value: r.value, detail: r.value === 1 ? 'bill' : 'bills' })),
     };
   }
   const { rows, eligible } = rankEntries(data, board, { region, limit });
   return {
     eligible,
-    items: rows.map((r) => ({ rank: r.rank, key: r.entry.key, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), value: r.value, detail: board.detail?.(r.entry) ?? null })),
+    items: rows.map((r) => ({ rank: r.rank, key: r.entry.key, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), offices: r.entry.offices, value: r.value, detail: board.detail?.(r.entry) ?? null })),
   };
 }
 
 function entryItem(rank: number, e: LeaderEntry, value: number): Item {
-  return { rank, key: e.key, people: e.people, tier: e.tier, office: officeLabel(e), value, detail: null };
+  return { rank, key: e.key, people: e.people, tier: e.tier, office: officeLabel(e), offices: e.offices, value, detail: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -633,7 +811,7 @@ interface HeroText {
   count: string | null;
   /** Drawn white, right-aligned on the count line (link previews). */
   url?: string | null;
-  /** "As of October 26, 2026": on the count row ("Top 7 of 190 district offices · As of …"), or alone where the count would be. */
+  /** "As of October 26, 2026": on the count row ("Top 7 of 190 DPWH offices · As of …"), or alone where the count would be. */
   asOf: string;
   /** "As of Oct 26, 2026", for a count row that is too narrow for the long date. */
   asOfShort: string;
@@ -653,11 +831,11 @@ function heroText(board: BoardDef, region: string | null, count: string | null):
   return { kicker: board.kicker, title: board.title, subtitle: board.subtitle, region: region ? regionPill(region) : null, count, asOf: cardAsOf, asOfShort: cardAsOfShort };
 }
 
-/** "Top 7 of 190 district offices" → "Top 7 of 190"; "Top 2 shown for each Congress" → "Top 2 per Congress". */
+/** "Top 7 of 190 DPWH offices" → "Top 7 of 190"; "Top 2 shown for each Congress" → "Top 2 per Congress". */
 function shortCount(count: string): string {
   return count
     .replace(/ shown for each Congress$/, ' per Congress')
-    .replace(/ (district offices|district office|representatives|representative|regions)$/, '');
+    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions)$/, '');
 }
 
 interface CountRow {
@@ -670,7 +848,7 @@ interface CountRow {
 }
 
 /**
- * The count row: "Top 7 of 190 district offices · As of October 26, 2026" on
+ * The count row: "Top 7 of 190 DPWH offices · As of October 26, 2026" on
  * ONE line. Narrower rows take the short date, then the short count, then no
  * letter-spacing, but never split the count and the date. Null when the card
  * has neither; `dated: false` when even the shortest form is too wide.
@@ -858,7 +1036,13 @@ function drawUrl(ctx: Ctx, u: FitUrl, x: number, y: number): void {
 // word wider than its line so the fit check can fail.
 // ---------------------------------------------------------------------------
 
-interface Run { text?: string; badge?: number; weight?: number; color: string; /** Start a new line here. */ br?: boolean }
+interface Run {
+  text?: string; badge?: number; weight?: number; color: string;
+  /** Start a new line here. */
+  br?: boolean;
+  /** Never break inside this run's text ("Tier A", an office name): it moves to the next line whole. */
+  keep?: boolean;
+}
 interface Tok { kind: 'word' | 'space' | 'badge' | 'br'; text: string; weight: number; color: string; w: number }
 interface PlacedTok { tok: Tok; x: number }
 interface RunLayout { lines: PlacedTok[][]; overflow: boolean }
@@ -880,7 +1064,9 @@ function runTokens(ctx: Ctx, runs: Run[], size: number): Tok[] {
     }
     const weight = r.weight ?? 400;
     setFont(ctx, weight, size, F.body);
-    for (const part of (r.text ?? '').split(/(\s+)/)) {
+    const t = r.text ?? '';
+    const parts = r.keep ? (/^(\s*)(.*?)(\s*)$/s.exec(t) ?? ['', '', t, '']).slice(1) : t.split(/(\s+)/);
+    for (const part of parts) {
       if (!part) continue;
       const space = /^\s+$/.test(part);
       out.push({ kind: space ? 'space' : 'word', text: space ? ' ' : part, weight, color: r.color, w: tw(ctx, space ? ' ' : part) });
@@ -976,19 +1162,24 @@ function sharedRefsOf(items: Item[]): Map<string, SharedRef> {
 }
 
 /**
- * "Shared offices serve: ① Metro Manila 1st district office (Tier B · 7
- * districts): City of Mandaluyong Lone · …". Never cut.
+ * "Shared offices serve these legislative districts: ① DPWH Metro Manila 1st
+ * DEO (Tier B · 7 districts): City of Mandaluyong Lone · …". Never cut.
  */
 function sharedBlock(ctx: Ctx, refs: Map<string, SharedRef>, w: number, size: number): { h: number; fits: boolean; draw: (x: number, y: number) => void } {
-  const runs: Run[] = [{ text: 'Shared offices serve:', weight: 700, color: C.ink }];
-  for (const r of refs.values()) {
-    runs.push(
-      { text: ' ', color: C.ink3 }, { badge: r.n, color: C.tierB },
-      { text: ` ${r.office}`, weight: 600, color: C.ink2 }, { text: ` (Tier B · ${r.people.length} districts):`, weight: 600, color: C.tierB },
-      { text: ` ${districtsSummary(r.people)}`, weight: 400, color: C.ink3 },
-    );
-  }
-  const lay = wrapRuns(ctx, runs, size, () => w);
+  const runsWith = (head: string): Run[] => {
+    const runs: Run[] = [{ text: head, weight: 700, color: C.ink }];
+    for (const r of refs.values()) {
+      runs.push(
+        { text: ' ', color: C.ink3 }, { badge: r.n, color: C.tierB },
+        { text: ` ${r.office}`, weight: 600, color: C.ink2 }, { text: ` (Tier B · ${r.people.length} districts):`, weight: 600, color: C.tierB },
+        { text: ` ${districtsSummary(r.people)}`, weight: 400, color: C.ink3 },
+      );
+    }
+    return runs;
+  };
+  // Name the districts as legislative districts where that costs no line.
+  const head = richestForm(['Shared offices serve these legislative districts:', 'Shared offices serve:'], (h) => wrapRuns(ctx, runsWith(h), size, () => w).lines.length);
+  const lay = wrapRuns(ctx, runsWith(head), size, () => w);
   const lh = size * 1.32;
   const h = lay.lines.length * lh + size * 0.95;
   return {
@@ -1028,10 +1219,13 @@ function residualText(data: LeaderboardData, board: BoardDef): string | null {
   }
 }
 
-/** What a card shows: portraits (credit the photos) and amounts beside people (the disclaimer and tiers). */
-interface CardPeople { photos: boolean; amounts: boolean }
+/**
+ * What a card shows: portraits (credit the photos), amounts beside people (the
+ * disclaimer and tiers) and, where DPWH offices are named, which DEO note.
+ */
+interface CardPeople { photos: boolean; amounts: boolean; deo?: DeoNote }
 
-interface FooterText { notes: string; residual: string | null; source: string }
+interface FooterText { notes: string; deo: string | null; residual: string | null; source: string }
 
 function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople): FooterText {
   // Cards with people beside amounts print CARD_DISCLAIMER; the board's own people
@@ -1040,7 +1234,19 @@ function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople):
     ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
     : board.notes[0] ?? null;
   const notes = [boardNote, people.amounts ? CARD_DISCLAIMER : null].filter(Boolean).join(' ');
-  return { notes, residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
+  return { notes, deo: deoText(people.deo ?? null), residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
+}
+
+/** The notes paragraph, the DEO note run on at its end with "DEO" in bold. */
+function notesRuns(ft: FooterText): Run[] {
+  const runs: Run[] = ft.notes ? [{ text: ft.notes, weight: 500, color: C.ink2 }] : [];
+  if (ft.deo) {
+    const m = /^(DEO)(\s*[:=])(.*)$/.exec(ft.deo);
+    const lead = ft.notes ? ' ' : '';
+    if (m) runs.push({ text: `${lead}${m[1]}`, weight: 700, color: C.ink }, { text: `${m[2]}${m[3]}`, weight: 500, color: C.ink2 });
+    else runs.push({ text: `${lead}${ft.deo}`, weight: 500, color: C.ink2 });
+  }
+  return runs;
 }
 
 function residualRuns(r: string): Run[] {
@@ -1071,8 +1277,9 @@ interface FooterGeom {
 }
 
 function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Block {
-  setFont(ctx, 500, g.fs, F.body);
-  const note = ft.notes ? wrap(ctx, ft.notes, g.w) : [];
+  const nr = notesRuns(ft);
+  const notesLay = nr.length ? wrapRuns(ctx, nr, g.fs, () => g.w) : null;
+  const note = notesLay ? notesLay.lines : [];
   const res = ft.residual ? wrapRuns(ctx, residualRuns(ft.residual), g.fs, () => g.w - g.fs * 0.6) : null;
   setFont(ctx, 400, g.fs, F.body);
   const src = wrap(ctx, ft.source, g.w);
@@ -1084,15 +1291,17 @@ function footerBlock(ctx: Ctx, g: FooterGeom, ft: FooterText, url: string): Bloc
   const h = g.padT + note.length * g.lh + (note.length ? g.gap : 0) + (res ? resH + g.gap : 0) + src.length * g.lh + urlH + g.padB;
   return {
     h,
-    fits: !res?.overflow,
+    fits: !res?.overflow && !notesLay?.overflow,
     draw(y0) {
       ctx.fillStyle = C.paper2;
       ctx.fillRect(g.bgX, y0, g.bgW, g.H - y0);
       ctx.fillStyle = C.rule;
       ctx.fillRect(g.bgX, y0, g.bgW, 2);
       let y = y0 + g.padT;
-      setFont(ctx, 500, g.fs, F.body);
-      for (const l of note) { text(ctx, l, g.x, y + g.fs * 0.95, C.ink2); y += g.lh; }
+      if (notesLay) {
+        drawRuns(ctx, notesLay, g.x, y + g.fs * 0.95, g.lh, g.fs);
+        y += note.length * g.lh;
+      }
       if (note.length) y += g.gap;
       if (res) {
         // The residual: its own strip, so district rows never read as the whole budget.
@@ -1156,19 +1365,51 @@ interface RowGeom {
 /**
  * The row headline at `size`, shrunk (to no less than 85% and never below
  * 22px) before it is ellipsized. Leaves the font set; returns the text.
+ * `namedElsewhere`: a shared office the card names in full in its block.
  */
-function fitHeadline(ctx: Ctx, it: Item, size: number, max: number, prefix = ''): string {
+function fitHeadline(ctx: Ctx, it: Item, size: number, max: number, prefix = '', namedElsewhere = false): string {
+  const whole = headlineForm(ctx, it, size, max, prefix);
+  if (whole != null) return whole;
+  // A legislative district is never cut (its number is what the office is paired with);
+  // a shared office's name may be only where the card names it in full elsewhere.
+  if (!it.personFirst && (!isGroup(it) || !namedElsewhere)) placeCut = true;
+  return ellipsize(ctx, headlineForms(it, prefix).pop()!, max);
+}
+
+/** The headline's forms, fullest first: the district or office, then its short (or a lone district's province) or folded form. */
+function headlineForms(it: Item, prefix: string): string[] {
   const forms = [prefix + headline(it)];
-  if (!it.personFirst && !isGroup(it) && it.people[0]) forms.push(prefix + shortDistrict(it.people[0]));
+  const p = it.people[0];
+  if (!it.personFirst && !isGroup(it) && p) {
+    forms.push(prefix + shortDistrict(p));
+    // A province's lone district is the province: "Nueva Vizcaya".
+    if (/^Lone\b/i.test(p.district_label)) forms.push(prefix + p.jurisdiction);
+  }
+  if (isGroup(it) && it.office && foldedOffice(it) !== it.office) forms.push(prefix + foldedOffice(it));
+  return forms;
+}
+
+/**
+ * The fullest headline form that fits `max` whole (the font left set at its
+ * size), or null: every form down to 85% of `size` first, then down to 22px
+ * (where a badge needs the room) before anything is cut.
+ */
+function headlineForm(ctx: Ctx, it: Item, size: number, max: number, prefix = ''): string | null {
   const floor = Math.max(20, Math.min(size, Math.max(22, Math.round(size * 0.85))));
-  for (const s0 of forms) {
-    for (let z = size; z >= floor; z--) {
-      setFont(ctx, 600, z, F.body, -z * 0.005);
-      if (tw(ctx, s0) <= max) return s0;
+  const last = Math.max(20, Math.min(size, 22));
+  for (const [from, to] of [[size, floor], [floor - 1, last]]) {
+    for (const s0 of headlineForms(it, prefix)) {
+      for (let z = from; z >= to; z--) {
+        setFont(ctx, 600, z, F.body, -z * 0.005);
+        if (tw(ctx, s0) <= max) return s0;
+      }
     }
   }
-  return ellipsize(ctx, forms[forms.length - 1], max);
+  return null;
 }
+
+/** Set during a draw when a row's legislative district, or a shared office named nowhere else, had to be cut. */
+let placeCut = false;
 
 /** "Tier B · Shared by 3 districts · not split", shortened only as far as `max` needs (the tier never goes). */
 function fitTierShared(ctx: Ctx, n: number, max: number, tierMarks: boolean): string {
@@ -1186,7 +1427,11 @@ function rowX(g: RowGeom): { ax: number; right: number; tx: number; tmax: number
   return { ax, right, tx, tmax: right - g.valueW - g.nameSize * 0.7 - tx, fullW: right - tx };
 }
 
-/** The lines under a row's name: the district (and tier), or the tier, shared mark and every district served. */
+/**
+ * The lines under a row's name (its DEO badge sits beside the name). One
+ * district: the seat holder and the tier. A shared office: the seat holders,
+ * then the tier, the shared mark and every legislative district it serves.
+ */
 interface RowPlan { sub: RunLayout; extra: number }
 
 function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
@@ -1194,6 +1439,7 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
   let runs: Run[] = [];
   const ref = g.refs?.get(it.key);
   const holderColor = C.ink3;
+  const widthOf = (i: number) => (i === 0 ? tmax : fullW);
   if (it.personFirst) {
     // Members board: the district under the person.
     const p = it.people[0];
@@ -1202,12 +1448,17 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
   } else if (isGroup(it)) {
     // Office headline; then the seat holders; then the tier, with every district served or the block number.
     setFont(ctx, 400, g.subSize, F.body);
+    const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
+    // The districts served move to the next line whole where they fit one.
+    const tailWith = (serves: string): Run[] => {
+      setFont(ctx, 400, g.subSize, F.body);
+      return [{ text: lab, weight: 600, color: C.tierB }, { text: ' · ', weight: 400, color: C.ink3 }, { text: serves, weight: 400, color: C.ink3, keep: tw(ctx, serves) <= fullW }];
+    };
+    const plain = districtsSummary(it.people);
     if (g.flow) {
       // Two names, or one where that saves a line of the district list.
-      const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
-      const tail: Run[] = [{ text: lab, weight: 600, color: C.tierB }, { text: ` · ${districtsSummary(it.people)}`, weight: 400, color: C.ink3 }];
-      const withNames = (k: number): Run[] => [{ text: `${seatHolders({ people: it.people }, k)} · `, weight: 400, color: holderColor }, ...(ref ? [] : tail)];
-      const lines = (k: number) => wrapRuns(ctx, withNames(k), g.subSize, (i) => (i === 0 ? tmax : fullW)).lines.length;
+      const withNames = (k: number): Run[] => [{ text: `${seatHolders({ people: it.people }, k)} · `, weight: 400, color: holderColor }, ...(ref ? [] : tailWith(plain))];
+      const lines = (k: number) => wrapRuns(ctx, withNames(k), g.subSize, widthOf).lines.length;
       runs = [{ text: `${seatHolders({ people: it.people }, lines(1) < lines(2) ? 1 : 2)} · `, weight: 400, color: holderColor }];
     } else runs = [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
     if (ref) {
@@ -1233,16 +1484,18 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
         runs.push(...tier);
       }
     } else {
-      const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
-      runs.push({ text: lab, weight: 600, color: C.tierB }, { text: ` · ${districtsSummary(it.people)}`, weight: 400, color: C.ink3 });
+      // "serves Isabela 4th, 6th legislative districts" where that costs no extra line.
+      const lead = runs;
+      const serves = richestForm(servesForms(it.people), (f) => wrapRuns(ctx, [...lead, ...tailWith(f)], g.subSize, widthOf).lines.length);
+      runs = [...lead, ...tailWith(serves)];
     }
   } else if (it.people[0]) {
-    // District headline; then "Rep. … · Tier A".
+    // District headline (with its DEO badge); then "Rep. … · Tier A".
     setFont(ctx, 400, g.subSize, F.body);
     runs = [{ text: seatHolders({ people: it.people }), weight: 400, color: holderColor }];
-    if (g.tierMarks) runs.push({ text: ' · ', weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2 });
+    if (g.tierMarks) runs.push({ text: ' · ', weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2, keep: true });
   }
-  const sub = wrapRuns(ctx, runs, g.subSize, (i) => (i === 0 ? tmax : fullW));
+  const sub = wrapRuns(ctx, runs, g.subSize, widthOf);
   return { sub, extra: Math.max(0, sub.lines.length - 1) };
 }
 
@@ -1304,7 +1557,7 @@ function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, plan: RowPlan,
   const lineGap = g.subSize * 0.3;
   const nh = g.nameSize + lineGap + g.subSize;
   const ny = cy - nh / 2 + g.nameSize * 0.8;
-  text(ctx, fitHeadline(ctx, it, g.nameSize, tmax), tx, ny, C.ink);
+  drawHeadlineWithBadges(ctx, it, tx, ny, g.nameSize, tmax, C.ink, '', !!g.refs?.get(it.key));
   drawRuns(ctx, plan.sub, tx, ny + lineGap + g.subSize * 1.02, g.subLH, g.subSize);
 }
 
@@ -1319,7 +1572,7 @@ function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: n
 
 function countLine(board: BoardDef, shown: number, eligible: number): string | null {
   if (!eligible) return null;
-  const unit = board.kind === 'members' ? ['representative', 'representatives'] : ['district office', 'district offices'];
+  const unit = board.kind === 'members' ? ['representative', 'representatives'] : ['DPWH office', 'DPWH offices'];
   const u = eligible === 1 ? unit[0] : unit[1];
   return shown < eligible ? `Top ${shown} of ${eligible.toLocaleString('en-US')} ${u}` : `${eligible.toLocaleString('en-US')} ${u}`;
 }
@@ -1347,8 +1600,16 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
   const valueW = sp.stacked ? 0 : Math.min(Math.max(vw, dw), w * 0.46);
   const tx = x + boxW + sp.name * 0.7;
   const tmax = x + w - (sp.stacked ? 0 : valueW + sp.name * 0.7) - tx;
+  // The place on up to two lines, the DEO badge after the last (every line narrower where the last needs the room).
+  const badges = badgeTexts(it);
+  const bSize = badgeSize(sp.name);
+  const bW = badgesWidth(ctx, badges, bSize);
   setFont(ctx, 700, sp.name, F.display, -sp.name * 0.01);
-  const nameLines = wrap(ctx, headline(it), tmax, 2);
+  let nameMax = tmax;
+  const whole = wrap(ctx, headline(it), tmax);
+  if (badges.length && tw(ctx, whole[whole.length - 1] ?? '') + bW > tmax) nameMax = tmax - bW;
+  const nameFits = wrap(ctx, headline(it), nameMax).length <= 2 && bW <= tmax;
+  const nameLines = wrap(ctx, headline(it), Math.max(1, nameMax), 2);
   const nLH = sp.name * 1.1;
   const subLH = sp.sub * 1.36;
   const chipSize = Math.round(sp.sub * 0.92);
@@ -1361,9 +1622,12 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
     ? [{ text: it.people[0]?.district ?? '', weight: 400, color: soft }]
     : group
       ? [{ text: fitHolders(ctx, it, tmax), weight: 400, color: soft }]
-      : [{ text: seatHolders({ people: it.people }), weight: 400, color: soft }, ...(tierMarks ? [{ text: ' · ', weight: 400, color: soft }, { text: 'Tier A', weight: 600, color: '#ffffff' }] : [])];
+      : [{ text: seatHolders({ people: it.people }), weight: 400, color: soft }, ...(tierMarks ? [{ text: ' · ', weight: 400, color: soft }, { text: 'Tier A', weight: 600, color: '#ffffff', keep: true }] : [])];
   const holders = wrapRuns(ctx, holdersRuns, sp.sub, () => tmax);
-  const sub = wrapRuns(ctx, group ? [{ text: districtsSummary(it.people), weight: 400, color: soft }] : [], sp.sub, () => tmax);
+  // "serves Isabela 4th, 6th legislative districts" where that costs no extra line.
+  const servesRuns = (f: string): Run[] => [{ text: f, weight: 400, color: soft }];
+  const serves = group ? richestForm(servesForms(it.people), (f) => wrapRuns(ctx, servesRuns(f), sp.sub, () => tmax).lines.length) : '';
+  const sub = wrapRuns(ctx, group ? servesRuns(serves) : [], sp.sub, () => tmax);
   const chipH = chip ? subLH : 0;
   const detailBelow = sp.stacked && it.detail ? vw + sp.detail + dw > tmax : false;
   const valueH = sp.stacked ? sp.sub * 0.5 + sp.value * 1.0 + (detailBelow ? sp.detail * 1.35 : 0) : 0;
@@ -1371,7 +1635,7 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
   const h = Math.max(d + sp.name * 0.5, textH) + sp.name * 0.2;
   return {
     h,
-    fits: !sub.overflow && !holders.overflow,
+    fits: !sub.overflow && !holders.overflow && nameFits,
     draw(y0) {
       const cy = y0 + h / 2;
       // Divider above the spotlight
@@ -1399,6 +1663,12 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
       let y = cy - textH / 2;
       setFont(ctx, 700, sp.name, F.display, -sp.name * 0.01);
       for (const l of nameLines) { text(ctx, l, tx, y + sp.name * 0.86, '#ffffff'); y += nLH; }
+      if (badges.length) {
+        setFont(ctx, 700, sp.name, F.display, -sp.name * 0.01);
+        const last = nameLines[nameLines.length - 1] ?? '';
+        drawBadges(ctx, badges, tx + tw(ctx, last), y - nLH + sp.name * 0.86 - sp.name * 0.35, bSize, BADGE_ON_BAND);
+      }
+      countBadge(it, nameFits);
       y += sp.sub * 0.4;
       drawRuns(ctx, holders, tx, y + sp.sub * 1.0, subLH, sp.sub);
       y += holders.lines.length * subLH;
@@ -1543,7 +1813,9 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
   const x = s.pad - s.rank * 0.2;
   const w = s.W - x * 2;
   const n = items.length;
-  const padY = s.rowPadY ?? s.rowSub * 0.9;
+  // Space above and below the rows; where the card is short of room it may halve before a row is dropped.
+  const padMax = s.rowPadY ?? s.rowSub * 0.9;
+  const padMin = Math.min(padMax, s.rowSub * 0.45);
   const maxPeople = Math.max(1, ...items.map((i) => i.people.length));
   const labelled = items.some((i) => i.label);
   // Labelled rows have no bar lane under the text, so they can be a little shorter.
@@ -1572,10 +1844,11 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
   const plans = items.map((it) => planRow(ctx, it, g));
   const exTotal = plans.reduce((a, p) => a + p.extra, 0) * g.subLH;
   return {
-    minH: n * rowMin + exTotal + padY * 2,
-    idealH: n * s.rowMax + exTotal + padY * 2,
+    minH: n * rowMin + exTotal + padMin * 2,
+    idealH: n * s.rowMax + exTotal + padMax * 2,
     fits: plans.every((p) => !p.sub.overflow),
     draw(y0, hAvail) {
+      const padY = Math.max(padMin, Math.min(padMax, (hAvail - n * rowMin - exTotal) / 2));
       const rowMax = n <= 4 ? s.rowMax * 1.25 : s.rowMax;
       const rowH = Math.max(rowMin, Math.min(rowMax, (hAvail - padY * 2 - exTotal) / Math.max(1, n)));
       // A short list sits a little above the middle of the space instead of leaving a gap at the bottom.
@@ -1591,7 +1864,7 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
 }
 
 function emptyMessage(board: BoardDef, region: string | null): string {
-  const who = board.kind === 'members' ? 'representative' : 'district office';
+  const who = board.kind === 'members' ? 'representative' : 'DPWH office';
   return `No ${who} in ${regionName(region) ?? 'this region'} fits this board`;
 }
 
@@ -1632,8 +1905,8 @@ function drawRankingVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
     return;
   }
   const tierMarks = board.kind === 'ranking';
-  const people: CardPeople = { photos: true, amounts: board.kind === 'ranking' };
-  const attempt = (k: number, useBlock: boolean, dry: boolean) => {
+  const attempt = (k: number, useBlock: boolean, deo: DeoNote, dry: boolean) => {
+    const people: CardPeople = { photos: true, amounts: board.kind === 'ranking', deo };
     const items = all.slice(0, k);
     const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
     const t = heroText(board, region, countLine(board, k, eligible));
@@ -1649,18 +1922,41 @@ function drawRankingVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
       };
     }, people, dry);
   };
-  // Most rows first; each shared office lists its districts in its row, else in the block under the rows.
+  // Most rows first; each shared office lists its districts in its row, else in the block under the rows;
+  // the fullest DEO note that fits (portrait and story always carry one).
   const minRows = Math.min(format === 'landscape' ? 2 : 3, all.length);
+  const deos = deoForms(format, tierMarks);
   for (let k = all.length; k >= 1; k--) {
     for (const useBlock of [false, true]) {
-      if (!attempt(k, useBlock, true)) continue;
+      const i = firstFit(deos, (d) => attempt(k, useBlock, d, true));
+      if (i < 0) continue;
       if (k < minRows) layoutSparse = true;
-      attempt(k, useBlock, false);
+      attempt(k, useBlock, deos[i], false);
       return;
     }
   }
   layoutFits = false;
-  attempt(1, true, false);
+  attempt(1, true, null, false);
+}
+
+/**
+ * The index of the first of `options` (best first) that fits, or -1. The
+ * last is the most permissive, so it is tried first: when it does not fit,
+ * none will.
+ */
+function firstFit<T>(options: T[], fits: (o: T) => boolean): number {
+  const last = options.length - 1;
+  if (last < 0 || !fits(options[last])) return -1;
+  return options.findIndex((o, i) => i === last || fits(o));
+}
+
+/**
+ * The DEO notes a card may carry, best first. Portrait and story cards that
+ * show DEO badges explain "DEO" in the footer where that costs no row; square
+ * cards and link previews leave it to the badge.
+ */
+function deoForms(format: ShareFormat, offices: boolean): DeoNote[] {
+  return offices && (format === 'portrait' || format === 'story') ? ['short', null] : [null];
 }
 
 // --- by Congress -------------------------------------------------------------
@@ -1674,7 +1970,6 @@ function sharedRefs(cols: CongressCols): Map<string, SharedRef> {
   return sharedRefsOf(cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value))));
 }
 
-/** The tier line of a by-Congress cell: "Tier A", or "Tier B" and the shared office's number. */
 /** The tier line of a by-Congress cell: "Tier A", or "Tier B", the shared office's number and "Shared by N" where it fits. */
 function cellTierRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
   if (!isGroup(it)) return [{ text: 'Tier A', weight: 600, color: C.ink2 }];
@@ -1723,9 +2018,19 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, i
   const textW = innerW - 6;
   const cells = cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value)));
   // Every cell gets the same slots so values line up: names up to three lines (four on stories), district up to two.
-  setFont(ctx, 600, s.rowSub, F.body);
+  // A one-district card's DEO badge follows the last line of its name, or takes a line of its own.
+  const bSize = badgeSize(s.rowSub);
+  const nameOf = (it: Item): { lines: string[]; badges: string[]; bW: number; own: boolean } => {
+    setFont(ctx, 600, s.rowSub, F.body);
+    const lines = wrap(ctx, headline(it), textW);
+    const badges = badgeTexts(it);
+    const bW = badgesWidth(ctx, badges, bSize);
+    setFont(ctx, 600, s.rowSub, F.body);
+    return { lines, badges, bW, own: !!badges.length && tw(ctx, lines[lines.length - 1] ?? '') + bW > textW };
+  };
+  const names = new Map(cells.map((it) => [it.key, nameOf(it)]));
   const maxNameLines = s.H >= 1900 ? 4 : 3;
-  const nameLinesN = Math.min(maxNameLines, Math.max(2, ...cells.map((it) => wrap(ctx, headline(it), textW).length)));
+  const nameLinesN = Math.min(maxNameLines, Math.max(2, ...[...names.values()].map((n) => n.lines.length + (n.own ? 1 : 0))));
   setFont(ctx, 400, s.rowSub, F.body);
   const subLinesN = Math.min(2, Math.max(1, ...cells.map((it) => (isGroup(it) ? 1 : wrap(ctx, seatHolders({ people: it.people }), textW).length))));
   const lineH = s.rowSub * (nameLinesN > 2 ? 1.13 : 1.25);
@@ -1733,7 +2038,7 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, i
   // The bar under each value is dropped only when keeping it would shrink the faces below faceMin.
   const textNoBar = lineH * slots + s.rowValue * 1.2 + 8;
   const cardMinH = faceMin + textNoBar + 10;
-  let overflow = false;
+  const overflow = [...names.values()].some((n) => n.lines.length + (n.own ? 1 : 0) > nameLinesN || n.bW > textW);
   return {
     minH: cols.length * (headH + cardMinH) + s.rowSub * 2,
     idealH: cols.length * (headH + cardMinH + barLane) * 1.2,
@@ -1782,15 +2087,33 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, i
           ctx.textBaseline = 'alphabetic';
           // Name (office for a shared group), district or shared mark, tier: centred in fixed slots
           const slotTop = ay + d / 2;
+          const nm = names.get(it.key)!;
+          const room = nameLinesN - (nm.own ? 1 : 0);
           setFont(ctx, 600, s.rowSub, F.body);
-          const nl = wrap(ctx, headline(it), textW, nameLinesN);
-          if (wrap(ctx, headline(it), textW).length > nameLinesN) overflow = true;
+          const nl = wrap(ctx, headline(it), textW, room);
           setFont(ctx, 400, s.rowSub, F.body);
           const subL = group ? [fitHolders(ctx, it, textW)] : wrap(ctx, seatHolders({ people: it.people }), textW, subLinesN);
-          const used = nl.length + subL.length + 1;
+          const used = nl.length + (nm.own ? 1 : 0) + subL.length + 1;
           let ty = slotTop + lineH + ((slots - used) * lineH) / 2;
           setFont(ctx, 600, s.rowSub, F.body);
-          for (const l of nl) { text(ctx, l, cx, ty, C.ink, 'center'); ty += lineH; }
+          nl.forEach((l, li) => {
+            const withBadge = nm.badges.length && !nm.own && li === nl.length - 1;
+            if (withBadge) {
+              // The last line and its badge, centred together.
+              const lw0 = tw(ctx, l);
+              const x0 = cx - (lw0 + nm.bW) / 2;
+              text(ctx, l, x0, ty, C.ink);
+              drawBadges(ctx, nm.badges, x0 + lw0, ty - s.rowSub * 0.35, bSize, BADGE_ROW);
+              setFont(ctx, 600, s.rowSub, F.body);
+            } else text(ctx, l, cx, ty, C.ink, 'center');
+            ty += lineH;
+          });
+          if (nm.own) {
+            const gap = badgeMetrics(bSize).gap;
+            drawBadges(ctx, nm.badges, cx - (nm.bW + gap) / 2, ty - s.rowSub * 0.35, bSize, BADGE_ROW);
+            ty += lineH;
+          }
+          countBadge(it, nm.bW <= textW);
           setFont(ctx, 400, s.rowSub, F.body);
           for (const l of subL) { text(ctx, l, cx, ty, C.ink3, 'center'); ty += lineH; }
           drawRuns(ctx, wrapRuns(ctx, cellTierRuns(ctx, it, refs.get(r.entry.key), s.rowSub, textW), s.rowSub, () => textW), cx, ty, lineH, s.rowSub, 'center');
@@ -1814,21 +2137,19 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, i
 }
 
 /**
- * The second line of a by-Congress row: the district and "Tier A" (the
- * district is shortened, never the tier), or "Tier B", the shared office's
- * number and "Shared by N" where it fits.
+ * The line beside the face in a by-Congress row: "Rep. … · Tier A" (the name
+ * is shortened, never the tier), or "Tier B", the shared office's number and
+ * the seat holders as far as they fit ("Tier B ① · Reps. A +6").
  */
 function cellSubRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
   const sep = ' · ';
   if (!isGroup(it)) {
-    // "Rep. Ferdinand Alexander Marcos · Tier A": the name is shortened, never the tier.
     setFont(ctx, 600, size, F.body);
     const tailW = tw(ctx, 'Tier A');
     setFont(ctx, 400, size, F.body);
     const room = max - tailW - tw(ctx, sep) - 2;
     return [{ text: fitHolders(ctx, it, room), weight: 400, color: C.ink3 }, { text: sep, weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2 }];
   }
-  // "Tier B ① · Reps. A +6" (names as far as they fit).
   const base: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
   const baseW = runLineWidth(wrapRuns(ctx, base, size, () => Infinity).lines[0] ?? []);
   setFont(ctx, 400, size, F.body);
@@ -1838,22 +2159,40 @@ function cellSubRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: numbe
 }
 
 /**
- * Three columns, one per Congress (portrait, square, landscape). Rows carry the
- * name, the tier with the district or the shared office's number, and the
- * value with a bar.
+ * Three columns, one per Congress (portrait, square, story). A row is a small
+ * card: the rank and the legislative district with its DEO badge across the
+ * card ("1. Davao de Oro, 2nd District [1st DEO]"; a shared office's name);
+ * under it the face beside the seat holder and tier, and the value with a
+ * bar. The columns use more of the width than the page margin (as the story
+ * bands do) so the district and its badge fit whole.
  */
 function congressColumns(ctx: Ctx, board: BoardDef, cols: CongressCols, images: ReadonlyMap<string, ShareImageSource>, x: number, w: number, sizes: { name: number; sub: number; value: number; head: number; avatar: number }, refs: Map<string, SharedRef>): Body {
   const perCol = Math.max(1, ...cols.map((c) => c.rows.length));
-  const gap = sizes.sub * 1.1;
+  const gap = Math.round(sizes.sub * 0.6);
   const colW = (w - gap * (cols.length - 1)) / cols.length;
+  const ip = 10;
+  const fullW = colW - ip * 2;
   setFont(ctx, 700, sizes.head, F.display);
   const labelW = Math.max(...cols.map((c) => tw(ctx, CONGRESS_LABEL[c.congress])));
   setFont(ctx, 500, sizes.sub, F.mono, sizes.sub * 0.04);
   const yearsW = Math.max(...cols.map((c) => tw(ctx, c.years)));
-  const oneLineHead = labelW + yearsW + sizes.sub <= colW;
+  const oneLineHead = labelW + yearsW + sizes.sub <= fullW;
   const headH = sizes.head * (oneLineHead ? 1.75 : 2.6);
-  const d0 = sizes.avatar;
-  const rowNeed = Math.max(sizes.name * 1.2 + sizes.sub * 1.3 + sizes.value * 1.1 + 14, d0 + 12);
+  const d = sizes.avatar;
+  const lh = sizes.sub * 1.3;
+  // The place and its DEO badge across the card, on one line where every cell's fit whole; else
+  // (a long badge such as "Davao Occidental DEO") the badge under the place, in every cell alike.
+  const cells = cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value)));
+  const bSize = badgeSize(sizes.name);
+  const twoLineHead = cells.some((it) => {
+    const bW = badgesWidth(ctx, badgeTexts(it), bSize);
+    return bW > 0 && headlineForm(ctx, it, sizes.name, fullW - bW, `${it.rank}. `) == null;
+  });
+  const nameH = sizes.name * 1.2 * (twoLineHead ? 2 : 1);
+  const pairH = lh + sizes.value * 1.05;
+  const bodyH = Math.max(d, pairH);
+  const contentH = nameH + 2 + bodyH;
+  const rowNeed = contentH + 14;
   return {
     minH: headH + perCol * rowNeed + sizes.sub,
     idealH: headH + perCol * rowNeed * 1.2 + sizes.sub,
@@ -1864,43 +2203,42 @@ function congressColumns(ctx: Ctx, board: BoardDef, cols: CongressCols, images: 
       cols.forEach((col, ci) => {
         const cx = x + ci * (colW + gap);
         setFont(ctx, 700, sizes.head, F.display);
-        text(ctx, CONGRESS_LABEL[col.congress], cx, top + sizes.head, C.ink);
+        text(ctx, CONGRESS_LABEL[col.congress], cx + ip, top + sizes.head, C.ink);
         setFont(ctx, 500, sizes.sub, F.mono, sizes.sub * 0.04);
-        if (oneLineHead) text(ctx, col.years, cx + colW, top + sizes.head, C.ink3, 'right');
-        else text(ctx, col.years, cx, top + sizes.head + sizes.sub * 1.3, C.ink3);
+        if (oneLineHead) text(ctx, col.years, cx + colW - ip, top + sizes.head, C.ink3, 'right');
+        else text(ctx, col.years, cx + ip, top + sizes.head + sizes.sub * 1.3, C.ink3);
         ctx.fillStyle = C.ink;
         ctx.fillRect(cx, top + headH - 5, colW, 3);
         const maxAbs = Math.max(0, ...col.rows.map((r) => Math.abs(r.value)));
         col.rows.forEach((r, i) => {
           const it = entryItem(r.rank, r.entry, r.value);
           const ry = top + headH + i * rowH;
-          const cyy = ry + rowH / 2;
           ctx.fillStyle = C.paper2;
           roundRect(ctx, cx, ry + 3, colW, rowH - 6, 8);
           ctx.fill();
-          const d = Math.min(d0, rowH - 12);
+          let y = ry + (rowH - contentH) / 2;
+          // "1. Davao de Oro, 2nd District [1st DEO]" / "1. Davao de Oro · 2nd [1st DEO]" / "1. DPWH Metro Manila 1st DEO"
+          if (!twoLineHead) drawHeadlineWithBadges(ctx, it, cx + ip, y + sizes.name * 0.92, sizes.name, fullW, C.ink, `${r.rank}. `, !!refs.get(it.key));
+          else drawTwoLineHead(ctx, it, cx + ip, y + sizes.name * 0.92, sizes.name, fullW, `${r.rank}. `, !!refs.get(it.key));
+          y += nameH + 2;
+          // The face beside the seat holder (or the shared mark) and the value
           const group = isGroup(it);
           const boxW = group ? Math.round(d * 1.6) : d;
-          drawAvatars(ctx, images, it.people, cx + 6, cyy, d, boxW, '#ffffff');
-          const tx = cx + 6 + boxW + sizes.sub * 0.5;
-          const tmax = cx + colW - tx - 8;
-          const blockH = rowNeed - 14;
-          let ty = cyy - blockH / 2 + sizes.name * 0.85;
-          // "1. Metro Manila 1st district office" / "1. Ilocos Norte, 1st District" (shrinks before it is cut)
-          text(ctx, fitHeadline(ctx, it, sizes.name, tmax, `${r.rank}. `), tx, ty, C.ink);
-          ty += sizes.sub * 1.3;
-          drawRuns(ctx, wrapRuns(ctx, cellSubRuns(ctx, it, refs.get(r.entry.key), sizes.sub, tmax), sizes.sub, () => Infinity), tx, ty, sizes.sub * 1.3, sizes.sub);
-          ty += sizes.value * 1.1;
+          drawAvatars(ctx, images, it.people, cx + ip - 2, y + bodyH / 2, d, boxW, '#ffffff');
+          const tx = cx + ip - 2 + boxW + sizes.sub * 0.45;
+          const ty = y + (bodyH - pairH) / 2 + sizes.sub * 0.98;
+          drawRuns(ctx, wrapRuns(ctx, cellSubRuns(ctx, it, refs.get(it.key), sizes.sub, cx + colW - ip - tx), sizes.sub, () => Infinity), tx, ty, lh, sizes.sub);
+          const vy = ty + lh - sizes.sub * 0.98 + sizes.value * 0.92;
           setFont(ctx, 700, sizes.value, F.display);
           ctx.fillStyle = th.text;
-          const vw = drawTab(ctx, formatValue(r.value, board.value), tx, ty, 'left');
+          const vw = drawTab(ctx, formatValue(r.value, board.value), tx, vy, 'left');
           // Bar beside the value, ∝ value within this Congress
           const bx0 = tx + vw + sizes.sub * 0.6;
-          const bw = cx + colW - 12 - bx0;
+          const bw = cx + colW - ip - bx0;
           const bh = Math.max(5, Math.round(sizes.sub * 0.28));
           if (bw > sizes.sub * 2) {
             const frac = maxAbs > 0 ? Math.abs(r.value) / maxAbs : 0;
-            const by = ty - sizes.value * 0.32 - bh / 2;
+            const by = vy - sizes.value * 0.32 - bh / 2;
             ctx.fillStyle = C.paper3;
             roundRect(ctx, bx0, by, bw, bh, bh / 2);
             ctx.fill();
@@ -1928,13 +2266,13 @@ function drawCongressVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Sha
     layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
-  const people: CardPeople = { photos: true, amounts: true };
   type Form = 'bands' | 'columns';
-  const attempt = (k: number, form: Form, dry: boolean) => {
+  const attempt = (k: number, form: Form, deo: DeoNote, dry: boolean) => {
+    const people: CardPeople = { photos: true, amounts: true, deo };
     const cols = rankByCongress(data, { region, limit: k });
     const refs = sharedRefs(cols);
     const main = form === 'columns'
-      ? congressColumns(ctx, board, cols, images, s.pad, s.W - s.pad * 2, { name: 22, sub: 22, value: format === 'story' ? 30 : 26, head: 28, avatar: format === 'story' ? 60 : 48 }, refs)
+      ? congressColumns(ctx, board, cols, images, Math.round(s.pad * 0.5), s.W - Math.round(s.pad * 0.5) * 2, { name: 22, sub: 22, value: format === 'story' ? 30 : 26, head: 28, avatar: format === 'story' ? 44 : 40 }, refs)
       : congressBands(ctx, s, board, cols, images, refs);
     return layoutVertical(ctx, s, input, heroText(board, region, congressCount(k, full)), () => ({
       extra: null,
@@ -1944,16 +2282,18 @@ function drawCongressVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Sha
   // Stories have the height for a card per office; portrait and square use the compact columns.
   const forms: Form[] = format === 'story' ? ['bands', 'columns'] : ['columns'];
   const most = Math.max(...full.map((c) => c.rows.length));
+  const deos = deoForms(format, true);
   for (let k = most; k >= 1; k--) {
     for (const form of forms) {
-      if (!attempt(k, form, true)) continue;
+      const i = firstFit(deos, (d) => attempt(k, form, d, true));
+      if (i < 0) continue;
       if (k < Math.min(2, most)) layoutSparse = true;
-      attempt(k, form, false);
+      attempt(k, form, deos[i], false);
       return;
     }
   }
   layoutFits = false;
-  attempt(1, 'columns', false);
+  attempt(1, 'columns', deos[deos.length - 1], false);
 }
 
 // --- shift (NEP vs House bill by office kind) -----------------------------------
@@ -1964,7 +2304,7 @@ type SliceKey = 'deo' | 'central' | 'regional' | 'office_change' | 'no_office';
 interface ShiftKind { key: string; keys: SliceKey[]; label: string; color: string; note?: string; dark?: boolean }
 
 const KINDS: readonly ShiftKind[] = [
-  { key: 'deo', keys: ['deo'], label: 'District offices', color: C.accent },
+  { key: 'deo', keys: ['deo'], label: 'DPWH district engineering offices', color: C.accent },
   { key: 'central', keys: ['central'], label: 'Central Office', color: C.central },
   { key: 'regional', keys: ['regional'], label: 'Regional offices', color: C.regional, dark: true },
 ];
@@ -2268,13 +2608,12 @@ function drawCongressLandscape(ctx: Ctx, input: ShareCardInput): void {
     return;
   }
   const t = heroText(board, region, congressCount(1, rankByCongress(data, { region, limit: 5 })));
-  const people: CardPeople = { photos: true, amounts: true };
   const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
   const attempt = (useBlock: boolean, dry: boolean) => layoutVertical(ctx, s, input, t, () => {
     const refs = useBlock ? sharedRefsOf(items) : null;
     const rows = rowsBody(ctx, s, board, items, images, maxAbs, true, refs);
     return { extra: null, body: refs && refs.size ? withSharedBlock(ctx, rows, refs, s.pad, s.W - s.pad * 2, s.rowSub) : rows };
-  }, people, dry);
+  }, { photos: true, amounts: true }, dry);
   if (attempt(false, true)) attempt(false, false);
   else attempt(true, false);
 }
@@ -2351,12 +2690,21 @@ export interface ShareCardReport {
   /**
    * False when some layout had to fall back (a title cut, rows squeezed, fewer
    * than three rows), when a district list or the residual could not be laid
-   * out whole, when the data has no residual figures yet, or when the as-of
-   * row is missing or does not fit its line.
+   * out whole, when the data has no residual figures yet, when the as-of
+   * row is missing or does not fit its line, or when a one-district row's
+   * DEO badge is missing or cut (or a row's legislative district, or a
+   * shared office named nowhere else on the card, cut).
    */
   fits: boolean;
   /** Fewer rows than usual fitted (the count line says "Top K of N"); not a defect, worth a look. */
   sparse: boolean;
+  /**
+   * One-district rows drawn (`expected`) and those whose DEO badge was drawn
+   * whole (`shown`); `placeCut` when a row's legislative district (or a
+   * shared office the card names nowhere else) had to be cut.
+   * `fits` is false unless shown === expected and nothing was cut.
+   */
+  badges: { expected: number; shown: number; placeCut: boolean };
 }
 
 /** Paint one share card at the format's native size. `ctx.canvas` must already be that size. */
@@ -2364,6 +2712,9 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   layoutFits = true;
   layoutSparse = false;
   residualMissing = false;
+  badgeExpected = 0;
+  badgeShown = 0;
+  placeCut = false;
   cardAsOf = asOfText(input.data);
   const built = new Date(input.data.built_at);
   cardAsOfShort = cardAsOf && !Number.isNaN(built.getTime())
@@ -2391,7 +2742,8 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
     else drawRankingVertical(ctx, s, format, inp);
   }
   ctx.restore();
-  return { fits: layoutFits && !residualMissing && !asOfMissing && asOfDrawn, sparse: layoutSparse };
+  const placesWhole = badgeShown === badgeExpected && !placeCut;
+  return { fits: layoutFits && !residualMissing && !asOfMissing && asOfDrawn && placesWhole, sparse: layoutSparse, badges: { expected: badgeExpected, shown: badgeShown, placeCut } };
 }
 
 /** Every image a card draws: the portraits of the rows shown (up to three per shared office) and the logo. */
@@ -2409,16 +2761,23 @@ export function shareCardImageUrls(data: LeaderboardData, board: BoardDef, forma
   return [...urls];
 }
 
-/** "Ilocos Norte, 1st District (Ferdinand Alexander Marcos), Tier A" or, for a shared office, the office, its tier and every district it serves. */
+/**
+ * "Davao de Oro, 2nd District (Rep. Leonel “Jhong” Ceniza), served by DPWH
+ * Davao de Oro 1st DEO, Tier A" (the badge's office in full) or, for a shared
+ * office, the office, its tier and every legislative district it serves.
+ */
 function altItem(it: Item, tiers: boolean): string {
   if (it.personFirst) {
     const p = it.people[0];
     return `${personName(p)} (${p.district})`;
   }
   const holders = seatHolders({ people: it.people });
-  if (!isGroup(it)) return `${headline(it)}${holders ? ` (${holders})` : ''}${tiers ? `, ${tierText(it, true)}` : ''}`;
+  if (!isGroup(it)) {
+    const office = it.offices.length ? `, served by ${officeName(it)}` : '';
+    return `${headline(it)}${holders ? ` (${holders})` : ''}${office}${tiers ? `, ${tierText(it, true)}` : ''}`;
+  }
   const tier = tiers ? tierText(it) : `shared by ${it.people.length} districts, not split`;
-  return `${headline(it)}, ${tier}: ${it.people.map((p) => p.district).join('; ')}${holders ? ` (${holders})` : ''}`;
+  return `${headline(it)}, ${tier}, serves the legislative districts ${it.people.map((p) => p.district).join('; ')}${holders ? ` (${holders})` : ''}`;
 }
 
 /** Text alternative for the card: title, scope, the top three with their values and tiers, the residual and the disclaimer. */
@@ -2459,7 +2818,7 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     });
   }
   const residual = residualText(data, board);
-  const tail = [residual, people ? CARD_DISCLAIMER : null].filter(Boolean);
+  const tail = [residual, people ? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
   return `${head} ${[...top.filter(Boolean), ...tail].join('. ')}.`.replace(/\.\./g, '.').replace(/\.\s*\./g, '.');
 }
 

@@ -16,7 +16,7 @@
  *
  * Styles live in `src/hgab.css`, built on the /2027 microsite's tokens.
  */
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import * as fmt from '../lib/format';
@@ -28,6 +28,7 @@ import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubVi
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
+import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
 
 /**
@@ -325,6 +326,37 @@ export function HgabHero({
 }
 
 /** A peso figure with its sign: "+1.2B", "−340.5M", or "0" for no movement. */
+/**
+ * The DPWH office(s) beside a legislative district, as small badges: "1st DEO"
+ * when the office is in the district's own province (so a crossed number shows
+ * at a glance: Davao de Oro, 2nd District · 1st DEO), else the office's short
+ * name ("Abra DEO"). The full name is the tooltip and what a screen reader
+ * hears ("DPWH Davao de Oro 1st DEO"). Sits inline after the district's name
+ * and adds no line of its own.
+ */
+export function DeoBadges({ offices, jurisdiction, className = '' }: {
+  /** Office names as the data lists them ("Davao de Oro 1st DEO"). */
+  offices: readonly string[];
+  /** The legislative district's province or city ("Davao de Oro"). */
+  jurisdiction?: string | null;
+  className?: string;
+}) {
+  if (!offices.length) return null;
+  return (
+    <>
+      {offices.map((name) => (
+        <Fragment key={name}>
+          {' '}
+          <span className={`hgab-deo ${className}`.trim()} title={deoBadgeTitle(name)}>
+            <span aria-hidden="true">{deoBadge(name, jurisdiction)}</span>
+            <span className="visually-hidden">(DPWH {name.replace(/\bDistrict Engineering Office\b/i, 'DEO')})</span>
+          </span>
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 export function SignedPhp({ value, className = '' }: { value: number | null | undefined; className?: string }) {
   if (value == null || !Number.isFinite(value)) return <span className={`hgab-delta ${className}`.trim()}>—</span>;
   const tone = value > 0 ? 'is-up' : value < 0 ? 'is-down' : '';

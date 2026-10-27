@@ -70,7 +70,7 @@ export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
   hgab: { term: 'House bill', meaning: "The House of Representatives' version of the budget, House Bill 10858 for 2027. It goes to the Senate next." },
   reading: { term: 'Second and third reading', meaning: 'The House votes on a bill twice. The third-reading text is the version it sends to the Senate.' },
   pap: { term: 'Program line', meaning: "A heading in the budget under which projects are listed, for example 'Preventive Maintenance - Primary Roads'." },
-  deo: { term: 'District engineering office', meaning: 'The DPWH field office that carries out projects in an area. One office can serve more than one congressional district.' },
+  deo: { term: 'District engineering office', meaning: 'The DPWH field office that carries out projects in an area. One office can serve more than one legislative district, and its number need not match the district’s.' },
   fap: { term: 'Foreign-assisted project', meaning: 'A project paid for partly with a loan or grant from abroad.' },
   candidate: { term: 'Candidate', meaning: 'A match or a gap found by comparing project names, places and amounts. It is a lead for checking, not a confirmed change.' },
   tier: { term: 'Tier A and Tier B', meaning: 'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.' },

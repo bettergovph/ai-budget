@@ -11,6 +11,10 @@
  * published per year; the FY2027 groups keep the source's caution (leads for
  * checking, not findings); and nothing says a representative moved money.
  *
+ * An office is always shown beside the legislative district it serves, as a
+ * small badge after the district's name ("Davao de Oro, 2nd District · 1st
+ * DEO", DeoBadges): a DEO's number is its own.
+ *
  * Wording is for a reader who has never opened a budget document. Technical
  * detail (matched labels, crosswalk ids, parquet paths) is not rendered here;
  * the detail page keeps it in a "Details for analysts" block.
@@ -26,11 +30,11 @@ import {
 import {
   ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
   cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
-  districtLabel, districtRegionKey, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
-  officeKindText, officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
+  districtLabel, districtRegionKey, dpwhOfficeName, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
+  officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
   residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, type HistorySlot,
 } from '../lib/hgab-districts';
-import { HgabDetails, SignedPhp } from './HgabBits';
+import { DeoBadges, HgabDetails, SignedPhp } from './HgabBits';
 import '../hgab-districts.css';
 
 // ---------------------------------------------------------------------------
@@ -524,16 +528,6 @@ export function CongressCaveat() {
 // Office pieces
 // ---------------------------------------------------------------------------
 
-/** An office name with its tier badge; Tier B chips say how many districts share it. */
-export function OfficeChip({ office, to }: { office: OfficeHistory; to?: string }) {
-  return (
-    <span className="hgab-dc-office" title={`${officeKindText(office)}${office.region ? ` · ${office.region}` : ''}`}>
-      <TierBadge tier={office.tier} sharedWith={Math.max(0, office.district_ids.length - 1)} compact />
-      {to ? <Link to={to}>{office.name}</Link> : office.name}
-    </span>
-  );
-}
-
 /** Links to the other districts an office serves, separated by semicolons because each label has a comma. */
 export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: HgabDistrictIndex }) {
   if (!ids.length) return null;
@@ -592,11 +586,11 @@ export function SharedLabel({ ids, index }: { ids: readonly string[]; index: Hga
         onClick={() => setOpen((v) => !v)}
       >
         Shared <span aria-hidden="true">ⓘ</span>
-        <span className="visually-hidden">: office total not split; show the {n} districts it serves</span>
+        <span className="visually-hidden">: office total not split; show the {n} legislative districts it serves</span>
       </button>
       <span id={popId} className="hgab-dc-shared-pop" role="note" hidden={!open}>
-        <strong>Shared office total, not split.</strong> This office serves {n} districts. Its figures are the
-        whole office’s; do not add the cards together.
+        <strong>Shared office total, not split.</strong> This DPWH office serves {n} legislative districts. Its
+        figures are the whole office’s; do not add the cards together.
         {ids.length > 0 && (
           <span className="hgab-dc-shared-list">
             Also serves: <CoServedLinks ids={ids} index={index} />
@@ -676,7 +670,7 @@ export function OfficeBridgePanel({ office, withName = false }: { office: Office
   const f = office.fy2027;
   const b = f?.bridge ?? null;
   const change = f?.office_change;
-  const name = withName ? <p className="hgab-dc-br-office">{office.name}</p> : null;
+  const name = withName ? <p className="hgab-dc-br-office">{dpwhOfficeName(office.name)}</p> : null;
   if (!f || !b) {
     return (
       <div className="hgab-dc-br">
@@ -802,7 +796,7 @@ function Figure({ v }: { v: number | null }) {
 }
 
 /**
- * One legislative district: who holds the seat, which office(s) serve it, the
+ * One legislative district: who holds the seat, which DPWH office(s) serve it, the
  * office history by Congress, the headline figures (labelled shared when the
  * office is), the one-line 2027 summary, and the links out. Memoised: the grid
  * draws 250 of these, each with an SVG, and typing in the search box must not
@@ -840,20 +834,22 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           </p>
           <Heading className="hgab-dc-district" id={hid} tabIndex={-1}>
             <Link to={districtPath(card.id)}>{card.label}</Link>
+            <DeoBadges offices={offices.map((o) => o.name)} jurisdiction={card.jurisdiction} />
           </Heading>
           <RepresentativeBlock rep={rep} />
         </div>
       </header>
 
-      <ul className="hgab-dc-offices" aria-label="District engineering offices serving this district">
-        {offices.map((o) => <li key={o.id}><OfficeChip office={o} /></li>)}
-        {groups.map((g) => (
-          <li key={g.id} className="hgab-dc-nooffice">
-            {g.name} is a regional grouping, not a district office. Its money is not assigned to a district and appears on no card.
-          </li>
-        ))}
-        {offices.length === 0 && groups.length === 0 && <li className="hgab-dc-nooffice">{ATTRIBUTION_LABELS.none.help}</li>}
-      </ul>
+      {(groups.length > 0 || offices.length === 0) && (
+        <ul className="hgab-dc-offices">
+          {groups.map((g) => (
+            <li key={g.id} className="hgab-dc-nooffice">
+              {g.name} is a regional grouping, not a DPWH district engineering office (DEO). Its money is not assigned to a district and appears on no card.
+            </li>
+          ))}
+          {offices.length === 0 && groups.length === 0 && <li className="hgab-dc-nooffice">{ATTRIBUTION_LABELS.none.help}</li>}
+        </ul>
+      )}
 
       {undivided && (
         <p className="hgab-dc-undivided">
@@ -861,7 +857,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
         </p>
       )}
       {!undivided && offices.length > 1 && (
-        <p className="hgab-dc-undivided is-sum">Total of {offices.length} offices</p>
+        <p className="hgab-dc-undivided is-sum">Total of {offices.length} DPWH offices</p>
       )}
 
       {offices.length > 0 && (
@@ -885,7 +881,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
                   {offices.map((o, i) => (
                     <div className="hgab-dc-chartrow" key={o.id}>
                       <div className="hgab-dc-chartrow-head">
-                        <span title={o.name}>{o.name}{offices.length > 1 ? ` · office ${i + 1} of ${offices.length}` : ''}</span>
+                        <span title={dpwhOfficeName(o.name)}>{dpwhOfficeName(o.name)}{offices.length > 1 ? ` · office ${i + 1} of ${offices.length}` : ''}</span>
                         <TierBadge tier={o.tier} sharedWith={Math.max(0, o.district_ids.length - 1)} compact />
                       </div>
                       <HistoryChart office={o} max={max || undefined} />
