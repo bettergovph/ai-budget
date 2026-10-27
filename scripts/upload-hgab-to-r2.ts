@@ -22,6 +22,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
+import { MPB_CSV_NAME } from "../src/lib/hgab-mpb";
 
 interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string }
 function parseArgs(): Args {
@@ -64,7 +65,7 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".pdf")) return "application/pdf";
   // share/<board>.png: link previews (npm run build:hgab-share), read by social crawlers.
   if (path.endsWith(".png")) return "image/png";
-  // changes-list.csv (npm run build:hgab-changes-list): UTF-8 with BOM, linked as a download.
+  // changes-list.csv (npm run build:hgab-changes-list), mpb.csv (npm run build:hgab-mpb): UTF-8 with BOM, linked as a download.
   if (path.endsWith(".csv")) return "text/csv; charset=utf-8";
   // we-are-not-ignorant.html (npm run build:hgab-not-ignorant): a static page the Worker serves.
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
@@ -74,10 +75,13 @@ function contentTypeFor(path: string): string {
 function cacheControlFor(path: string): string {
   return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") ? "public, max-age=300" : "public, max-age=86400";
 }
+/** Download names that are not `bettergov-house-bill-2027-<file>` (mpb.csv: npm run build:hgab-mpb). */
+const CSV_NAMES: Readonly<Record<string, string>> = { "mpb.csv": MPB_CSV_NAME };
 /** A CSV is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {
   if (!path.endsWith(".csv")) return undefined;
-  return `attachment; filename="bettergov-house-bill-2027-${path.split(sep).pop()}"`;
+  const file = path.split(sep).pop()!;
+  return `attachment; filename="${CSV_NAMES[file] ?? `bettergov-house-bill-2027-${file}`}"`;
 }
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;

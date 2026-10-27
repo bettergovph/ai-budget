@@ -57,6 +57,10 @@
  *     kind = candidate_changes; every representative = the districts.json seat holders of the districts the
  *     office's (leaderboard) group serves, none on Central/regional/office-change/no-office lines; the CSV
  *     parsed on its own, row for row with the JSON.
+ *   - multi-purpose buildings (`npm run build:hgab-mpb`): mpb.json and mpb.csv recomputed from the parquets —
+ *     the MPB lines (title only, misspellings in, water projects out; none in the three lists), totals per kind, office kinds, programs, every
+ *     office group's figures and share (leaderboard groups, districts.json seat holders), regions,
+ *     subtypes, House amounts, repeated titles, the largest inserted lines; the CSV row for row.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -95,6 +99,10 @@ import {
   CHANGES_LIST_CSV_COLUMNS, CHANGES_LIST_LEGEND, CHANGES_LIST_SCHEMA, CHANGES_LIST_SITE, CHANGE_PROGRAM_LABELS, NO_DISTRICT_REASON,
   districtsServedText, type ChangesListData,
 } from "../src/lib/hgab-changes-list";
+import {
+  MPB_CSV_COLUMNS, MPB_EXCLUDE_RE, MPB_KINDS, MPB_SCHEMA, MPB_SUBTYPES, MPB_TITLE_RE, isMpbTitle, mpbProjectsHref, mpbSubtypeOf,
+  type MpbCell, type MpbData, type MpbSlice,
+} from "../src/lib/hgab-mpb";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -663,6 +671,8 @@ async function main(): Promise<void> {
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
+
+  await verifyMpb(overview, c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -2144,6 +2154,383 @@ async function verifyChangesList(overview: Overview, c: DuckDBConnection): Promi
       || csvSum(l, "increased", "house_php") !== a.increased_house_php || csvSum(l, "decreased", "nep_php") !== a.reduced_nep_php;
   });
   check("CSV sums per program and kind, read from the file alone, equal candidate_changes", csvSumBad.length === 0, csvSumBad.map((p) => p.key).join(", "));
+}
+
+// ---------------------------------------------------------------------------
+// Multi-purpose buildings (mpb.json + mpb.csv, npm run build:hgab-mpb)
+//
+// Recomputed on the verifier's own path: the MPB lines picked from the parquet twice (DuckDB's RE2, written out
+// here, and the contract's isMpbTitle), kinds through the SQL trace partition (not TRACE_LABELS), office groups from
+// leaderboard.json, seat holders from districts.json, regions from the published label ("Region " dropped),
+// repeats through this section's own title key. Then the CSV, parsed on its own, row for row.
+// ---------------------------------------------------------------------------
+
+const MPB_CONTRACT = resolve(arg("mpb-contract", "src/lib/hgab-mpb.ts"));
+/** The MPB rule in RE2 (DuckDB), written out independently of isMpbTitle: any dash or space, the five misspellings; not water works. */
+const MPB_SQL = `coalesce(regexp_matches(title, 'multi[\\s\\x{2010}-\\x{2015}\\x{2212}-]*(purpose|pupose|pirpose|purppose|purpoe|purpse)', 'i')
+  AND NOT regexp_matches(title, '\\b(impounding|dam|irrigation)\\b', 'i'), false)`;
+const EXPECTED_MPB = {
+  rows: 6_002, dpwh_rows: 17_613,
+  traces: {
+    house_only_candidate: { rows: 3_002, nep: 0, house: 42_659_648_000 }, fuzzy_candidate: { rows: 256, nep: 0, house: 4_144_097_000 },
+    ambiguous: { rows: 1, nep: 0, house: 25_000_000 }, amount_same: { rows: 2_347, nep: 33_377_663_000, house: 33_377_663_000 },
+    nep_only_candidate: { rows: 301, nep: 4_605_500_000, house: 0 }, candidate_increase: { rows: 68, nep: 1_260_500_000, house: 1_807_114_000 },
+    candidate_decrease: { rows: 27, nep: 1_035_500_000, house: 418_121_000 },
+  } as Record<string, { rows: number; nep: number; house: number }>,
+  /** Counted only through a dash ("Multi – Purpose") or a misspelling of "purpose". */
+  variants: ["house-reading:10666", "house-reading:10685", "house-reading:10728", "house-reading:11670", "house-reading:11718", "house-reading:11756", "house-reading:13812", "house-reading:14000", "house-reading:14038"],
+  /** Left out: water works that only use the phrase (Cabayongan River … Small River Impounding System). */
+  excluded: ["house-reading:4595"],
+  central_published: { rows: 473, house: 30_936_333_000 },
+  top_amount: { php: 5_000_000, rows: 1_657 },
+  note_words: 20,
+};
+
+async function verifyMpb(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nmpb.json + mpb.csv (multi-purpose buildings)\n");
+  const jsonPath = resolve(OUT, "mpb.json"), csvPath = resolve(OUT, "mpb.csv");
+  check("mpb.json and mpb.csv present (npm run build:hgab-mpb)", existsSync(jsonPath) && existsSync(csvPath), `${jsonPath} / ${csvPath}`);
+  if (!existsSync(jsonPath) || !existsSync(csvPath)) return;
+  const M = readJson<MpbData>(jsonPath);
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  const LB = readJson<LeaderboardData>(resolve(OUT, "leaderboard.json"));
+  const ov = readJson<{ candidate_changes?: CcBlock; documents: Array<{ key: string; title: string }> }>(resolve(OUT, "overview.json"));
+  const summary = readJson<{ dataset: { totals: { nep_php: number; hgab3_php: number | null } } }>(resolve(OUT, "dpwh", "summary.json"));
+  const meta = overview.datasets.find((d) => d.key === "dpwh");
+  const ccDpwh = ov.candidate_changes?.programs.find((p) => p.key === "dpwh");
+  if (!meta || !ccDpwh) { check("overview.json carries the DPWH dataset and its candidate_changes", false); return; }
+  const src = readFileSync(MPB_CONTRACT, "utf8"), hgabSrc = readFileSync(CONTRACT, "utf8");
+  const regionOrder = [...(/export const REGION_ORDER[^=]*=\s*\[([\s\S]*?)\];/.exec(hgabSrc)?.[1] ?? "").matchAll(/'([A-Z-]+)'/g)].map((m) => m[1]);
+  const traceBlock = /export const TRACE_LABELS[^{]*\{([\s\S]*?)\n\};/.exec(hgabSrc)?.[1] ?? "";
+  const traceLabels = new Map([...traceBlock.matchAll(/^\s*([a-z0-9_]+):\s*\{\s*label:\s*'([^']*)'/gm)].map((m) => [m[1], m[2]] as const));
+  const docTitle = new Map(ov.documents.map((d) => [d.key, d.title] as const));
+  const byLabel = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true });
+  type Kind = (typeof MPB_KINDS)[number];
+
+  // 1. Header and shape (field lists parsed from the contract's interfaces).
+  check("schema 1, fiscal year 2027, source commit equals the overview, districts.json and leaderboard.json; a definition",
+    M.schema === MPB_SCHEMA && M.fiscal_year === 2027 && M.source_commit === overview.source_commit && M.source_commit === D.source_commit && M.source_commit === LB.source_commit
+      && !Number.isNaN(Date.parse(M.built_at)) && typeof M.definition === "string" && /multi-purpose/i.test(M.definition) && /misspelling/i.test(M.definition) && /left out/i.test(M.definition),
+    `${M.schema} ${M.fiscal_year} ${M.source_commit}`);
+  const F = (name: string) => contractFields(src, name).sort().join();
+  const keysOf = (o: object) => Object.keys(o).sort().join();
+  const shapeBad = [
+    keysOf(M) !== F("MpbData") && "MpbData",
+    M.offices.some((o) => keysOf(o) !== F("MpbOffice")) && "MpbOffice",
+    M.offices.some((o) => o.offices.some((x) => keysOf(x) !== "href,id,label,name,rows")) && "MpbOffice.offices[]",
+    M.offices.some((o) => o.people.some((p) => keysOf(p) !== F("MpbPerson"))) && "MpbPerson",
+    M.regions.some((r) => keysOf(r) !== F("MpbRegion")) && "MpbRegion",
+    M.subtypes.some((s) => keysOf(s) !== F("MpbSubtype")) && "MpbSubtype",
+    M.largest_inserted.some((l) => keysOf(l) !== F("MpbLine")) && "MpbLine",
+    M.repeats.some((r) => keysOf(r) !== F("MpbRepeat")) && "MpbRepeat",
+    M.amounts.top.some((b) => keysOf(b) !== F("MpbAmountBucket")) && "MpbAmountBucket",
+    keysOf(M.by_office_kind) !== "central,deo,no_office,office_change,regional" && "by_office_kind",
+  ].filter(Boolean);
+  check("every object carries exactly the fields its contract interface names (src/lib/hgab-mpb.ts)", shapeBad.length === 0, shapeBad.join(", "));
+  const nonFinite: string[] = [], nonInt: string[] = [];
+  const walk = (v: unknown, path: string) => {
+    if (typeof v === "number") {
+      if (!Number.isFinite(v)) nonFinite.push(path);
+      else if (path !== "inserted_mpb_share" && !Number.isSafeInteger(v)) nonInt.push(path);
+    } else if (Array.isArray(v)) v.forEach((x) => walk(x, path));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+  };
+  walk(M, "");
+  check("no NaN or Infinity; every count and peso figure is a safe integer (only inserted_mpb_share is a ratio)", !nonFinite.length && !nonInt.length,
+    [...new Set([...nonFinite, ...nonInt])].join(", "));
+
+  // 2. The lines, from the parquet.
+  const parquet = resolve(OUT, "dpwh", "projects.parquet");
+  const raw = (await c.runAndReadAll(`
+    WITH t AS (SELECT *, CASE
+      WHEN trace LIKE '%segment_scope_review%' THEN 'scope_review'
+      WHEN trace LIKE '%house_only_candidate%' OR trace IN ('fuzzy_candidate', 'ambiguous') THEN 'inserted'
+      WHEN trace LIKE '%nep_only_candidate%' THEN 'dropped'
+      WHEN trace LIKE '%candidate_increase%' THEN 'increased'
+      WHEN trace LIKE '%candidate_decrease%' THEN 'decreased'
+      WHEN trace LIKE '%amount_same%' THEN 'unchanged'
+      ELSE 'unknown' END k FROM read_parquet('${q(parquet)}'))
+    SELECT id, k, trace IN ('fuzzy_candidate', 'ambiguous'), trace, title, program, region, office, office_kind, nep_php, hgab3_php, delta_php,
+           CASE WHEN hgab3_php IS NOT NULL THEN coalesce(json_array_length(record_json->'$.third.records'), 1)
+                WHEN nep_php IS NOT NULL THEN coalesce(json_array_length(record_json->'$.nep.records'), 1) ELSE 0 END,
+           ${MPB_SQL}, nep_doc, nep_page, hgab2_doc, hgab2_page, hgab3_doc, hgab3_page
+    FROM t ORDER BY id`)).getRows();
+  const n = (v: unknown) => (v == null ? null : num(v)), s = (v: unknown) => (v == null ? null : String(v));
+  const officeChange = new Set(D.office_change.row_ids), noOffice = new Set(D.no_office.row_ids);
+  const officeOfLabel = new Map<string, string>();
+  for (const o of Object.values(D.offices)) {
+    const label = o.kind === "regional_group" ? null : o.years.find((y) => y.fy === 2027 && y.stage === "hgab3")?.matched_label ?? null;
+    if (label && o.fy2027) officeOfLabel.set(label, o.id);
+  }
+  const entryOf = new Map<string, LeaderEntry>();
+  for (const e of LB.entries) for (const o of e.offices) entryOf.set(o.id, e);
+  interface L {
+    id: string; kind: Kind; held: boolean; trace: string; title: string; program: string; region: string | null; office: string; officeKind: string;
+    nep: number | null; house: number | null; delta: number | null; records: number; basis: string; officeId: string | null; entry: LeaderEntry | null;
+    nepDoc: string | null; nepPage: number | null; d2: string | null; p2: number | null; d3: string | null; p3: number | null;
+  }
+  const dpwhAll = { rows: 0, nep: 0, house: 0, insRows: 0, insPhp: 0 };
+  const groupIns = new Map<string, number>();
+  const lines: L[] = [];
+  let sqlOnly = 0, jsOnly = 0, unknownKinds = 0;
+  const excludedIds: string[] = [], variantIds: string[] = [];
+  for (const r of raw) {
+    const id = String(r[0]), kind = String(r[1]) as Kind | "unknown", title = String(r[4] ?? "");
+    if (kind === "unknown") { unknownKinds++; continue; }
+    const office = String(r[7] ?? ""), officeKind = String(r[8] ?? "");
+    const basis = officeChange.has(id) ? "office_change" : noOffice.has(id) ? "no_office" : officeKind === "Central Office" ? "central" : officeKind === "Regional offices" ? "regional" : "office";
+    const officeId = basis === "office" ? officeOfLabel.get(office) ?? null : null;
+    const entry = officeId ? entryOf.get(officeId) ?? null : null;
+    dpwhAll.rows++; dpwhAll.nep += n(r[9]) ?? 0; dpwhAll.house += n(r[10]) ?? 0;
+    if (kind === "inserted") { dpwhAll.insRows++; dpwhAll.insPhp += n(r[10]) ?? 0; if (entry) groupIns.set(entry.key, (groupIns.get(entry.key) ?? 0) + (n(r[10]) ?? 0)); }
+    const js = isMpbTitle(title), sql = r[13] === true;
+    if (MPB_TITLE_RE.test(title) && MPB_EXCLUDE_RE.test(title)) excludedIds.push(id);
+    if (js && !/multi[\s-]*purpose/i.test(title)) variantIds.push(id);
+    if (js && !sql) jsOnly++;
+    if (sql && !js) sqlOnly++;
+    if (!js) continue;
+    lines.push({
+      id, kind, held: r[2] === true, trace: String(r[3]), title, program: String(r[5] ?? ""), region: s(r[6]), office, officeKind,
+      nep: n(r[9]), house: n(r[10]), delta: n(r[11]), records: num(r[12]), basis, officeId, entry,
+      nepDoc: s(r[14]), nepPage: n(r[15]), d2: s(r[16]), p2: n(r[17]), d3: s(r[18]), p3: n(r[19]),
+    });
+  }
+  const byId = new Map(lines.map((x) => [x.id, x] as const));
+  const traceTally = new Map<string, { rows: number; nep: number; house: number }>();
+  for (const x of lines) { const t = traceTally.get(x.trace) ?? { rows: 0, nep: 0, house: 0 }; t.rows++; t.nep += x.nep ?? 0; t.house += x.house ?? 0; traceTally.set(x.trace, t); }
+  check(`MPB lines: ${lines.length.toLocaleString("en-US")} of ${dpwhAll.rows.toLocaleString("en-US")} DPWH lines by title alone, the same set through DuckDB's regex and isMpbTitle; every trace is in the partition`,
+    lines.length === EXPECTED_MPB.rows && dpwhAll.rows === EXPECTED_MPB.dpwh_rows && !sqlOnly && !jsOnly && !unknownKinds,
+    `${lines.length} lines, ${sqlOnly} SQL-only, ${jsOnly} JS-only, ${unknownKinds} unknown traces`);
+  const traceBad = Object.entries(EXPECTED_MPB.traces).filter(([t, want]) => JSON.stringify(traceTally.get(t)) !== JSON.stringify(want));
+  check(`by trace, as pinned: ${Object.entries(EXPECTED_MPB.traces).map(([t, x]) => `${t} ${x.rows.toLocaleString("en-US")}`).join(", ")} (inserted House ${peso(EXPECTED_MPB.traces.house_only_candidate.house)}, dropped NEP ${peso(EXPECTED_MPB.traces.nep_only_candidate.nep)})`,
+    traceBad.length === 0 && traceTally.size === Object.keys(EXPECTED_MPB.traces).length, traceBad.map(([t]) => `${t}: ${JSON.stringify(traceTally.get(t))}`).join("; "));
+  check(`the rule's edges: ${variantIds.length} lines count only through a dash or a misspelling of "purpose" (${variantIds.join(", ")}); ${excludedIds.length} water project left out (${excludedIds.join(", ")})`,
+    JSON.stringify(variantIds.sort()) === JSON.stringify([...EXPECTED_MPB.variants].sort()) && JSON.stringify(excludedIds.sort()) === JSON.stringify([...EXPECTED_MPB.excluded].sort())
+      && excludedIds.every((id) => !byId.has(id)) && variantIds.every((id) => byId.has(id)),
+    `variants ${variantIds.join(",")} · excluded ${excludedIds.join(",")}`);
+  const otherHits: string[] = [];
+  for (const key of ["fmr", "hfep", "nia"]) {
+    const rows = (await c.runAndReadAll(`SELECT title, ${MPB_SQL} FROM read_parquet('${q(resolve(OUT, key, "projects.parquet"))}')`)).getRows();
+    const hits = rows.filter((r) => r[1] === true || isMpbTitle(String(r[0] ?? ""))).length;
+    if (hits) otherHits.push(`${key} ${hits}`);
+  }
+  check("no farm-to-market road, health facility or irrigation line has an MPB title, and a note says so",
+    otherHits.length === 0 && M.notes.some((x) => /farm-to-market/i.test(x) && /health/i.test(x) && /irrigation/i.test(x)), otherHits.join(", "));
+
+  // 3. The comparison base.
+  check(`dpwh: ${M.dpwh.rows.toLocaleString("en-US")} lines, NEP ${peso(M.dpwh.nep_php)}, House ${peso(M.dpwh.house_php)}, inserted ${M.dpwh.inserted_rows.toLocaleString("en-US")} rows ${peso(M.dpwh.inserted_php)} — the parquet, summary.json and candidate_changes`,
+    M.dpwh.rows === dpwhAll.rows && M.dpwh.nep_php === dpwhAll.nep && M.dpwh.house_php === dpwhAll.house && M.dpwh.inserted_rows === dpwhAll.insRows && M.dpwh.inserted_php === dpwhAll.insPhp
+      && dpwhAll.nep === summary.dataset.totals.nep_php && dpwhAll.house === summary.dataset.totals.hgab3_php
+      && dpwhAll.insRows === (ccDpwh.insertions.comparison_rows ?? ccDpwh.insertions.count) && dpwhAll.insPhp === ccDpwh.insertions.amount_php,
+    JSON.stringify(M.dpwh));
+
+  // 4. Slices.
+  const cellOf = (): MpbCell => ({ rows: 0, records: 0, nep_php: 0, house_php: 0 });
+  const add = (t: MpbCell, x: L) => { t.rows++; t.records += x.records; t.nep_php += x.nep ?? 0; t.house_php += x.house ?? 0; };
+  const sliceOf = (xs: L[]): MpbSlice => {
+    const sl: MpbSlice = { kinds: Object.fromEntries(MPB_KINDS.map((k) => [k, cellOf()])) as MpbSlice["kinds"], all: cellOf(), unconfirmed: { rows: 0, php: 0 } };
+    for (const x of xs) { add(sl.kinds[x.kind], x); add(sl.all, x); if (x.held) { sl.unconfirmed.rows++; sl.unconfirmed.php += x.house ?? 0; } }
+    return sl;
+  };
+  const cellKey = (t: MpbCell) => `${t.rows}/${t.records}/${t.nep_php}/${t.house_php}`;
+  const sliceKey = (sl: MpbSlice) => `${MPB_KINDS.map((k) => cellKey(sl.kinds[k])).join(" ")} | ${cellKey(sl.all)} | ${sl.unconfirmed.rows}/${sl.unconfirmed.php}`;
+  const sumKey = (xs: MpbSlice[]) => {
+    const t = sliceOf([]);
+    for (const x of xs) {
+      for (const k of MPB_KINDS) for (const f of ["rows", "records", "nep_php", "house_php"] as const) t.kinds[k][f] += x.kinds[k][f];
+      for (const f of ["rows", "records", "nep_php", "house_php"] as const) t.all[f] += x.all[f];
+      t.unconfirmed.rows += x.unconfirmed.rows; t.unconfirmed.php += x.unconfirmed.php;
+    }
+    return sliceKey(t);
+  };
+  const T = sliceOf(lines), totalKey = sliceKey(T);
+  check(`totals per kind (rows, records, NEP, House) and unconfirmed recomputed: inserted ${T.kinds.inserted.rows.toLocaleString("en-US")} rows / ${T.kinds.inserted.records.toLocaleString("en-US")} House lines ${peso(T.kinds.inserted.house_php)} (unconfirmed ${T.unconfirmed.rows}, ${peso(T.unconfirmed.php)}); all ${T.all.rows.toLocaleString("en-US")}, NEP ${peso(T.all.nep_php)}, House ${peso(T.all.house_php)}`,
+    sliceKey(M.totals) === totalKey && T.all.records === lines.reduce((a, x) => a + x.records, 0), `${sliceKey(M.totals)} vs ${totalKey}`);
+  const kindsBad = (["deo", "central", "regional", "office_change", "no_office"] as const).filter((k) => sliceKey(M.by_office_kind[k]) !== sliceKey(sliceOf(lines.filter((x) => (x.basis === "office" ? "deo" : x.basis) === k))));
+  const pubCentral = lines.filter((x) => x.officeKind === "Central Office");
+  check(`office kinds recomputed (office-change and no-office ids from districts.json held out) and add up to the totals; ${pubCentral.length} lines list Central Office (${peso(pubCentral.reduce((a, x) => a + (x.house ?? 0), 0))})`,
+    kindsBad.length === 0 && sumKey(Object.values(M.by_office_kind)) === totalKey
+      && pubCentral.length === EXPECTED_MPB.central_published.rows && pubCentral.reduce((a, x) => a + (x.house ?? 0), 0) === EXPECTED_MPB.central_published.house,
+    kindsBad.join(", "));
+  const progs = [...new Set(lines.map((x) => x.program))];
+  const progBad = progs.filter((p) => { const m = M.by_program.find((x) => x.program === p); return !m || sliceKey(m) !== sliceKey(sliceOf(lines.filter((x) => x.program === p))); });
+  check(`programs recomputed (${M.by_program.map((p) => `${p.program} ${p.all.rows.toLocaleString("en-US")}`).join(" · ")}), rows largest first, adding up to the totals`,
+    progBad.length === 0 && M.by_program.length === progs.length && sumKey(M.by_program) === totalKey && M.by_program.every((p, i) => i === 0 || M.by_program[i - 1].all.rows >= p.all.rows),
+    progBad.join(", "));
+
+  // 5. Office groups: leaderboard entries, their MPB slices, shares, offices and people.
+  const groups = new Map<string, L[]>();
+  for (const x of lines) if (x.entry) groups.set(x.entry.key, [...(groups.get(x.entry.key) ?? []), x]);
+  const unbooked = lines.filter((x) => x.basis === "office" && !x.entry).map((x) => x.id);
+  const officeBad: string[] = [];
+  for (const o of M.offices) {
+    const xs = groups.get(o.key), e = LB.entries.find((y) => y.key === o.key);
+    if (!xs || !e) { officeBad.push(`${o.key}: ${!e ? "not a leaderboard entry" : "no MPB line"}`); continue; }
+    const insAll = groupIns.get(o.key) ?? 0, sl = sliceOf(xs);
+    const offs = e.offices.map((x) => {
+      const label = [...officeOfLabel].find(([, id]) => id === x.id)?.[0] ?? null;
+      return { id: x.id, name: x.name, label, rows: xs.filter((y) => y.officeId === x.id).length, href: label ? mpbProjectsHref({ deo: label }) : null };
+    });
+    const lead = [...offs].sort((a, b) => b.rows - a.rows)[0];
+    const diffs = [
+      sliceKey(o) !== sliceKey(sl) && "slice",
+      o.tier !== e.tier && "tier", o.region !== e.region && "region",
+      JSON.stringify(o.offices) !== JSON.stringify(offs) && "offices",
+      o.inserted_all_php !== insAll && `inserted_all ${o.inserted_all_php} vs ${insAll}`,
+      insAll !== e.added_php + e.held_php && `inserted_all ${insAll} ≠ leaderboard added + held ${e.added_php + e.held_php}`,
+      (insAll > 0 ? o.inserted_mpb_share !== sl.kinds.inserted.house_php / insAll : o.inserted_mpb_share !== null) && "share",
+      o.inserted_mpb_share != null && (o.inserted_mpb_share < 0 || o.inserted_mpb_share > 1) && "share out of [0, 1]",
+      o.href !== lead.href && "href",
+    ].filter(Boolean);
+    if (diffs.length) officeBad.push(`${o.key}: ${diffs.join(", ")}`);
+  }
+  const unsortedOffice = M.offices.findIndex((o, i) => i > 0 && (M.offices[i - 1].kinds.inserted.house_php < o.kinds.inserted.house_php
+    || (M.offices[i - 1].kinds.inserted.house_php === o.kinds.inserted.house_php && M.offices[i - 1].all.house_php < o.all.house_php)));
+  check(`office groups: the ${groups.size} leaderboard entries with MPB lines, each once, figures recomputed; inserted_all = the entry's added + held (all DPWH lines); share = MPB inserted ÷ that; inserted pesos largest first; Σ = the district-office slice`,
+    officeBad.length === 0 && unbooked.length === 0 && M.offices.length === groups.size && new Set(M.offices.map((o) => o.key)).size === M.offices.length
+      && unsortedOffice === -1 && sumKey(M.offices) === sliceKey(M.by_office_kind.deo),
+    firstFew([...officeBad, ...unbooked.map((id) => `${id}: a district-office line in no entry`), ...(unsortedOffice === -1 ? [] : [`order breaks at ${M.offices[unsortedOffice].key}`])]));
+  const cards = new Map(D.districts.map((d) => [d.id, d] as const));
+  const seatRaw = (rep: Representative | null) => (!rep ? null : rep.status === "ambiguous" ? (rep.name || (rep.candidates ?? []).map((x) => x.name).filter(Boolean).join(" / ") || null) : rep.name || null);
+  const peopleBad: string[] = [];
+  for (const o of M.offices) {
+    const e = LB.entries.find((y) => y.key === o.key);
+    if (!e) continue;
+    const want = e.people.map((p) => ({ district_id: p.district_id, district: p.district, jurisdiction: p.jurisdiction, district_label: p.district_label, name: p.name, status: p.status, portrait_url: p.portrait_url, href: p.href }));
+    if (JSON.stringify(o.people) !== JSON.stringify(want)) peopleBad.push(`${o.key}: people differ from the leaderboard entry`);
+    for (const p of o.people) {
+      const d = cards.get(p.district_id);
+      if (!d) { peopleBad.push(`${o.key}: ${p.district_id} not in districts.json`); continue; }
+      if (p.name !== seatRaw(d.representative) || p.status !== (d.representative ? d.representative.status : "missing") || p.district !== d.label) peopleBad.push(`${o.key}: ${p.district_id} ${p.name} vs ${seatRaw(d.representative)}`);
+    }
+    if ((o.tier === "B") !== (o.people.length > 1)) peopleBad.push(`${o.key}: tier ${o.tier} with ${o.people.length} districts`);
+  }
+  check(`representatives: every group's people are its leaderboard districts, each the districts.json seat holder (${M.offices.reduce((a, o) => a + o.people.length, 0)} seats; Tier B ↔ several)`,
+    peopleBad.length === 0, firstFew(peopleBad));
+
+  // 6. Regions (published label, "Region " dropped), every office kind.
+  const regionKey = (r: string | null) => (r == null ? null : r.replace(/^Region\s+/i, ""));
+  const unplaced = lines.filter((x) => !regionOrder.includes(regionKey(x.region) ?? ""));
+  const keys = regionOrder.filter((k) => lines.some((x) => regionKey(x.region) === k));
+  const regionBad = M.regions.filter((r) => {
+    const xs = lines.filter((x) => regionKey(x.region) === r.region);
+    const cen = cellOf(), cenIns = cellOf();
+    for (const x of xs) if (x.basis === "central") { add(cen, x); if (x.kind === "inserted") add(cenIns, x); }
+    const pub = [...new Set(xs.map((x) => x.region!))].sort(byLabel);
+    return sliceKey(r) !== sliceKey(sliceOf(xs)) || cellKey(r.central) !== cellKey(cen) || cellKey(r.central_inserted) !== cellKey(cenIns)
+      || r.offices !== new Set(xs.map((x) => x.office)).size || JSON.stringify(r.published) !== JSON.stringify(pub) || r.href !== mpbProjectsHref({ region: pub.join("|") });
+  });
+  const centralSum = M.regions.reduce((a, r) => a + r.central.rows, 0), centralHouse = M.regions.reduce((a, r) => a + r.central.house_php, 0);
+  check(`regions: every line placed; one per region with MPB lines, in REGION_ORDER (${M.regions.length}), each recomputed with its Central Office part, offices, published labels and link; Σ = totals, Σ central = the Central Office slice`,
+    unplaced.length === 0 && JSON.stringify(M.regions.map((r) => r.region)) === JSON.stringify(keys) && regionBad.length === 0 && sumKey(M.regions) === totalKey
+      && centralSum === M.by_office_kind.central.all.rows && centralHouse === M.by_office_kind.central.all.house_php,
+    firstFew([...unplaced.map((x) => `${x.id}: ${x.region}`), ...regionBad.map((r) => r.region)]));
+
+  // 7. Subtypes partition the lines.
+  const subBad = M.subtypes.filter((st, i) => st.key !== MPB_SUBTYPES[i]?.key || st.label !== MPB_SUBTYPES[i].label || sliceKey(st) !== sliceKey(sliceOf(lines.filter((x) => mpbSubtypeOf(x.title) === st.key))));
+  check(`subtypes: the ${MPB_SUBTYPES.length} MPB_SUBTYPES keys in order (other included), each recomputed from the titles; together they partition the lines (${M.subtypes.map((x) => `${x.key} ${x.all.rows}`).join(" · ")})`,
+    subBad.length === 0 && M.subtypes.length === MPB_SUBTYPES.length && M.subtypes.some((x) => x.key === "other") && sumKey(M.subtypes) === totalKey
+      && M.subtypes.reduce((a, x) => a + x.all.rows, 0) === lines.length, subBad.map((x) => x.key).join(", "));
+
+  // 8. House amounts.
+  const hl = lines.filter((x) => x.house != null);
+  const counts = new Map<number, { rows: number; ins: number }>();
+  for (const x of hl) { const b = counts.get(x.house!) ?? { rows: 0, ins: 0 }; b.rows++; if (x.kind === "inserted") b.ins++; counts.set(x.house!, b); }
+  const topWant = [...counts].sort((a, b) => b[1].rows - a[1].rows || b[0] - a[0]).slice(0, 15).map(([php, b]) => ({ php, rows: b.rows, inserted_rows: b.ins }));
+  const asc = hl.map((x) => x.house!).sort((a, b) => a - b);
+  const rank = (p: number) => asc[Math.ceil(p * asc.length) - 1];
+  const A = M.amounts;
+  check(`House amounts: ${A.house_lines.toLocaleString("en-US")} lines with one; the 15 most common exact amounts (first ${peso(A.top[0]?.php)} ×${A.top[0]?.rows}); ×₱1,000,000 ${A.multiple_of_1m.toLocaleString("en-US")}, ×₱500,000 ${A.multiple_of_500k.toLocaleString("en-US")}; median ${peso(A.median_php)}, p90 ${peso(A.p90_php)}, max ${peso(A.max_php)} (nearest rank)`,
+    A.house_lines === hl.length && JSON.stringify(A.top) === JSON.stringify(topWant) && A.top[0]?.php === EXPECTED_MPB.top_amount.php && A.top[0]?.rows === EXPECTED_MPB.top_amount.rows
+      && A.multiple_of_1m === hl.filter((x) => x.house! % 1_000_000 === 0).length && A.multiple_of_500k === hl.filter((x) => x.house! % 500_000 === 0).length
+      && A.median_php === rank(0.5) && A.p90_php === rank(0.9) && A.max_php === asc[asc.length - 1],
+    JSON.stringify({ ...A, top: A.top.slice(0, 3) }));
+
+  // 9. Repeats: this section's own title key; every listed id checked.
+  const titleKey = (t: string) => t.toLowerCase().replace(/-?\d{1,3}\s?\.\s?\d{4,}/g, " ").split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(" ");
+  const rg = new Map<string, L[]>();
+  for (const x of hl) { const k = `${x.office}\u0000${titleKey(x.title)}`; rg.set(k, [...(rg.get(k) ?? []), x]); }
+  const repWant = [...rg].map(([k, xs]) => ({
+    title_norm: k.split("\u0000")[1], title: [...xs].sort((a, b) => byLabel(a.id, b.id))[0].title, office: xs[0].office, rows: xs.reduce((a, x) => a + x.records, 0),
+    inserted_rows: xs.filter((x) => x.kind === "inserted").reduce((a, x) => a + x.records, 0), house_php: xs.reduce((a, x) => a + x.house!, 0), ids: xs.map((x) => x.id).sort(byLabel),
+  })).filter((r) => r.rows >= 2).sort((a, b) => b.rows - a.rows || b.house_php - a.house_php || byLabel(a.office, b.office) || byLabel(a.title_norm, b.title_norm));
+  const repIdBad = M.repeats.flatMap((r) => r.ids.filter((id) => { const x = byId.get(id); return !x || x.house == null || x.office !== r.office || titleKey(x.title) !== r.title_norm; }).map((id) => `${id} (${r.title_norm.slice(0, 40)})`));
+  check(`repeats: ${repWant.length} titles listed more than once under one office (${repWant.reduce((a, r) => a + r.rows, 0)} House lines; coordinates ignored, grouped lines counted each); the top ${M.repeats.length} in order, each id an MPB House line under that office with that title`,
+    repIdBad.length === 0 && M.repeats.length === Math.min(100, repWant.length) && JSON.stringify(M.repeats) === JSON.stringify(repWant.slice(0, 100)) && M.repeats.every((r) => r.rows >= 2),
+    firstFew(repIdBad.length ? repIdBad : M.repeats.flatMap((r, i) => (JSON.stringify(r) === JSON.stringify(repWant[i]) ? [] : [`#${i + 1}: ${JSON.stringify(r)} vs ${JSON.stringify(repWant[i])}`]))));
+
+  // 10. The largest inserted lines.
+  const insWant = lines.filter((x) => x.kind === "inserted").sort((a, b) => b.house! - a.house! || byLabel(a.id, b.id)).slice(0, 100).map((x) => ({
+    id: x.id, kind: x.kind, unconfirmed: x.held, title: x.title, nep_php: x.nep, house_php: x.house, delta_php: x.delta, region: x.region, office: x.office,
+    basis: x.basis, group: x.entry?.key ?? null, href: `/hgab/2027/dpwh/p/${encodeURIComponent(x.id)}`,
+  }));
+  check(`largest_inserted: the ${insWant.length} largest inserted lines by House amount, in order, field for field (first ${M.largest_inserted[0]?.id} ${peso(M.largest_inserted[0]?.house_php)})`,
+    JSON.stringify(M.largest_inserted) === JSON.stringify(insWant), firstFew(M.largest_inserted.map((l, i) => (JSON.stringify(l) === JSON.stringify(insWant[i]) ? "" : `${i}: ${l.id} vs ${insWant[i]?.id}`)).filter(Boolean)));
+
+  // 11. The CSV, parsed on its own.
+  const text = readFileSync(csvPath, "utf8");
+  const table = parseCsv(text.startsWith("\uFEFF") ? text.slice(1) : text).filter((x) => !(x.length === 1 && x[0] === ""));
+  const [head, ...body] = table;
+  const col = new Map(head.map((h, i) => [h, i]));
+  const cell = (row: string[], k: string) => row[col.get(k)!] ?? "";
+  const int = (v: string) => (v === "" ? null : /^-?\d+$/.test(v) ? Number(v) : NaN);
+  check(`CSV: UTF-8 with BOM, snake_case header of ${MPB_CSV_COLUMNS.length} columns, ${body.length.toLocaleString("en-US")} rows = the MPB lines`,
+    text.startsWith("\uFEFF") && head.join(",") === MPB_CSV_COLUMNS.join(",") && body.length === lines.length && body.every((x) => x.length === head.length),
+    `${head.join(",").slice(0, 80)} · ${body.length} rows`);
+  const prefix = (k: string | null) => (k ? (docTitle.get(k) ?? k).split(":")[0] : "");
+  const subLabel = new Map(MPB_SUBTYPES.map((x) => [x.key, x.label]));
+  const csvBad: string[] = [], seenIds = new Set<string>();
+  const order: L[] = [];
+  body.forEach((row, i) => {
+    const id = decodeURIComponent(cell(row, "record_url").replace(`${CHANGES_LIST_SITE}/hgab/2027/dpwh/p/`, ""));
+    const x = byId.get(id);
+    if (!x || seenIds.has(id)) { csvBad.push(`line ${i + 2}: ${x ? "duplicate" : "unknown"} ${id}`); return; }
+    seenIds.add(id); order.push(x);
+    const third = houseCitations({ hgab2_page: x.p2, hgab3_page: x.p3, hgab2_doc: x.d2, hgab3_doc: x.d3 }, meta, overview.documents).filter((z) => z.reading === 3);
+    const ds = x.entry ? [...x.entry.people].sort((a, b) => byLabel(a.district, b.district)).map((p) => cards.get(p.district_id)!) : null;
+    const pages = [x.nep != null && x.nepPage != null ? `${prefix(x.nepDoc)}, PDF page ${x.nepPage}` : null, third[0] ? `${prefix(third[0].doc)}, third reading, PDF page ${third[0].page}` : null].filter(Boolean).join("; ");
+    const want: Record<string, string> = {
+      program: x.program, kind: x.kind, status_label: traceLabels.get(x.trace) ?? "?", unconfirmed_match: x.held ? "yes" : "", title: x.title,
+      region: x.region ?? "", dpwh_office: x.office, tier: x.entry?.tier ?? "",
+      legislative_districts_served: ds ? districtsServedText(ds) : "",
+      representatives_of_those_districts: ds ? ds.map((d) => displayName(seatRaw(d.representative))).join("; ") : "",
+      no_district_reason: x.basis === "office" ? "" : NO_DISTRICT_REASON[x.basis as keyof typeof NO_DISTRICT_REASON],
+      subtype: subLabel.get(mpbSubtypeOf(x.title)) ?? "?", pages,
+    };
+    const nums: Record<string, number | null> = { nep_php: x.nep, house_php: x.house, change_php: x.kind === "inserted" || x.kind === "dropped" ? null : x.delta };
+    const diffs = [
+      ...Object.entries(want).filter(([k, v]) => cell(row, k) !== v).map(([k]) => k),
+      ...Object.entries(nums).filter(([k, v]) => int(cell(row, k)) !== v).map(([k]) => k),
+      x.house != null && third.length !== 1 && "house page",
+      (x.basis === "office") !== Boolean(x.entry) && "group",
+    ].filter(Boolean);
+    if (diffs.length) csvBad.push(`line ${i + 2} (${id}): ${diffs.join(", ")}`);
+  });
+  check("CSV and the parquet agree row for row: every MPB line once, every text cell, exact integer pesos (empty = null), the representatives (districts.json seat holders), the absolute record link and the pages",
+    csvBad.length === 0 && seenIds.size === lines.length, firstFew(csvBad));
+  const kr = new Map(MPB_KINDS.map((k, i) => [k, i]));
+  const badOrder = order.findIndex((x, i) => {
+    if (i === 0) return false;
+    const a = order[i - 1];
+    return kr.get(x.kind)! < kr.get(a.kind)! || (x.kind === a.kind && ((x.house ?? -1) > (a.house ?? -1) || ((x.house ?? -1) === (a.house ?? -1) && (x.nep ?? -1) > (a.nep ?? -1))));
+  });
+  check("CSV sorted by kind (MPB_KINDS order), then House amount largest first (none last), then NEP", badOrder === -1, badOrder === -1 ? "" : `line ${badOrder + 2}: ${order[badOrder].id}`);
+  const csvSum = (k: Kind, f: string) => body.filter((x) => cell(x, "kind") === k).reduce((a, x) => a + (int(cell(x, f)) ?? 0), 0);
+  const csvSumBad = MPB_KINDS.filter((k) => body.filter((x) => cell(x, "kind") === k).length !== M.totals.kinds[k].rows || csvSum(k, "nep_php") !== M.totals.kinds[k].nep_php || csvSum(k, "house_php") !== M.totals.kinds[k].house_php);
+  const csvLarge = M.largest_inserted.filter((l) => {
+    const row = body.find((x) => cell(x, "record_url") === `${CHANGES_LIST_SITE}${l.href}`);
+    return !row || int(cell(row, "house_php")) !== l.house_php || cell(row, "title") !== l.title || cell(row, "dpwh_office") !== (l.office ?? "") || cell(row, "kind") !== l.kind || cell(row, "unconfirmed_match") !== (l.unconfirmed ? "yes" : "");
+  });
+  check("CSV ↔ JSON: rows and pesos per kind, read from the file alone, equal mpb.json totals; every largest_inserted line is its CSV row",
+    csvSumBad.length === 0 && csvLarge.length === 0, [...csvSumBad, ...csvLarge.map((l) => l.id)].join(", "));
+  check("every peso in the CSV is an exact integer or empty", body.every((x) => ["nep_php", "house_php", "change_php"].every((f) => !Number.isNaN(int(cell(x, f))))));
+
+  // 12. Notes (reader-facing).
+  const hits = M.notes.flatMap((x) => [...readerCopyHits(x), ...copyHits(x)]);
+  check(`notes: 3 to 6 plain sentences of at most ${EXPECTED_MPB.note_words} words, the section's wording, saying what counts (title, misspellings included, water projects left out), that inserted is a candidate, that the documents do not say who asked, and that repeats may be phases or other sites`,
+    M.notes.length >= 3 && M.notes.length <= 6 && M.notes.every((x) => x.trim() && words(x) <= EXPECTED_MPB.note_words) && hits.length === 0
+      && M.notes.some((x) => /title/i.test(x) && /misspelling/i.test(x)) && M.notes.some((x) => /water/i.test(x) && /left out/i.test(x)) && M.notes.some((x) => /candidate/i.test(x)) && M.notes.some((x) => /do not say who asked/i.test(x)) && M.notes.some((x) => /phases/i.test(x) && /sites?/i.test(x)),
+    [...hits, ...M.notes.filter((x) => words(x) > EXPECTED_MPB.note_words).map((x) => `${words(x)} words: ${x}`)].join("; "));
 }
 
 main().catch((e) => {

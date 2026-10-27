@@ -831,3 +831,57 @@ production). Updating it is regenerate + upload, never a redeploy. `verify:hgab`
 has one item per list row, numbered continuously, each linking to its row's record page,
 built from the current list, with the counts line and the disclaimer. The campaign poster
 is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`).
+
+## Multi-purpose buildings
+
+`npm run build:hgab-mpb` (`scripts/build-hgab-mpb.ts`) writes `data/hgab/2027/mpb.json`
+(`MpbData` in `src/lib/hgab-mpb.ts`) and `mpb.csv` for `/hgab/2027/multi-purpose-buildings`.
+It reads `overview.json`, `districts.json`, `leaderboard.json`, `dpwh/summary.json` and the
+parquets, so it runs after `build:hgab-leaderboard`. The upload walks the tree, and `mpb.csv`
+downloads as `MPB_CSV_NAME`. Any figure that does not reconcile stops the build.
+
+- **What counts** is `isMpbTitle(title)` in the contract, which the builder and the verifier
+  both use. The title is the only test:
+  - `MPB_TITLE_RE` matches "multi" and "purpose" joined by nothing, spaces or any dash
+    (hyphen, en or em dash), in any case. It also matches the exact misspellings the House
+    bill uses ("Pupose", "Pirpose", "Purppose", "Purpoe", "purpse"), and nothing fuzzier.
+  - `MPB_EXCLUDE_RE` (`\b(impounding|dam|irrigation)\b`, whole words, so barangay names like
+    Damar or Dampig stay) leaves out water works that only use the phrase.
+  - At this build that is 6,002 of the 17,613 DPWH lines. Nine of them count only through a
+    dash or a misspelling: `house-reading:10666`, `10685`, `10728`, `11670`, `11718`, `11756`,
+    `13812`, `14000` and `14038`. One is left out: `house-reading:4595`, "Cabayongan River
+    Multi-Purpose Project Small River Impounding System", ₱170,000,000. The verifier pins both
+    lists.
+  - The farm-to-market road, health facility and irrigation lists have none, and the build
+    checks this.
+- **Kinds** come from the trace's `TRACE_LABELS` group. `inserted` = `house_only`, which includes
+  the unconfirmed matches (`fuzzy_candidate`, `ambiguous`; 257 lines, ₱4,169,097,000), flagged in
+  `unconfirmed`. `dropped` = `nep_only`. The House amount is `hgab3`. `records` counts House bill
+  lines, with grouped repeated keys counted individually (two MPB rows hold two lines each). A
+  dropped row counts its NEP lines.
+- **Office groups** are the leaderboard entries (key, tier, region, offices, people), reached
+  through the office's hgab3 `matched_label`. Office-change, no-office, Central Office and
+  regional lines sit in no group. `inserted_all_php` = the entry's `added_php + held_php`,
+  i.e. every inserted DPWH line of the group, unconfirmed included. The share's numerator
+  (inserted MPB pesos, unconfirmed included) uses the same definition. `offices[].label` is
+  the House bill office label. `href` filters the projects page to it, and the group's `href`
+  uses the office with the most MPB lines.
+- **Regions** use the line's published region through `regionKeyOf`, in `REGION_ORDER`. Only
+  regions with MPB lines are listed: 17, with no BARMM line. `central` / `central_inserted` are
+  the Central Office lines (basis `central`). `published` lists the labels and feeds `href`.
+- **Subtypes** come from `MPB_SUBTYPES` (title words, first match wins, `other` last).
+  **Amounts** are taken over rows with a House amount (a grouped row counts once, at its
+  total). Median and p90 are nearest-rank, so each is an amount actually listed.
+- **Repeats**: one `mpbTitleNorm` title (lower-case, coordinates with four or more decimals
+  removed, other runs of non-letters and non-digits read as one space) on at least two House
+  bill lines under one office, grouped lines counted each. The source already folds identical
+  titles into one row, so exact repeats only appear as those grouped rows. Ignoring
+  coordinates finds same-site pairs listed once with and once without them. At this build
+  that gives 35 titles on 73 lines. `title` is the title as published on the first id. They are leads only: they may be phases of one project or
+  separate sites with the same name.
+- `mpb.csv` has one row per MPB line, sorted by kind, then House amount. The columns are
+  `MPB_CSV_COLUMNS`: districts and seat holders as in `changes-list.csv`, `no_district_reason`
+  for lines with no district, and `pages` = the NEP page and the third-reading House page.
+- `verify:hgab` has a "mpb.json + mpb.csv" section with 25 checks. It recomputes everything
+  from the parquets, the leaderboard groups and the districts.json seat holders, and parses the
+  CSV on its own.
