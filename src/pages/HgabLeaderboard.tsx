@@ -2,8 +2,9 @@
  * `/hgab/2027/leaderboard` and `/hgab/2027/leaderboard/:board` — rankings of
  * DPWH district engineering offices (DEOs) (and, on one board, district
  * representatives), each with an image formatted for social sharing. Every
- * view names the office and the legislative district it serves together, and
- * says once what "DEO" means (DEO_MEANING).
+ * view names the office and the legislative district it serves together (a
+ * one-district row carries its office as a small badge, "1st DEO"), and says
+ * once, quietly, what "DEO" means (DEO_MEANING).
  *
  *   Gallery: a compact page head, then the boards in `BOARD_SECTIONS` order
  *   as light HTML tiles (kicker, title, the top three with round portraits).
@@ -212,7 +213,7 @@ function Gallery({
             <span className="hgab-lb-asof">{asOfText(data)}.</span>
           </>
         }
-        note={`${DEO_MEANING} Amounts belong to DPWH offices, not to people. The representative shown holds the legislative district’s seat in the 20th Congress. The documents do not say who asked for any project.`}
+        note={`Amounts belong to DPWH offices, not to people. The representative shown holds the legislative district’s seat in the 20th Congress. The documents do not say who asked for any project. ${DEO_MEANING}`}
       />
 
       <main className="nep-main hgab-lb-main">
@@ -380,7 +381,7 @@ function BoardPage({
         compact
         crumb={crumb}
         title={titled}
-        dek={<>{board.subtitle} {DEO_MEANING}</>}
+        dek={board.subtitle}
         note={residualText(data, board) ?? undefined}
       />
 
@@ -512,7 +513,7 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
       </header>
       {table}
       <p className="hgab-lb-credit">
-        {showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
+        {DEO_MEANING} {showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
         <Link to={`${HGAB_ROOT}/methodology`}>How the figures are built</Link>
       </p>
     </section>

@@ -25,7 +25,7 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
 import {
-  BridgeStrip, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, StageAmounts, StatusChip,
+  BridgeStrip, DeoBadges, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, StageAmounts, StatusChip,
 } from '../components/HgabBits';
 import { DeltaCell, PageLinks } from '../components/HgabProjects';
 import {
@@ -100,7 +100,7 @@ export default function HgabDistrict() {
   const tree = useMemo(() => {
     if (!index) return [];
     const cards = filterDistricts(index, { ...DEFAULT_DISTRICT_FILTERS, q: find });
-    return by === 'office' ? sidebarOfficeRegions(cards, index) : sidebarRegions(cards);
+    return by === 'office' ? sidebarOfficeRegions(cards, index) : sidebarRegions(cards, index);
   }, [index, find, by]);
   const regionSize = useMemo(() => {
     const m = new Map<ReturnType<typeof districtRegionKey>, number>();
@@ -154,7 +154,7 @@ export default function HgabDistrict() {
             <span className="hgab-crumb-here">{card.label}</span>
           </>
         }
-        title={card.label}
+        title={<>{card.label}<DeoBadges offices={offices.map((o) => o.name)} jurisdiction={card.jurisdiction} /></>}
         dek={
           <>
             {regionKey === 'other'
@@ -163,12 +163,12 @@ export default function HgabDistrict() {
             {offices.length === 0 && attribution.help}
             {one && (
               <>
-                Its DPWH office is the {one.name}. {DEO_MEANING}{' '}
+                Its DPWH office is the {one.name}.{' '}
                 {officeTierText(one.tier, Math.max(0, one.district_ids.length - 1))}.
               </>
             )}
             {offices.length > 1 && (
-              <>It is served by {offices.length} DPWH offices: {offices.map((o) => o.name).join(' and ')}. {DEO_MEANING} Each office is shown on its own. {attribution.label}.</>
+              <>It is served by {offices.length} DPWH offices: {offices.map((o) => o.name).join(' and ')}. Each office is shown on its own. {attribution.label}.</>
             )}
             {offices.length > 0 && (
               <>
@@ -181,7 +181,8 @@ export default function HgabDistrict() {
         note={
           <>
             This page follows the office, not the district. It shows which districts an office serves, never
-            which district a project is in. Figures are the office’s, as each document publishes them.
+            which district a project is in. Figures are the office’s, as each document publishes them.{' '}
+            {offices.length > 0 && DEO_MEANING}
           </>
         }
       >

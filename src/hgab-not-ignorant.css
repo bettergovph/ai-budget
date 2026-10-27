@@ -202,6 +202,19 @@
 
 .hgab-wani-meta { display: block; margin-top: 1px; font-size: 9px; color: var(--wani-grey); }
 .hgab-wani-reps { color: var(--wani-ink); font-weight: 600; }
+/* The DPWH office beside the legislative district it serves: small, so a crossed number shows. */
+.hgab-wani-deo {
+  display: inline-block;
+  padding: 0 3px;
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.35);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--wani-ink);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
 
 .hgab-wani-sr {
   position: absolute;

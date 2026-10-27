@@ -42,6 +42,7 @@ import {
   NO_OFFICE_GROUP_NAME, districtListHref, districtPageHref, dpwhOfficeName, officeGroupTierShort, officeListHref, regionNames,
   type DistrictBrowse, type RegionSectionKey, type SidebarDistrict, type SidebarOffice, type SidebarRegion,
 } from '../lib/hgab-districts';
+import { DeoBadges } from './HgabBits';
 import '../hgab-districts.css';
 
 /** The sidebar is a column from here up, a button and a dialog below. */
@@ -560,6 +561,7 @@ function Amount({ d }: { d: SidebarDistrict }) {
         {d.hgab3_php == null ? '—' : fmt.php(d.hgab3_php)}
       </span>
       {d.shared && <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span>}
+      {d.offices && <DeoBadges offices={d.offices} jurisdiction={d.jurisdiction} />}
     </span>
   );
 }

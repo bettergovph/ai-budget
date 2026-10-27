@@ -397,7 +397,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   const treeFilters = useMemo(() => ({ ...filters, office: '' }), [filters]);
   const treeCards = useMemo(() => (filters.office ? filterDistricts(index, treeFilters) : filtered), [filters.office, index, treeFilters, filtered]);
   const tree = useMemo(
-    () => (byOffice ? sidebarOfficeRegions(treeCards, index) : sidebarRegions(treeCards)),
+    () => (byOffice ? sidebarOfficeRegions(treeCards, index) : sidebarRegions(treeCards, index)),
     [byOffice, treeCards, index],
   );
   const byAnchor = useMemo(() => new Map(index.districts.map((d) => [districtAnchor(d.id), d] as const)), [index]);
@@ -594,12 +594,12 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
           </>
         }
         title="Districts"
-        dek={<>One card per legislative district, with the DPWH office that serves it. {DEO_MEANING} {TIER_MEANING}</>}
+        dek={<>One card per legislative district, with the DPWH office that serves it as a small badge. {TIER_MEANING}</>}
         note={
           <>
             The representative shown holds the seat in the 20th Congress. The 2020–2025 budgets were passed by
             the 18th and 19th Congresses, whose members are not shown. Nothing here says or implies that a
-            representative requested, sponsored or controlled a project.
+            representative requested, sponsored or controlled a project. {DEO_MEANING}
           </>
         }
       >

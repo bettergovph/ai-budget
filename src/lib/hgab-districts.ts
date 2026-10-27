@@ -979,6 +979,10 @@ export interface SidebarDistrict {
   shared: boolean;
   /** No office found, so no figure. */
   none: boolean;
+  /** The DPWH office names serving it, for the small "1st DEO" badge (district mode, when the index is given). */
+  offices?: string[];
+  /** The district's province or city, which the badge drops from a matching office name. */
+  jurisdiction?: string;
 }
 
 export interface SidebarRegion {
@@ -989,8 +993,11 @@ export interface SidebarRegion {
   offices?: SidebarOffice[];
 }
 
-/** Districts by region in `REGION_ORDER`, each region's districts by name ("2nd" before "10th"). Empty regions are left out. */
-export function sidebarRegions(cards: readonly DistrictCard[]): SidebarRegion[] {
+/**
+ * Districts by region in `REGION_ORDER`, each region's districts by name ("2nd" before "10th"). Empty regions are left out.
+ * With the index, each district also carries its DPWH office names for the badge beside its figure.
+ */
+export function sidebarRegions(cards: readonly DistrictCard[], index?: HgabDistrictIndex): SidebarRegion[] {
   return groupDistrictsByRegion(cards).map((g) => ({
     key: g.key,
     anchor: regionAnchor(g.key),
@@ -1002,6 +1009,7 @@ export function sidebarRegions(cards: readonly DistrictCard[]): SidebarRegion[] 
         hgab3_php: c.headline.fy2027_hgab3_php,
         shared: c.attribution === 'B' || c.attribution === 'mixed',
         none: c.attribution === 'none',
+        ...(index ? { offices: cardOffices(c, index).map((o) => o.name), jurisdiction: c.jurisdiction } : {}),
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'en', { numeric: true })),
   }));

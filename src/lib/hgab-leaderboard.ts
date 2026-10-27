@@ -776,3 +776,31 @@ export function asOfText(data: Pick<LeaderboardData, 'built_at'>): string {
   if (Number.isNaN(d.getTime())) return '';
   return `As of ${d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' })}`;
 }
+
+/**
+ * The small badge beside a legislative district: the DPWH office that serves
+ * it, short. The office name loses the province when it matches the
+ * district's ("Davao de Oro 1st DEO" beside "Davao de Oro, 2nd District" →
+ * "1st DEO"), so a crossed number shows at a glance; otherwise it stays whole
+ * ("Abra DEO", "North Manila DEO", "Metro Manila 3rd DEO").
+ */
+export function deoBadge(officeName: string, jurisdiction?: string | null): string {
+  const name = officeName.replace(/\bDistrict Engineering Office\b/i, 'DEO').trim();
+  const j = (jurisdiction ?? '').trim();
+  if (j && name.toLowerCase().startsWith(`${j.toLowerCase()} `)) {
+    const rest = name.slice(j.length + 1);
+    if (/^\d+(st|nd|rd|th)\b/i.test(rest) || /^sub-deo$/i.test(rest)) return rest;
+  }
+  return name;
+}
+
+/** The badge's tooltip: the full office name and why the badge is there. */
+export function deoBadgeTitle(officeName: string): string {
+  const name = officeName.replace(/\bDistrict Engineering Office\b/i, 'DEO').trim();
+  return `DPWH ${name}: the district engineering office that serves this legislative district. A DEO's number is its own and need not match the district's.`;
+}
+
+/** Badges for an entry's office(s), given the district they sit beside. */
+export function entryDeoBadges(entry: Pick<LeaderEntry, 'offices'>, jurisdiction?: string | null): { text: string; title: string }[] {
+  return entry.offices.map((o) => ({ text: deoBadge(o.name, jurisdiction), title: deoBadgeTitle(o.name) }));
+}

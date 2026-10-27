@@ -11,8 +11,9 @@
  * published per year; the FY2027 groups keep the source's caution (leads for
  * checking, not findings); and nothing says a representative moved money.
  *
- * An office is always named as a DPWH office ("DPWH office: Davao de Oro 1st
- * DEO") beside the legislative district it serves: a DEO's number is its own.
+ * An office is always shown beside the legislative district it serves, as a
+ * small badge after the district's name ("Davao de Oro, 2nd District · 1st
+ * DEO", DeoBadges): a DEO's number is its own.
  *
  * Wording is for a reader who has never opened a budget document. Technical
  * detail (matched labels, crosswalk ids, parquet paths) is not rendered here;
@@ -30,10 +31,10 @@ import {
   ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
   cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
   districtLabel, districtRegionKey, dpwhOfficeName, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
-  officeKindText, officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
+  officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
   residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, type HistorySlot,
 } from '../lib/hgab-districts';
-import { HgabDetails, SignedPhp } from './HgabBits';
+import { DeoBadges, HgabDetails, SignedPhp } from './HgabBits';
 import '../hgab-districts.css';
 
 // ---------------------------------------------------------------------------
@@ -527,23 +528,6 @@ export function CongressCaveat() {
 // Office pieces
 // ---------------------------------------------------------------------------
 
-/**
- * The DPWH office that serves a legislative district, labelled as one ("DPWH
- * office: Davao de Oro 1st DEO") so its number is never read as the
- * district's, with its tier badge; Tier B chips say how many districts share it.
- */
-export function OfficeChip({ office, to }: { office: OfficeHistory; to?: string }) {
-  return (
-    <span className="hgab-dc-office" title={`${officeKindText(office)}${office.region ? ` · ${office.region}` : ''}`}>
-      <span className="hgab-dc-office-name">
-        <span className="hgab-dc-office-k">DPWH office:</span>{' '}
-        {to ? <Link to={to}>{office.name}</Link> : office.name}
-      </span>
-      <TierBadge tier={office.tier} sharedWith={Math.max(0, office.district_ids.length - 1)} compact />
-    </span>
-  );
-}
-
 /** Links to the other districts an office serves, separated by semicolons because each label has a comma. */
 export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: HgabDistrictIndex }) {
   if (!ids.length) return null;
@@ -850,20 +834,22 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           </p>
           <Heading className="hgab-dc-district" id={hid} tabIndex={-1}>
             <Link to={districtPath(card.id)}>{card.label}</Link>
+            <DeoBadges offices={offices.map((o) => o.name)} jurisdiction={card.jurisdiction} />
           </Heading>
           <RepresentativeBlock rep={rep} />
         </div>
       </header>
 
-      <ul className="hgab-dc-offices" aria-label="DPWH offices (DEOs) serving this legislative district">
-        {offices.map((o) => <li key={o.id}><OfficeChip office={o} /></li>)}
-        {groups.map((g) => (
-          <li key={g.id} className="hgab-dc-nooffice">
-            {g.name} is a regional grouping, not a DPWH district engineering office (DEO). Its money is not assigned to a district and appears on no card.
-          </li>
-        ))}
-        {offices.length === 0 && groups.length === 0 && <li className="hgab-dc-nooffice">{ATTRIBUTION_LABELS.none.help}</li>}
-      </ul>
+      {(groups.length > 0 || offices.length === 0) && (
+        <ul className="hgab-dc-offices">
+          {groups.map((g) => (
+            <li key={g.id} className="hgab-dc-nooffice">
+              {g.name} is a regional grouping, not a DPWH district engineering office (DEO). Its money is not assigned to a district and appears on no card.
+            </li>
+          ))}
+          {offices.length === 0 && groups.length === 0 && <li className="hgab-dc-nooffice">{ATTRIBUTION_LABELS.none.help}</li>}
+        </ul>
+      )}
 
       {undivided && (
         <p className="hgab-dc-undivided">

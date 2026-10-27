@@ -21,7 +21,7 @@ import {
 import ts from "typescript";
 import { DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers.ts";
 import { pageMeta } from "../src/lib/seo.ts";
-import { DEO_MEANING } from "../src/lib/hgab-leaderboard.ts";
+import { DEO_MEANING, deoBadge } from "../src/lib/hgab-leaderboard.ts";
 
 function ensure(cond: unknown, msg: string): asserts cond {
   if (!cond) { console.error(`build-hgab-not-ignorant: ${msg}`); process.exit(1); }
@@ -73,34 +73,46 @@ function regionText(r: string | null | undefined): string | null {
   return k ? REGION_LABELS[k].short : r;
 }
 
-/** program · detail · region · province · office · [shared …] · districts served — and the representatives (same rule as the page had). */
-function metaText(r: ChangesListRow): { lead: string; reps: string } {
+/**
+ * The muted line under a title, as HTML: program · detail · region · province,
+ * then where the money sits. A one-district DPWH row reads "Davao de Oro 2nd
+ * [1st DEO]": the legislative district with a small badge for the DPWH office
+ * that serves it (a DEO's number is its own). A shared office leads with the
+ * office: "DPWH Isabela 4th DEO · shared by 2 districts, not split · serves …".
+ */
+function metaHtml(r: ChangesListRow): string {
   const parts: string[] = [CHANGE_PROGRAM_LABELS[r.p]];
   if (r.pa) parts.push(r.pa);
   const region = regionText(r.r);
   if (region) parts.push(region);
   if (r.pv) parts.push(r.pv);
-  // The DPWH office and the legislative district(s) it serves, named as such: a DEO's number
-  // is its own (the Davao de Oro 1st DEO serves the 2nd legislative district).
-  if (r.o && r.w !== "central") parts.push(`DPWH office: ${shortOffice(r.o)}`);
-  if (r.w === "office" && r.ds) {
+  const html = parts.map(esc);
+  if (r.w === "office" && r.ds && r.o) {
+    const office = shortOffice(r.o);
     const n = r.rp?.length ?? 1;
-    if (r.tr === "B") parts.push(`shared by ${n} legislative districts, not split`);
-    parts.push(`serves legislative district${n > 1 ? "s" : ""} ${r.ds}`);
-  } else if (r.w && r.w !== "office") parts.push(NO_DISTRICT_TEXT[r.w]);
-  return { lead: parts.join(" · "), reps: r.w === "office" ? seatHoldersText(r.rp) : "" };
+    if (r.tr === "B") {
+      html.push(`DPWH ${esc(office)}`, `shared by ${n} districts, not split`, `serves ${esc(r.ds)}`);
+    } else {
+      const jurisdiction = r.ds.replace(/\s+(\d+(st|nd|rd|th)|\(lone\))$/i, "");
+      html.push(`${esc(r.ds)} <span class="hgab-wani-deo" title="DPWH ${esc(office)}">${esc(deoBadge(office, jurisdiction))}</span>`);
+    }
+  } else {
+    if (r.o && r.w !== "central") html.push(`DPWH ${esc(shortOffice(r.o))}`);
+    if (r.w && r.w !== "office") html.push(esc(NO_DISTRICT_TEXT[r.w]));
+  }
+  const reps = r.w === "office" ? seatHoldersText(r.rp) : "";
+  return html.join(" · ") + (reps ? ` · <span class="hgab-wani-reps">${esc(reps)}</span>` : "");
 }
 
 function item(r: ChangesListRow, n: number): string {
   const cls = r.k === "inserted" ? "is-in" : r.k === "increased" ? "is-up" : "is-down";
-  const { lead, reps } = metaText(r);
   const amt = r.k === "inserted"
     ? `<b>${peso(r.h ?? 0)}</b>${r.m ? `<span class="hgab-wani-kind"> · listed as ${r.m} lines</span>` : ""}`
     : `<b><span class="hgab-wani-num">${r.n == null ? "none" : peso(r.n)}</span> <span aria-hidden="true">→</span><span class="hgab-wani-sr"> to </span> <span class="hgab-wani-num">${r.h == null ? "none" : peso(r.h)}</span></b> <span class="hgab-wani-chg">(${signedPeso(r.d ?? 0)})</span>`;
   return `<li class="hgab-wani-item ${cls}"><span class="hgab-wani-n" aria-hidden="true">${n.toLocaleString("en-US")}</span><span class="hgab-wani-tag ${cls}">${r.k}</span> `
     + `<span class="hgab-wani-amt">${amt}${r.u ? '<span class="hgab-wani-flag">unconfirmed match</span>' : ""}</span>`
     + `<a class="hgab-wani-ttl" href="${esc(r.x)}">${esc(r.t)}</a>`
-    + `<span class="hgab-wani-meta">${esc(lead)}${reps ? ` · <span class="hgab-wani-reps">${esc(reps)}</span>` : ""}</span></li>`;
+    + `<span class="hgab-wani-meta">${metaHtml(r)}</span></li>`;
 }
 
 const chunks: string[] = [];
