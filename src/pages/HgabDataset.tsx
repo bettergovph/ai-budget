@@ -35,6 +35,7 @@ import {
   type HgabDocument, type HgabOverview, type ProjectRow,
 } from '../lib/hgab';
 import { papLabel } from '../lib/hgab-query';
+import { MPB_ROOT } from '../lib/hgab-mpb';
 import {
   SENATE_BUDGET_PORTAL, controlCitations, isSenatePortal, shownCitations, type HouseCitation,
 } from '../lib/hgab-citations';
@@ -253,6 +254,11 @@ function OverviewTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
         but unconfirmed match in the NEP;{' '}
         <Link to={`${datasetPath(d.key, 'projects')}&held=only`}>see them under Projects</Link>.
       </p>
+      {d.key === 'dpwh' && (
+        <p className="hgab-ds-identity">
+          <Link to={MPB_ROOT}>Multi-purpose buildings in these lists, by DPWH office, region and amount →</Link>
+        </p>
+      )}
 
       <div className="nep-section">
         <SectionHead

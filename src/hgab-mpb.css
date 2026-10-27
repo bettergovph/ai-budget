@@ -1,0 +1,368 @@
+/* Multi-purpose buildings in the FY2027 DPWH lists (/hgab/2027/multi-purpose-buildings).
+
+   Builds on the section chrome (hgab.css), the tables of nep2027.css and the
+   leaderboard tables (hgab-leaderboard.css: office rows with portraits, tier
+   tags, the phone layout that hides .hgab-lb-col-wide and shows
+   .hgab-lb-phone). Everything new is scoped to .hgab-mpb-*.
+
+   Colours: what changed takes the section's bridge-group colours
+   (hgab.css .is-<group>); office kinds take the leaderboard's (district
+   offices the accent, Central Office navy). */
+
+.hgab-mpb { --hgab-mpb-rest: color-mix(in srgb, var(--ink-3) 30%, var(--paper)); }
+
+/* --- headline figures: six tiles, three a row ----------------------------- */
+
+.hgab-mpb-kpis .kpi-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 4px 0 20px; }
+.hgab-mpb-kpis .kpi-cell:nth-child(3n) { border-right: none; }
+.hgab-mpb-kpis .kpi-cell:nth-child(n + 4) { border-top: 1px solid var(--rule); }
+.hgab-mpb-kpis .kpi-sub { margin-top: 8px; font-family: var(--font-body); font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+.hgab-mpb-kpi-pair { font-size: 0.82em; white-space: nowrap; }
+.hgab-mpb-arrow { color: var(--ink-mute); font-weight: 400; }
+
+/* --- on this page ---------------------------------------------------------- */
+
+.hgab-mpb-toc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.hgab-mpb-toc > span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-mpb-toc ul { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; }
+.hgab-mpb-toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-mpb-toc a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* --- sections -------------------------------------------------------------- */
+
+.hgab-mpb-section { margin-top: 44px; scroll-margin-top: calc(var(--hgab-mpb-top, 120px) + 16px); }
+.hgab-mpb-section > .hgab-mpb-head { margin-bottom: 14px; }
+.hgab-mpb-eyebrow {
+  margin: 0 0 4px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent) !important;
+}
+.hgab-mpb-h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 15.5px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.hgab-mpb-foot {
+  margin: 10px 0 0;
+  max-width: 860px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.hgab-mpb-foot a { color: var(--accent); }
+.hgab-mpb-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- tables ------------------------------------------------------------------ */
+
+.hgab-mpb-table tbody th[scope="row"],
+.hgab-mpb-table tfoot th[scope="row"] { font-weight: 400; vertical-align: top; }
+.hgab-mpb-table tbody th.nep-td-name strong { font-weight: 600; }
+.hgab-mpb-table td.num,
+.hgab-mpb-table td.hgab-lb-go { padding-top: 10px; }
+.hgab-mpb-table .hgab-lb-region { padding-top: 10px !important; }
+.hgab-mpb-table tbody tr { scroll-margin-top: calc(var(--hgab-mpb-top, 120px) + 16px); }
+.hgab-mpb-table tbody tr:target { background: color-mix(in srgb, var(--accent) 7%, var(--paper)); }
+.hgab-mpb-sub {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+.hgab-mpb-pair { color: var(--ink-2); }
+
+/* What changed: a swatch, the label and its plain meaning. */
+.hgab-mpb-kind { display: flex; gap: 10px; align-items: flex-start; min-width: 220px; font-weight: 400; }
+.hgab-mpb-kind > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+.hgab-mpb-kind strong { font-weight: 600; color: var(--ink); }
+.hgab-mpb-kind small { font-family: var(--font-body); font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.hgab-mpb-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--hgab-group, var(--ink-3));
+}
+.hgab-mpb-swatch.is-office { background: var(--hgab-lb-deo); }
+.hgab-mpb-swatch.is-central { background: var(--hgab-lb-central); }
+.hgab-mpb-swatch.is-rest { background: var(--hgab-mpb-rest); }
+
+.hgab-mpb-kindbar {
+  display: flex;
+  gap: 2px;
+  height: 26px;
+  margin: 0 0 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--paper-3);
+}
+.hgab-mpb-kindbar > span {
+  display: flex;
+  align-items: center;
+  min-width: 2px;
+  background: var(--hgab-group, var(--ink-3));
+  overflow: hidden;
+}
+.hgab-mpb-kindbar em {
+  padding: 0 8px;
+  font-family: var(--font-body);
+  font-style: normal;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+/* The office table: a little wider name cell, the share's mini bar, office links. */
+.hgab-mpb-place { min-width: 250px; }
+.hgab-mpb-officelinks {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.hgab-mpb-officelinks a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.hgab-mpb-officelinks a:hover { text-decoration: underline; }
+.hgab-mpb-minibar {
+  display: block;
+  width: 72px;
+  height: 4px;
+  margin: 4px 0 0 auto;
+  border-radius: 2px;
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.hgab-mpb-minibar > span { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+
+.hgab-mpb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+.hgab-mpb-toolbar .hgab-lb-select > span { white-space: nowrap; }
+.hgab-mpb-toolbar p { margin: 0; font-family: var(--font-body); font-size: 12.5px; color: var(--ink-3); }
+
+/* Line tables: titles wrap; the office under them on phones. */
+.hgab-mpb-title { min-width: 280px; max-width: 560px; line-height: 1.4; }
+.hgab-mpb-title a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-mpb-title a:hover { color: var(--accent); border-color: var(--accent); }
+.hgab-mpb-lineoffice { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.35; }
+.hgab-mpb-lineoffice > span > a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-mpb-lineoffice > span > a:hover { color: var(--accent); border-color: var(--accent); }
+.hgab-mpb-lineoffice small { font-family: var(--font-body); font-size: 11.5px; color: var(--ink-3); }
+.hgab-mpb-lineoffice small a { color: var(--ink-3); }
+.hgab-mpb-lines-table td.hgab-lb-col-wide { min-width: 200px; max-width: 300px; vertical-align: top; padding-top: 10px; }
+.hgab-mpb-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--hgab-house-only) 45%, transparent);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  white-space: nowrap;
+  vertical-align: 0.1em;
+}
+.hgab-mpb-records { white-space: nowrap; }
+.hgab-mpb-records a {
+  display: inline-block;
+  min-width: 26px;
+  margin: 0 4px 4px 0;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-align: center;
+  color: var(--accent);
+  text-decoration: none;
+}
+.hgab-mpb-records a:hover { border-color: var(--accent); }
+
+/* --- bar charts (regions, amounts) ------------------------------------------ */
+
+.hgab-mpb-chart { margin: 0 0 18px; }
+.hgab-mpb-chart figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 10px;
+}
+.hgab-mpb-chart-title { font-family: var(--font-hero); font-weight: 700; font-size: 14px; color: var(--ink); }
+.hgab-mpb-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--font-body); font-size: 12px; color: var(--ink-3); }
+.hgab-mpb-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.hgab-mpb-legend .hgab-mpb-swatch { margin-top: 0; }
+
+.hgab-mpb-bars { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.hgab-mpb-bars li {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 12px;
+  min-height: 26px;
+}
+.hgab-mpb-bars.is-amounts li { grid-template-columns: 110px minmax(0, 1fr) 150px; }
+.hgab-mpb-bar-label {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hgab-mpb-bar-label.is-mono { font-family: var(--font-mono); font-size: 12px; }
+.hgab-mpb-bar-label a { color: inherit; text-decoration: none; }
+.hgab-mpb-bar-label a:hover { color: var(--accent); }
+.hgab-mpb-bar-track { display: flex; gap: 2px; height: 14px; }
+.hgab-mpb-bar-track > span { display: block; height: 100%; min-width: 0; }
+.hgab-mpb-bar-track > span:first-child { border-radius: 2px 0 0 2px; }
+.hgab-mpb-bar-track > span:last-child { border-radius: 0 4px 4px 0; }
+.hgab-mpb-bar-track > span[style^="width: 0%"] { display: none; }
+.hgab-mpb-bar-track .is-office { background: var(--hgab-lb-deo); }
+.hgab-mpb-bar-track .is-central { background: var(--hgab-lb-central); }
+.hgab-mpb-bar-track .is-house_only { background: var(--hgab-house-only); }
+.hgab-mpb-bar-track .is-rest { background: var(--hgab-mpb-rest); }
+.hgab-mpb-bar-val {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-mpb-bar-val small { font-weight: 400; font-size: 10.5px; color: var(--ink-mute); }
+
+/* --- amounts ------------------------------------------------------------------ */
+
+.hgab-mpb-amounts-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+.hgab-mpb-amounts-grid > * { min-width: 0; }
+.hgab-mpb-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px solid var(--ink); }
+.hgab-mpb-stats > div { padding: 12px 14px 12px 0; border-bottom: 1px solid var(--rule); }
+.hgab-mpb-stats dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-mpb-stats dd {
+  margin: 6px 0 2px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.hgab-mpb-stats small { font-family: var(--font-body); font-size: 12px; color: var(--ink-3); }
+.hgab-mpb-stats small a { color: var(--accent); }
+
+/* --- where the rest sits -------------------------------------------------------- */
+
+.hgab-mpb-residbar { height: 18px; margin: 0 0 14px; gap: 2px; }
+.hgab-mpb-residbar > span + span { box-shadow: none; }
+
+/* --- about ------------------------------------------------------------------------ */
+
+.hgab-mpb-about {
+  padding: 16px 20px 18px;
+  background: var(--paper-2);
+  border-left: 3px solid var(--ink);
+  max-width: 900px;
+}
+.hgab-mpb-about h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-mpb-about p,
+.hgab-mpb-about li { font-family: var(--font-body); font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.hgab-mpb-about p { margin: 0 0 8px; }
+.hgab-mpb-about ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.hgab-mpb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 14px 0 6px !important; }
+.hgab-mpb-actions .hgab-lb-btn { flex: none; text-decoration: none; }
+.hgab-mpb-actions a:not(.hgab-lb-btn) { color: var(--accent); }
+.hgab-mpb .hgab-disclaimer { margin-top: 28px; }
+
+/* --- narrower screens ------------------------------------------------------------- */
+
+@media (max-width: 1000px) {
+  .hgab-mpb-amounts-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+}
+
+/* The site's KPI strips go to two columns here (responsive.css): undo the three-a-row rules. */
+@media (max-width: 960px) {
+  .hgab-mpb-kpis .kpi-cell:nth-child(3n) { border-right: 1px solid var(--rule); }
+  .hgab-mpb-kpis .kpi-cell:nth-child(2n) { border-right: none; }
+  .hgab-mpb-kpis .kpi-cell:nth-child(n + 4) { border-top: none; }
+}
+
+@media (max-width: 720px) {
+  .hgab-mpb-kpis .kpi-value { font-size: 21px !important; }
+  .hgab-mpb-kpi-pair { white-space: normal; }
+  .hgab-mpb-section { margin-top: 32px; }
+  .hgab-mpb-toc { font-size: 12.5px; }
+  .hgab-mpb-kind { min-width: 0; }
+  .hgab-mpb-place { min-width: 0; }
+  .hgab-mpb-title { min-width: 0; max-width: none; }
+  .hgab-mpb-title .hgab-lb-phone { display: block; margin-top: 4px; font-size: 12px; }
+  .hgab-mpb-kindbar em { display: none; }
+  /* Bars: the label and the figure on one line, the bar full width under them. */
+  .hgab-mpb-bars { gap: 8px; }
+  .hgab-mpb-bars li,
+  .hgab-mpb-bars.is-amounts li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "label val" "bar bar";
+    gap: 3px 8px;
+  }
+  .hgab-mpb-bar-label { grid-area: label; font-size: 12.5px; text-align: left; }
+  .hgab-mpb-bar-track { grid-area: bar; height: 10px; }
+  .hgab-mpb-bar-val { grid-area: val; flex-direction: row; align-items: baseline; gap: 6px; font-size: 12px; }
+  .hgab-mpb-bar-val small { font-size: 10px; }
+  .hgab-mpb-toolbar .hgab-lb-select { flex: 1 1 100%; }
+  .hgab-mpb-toolbar .hgab-lb-select select { flex: 1 1 auto; }
+  .hgab-mpb-stats dd { font-size: 18px; }
+  .hgab-mpb-about { padding: 14px 14px 16px; }
+  .hgab-mpb-records a { margin-bottom: 4px; }
+  .hgab-mpb-records { white-space: normal; }
+}

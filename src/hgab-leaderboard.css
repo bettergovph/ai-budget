@@ -327,6 +327,10 @@
   color: var(--ink-mute);
 }
 .hgab-lb-credit a { color: var(--ink-3); }
+/* The one-line link to a related page (multi-purpose buildings). */
+.hgab-lb-more { font-size: 13px; }
+.hgab-lb-more a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.hgab-lb-more a:hover { text-decoration: underline; }
 .hgab-lb-main .hgab-disclaimer { margin-top: 28px; }
 
 /* --- board page: the image beside its controls ---------------------------- */

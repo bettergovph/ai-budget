@@ -29,6 +29,7 @@ import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
+import { MPB_ROOT, MPB_TITLE } from '../lib/hgab-mpb';
 import '../hgab.css';
 
 /**
@@ -49,6 +50,15 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
 ];
+
+/**
+ * Pages that sit under a program's dropdown though they are not views of its
+ * hub: each is listed after the hub's views and marks the program active.
+ * Multi-purpose buildings are DPWH project lines, so they open from DPWH.
+ */
+const PROGRAM_PAGES: Partial<Record<DatasetKey, ReadonlyArray<{ key: string; label: string; to: string }>>> = {
+  dpwh: [{ key: 'mpb', label: MPB_TITLE, to: MPB_ROOT }],
+};
 
 /**
  * Masthead + the section's own sub-nav, mirroring `NepHeader`.
@@ -74,7 +84,9 @@ export function HgabHeader({
   const view = new URLSearchParams(search).get('view') ?? 'overview';
   const linkActive = (n: (typeof SECTION_LINKS)[number]) =>
     n.match ? n.match(path) : path === n.to || path.startsWith(`${n.to}/`);
-  const programActive = (key: DatasetKey) => path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`);
+  const programPage = (key: DatasetKey) => PROGRAM_PAGES[key]?.find((x) => path === x.to) ?? null;
+  const programActive = (key: DatasetKey) =>
+    path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`) || programPage(key) != null;
   const link = (n: (typeof SECTION_LINKS)[number]) => (
     <Link key={n.to} to={n.to} className={linkActive(n) ? 'active' : ''} aria-current={linkActive(n) ? 'page' : undefined}>
       {n.label}
@@ -99,9 +111,12 @@ export function HgabHeader({
             <SectionMenu
               key={p.key}
               label={p.label}
-              items={hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }))}
+              items={[
+                ...hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) })),
+                ...(PROGRAM_PAGES[p.key] ?? []),
+              ]}
               active={programActive(p.key)}
-              currentKey={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
+              currentKey={programPage(p.key)?.key ?? (programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null)}
             />
           ))}
           <SectionMenu
@@ -122,16 +137,24 @@ export function HgabHeader({
               <Link
                 to={datasetPath(p.key)}
                 className={programActive(p.key) ? 'active' : ''}
-                aria-current={programActive(p.key) && view === 'overview' ? 'page' : undefined}
+                aria-current={programActive(p.key) && !programPage(p.key) && view === 'overview' ? 'page' : undefined}
               >
                 {p.label}
               </Link>
               <div className="hgab-drawer-sub">
                 {hubViews(p.hasReadings).filter((v) => v.key !== 'overview').map((v) => {
-                  const on = programActive(p.key) && view === v.key;
+                  const on = programActive(p.key) && !programPage(p.key) && view === v.key;
                   return (
                     <Link key={v.key} to={datasetPath(p.key, v.key)} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
                       {v.label}
+                    </Link>
+                  );
+                })}
+                {(PROGRAM_PAGES[p.key] ?? []).map((x) => {
+                  const on = path === x.to;
+                  return (
+                    <Link key={x.key} to={x.to} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
+                      {x.label}
                     </Link>
                   );
                 })}

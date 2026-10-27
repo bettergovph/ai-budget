@@ -15,6 +15,7 @@
 
 import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
+import { MPB_ROOT, MPB_TITLE } from "./hgab-mpb";
 
 export interface PageMeta {
   title: string;
@@ -280,6 +281,17 @@ export function pageMeta(pathname: string): PageMeta {
       imageWidth: "1200",
       imageHeight: "630",
       imageAlt: "WE ARE NOT IGNORANT: 7,465 inserted and adjusted projects in the 2027 House budget bill, over the list of the projects themselves.",
+    };
+  }
+  // Multi-purpose buildings in the DPWH lists: before the dataset pattern.
+  if (p === MPB_ROOT) {
+    return {
+      title: `${MPB_TITLE} — DPWH Lines in the FY 2027 House Bill and NEP, by Office and Region · ${SITE}`,
+      description:
+        "Every DPWH project line whose published title says multi-purpose, in House Bill 10858 and the FY 2027 NEP: " +
+        "insertion candidates by DPWH district engineering office and the legislative districts it serves, by region, " +
+        "type and program, the most common amounts, repeated titles and the largest lines. Downloadable as CSV. " +
+        "Amounts belong to offices, not people; candidates are not findings.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"

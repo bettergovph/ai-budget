@@ -39,6 +39,7 @@ import {
   asOfText, leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
+import { MPB_ROOT } from '../lib/hgab-mpb';
 import '../nep2027.css';
 import '../hgab-leaderboard.css';
 
@@ -243,6 +244,10 @@ function Gallery({
             </section>
           );
         })}
+
+        <p className="hgab-lb-credit hgab-lb-more">
+          <Link to={MPB_ROOT}>Multi-purpose buildings: inserted lines ranked by DPWH office and region →</Link>
+        </p>
 
         {data.notes.length > 0 && (
           <aside className="hgab-lb-notes" aria-labelledby="hgab-lb-notes-h">

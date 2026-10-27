@@ -27,6 +27,7 @@
  */
 import { dataUrl } from './data-url';
 import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
+import { MPB_DATA_PATH, type MpbData } from './hgab-mpb';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -727,6 +728,13 @@ export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {
   return cached('leaderboard', () =>
     getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
+  );
+}
+
+/** The multi-purpose buildings file (`npm run build:hgab-mpb`); the contract lives in `lib/hgab-mpb.ts`. */
+export function loadHgabMpb(): Promise<MpbData> {
+  return cached('mpb', () =>
+    getJson<MpbData>(dataUrl(MPB_DATA_PATH), 'Failed to load the FY2027 House bill multi-purpose buildings'),
   );
 }
 

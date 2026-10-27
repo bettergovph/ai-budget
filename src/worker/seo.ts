@@ -20,6 +20,7 @@ import {
 } from "../lib/seo";
 import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
 import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
+import { MPB_ROOT } from "../lib/hgab-mpb";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -163,6 +164,8 @@ const STATIC_SITEMAP_PATHS = [
   ...BOARDS.map((b) => `${LEADERBOARD_ROOT}/${b.id}`),
   // Every inserted and adjusted project, one page.
   CHANGES_LIST_ROOT,
+  // Multi-purpose buildings in the DPWH lists, one page.
+  MPB_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

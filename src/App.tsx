@@ -25,6 +25,7 @@ const HgabRecord = lazy(() => import('./pages/HgabRecord'));
 const HgabDistricts = lazy(() => import('./pages/HgabDistricts'));
 const HgabDistrict = lazy(() => import('./pages/HgabDistrict'));
 const HgabLeaderboard = lazy(() => import('./pages/HgabLeaderboard'));
+const HgabMpb = lazy(() => import('./pages/HgabMpb'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -113,6 +114,8 @@ export default function App() {
           {/* Leaderboards: the gallery, and one board with its share image. */}
           <Route path="/hgab/2027/leaderboard" element={<HgabLeaderboard />} />
           <Route path="/hgab/2027/leaderboard/:board" element={<HgabLeaderboard />} />
+          {/* Multi-purpose buildings in the DPWH lists: one page of tables. */}
+          <Route path="/hgab/2027/multi-purpose-buildings" element={<HgabMpb />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
           {/* A static page published with the data and served by the Worker: load it from the server. */}
           <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />
