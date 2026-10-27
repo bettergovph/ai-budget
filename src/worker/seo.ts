@@ -19,6 +19,7 @@ import {
   type PageMeta,
 } from "../lib/seo";
 import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
+import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -160,6 +161,8 @@ const STATIC_SITEMAP_PATHS = [
   // The leaderboards gallery and every board (national; `?region=` views are not listed).
   LEADERBOARD_ROOT,
   ...BOARDS.map((b) => `${LEADERBOARD_ROOT}/${b.id}`),
+  // Every inserted and adjusted project, one page.
+  CHANGES_LIST_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

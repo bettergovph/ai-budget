@@ -25,6 +25,7 @@ const HgabRecord = lazy(() => import('./pages/HgabRecord'));
 const HgabDistricts = lazy(() => import('./pages/HgabDistricts'));
 const HgabDistrict = lazy(() => import('./pages/HgabDistrict'));
 const HgabLeaderboard = lazy(() => import('./pages/HgabLeaderboard'));
+const HgabNotIgnorant = lazy(() => import('./pages/HgabNotIgnorant'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -101,6 +102,8 @@ export default function App() {
           {/* Leaderboards: the gallery, and one board with its share image. */}
           <Route path="/hgab/2027/leaderboard" element={<HgabLeaderboard />} />
           <Route path="/hgab/2027/leaderboard/:board" element={<HgabLeaderboard />} />
+          {/* Every inserted and adjusted project as one list, no site chrome. */}
+          <Route path="/hgab/2027/we-are-not-ignorant" element={<HgabNotIgnorant />} />
           <Route path="/hgab/2027/:dataset" element={<HgabDataset />} />
           <Route path="/hgab/2027/:dataset/p/:id" element={<HgabRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -52,6 +52,12 @@
  *     office kinds = the DPWH totals), the 389 held rows, regions, every board
  *     in BOARDS (≥ 3 rows, first row = the pool's extreme), credits and notes.
  *
+ *   - the "We are not ignorant" list (`npm run build:hgab-changes-list`): every insertion candidate,
+ *     increase and decrease in the parquets listed once, field for field; counts and pesos per program and
+ *     kind = candidate_changes; every representative = the districts.json seat holders of the districts the
+ *     office's (leaderboard) group serves, none on Central/regional/office-change/no-office lines; the CSV
+ *     parsed on its own, row for row with the JSON.
+
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
  *     `wrangler d1 execute budget --local --json`: contract row counts, every
@@ -78,13 +84,17 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
-  BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
+  BOARDS, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
   type LeaderEntry, type LeaderSlice, type LeaderboardData,
 } from "../src/lib/hgab-leaderboard";
 import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
 import {
   SENATE_BUDGET_PORTAL, SENATE_COPIES, controlCitations, houseCitations, isSenatePortal, type HouseCitation,
 } from "../src/lib/hgab-citations";
+import {
+  CHANGES_LIST_CSV_COLUMNS, CHANGES_LIST_LEGEND, CHANGES_LIST_SCHEMA, CHANGES_LIST_SITE, CHANGE_PROGRAM_LABELS, NO_DISTRICT_REASON,
+  districtsServedText, type ChangesListData,
+} from "../src/lib/hgab-changes-list";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -650,6 +660,8 @@ async function main(): Promise<void> {
   }
 
   await verifyLeaderboard(overview, c, lens);
+
+  await verifyChangesList(overview, c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -1866,6 +1878,240 @@ async function verifyCandidateChanges(c: DuckDBConnection): Promise<void> {
       && T.insertions.amount_php - T.deletions.amount_php + T.increased.php - T.decreased.php + T.scope_review.net_php === T.delta_php
       && T.house.amount_php - T.nep.amount_php === T.delta_php,
     JSON.stringify(T) === JSON.stringify(want) ? "identity fails" : "totals differ from the sum of programs");
+}
+
+// ---------------------------------------------------------------------------
+// "We are not ignorant" list (changes-list.json + changes-list.csv, npm run build:hgab-changes-list)
+//
+// Recomputed on the verifier's own path: the parquet rows through the same trace partition the bridge and
+// candidate-change checks use (SQL, not TRACE_LABELS), the office groups from leaderboard.json (not the
+// builder's union-find), the seat holders from districts.json. Then the CSV, parsed on its own, row for row.
+// ---------------------------------------------------------------------------
+
+/** RFC 4180 rows (quoted fields, doubled quotes, embedded newlines). */
+function parseCsv(text: string): string[][] {
+  const out: string[][] = [];
+  let row: string[] = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); out.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); out.push(row); }
+  return out;
+}
+
+async function verifyChangesList(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nchanges-list.json + changes-list.csv (We are not ignorant)\n");
+  const jsonPath = resolve(OUT, "changes-list.json"), csvPath = resolve(OUT, "changes-list.csv");
+  check("changes-list.json and changes-list.csv present (npm run build:hgab-changes-list)", existsSync(jsonPath) && existsSync(csvPath), `${jsonPath} / ${csvPath}`);
+  if (!existsSync(jsonPath) || !existsSync(csvPath)) return;
+  const L = readJson<ChangesListData>(jsonPath);
+  const cc = readJson<{ candidate_changes?: CcBlock }>(resolve(OUT, "overview.json")).candidate_changes;
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  const LB = readJson<LeaderboardData>(resolve(OUT, "leaderboard.json"));
+  if (!cc) { check("candidate_changes present for the list's reconciliation", false); return; }
+  const rows = L.rows;
+  // Status labels: TRACE_LABELS as written in the contract (label of each trace).
+  const traceBlock = /export const TRACE_LABELS[^{]*\{([\s\S]*?)\n\};/.exec(readFileSync(CONTRACT, "utf8"))?.[1] ?? "";
+  const traceLabels = new Map([...traceBlock.matchAll(/^\s*([a-z0-9_]+):\s*\{\s*label:\s*'([^']*)'/gm)].map((m) => [m[1], m[2]] as const));
+  const keyOf = (p: string, id: string) => `${p}\u0000${id}`;
+
+  check("schema 1, fiscal year 2027, source commit equals the overview and districts.json, a legend for every key the rows use",
+    L.schema === CHANGES_LIST_SCHEMA && L.fiscal_year === 2027 && L.source_commit === overview.source_commit && L.source_commit === D.source_commit
+      && JSON.stringify(L.legend) === JSON.stringify(CHANGES_LIST_LEGEND) && rows.every((r) => Object.keys(r).every((k) => k in L.legend)),
+    `${L.schema} ${L.fiscal_year} ${L.source_commit}`);
+
+  // 1. Every row from the parquet, and nothing else.
+  const expected = new Map<string, { trace: string; kind: string; held: boolean; title: string; nep: number | null; house: number | null; delta: number | null; region: string | null; office: string | null; officeKind: string | null; records: number; nepPage: number | null; nepDoc: string | null; p2: number | null; p3: number | null; d2: string | null; d3: string | null }>();
+  for (const p of cc.programs) {
+    const h = `${p.house_stage}_php`;
+    const members = p.key === "dpwh" ? `coalesce(json_array_length(record_json->'$.${p.house_stage === "hgab3" ? "third" : "second"}.records'), 1)` : "1";
+    const sql = `
+      WITH t AS (SELECT *, CASE
+        WHEN trace LIKE '%segment_scope_review%' THEN 'scope_review'
+        WHEN trace LIKE '%house_only_candidate%' OR trace IN ('fuzzy_candidate', 'ambiguous') THEN 'house_only'
+        WHEN trace LIKE '%nep_only_candidate%' THEN 'nep_only'
+        WHEN trace LIKE '%candidate_increase%' THEN 'increased'
+        WHEN trace LIKE '%candidate_decrease%' THEN 'decreased'
+        WHEN trace LIKE '%amount_same%' THEN 'unchanged'
+        WHEN ${h} IS NOT NULL AND nep_php IS NULL THEN 'house_only'
+        WHEN nep_php IS NOT NULL AND ${h} IS NULL THEN 'nep_only'
+        WHEN delta_php > 0 THEN 'increased' WHEN delta_php < 0 THEN 'decreased' ELSE 'unchanged' END g
+        FROM read_parquet('${q(resolve(OUT, p.key, "projects.parquet"))}'))
+      SELECT id, g, trace IN ('fuzzy_candidate', 'ambiguous'), title, nep_php, ${h}, delta_php, region, office, office_kind,
+             CASE WHEN ${h} IS NOT NULL THEN ${members} ELSE 0 END, nep_page, nep_doc, hgab2_page, hgab3_page, hgab2_doc, hgab3_doc, trace
+      FROM t WHERE g IN ('house_only', 'increased', 'decreased')`;
+    for (const r of (await c.runAndReadAll(sql)).getRows()) {
+      const n = (v: unknown) => (v == null ? null : num(v)), s = (v: unknown) => (v == null ? null : String(v));
+      expected.set(keyOf(p.key, String(r[0])), {
+        trace: String(r[17]), kind: r[1] === "house_only" ? "inserted" : String(r[1]), held: r[2] === true, title: String(r[3] ?? ""), nep: n(r[4]), house: n(r[5]), delta: n(r[6]),
+        region: s(r[7]), office: s(r[8]), officeKind: s(r[9]), records: num(r[10]), nepPage: n(r[11]), nepDoc: s(r[12]), p2: n(r[13]), p3: n(r[14]), d2: s(r[15]), d3: s(r[16]),
+      });
+    }
+  }
+  const seen = new Set<string>();
+  const dup: string[] = [], extra: string[] = [], wrong: string[] = [];
+  for (const r of rows) {
+    const k = keyOf(r.p, r.i);
+    if (seen.has(k)) dup.push(`${r.p} ${r.i}`);
+    seen.add(k);
+    const e = expected.get(k);
+    if (!e) { extra.push(`${r.p} ${r.i}`); continue; }
+    const diffs = [
+      r.k !== e.kind && `kind ${r.k} vs ${e.kind}`, Boolean(r.u) !== e.held && `unconfirmed ${Boolean(r.u)} vs ${e.held}`, r.u !== undefined && r.u !== 1 && "u not 1",
+      r.t !== e.title && "title", r.n !== e.nep && `NEP ${r.n} vs ${e.nep}`, r.h !== e.house && `House ${r.h} vs ${e.house}`,
+      r.d !== (e.kind === "inserted" ? null : e.delta) && `change ${r.d} vs ${e.delta}`, r.r !== e.region && "region", r.o !== e.office && "office",
+      (r.m ?? 1) !== (e.kind === "inserted" ? e.records : 1) && `lines ${r.m} vs ${e.records}`,
+      r.x !== `/hgab/2027/${r.p}/p/${encodeURIComponent(r.i)}` && "record path",
+      r.s !== traceLabels.get(e.trace) && `status "${r.s}" vs "${traceLabels.get(e.trace)}"`,
+    ].filter(Boolean);
+    if (diffs.length) wrong.push(`${r.p} ${r.i}: ${diffs.join(", ")}`);
+  }
+  const missing = [...expected.keys()].filter((k) => !seen.has(k)).map((k) => k.replace("\u0000", " "));
+  check(`every insertion candidate, increase and decrease in the four parquets is listed once, field for field, and nothing else (${rows.length.toLocaleString("en-US")} rows; every id exists)`,
+    rows.length === expected.size && !dup.length && !extra.length && !missing.length && !wrong.length,
+    firstFew([...dup.map((x) => `duplicate ${x}`), ...extra.map((x) => `not in the parquet or not a change: ${x}`), ...missing.map((x) => `missing ${x}`), ...wrong]));
+
+  // 2. Counts and pesos per program and kind = candidate_changes (and the file's own totals).
+  const tally = (p: string, k: string) => {
+    const xs = rows.filter((r) => r.p === p && r.k === k);
+    return {
+      rows: xs.length, records: xs.reduce((t, r) => t + (k === "inserted" ? (r.m ?? 1) : 1), 0),
+      nep: xs.reduce((t, r) => t + (r.n ?? 0), 0), house: xs.reduce((t, r) => t + (r.h ?? 0), 0), delta: xs.reduce((t, r) => t + (r.d ?? 0), 0),
+      heldRows: xs.filter((r) => r.u).length, heldPhp: xs.filter((r) => r.u).reduce((t, r) => t + (r.h ?? 0), 0),
+    };
+  };
+  for (const p of cc.programs) {
+    const a = p.adjustments, I = tally(p.key, "inserted"), U = tally(p.key, "increased"), R = tally(p.key, "decreased");
+    const mine = L.programs.find((x) => x.key === p.key);
+    const cells: Array<[string, number, number]> = [
+      ["insertion records", I.records, p.insertions.count], ["insertion rows", I.rows, p.insertions.comparison_rows ?? p.insertions.count],
+      ["insertion House", I.house, p.insertions.amount_php], ["insertion NEP", I.nep, 0],
+      ["increased pairs", U.rows, a.increased_count], ["increased NEP", U.nep, a.increased_nep_php], ["increased House", U.house, a.increased_house_php], ["increased change", U.delta, a.increased_php],
+      ["decreased pairs", R.rows, a.reduced_count], ["decreased NEP", R.nep, a.reduced_nep_php], ["decreased House", R.house, a.reduced_house_php], ["decreased change", -R.delta, a.reduced_php],
+    ];
+    const bad = cells.filter(([, x, y]) => x !== y);
+    const own = !!mine && mine.house_stage === p.house_stage && (["inserted", "increased", "decreased"] as const).every((k) => {
+      const t = tally(p.key, k), m = mine.kinds[k];
+      return m.rows === t.rows && m.records === t.records && m.nep_php === t.nep && m.house_php === t.house && m.delta_php === t.delta && m.unconfirmed_rows === t.heldRows && m.unconfirmed_php === t.heldPhp;
+    });
+    check(`${p.key}: inserted ${I.records.toLocaleString("en-US")} lines in ${I.rows.toLocaleString("en-US")} rows ${peso(I.house)}${I.heldRows ? ` (${I.heldRows} unconfirmed, ${peso(I.heldPhp)})` : ""} · increased ${U.rows} ${peso(U.delta)} · decreased ${R.rows} −${peso(-R.delta)} — each equals candidate_changes and the file's totals`,
+      bad.length === 0 && own, bad.map(([n, x, y]) => `${n} ${x} vs ${y}`).join("; ") || "programs[] totals differ");
+  }
+  const T = cc.totals;
+  const records = rows.reduce((t, r) => t + (r.k === "inserted" ? (r.m ?? 1) : 1), 0);
+  check(`totals: ${rows.length.toLocaleString("en-US")} rows, ${records.toLocaleString("en-US")} listed = ${T.insertions.count.toLocaleString("en-US")} insertions + ${T.increased.count} increases + ${T.decreased.count} decreases`,
+    records === T.insertions.count + T.increased.count + T.decreased.count && L.totals.rows === rows.length && L.totals.records === records
+      && L.totals.inserted_records === T.insertions.count && L.totals.adjusted_rows === T.increased.count + T.decreased.count,
+    JSON.stringify(L.totals));
+  // Inserted, then increased, then decreased; within each kind, House amount largest first (none last).
+  const kindRank: Record<string, number> = { inserted: 0, increased: 1, decreased: 2 };
+  const unsorted = rows.findIndex((r, i) => {
+    if (i === 0) return false;
+    const a = rows[i - 1];
+    const ka = kindRank[a.k] ?? 9, kb = kindRank[r.k] ?? 9;
+    return kb < ka || (kb === ka && (r.h ?? -1) > (a.h ?? -1));
+  });
+  check("sorted inserted → increased → decreased, each by House bill amount largest first (none last)", unsorted === -1, unsorted === -1 ? "" : `row ${unsorted}: ${rows[unsorted].i}`);
+
+  // 3. Representatives: office label → office → its leaderboard group → districts.json seat holders, undivided.
+  const officeOfLabel = new Map<string, string>();
+  for (const o of Object.values(D.offices)) {
+    const label = o.kind === "regional_group" ? null : o.years.find((y) => y.fy === 2027 && y.stage === "hgab3")?.matched_label ?? null;
+    if (label && o.fy2027) officeOfLabel.set(label, o.id);
+  }
+  const entryOf = new Map<string, LeaderEntry>();
+  for (const e of LB.entries) for (const o of e.offices) entryOf.set(o.id, e);
+  const cards = new Map(D.districts.map((d) => [d.id, d] as const));
+  const seatName = (rep: Representative | null) => displayName(!rep ? null : rep.status === "ambiguous" ? (rep.name || (rep.candidates ?? []).map((x) => x.name).filter(Boolean).join(" / ") || null) : rep.name);
+  const officeChange = new Set(D.office_change.row_ids), noOffice = new Set(D.no_office.row_ids);
+  const repBad: string[] = [], noRepBad: string[] = [];
+  let withReps = 0, shared = 0, names = 0;
+  for (const r of rows) {
+    const e = expected.get(keyOf(r.p, r.i));
+    if (!e) continue;
+    if (r.p !== "dpwh") {
+      if (r.o !== null || r.w !== null || r.tr !== null || r.ds !== null || r.rp !== null) noRepBad.push(`${r.p} ${r.i}: the list names no office, yet the row carries one`);
+      continue;
+    }
+    const want = officeChange.has(r.i) ? "office_change" : noOffice.has(r.i) ? "no_office" : e.officeKind === "Central Office" ? "central" : e.officeKind === "Regional offices" ? "regional" : "office";
+    if (r.w !== want) { (want === "office" ? repBad : noRepBad).push(`${r.i}: basis ${r.w}, expected ${want}`); continue; }
+    if (want !== "office") {
+      if (r.tr !== null || r.ds !== null || r.rp !== null) noRepBad.push(`${r.i} (${want}) lists districts or representatives`);
+      continue;
+    }
+    const officeId = officeOfLabel.get(r.o ?? "");
+    const entry = officeId ? entryOf.get(officeId) : undefined;
+    if (!entry) { repBad.push(`${r.i}: office "${r.o}" is in no leaderboard group`); continue; }
+    const ds = [...entry.people].sort((a, b) => a.district.localeCompare(b.district, "en", { numeric: true })).map((p) => cards.get(p.district_id));
+    if (ds.some((d) => !d)) { repBad.push(`${r.i}: a district of ${officeId} is not in districts.json`); continue; }
+    const wantReps = ds.map((d) => seatName(d!.representative));
+    const wantDs = districtsServedText(ds as DistrictCard[]);
+    if (r.tr !== entry.tier || JSON.stringify(r.rp) !== JSON.stringify(wantReps) || r.ds !== wantDs || (entry.tier === "B") !== (wantReps.length > 1)) {
+      repBad.push(`${r.i}: ${r.tr} "${r.ds}" ${JSON.stringify(r.rp)} vs ${entry.tier} "${wantDs}" ${JSON.stringify(wantReps)}`);
+    }
+    withReps++; names += wantReps.length; if (entry.tier === "B") shared++;
+  }
+  check(`every representative listed is the districts.json seat holder of a district the office's group serves, all of them, in order (${withReps.toLocaleString("en-US")} DPWH rows, ${shared.toLocaleString("en-US")} under shared offices; ${names.toLocaleString("en-US")} names)`,
+    repBad.length === 0 && withReps > 0, firstFew(repBad));
+  const basis = (w: string) => rows.filter((r) => r.w === w).length;
+  check(`no representative on Central Office (${basis("central").toLocaleString("en-US")}), regional (${basis("regional")}), office-change (${basis("office_change")}) or no-office (${basis("no_office")}) lines, nor on the three lists`,
+    noRepBad.length === 0 && rows.filter((r) => r.p === "dpwh" && officeChange.has(r.i)).every((r) => r.w === "office_change"), firstFew(noRepBad));
+
+  // 4. The CSV, parsed on its own: header, BOM, row for row with the JSON, sums again.
+  const text = readFileSync(csvPath, "utf8");
+  const table = parseCsv(text.startsWith("\uFEFF") ? text.slice(1) : text).filter((x) => !(x.length === 1 && x[0] === ""));
+  const [head, ...body] = table;
+  const col = new Map(head.map((h, i) => [h, i]));
+  const cell = (row: string[], k: string) => row[col.get(k)!] ?? "";
+  const int = (s: string) => (s === "" ? null : /^-?\d+$/.test(s) ? Number(s) : NaN);
+  check(`CSV: UTF-8 with BOM, snake_case header of ${CHANGES_LIST_CSV_COLUMNS.length} columns, ${body.length.toLocaleString("en-US")} rows = the JSON's`,
+    text.startsWith("\uFEFF") && head.join(",") === CHANGES_LIST_CSV_COLUMNS.join(",") && body.length === rows.length && body.every((x) => x.length === head.length),
+    `${head.join(",").slice(0, 80)} · ${body.length} rows`);
+  const csvBad: string[] = [];
+  body.forEach((x, i) => {
+    const r = rows[i];
+    if (!r) return;
+    const e = expected.get(keyOf(r.p, r.i));
+    const meta = overview.datasets.find((d) => d.key === r.p);
+    const third = e && meta ? houseCitations({ hgab2_page: e.p2, hgab3_page: e.p3, hgab2_doc: e.d2, hgab3_doc: e.d3 }, meta, overview.documents).filter((z) => z.reading === 3) : [];
+    const want: Record<string, string | number | null> = {
+      program: CHANGE_PROGRAM_LABELS[r.p], kind: r.k, status_label: r.s, unconfirmed_match: r.u ? "yes" : "", title: r.t, detail: r.pa ?? "",
+      region: r.r ?? "", province: r.pv ?? "", office: r.o ?? "", tier: r.tr ?? "", districts_served: r.ds ?? "",
+      representatives_of_those_districts: r.rp ? r.rp.join("; ") : "", record_id: r.i, record_url: `${CHANGES_LIST_SITE}${r.x}`,
+      no_district_reason: r.w === null ? NO_DISTRICT_REASON.list : r.w === "office" ? "" : NO_DISTRICT_REASON[r.w],
+      nep_document: r.n == null ? "" : e?.nepDoc ?? "", house_document: third[0]?.doc ?? "",
+    };
+    const nums: Record<string, number | null> = {
+      nep_php: r.n, house_php: r.h, change_php: r.d, house_lines: r.h == null ? null : (r.m ?? 1),
+      nep_page: r.n == null ? null : e?.nepPage ?? null, house_page: third[0]?.page ?? null,
+    };
+    const diffs = [
+      ...Object.entries(want).filter(([k, v]) => cell(x, k) !== String(v ?? "")).map(([k]) => k),
+      ...Object.entries(nums).filter(([k, v]) => int(cell(x, k)) !== v).map(([k]) => k),
+      r.h != null && third.length !== 1 && "house page",
+    ].filter(Boolean);
+    if (diffs.length) csvBad.push(`line ${i + 2} (${r.i}): ${diffs.join(", ")}`);
+  });
+  check("CSV and JSON agree row for row: every text cell, exact integer pesos (empty = null), the absolute record link, the NEP page and the third-reading House page the site links",
+    csvBad.length === 0, firstFew(csvBad));
+  const csvSum = (p: string, k: string, f: string) => body.filter((x) => cell(x, "program") === p && cell(x, "kind") === k).reduce((t, x) => t + (int(cell(x, f)) ?? 0), 0);
+  const csvSumBad = cc.programs.filter((p) => {
+    const l = CHANGE_PROGRAM_LABELS[p.key], a = p.adjustments;
+    return csvSum(l, "inserted", "house_lines") !== p.insertions.count || csvSum(l, "inserted", "house_php") !== p.insertions.amount_php
+      || csvSum(l, "increased", "change_php") !== a.increased_php || csvSum(l, "decreased", "change_php") !== -a.reduced_php
+      || csvSum(l, "increased", "house_php") !== a.increased_house_php || csvSum(l, "decreased", "nep_php") !== a.reduced_nep_php;
+  });
+  check("CSV sums per program and kind, read from the file alone, equal candidate_changes", csvSumBad.length === 0, csvSumBad.map((p) => p.key).join(", "));
 }
 
 main().catch((e) => {

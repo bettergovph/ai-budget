@@ -22,6 +22,9 @@ export const DEO_RESTRICTIONS_UPSTREAM_URL =
 /** Our summary of those restrictions (Methodology page anchor). */
 export const DEO_RESTRICTIONS_PATH = '/hgab/2027/methodology#deo-mapping-restrictions';
 
+/** The full disclaimers, in one place (Methodology page anchor). */
+export const DISCLAIMERS_PATH = '/hgab/2027/methodology#disclaimer';
+
 export const DISCLAIMER_OFFICES: Disclaimer = {
   id: 'disclaimer-offices',
   title: 'Office and legislative-district associations.',
