@@ -819,3 +819,15 @@ Without the flag the verifier runs exactly as before.
   pagination differs from the retained OCR copy. The registry notes say so.
 - The workbench's matching is provisional (`comparison_ready: false`,
   `reviewed_pairs: 0`); candidate vocabulary must stay candidate vocabulary.
+
+## "We are not ignorant" static page
+
+`/hgab/2027/we-are-not-ignorant` is not part of the SPA. `npm run build:hgab-not-ignorant`
+writes `data/hgab/2027/we-are-not-ignorant.html` from `changes-list.json` (every row,
+numbered 1…N across the rows, the styles of `src/hgab-not-ignorant.css` inlined, no
+JavaScript); `npm run upload:hgab` publishes it and the Worker serves it at that path
+(`src/worker/static-pages.ts`: the local data tree in development, the data host in
+production). Updating it is regenerate + upload, never a redeploy. `verify:hgab` checks it
+has one item per list row, numbered continuously, each linking to its row's record page,
+built from the current list, with the counts line and the disclaimer. The campaign poster
+is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`).

@@ -66,11 +66,13 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".png")) return "image/png";
   // changes-list.csv (npm run build:hgab-changes-list): UTF-8 with BOM, linked as a download.
   if (path.endsWith(".csv")) return "text/csv; charset=utf-8";
+  // we-are-not-ignorant.html (npm run build:hgab-not-ignorant): a static page the Worker serves.
+  if (path.endsWith(".html")) return "text/html; charset=utf-8";
   return "application/octet-stream";
 }
 /** JSON and CSV change with every rebuild; parquet and PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") || path.endsWith(".csv") ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") ? "public, max-age=300" : "public, max-age=86400";
 }
 /** A CSV is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {

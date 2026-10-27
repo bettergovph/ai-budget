@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
@@ -93,6 +94,11 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
 
   return (
     <>
+      {/* Campaign strip: every page, above the (sticky) masthead, so it scrolls away.
+          A plain link: the page is a static file the Worker serves. */}
+      <a href={CHANGES_LIST_ROOT} className="campaign-strip">
+        We are not ignorant <span aria-hidden="true">→</span>
+      </a>
       <header className={`masthead ${headerClassName ?? ''}`.trim()}>
         {/* Full-bleed wrapper: carries the masthead's single horizontal rule
             so it runs edge to edge, while the content inside stays within the

@@ -39,6 +39,7 @@ import { handleMcp } from "./mcp";
 import { handleHearings } from "./hearings";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
+import { serveStaticPage, staticPageFor } from "./static-pages";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
 
@@ -1573,6 +1574,10 @@ export default {
     // ---- SEO artifacts ----
     if (url.pathname === "/robots.txt") return robotsTxt();
     if (url.pathname === "/sitemap.xml") return sitemapXml(env);
+
+    // Static pages published with the data (e.g. /hgab/2027/we-are-not-ignorant).
+    const staticPage = staticPageFor(url.pathname);
+    if (staticPage) return serveStaticPage(request, env, url, staticPage);
 
     // Everything else — SPA assets, the data/*.json / *.parquet tree, etc.
     // HTML responses (the SPA shell) get per-route metadata streamed in.

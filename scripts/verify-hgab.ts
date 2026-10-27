@@ -662,6 +662,7 @@ async function main(): Promise<void> {
   await verifyLeaderboard(overview, c, lens);
 
   await verifyChangesList(overview, c);
+  verifyNotIgnorantPage();
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -1907,6 +1908,37 @@ function parseCsv(text: string): string[][] {
   }
   if (cell !== "" || row.length) { row.push(cell); out.push(row); }
   return out;
+}
+
+/**
+ * The static page (npm run build:hgab-not-ignorant): one item per list row,
+ * numbered 1…N in order, each linking to its row's record page, built from
+ * the current changes-list.json, with the counts line and the disclaimer.
+ */
+function verifyNotIgnorantPage(): void {
+  process.stdout.write("\nwe-are-not-ignorant.html (static page)\n");
+  const htmlPath = resolve(OUT, "we-are-not-ignorant.html");
+  const listPath = resolve(OUT, "changes-list.json");
+  check("we-are-not-ignorant.html present (npm run build:hgab-not-ignorant)", existsSync(htmlPath), htmlPath);
+  if (!existsSync(htmlPath) || !existsSync(listPath)) return;
+  const html = readFileSync(htmlPath, "utf8");
+  const L = readJson<ChangesListData>(listPath);
+  const unesc = (s: string) => s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  check("carries the Worker's marker and was built from the current changes-list.json",
+    html.includes("hgab-we-are-not-ignorant") && html.includes(L.built_at), "rerun npm run build:hgab-not-ignorant");
+  const items = html.match(/<li class="hgab-wani-item /g)?.length ?? 0;
+  check(`${items.toLocaleString("en-US")} items = ${L.rows.length.toLocaleString("en-US")} list rows`, items === L.rows.length);
+  const nums = [...html.matchAll(/<span class="hgab-wani-n" aria-hidden="true">([\d,]+)<\/span>/g)].map((m) => Number(m[1].replace(/,/g, "")));
+  const badNum = nums.findIndex((n, i) => n !== i + 1);
+  check("numbered 1…N continuously, in list order", nums.length === L.rows.length && badNum === -1, badNum === -1 ? "" : `item ${badNum + 1} is numbered ${nums[badNum]}`);
+  const hrefs = [...html.matchAll(/<a class="hgab-wani-ttl" href="([^"]*)">/g)].map((m) => unesc(m[1]));
+  const badHref = hrefs.findIndex((h, i) => h !== L.rows[i]?.x);
+  check("every item links to its own row's record page, in order", hrefs.length === L.rows.length && badHref === -1, badHref === -1 ? "" : `item ${badHref + 1}: ${hrefs[badHref]}`);
+  const ins = html.match(/<li class="hgab-wani-item is-in"/g)?.length ?? 0;
+  const insRows = L.rows.filter((r) => r.k === "inserted").length;
+  check(`${ins.toLocaleString("en-US")} items marked inserted = ${insRows.toLocaleString("en-US")} inserted rows`, ins === insRows);
+  check(`counts line says ${L.totals.records.toLocaleString("en-US")} projects`, html.includes(`${L.totals.records.toLocaleString("en-US")} inserted and adjusted projects`));
+  check("footer carries the disclaimer", html.includes("the documents do not say who asked for any project") && html.includes("Matches are candidates, not findings"));
 }
 
 async function verifyChangesList(overview: Overview, c: DuckDBConnection): Promise<void> {
