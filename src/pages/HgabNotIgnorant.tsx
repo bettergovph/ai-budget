@@ -15,7 +15,7 @@
  * never "their" project; lines with no district name no one.
  *
  * Performance: ~7,500 items. They are split into chunks of CHUNK items, each
- * its own multi-column <ol> (numbering continues through `start`) with
+ * its own grid <ol>, filled left to right, numbered continuously, with
  * `content-visibility: auto`, so only the chunks on screen are laid out. The
  * first chunks commit as soon as the data lands; the rest render in one
  * transition right after, so the first screen never waits for the whole list.
@@ -68,15 +68,17 @@ function metaText(r: ChangesListRow): { lead: string; reps: string } {
   return { lead: parts.join(' · '), reps: r.w === 'office' ? seatHoldersText(r.rp) : '' };
 }
 
-function Item({ r }: { r: ChangesListRow }) {
+function Item({ r, n }: { r: ChangesListRow; n: number }) {
   const { lead, reps } = metaText(r);
   const cls = r.k === 'inserted' ? 'is-in' : r.k === 'increased' ? 'is-up' : 'is-down';
   return (
     <li className={`hgab-wani-item ${cls}`}>
+      <span className="hgab-wani-n" aria-hidden="true">{n.toLocaleString('en-US')}</span>
+      <span className={`hgab-wani-tag ${cls}`}>{r.k}</span>{' '}
       <span className="hgab-wani-amt">
         {r.k === 'inserted' ? (
           <>
-            <b>{peso(r.h ?? 0)}</b> <span className="hgab-wani-kind">inserted</span>
+            <b>{peso(r.h ?? 0)}</b>
             {r.m ? <span className="hgab-wani-kind"> · listed as {r.m} lines</span> : null}
           </>
         ) : (
@@ -172,7 +174,7 @@ export default function HgabNotIgnorant() {
         <main className="hgab-wani-list" onClick={onListClick}>
           {(all ? chunks : chunks.slice(0, FIRST_CHUNKS)).map((rows, ci) => (
             <ol key={ci} className="hgab-wani-chunk" start={ci * CHUNK + 1}>
-              {rows.map((r) => <Item key={`${r.p}:${r.i}`} r={r} />)}
+              {rows.map((r, j) => <Item key={`${r.p}:${r.i}`} r={r} n={ci * CHUNK + j + 1} />)}
             </ol>
           ))}
         </main>
