@@ -14,6 +14,7 @@
  */
 
 import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
+import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 
 export interface PageMeta {
   title: string;
@@ -263,6 +264,17 @@ export function pageMeta(pathname: string): PageMeta {
         "One legislative district's DPWH district engineering office(s): attribution tier, budget by " +
         "fiscal year and Congress (FY 2020–2026 GAA, FY 2027 NEP and House bill), the FY 2027 bridge, " +
         "the largest projects, and the representative who holds the seat in the 20th Congress.",
+    };
+  }
+  // The whole list of inserted and adjusted projects: before the dataset pattern.
+  if (p === CHANGES_LIST_ROOT) {
+    return {
+      title: `${CHANGES_LIST_TITLE} — FY2027 House bill · ${SITE}`,
+      description:
+        "Every project House Bill 10858, the FY 2027 House bill, lists that is not in the NEP or carries a " +
+        "different amount: DPWH infrastructure, farm-to-market roads, health facilities and irrigation, with " +
+        "the amounts as published, the DPWH office that carries each out, the districts it serves and their " +
+        "representatives. One page, downloadable as CSV. Matches are candidates, not findings.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"

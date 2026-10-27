@@ -3,7 +3,8 @@
  *
  * Modelled on upload-nep-2027-to-r2.ts. Everything under the tree is uploaded
  * — manifest.json, overview.json, each dataset's summary.json and
- * projects.parquet, and the source PDFs under pdf/ (about 140 MB) — because
+ * projects.parquet, the "We are not ignorant" list (changes-list.json and
+ * changes-list.csv), and the source PDFs under pdf/ (about 140 MB) — because
  * the /hgab section fetches all of it from the data host.
  *
  * Objects already in the bucket are skipped when their size matches and, for
@@ -63,11 +64,18 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".pdf")) return "application/pdf";
   // share/<board>.png: link previews (npm run build:hgab-share), read by social crawlers.
   if (path.endsWith(".png")) return "image/png";
+  // changes-list.csv (npm run build:hgab-changes-list): UTF-8 with BOM, linked as a download.
+  if (path.endsWith(".csv")) return "text/csv; charset=utf-8";
   return "application/octet-stream";
 }
-/** JSON changes with every rebuild; parquet and PDFs are pinned to the manifest commit. */
+/** JSON and CSV change with every rebuild; parquet and PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".csv") ? "public, max-age=300" : "public, max-age=86400";
+}
+/** A CSV is a download: the page links it cross-origin, where the `download` attribute is ignored. */
+function contentDispositionFor(path: string): string | undefined {
+  if (!path.endsWith(".csv")) return undefined;
+  return `attachment; filename="bettergov-house-bill-2027-${path.split(sep).pop()}"`;
 }
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -111,6 +119,7 @@ async function uploadOne(localPath: string, key: string): Promise<{ skipped: boo
   await s3.send(new PutObjectCommand({
     Bucket, Key: key, Body: createReadStream(localPath), ContentLength: size,
     ContentType: contentTypeFor(localPath), CacheControl: cacheControlFor(localPath),
+    ContentDisposition: contentDispositionFor(localPath),
   }));
   return { skipped: false, bytes: size };
 }

@@ -1,0 +1,159 @@
+/* "We are not ignorant" (/hgab/2027/we-are-not-ignorant): the whole list of
+   inserted and adjusted projects as one wall. Logo, title, one line, the CSV
+   link, then every item in dense columns; no site chrome.
+
+   The list is cut into chunks (one <ol> each); every chunk is its own
+   multi-column block, so reading runs down each column of a screen-sized
+   block and on to the next, and `content-visibility: auto` skips layout for
+   the chunks off screen. Tokens are the portal's (src/styles.css). */
+
+.hgab-wani {
+  padding: 28px 28px 40px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/* --- top -------------------------------------------------------------- */
+
+.hgab-wani-top { max-width: 1100px; margin-bottom: 22px; }
+.hgab-wani-logo { display: inline-block; line-height: 0; }
+.hgab-wani-logo img { height: 34px; width: auto; }
+.hgab-wani-h1 {
+  margin: 18px 0 8px;
+  font-family: var(--font-hero);
+  font-size: clamp(34px, 5.2vw, 64px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+.hgab-wani-count {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--ink-2);
+}
+.hgab-wani-dl { margin: 8px 0 0; font-size: 14px; font-weight: 600; }
+.hgab-wani-dl a { color: var(--accent); }
+.hgab-wani-dl a:hover { color: var(--accent-deep); }
+
+/* --- the wall ----------------------------------------------------------- */
+
+.hgab-wani-list { border-top: 2px solid var(--ink); padding-top: 14px; }
+
+.hgab-wani-chunk {
+  margin: 0;
+  padding: 0;
+  list-style: decimal inside;
+  columns: 13.5rem 6;
+  column-gap: 20px;
+  column-rule: 1px solid var(--rule-soft);
+  content-visibility: auto;
+  /* Estimated chunk height until it has been laid out once ("auto" then keeps
+     the real one), measured per column count: 6 columns ≈ 1,050px. */
+  contain-intrinsic-size: auto 1050px;
+}
+@media (max-width: 1451px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1400px; } }  /* 5 columns */
+@media (max-width: 1215px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1750px; } }  /* 4 */
+@media (max-width: 979px) { .hgab-wani-chunk { contain-intrinsic-size: auto 2200px; } }   /* 3 */
+@media (max-width: 743px) { .hgab-wani-chunk { contain-intrinsic-size: auto 3200px; } }   /* 2 */
+@media (max-width: 507px) { .hgab-wani-chunk { contain-intrinsic-size: auto 6000px; } }   /* 1 */
+
+.hgab-wani-item {
+  break-inside: avoid;
+  margin: 0 0 11px;
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.36;
+  overflow-wrap: anywhere;
+}
+.hgab-wani-item::marker {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-mute);
+}
+
+.hgab-wani-amt { font-family: var(--font-mono); font-size: 11px; }
+.hgab-wani-amt b { font-weight: 700; color: var(--ink); }
+.hgab-wani-kind { color: var(--ink-mute); font-size: 10px; }
+.hgab-wani-num,
+.hgab-wani-chg { white-space: nowrap; }
+.hgab-wani-item.is-up .hgab-wani-chg { color: var(--positive); }
+.hgab-wani-item.is-down .hgab-wani-chg { color: var(--negative); }
+.hgab-wani-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--neutral);
+  border-radius: 3px;
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: var(--neutral);
+  white-space: nowrap;
+}
+
+.hgab-wani-ttl {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.hgab-wani-ttl:hover { color: var(--accent); text-decoration: underline; }
+.hgab-wani-ttl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.hgab-wani-meta { display: block; margin-top: 1px; font-size: 10.5px; color: var(--ink-3); }
+.hgab-wani-reps { color: var(--ink-2); font-weight: 600; }
+
+.hgab-wani-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- footer ------------------------------------------------------------- */
+
+.hgab-wani-foot {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.hgab-wani-foot p { margin: 0; max-width: 1100px; }
+.hgab-wani-foot a { color: var(--accent); }
+
+/* --- phones -------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .hgab-wani { padding: 18px 16px 32px; }
+  .hgab-wani-logo img { height: 28px; }
+  .hgab-wani-count { font-size: 15px; }
+  .hgab-wani-item { font-size: 12.5px; }
+  .hgab-wani-meta { font-size: 11.5px; }
+  .hgab-wani-amt { font-size: 12px; }
+}
+
+/* --- print: a long poster ----------------------------------------------- */
+
+@media print {
+  @page { margin: 10mm; }
+  .hgab-wani { padding: 0; }
+  .hgab-wani-dl { display: none; }
+  .hgab-wani-h1 { font-size: 30pt; margin-top: 8pt; }
+  .hgab-wani-count { font-size: 11pt; }
+  .hgab-wani-chunk {
+    content-visibility: visible;
+    contain-intrinsic-size: none;
+    columns: 5;
+    column-gap: 10pt;
+  }
+  .hgab-wani-item { font-size: 6.5pt; margin-bottom: 5pt; }
+  .hgab-wani-meta { font-size: 6pt; }
+  .hgab-wani-amt { font-size: 6.5pt; }
+  .hgab-wani a { color: inherit; text-decoration: none; }
+  .hgab-wani-item.is-up .hgab-wani-chg,
+  .hgab-wani-item.is-down .hgab-wani-chg { color: inherit; }
+}
