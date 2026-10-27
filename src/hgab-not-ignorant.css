@@ -43,10 +43,14 @@
 .hgab-wani-chunk {
   margin: 0;
   padding: 0;
-  list-style: decimal inside;
-  columns: 13.5rem 6;
-  column-gap: 20px;
-  column-rule: 1px solid var(--rule-soft);
+  list-style: none;
+  /* Rows, filled left to right, so the numbers run on across the page and
+     from one chunk to the next (60 items fill 1–6 columns evenly). */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 9px 16px;
+  align-items: start;
+  margin-bottom: 9px;
   content-visibility: auto;
   /* Estimated chunk height until it has been laid out once ("auto" then keeps
      the real one), measured per column count: 6 columns ≈ 1,050px. */
@@ -60,19 +64,40 @@
 
 .hgab-wani-item {
   break-inside: avoid;
-  margin: 0 0 11px;
+  margin: 0;
+  padding-left: 7px;
+  border-left: 2px solid var(--rule);
   font-family: var(--font-body);
-  font-size: 11.5px;
-  line-height: 1.36;
+  font-size: 10.5px;
+  line-height: 1.33;
   overflow-wrap: anywhere;
 }
-.hgab-wani-item::marker {
+/* Insertions stand out: a red edge and a solid red tag. */
+.hgab-wani-item.is-in { border-left: 3px solid #d62828; }
+.hgab-wani-n {
+  margin-right: 5px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 9px;
   color: var(--ink-mute);
 }
+.hgab-wani-tag {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.hgab-wani-tag.is-in { background: #d62828; color: #fff; }
+.hgab-wani-tag.is-up { border: 1px solid var(--positive); color: var(--positive); }
+.hgab-wani-tag.is-down { border: 1px solid var(--negative); color: var(--negative); }
 
-.hgab-wani-amt { font-family: var(--font-mono); font-size: 11px; }
+.hgab-wani-amt { font-family: var(--font-mono); font-size: 10px; }
+.hgab-wani-item.is-in .hgab-wani-amt b { color: #b3121f; }
 .hgab-wani-amt b { font-weight: 700; color: var(--ink); }
 .hgab-wani-kind { color: var(--ink-mute); font-size: 10px; }
 .hgab-wani-num,
@@ -101,7 +126,7 @@
 .hgab-wani-ttl:hover { color: var(--accent); text-decoration: underline; }
 .hgab-wani-ttl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.hgab-wani-meta { display: block; margin-top: 1px; font-size: 10.5px; color: var(--ink-3); }
+.hgab-wani-meta { display: block; margin-top: 1px; font-size: 9.5px; color: var(--ink-3); }
 .hgab-wani-reps { color: var(--ink-2); font-weight: 600; }
 
 .hgab-wani-sr {
@@ -131,9 +156,9 @@
   .hgab-wani { padding: 18px 16px 32px; }
   .hgab-wani-logo img { height: 28px; }
   .hgab-wani-count { font-size: 15px; }
-  .hgab-wani-item { font-size: 12.5px; }
-  .hgab-wani-meta { font-size: 11.5px; }
-  .hgab-wani-amt { font-size: 12px; }
+  .hgab-wani-item { font-size: 11.5px; }
+  .hgab-wani-meta { font-size: 10.5px; }
+  .hgab-wani-amt { font-size: 11px; }
 }
 
 /* --- print: a long poster ----------------------------------------------- */
@@ -147,7 +172,7 @@
   .hgab-wani-chunk {
     content-visibility: visible;
     contain-intrinsic-size: none;
-    columns: 5;
+    grid-template-columns: repeat(5, 1fr);
     column-gap: 10pt;
   }
   .hgab-wani-item { font-size: 6.5pt; margin-bottom: 5pt; }
