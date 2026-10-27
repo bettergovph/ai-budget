@@ -275,6 +275,11 @@ export function pageMeta(pathname: string): PageMeta {
         "different amount: DPWH infrastructure, farm-to-market roads, health facilities and irrigation, with " +
         "the amounts as published, the DPWH office that carries each out, the districts it serves and their " +
         "representatives. One page, downloadable as CSV. Matches are candidates, not findings.",
+      // The campaign poster's link-preview size (npm run build:hgab-poster, published with upload:hgab).
+      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/we-are-not-ignorant-1200x630.png",
+      imageWidth: "1200",
+      imageHeight: "630",
+      imageAlt: "WE ARE NOT IGNORANT: 7,465 inserted and adjusted projects in the 2027 House budget bill, over the list of the projects themselves.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"

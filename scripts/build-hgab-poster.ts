@@ -15,11 +15,12 @@
  *   we-are-not-ignorant-24x36.png    preview at 150 dpi (3600 × 5400)
  *   we-are-not-ignorant-1080x1350.png  feed post (4:5)
  *   we-are-not-ignorant-1080x1920.png  story (9:16)
+ *   we-are-not-ignorant-1200x630.png   link preview (og:image) for the page
  * The print poster fits all 7,465 projects (the font size is solved so the
  * list exactly fills the page). The social sizes keep the wall readable when
  * zoomed and say how many of the projects they show.
  *
- * Usage: npm run build:hgab-poster -- [--art=art.png] [--art-story=art.png] [--out=dir] [--only=print,post,story]
+ * Usage: npm run build:hgab-poster -- [--art=art.png] [--art-story=art.png] [--out=dir] [--only=print,post,story,og]
  * Needs network access for Google Fonts (Anton, Inter, JetBrains Mono).
  */
 import { chromium } from "playwright-core";
@@ -88,6 +89,8 @@ const FORMATS: Format[] = [
   { key: "print", file: "we-are-not-ignorant-24x36", w: 2304, h: 3456, wall: "all", pdf: { width: "24in", height: "36in" }, scale: 3600 / 2304 },
   { key: "post", file: "we-are-not-ignorant-1080x1350", w: 1080, h: 1350, wall: 7.2, scale: 1 },
   { key: "story", file: "we-are-not-ignorant-1080x1920", w: 1080, h: 1920, wall: 7.2, scale: 1 },
+  // Link preview (og:image) for /hgab/2027/we-are-not-ignorant: landscape, headline left, fist right.
+  { key: "og", file: "we-are-not-ignorant-1200x630", w: 1200, h: 630, wall: 5.6, scale: 1 },
 ];
 
 function html(f: Format): string {
@@ -130,7 +133,16 @@ function html(f: Format): string {
   .foot .url { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: ${2.15 * u}px; color: #fff; }
   .foot .fine { font-size: ${1.12 * u}px; line-height: 1.35; color: rgba(243, 238, 228, 0.82); }
   .foot .fine strong { color: #fff; font-weight: 600; }
-</style></head><body><div class="poster" style="--foot: ${f.h / f.w > 1.6 ? 17 * u : 14.5 * u}px; --hs: ${f.h / f.w > 1.6 ? 17.5 * u : 15.5 * u}px">
+${f.w > f.h ? `  /* Landscape (link preview): headline on the left half, the fist on the right. */
+  .head { right: auto; width: 60%; top: ${2.6 * u}px; }
+  h1 span + span { margin-top: ${0.5 * u}px; }
+  .sub { margin-top: ${1.4 * u}px; max-width: 100%; font-size: ${2.35 * u}px; }
+  .art { left: auto; right: ${1 * u}px; transform: none; width: auto; height: calc(100% - var(--foot) + ${3 * u}px); bottom: calc(var(--foot) - ${3 * u}px); }
+  .foot { padding: ${1.1 * u}px ${2.6 * u}px; gap: ${0.3 * u}px ${2 * u}px; }
+  .foot img { height: ${2.6 * u}px; }
+  .foot .url { font-size: ${1.7 * u}px; }
+  .foot .fine { font-size: ${0.95 * u}px; }
+` : ""}</style></head><body><div class="poster" style="--foot: ${f.w > f.h ? 10 * u : f.h / f.w > 1.6 ? 17 * u : 14.5 * u}px; --hs: ${f.w > f.h ? 8.6 * u : f.h / f.w > 1.6 ? 17.5 * u : 15.5 * u}px">
   <div class="wall" id="wall"></div>
   ${(f.key === "story" ? ARTURI_STORY : ARTURI) ? `<img class="art" src="${f.key === "story" ? ARTURI_STORY : ARTURI}" alt="">` : ""}
   <div class="head">

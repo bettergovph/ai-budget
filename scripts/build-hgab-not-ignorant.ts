@@ -129,8 +129,15 @@ const html = `<!doctype html>
 <meta property="og:title" content="${esc(meta.title)}">
 <meta property="og:description" content="${esc(meta.description)}">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${CHANGES_LIST_SITE}/og.png">
+<meta property="og:image" content="${esc(meta.image ?? `${CHANGES_LIST_SITE}/og.png`)}">
+<meta property="og:image:width" content="${esc(meta.imageWidth ?? "1200")}">
+<meta property="og:image:height" content="${esc(meta.imageHeight ?? "630")}">
+<meta property="og:image:alt" content="${esc(meta.imageAlt ?? meta.title)}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(meta.title)}">
+<meta name="twitter:description" content="${esc(meta.description)}">
+<meta name="twitter:image" content="${esc(meta.image ?? `${CHANGES_LIST_SITE}/og.png`)}">
+<meta name="twitter:image:alt" content="${esc(meta.imageAlt ?? meta.title)}">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
