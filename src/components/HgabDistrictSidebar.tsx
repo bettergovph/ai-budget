@@ -28,7 +28,8 @@
  * under the office group that serves them (`officeGroups`): the office's name,
  * its tier and its whole-office 2027 House bill amount, then its districts,
  * which carry no figure of their own. Districts with no office sit in a "No
- * district office" group. On the list an office row filters the cards to
+ * DPWH office found" group. Offices are named as DPWH offices ("DPWH Davao de
+ * Oro 1st DEO") and the rows under them as legislative districts. On the list an office row filters the cards to
  * that group (`office=`); on a district page it opens that filtered list.
  */
 import {
@@ -38,7 +39,7 @@ import {
 import { Link } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
-  NO_OFFICE_GROUP_NAME, districtListHref, districtPageHref, officeGroupTierShort, officeListHref, regionNames,
+  NO_OFFICE_GROUP_NAME, districtListHref, districtPageHref, dpwhOfficeName, officeGroupTierShort, officeListHref, regionNames,
   type DistrictBrowse, type RegionSectionKey, type SidebarDistrict, type SidebarOffice, type SidebarRegion,
 } from '../lib/hgab-districts';
 import '../hgab-districts.css';
@@ -323,9 +324,8 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
   const total = regions.reduce((n, r) => n + r.districts.length, 0);
   const titleId = `hgab-dsb-${uid}-title`;
   const byOffice = by === 'office';
-  const activeOfficeName = byOffice && activeOffice
-    ? regions.flatMap((r) => r.offices ?? []).find((o) => o.id === activeOffice)?.name ?? null
-    : null;
+  const activeOfficeRow = byOffice && activeOffice ? regions.flatMap((r) => r.offices ?? []).find((o) => o.id === activeOffice) : undefined;
+  const activeOfficeName = activeOfficeRow ? dpwhOfficeName(activeOfficeRow.name) : null;
   const activeName = activeOfficeName ?? (active ? regionNames(active).name : null);
   const title = byOffice ? 'Regions and offices' : 'Regions and districts';
 
@@ -360,12 +360,12 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
       </label>
       {byOffice ? (
         <p className="hgab-dsb-key">
-          Each region lists its district engineering offices (DEOs) and the districts each serves. Amounts are the
-          office’s 2027 House bill total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
+          Each region lists its DPWH district engineering offices (DEOs) and the legislative districts each serves.
+          Amounts are the office’s 2027 House bill total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
         </p>
       ) : (
         <p className="hgab-dsb-key">
-          Beside each district: its office’s 2027 House bill amount.{' '}
+          Beside each legislative district: its DPWH office’s 2027 House bill amount.{' '}
           <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span> means the office serves other districts too.
         </p>
       )}
@@ -436,7 +436,7 @@ function BrowseToggle({ by, onBy }: { by: DistrictBrowse; onBy: (by: DistrictBro
           type="button"
           aria-pressed={by === 'office'}
           onClick={() => onBy('office')}
-          title="Districts under the district engineering office (DEO) that serves them"
+          title="Legislative districts under the DPWH district engineering office (DEO) that serves them"
         >
           Office
         </button>
@@ -586,9 +586,10 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
   const n = o.size;
   const amount = o.hgab3_php == null ? 'no House bill figure' : `2027 House bill ${fmt.php(o.hgab3_php)}, whole office${o.tier === 'B' ? ', not split' : ''}`;
   const shown = o.districts.length < n ? `, ${o.districts.length} of ${n} shown` : '';
+  const name = dpwhOfficeName(o.name);
   const body = (
     <>
-      <span className="hgab-dsb-o-name" title={o.title}>{o.name}</span>
+      <span className="hgab-dsb-o-name" title={o.title}>{name}</span>
       <span className="hgab-dsb-o-meta">
         {o.tier && (
           <span className="hgab-dsb-o-amt" title={o.hgab3_php == null ? 'No House bill figure' : `${OFFICE_AMOUNT_TITLE} ${fmt.php(o.hgab3_php, { unit: 'full' })}.`}>
@@ -601,7 +602,7 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
     </>
   );
   const districts = (
-    <ul className="hgab-dsb-ds hgab-dsb-o-ds" aria-label={`Districts served by ${o.name}`}>
+    <ul className="hgab-dsb-ds hgab-dsb-o-ds" aria-label={o.tier ? `Legislative districts served by ${name}` : 'Legislative districts with no DPWH office found'}>
       {o.districts.map((d) => (
         <DistrictRow key={d.id} d={d} region={region} mode={mode} by="office" bare current={selectedId === d.id} onPick={onPickDistrict} onLeave={onLeave} />
       ))}
@@ -619,8 +620,8 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
     );
   }
   const label = mode === 'page'
-    ? `${o.name}: see its ${n === 1 ? 'district' : `${n} districts`} as cards${current ? ' (this district’s office)' : ''}. ${amount}.`
-    : `${o.name}: show only ${n === 1 ? 'its district' : `its ${n} districts`}${shown}. ${amount}.`;
+    ? `${name}: see its ${n === 1 ? 'legislative district' : `${n} legislative districts`} as cards${current ? ' (this district’s office)' : ''}. ${amount}.`
+    : `${name}: show only ${n === 1 ? 'its legislative district' : `its ${n} legislative districts`}${shown}. ${amount}.`;
   return (
     <li className={cls} data-office={o.id}>
       {mode === 'page' ? (

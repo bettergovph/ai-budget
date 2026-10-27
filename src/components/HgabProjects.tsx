@@ -345,6 +345,8 @@ export default function HgabProjects({
   const twoReadings = dataset.has_readings;
   const houseKey: 'hgab2' | 'hgab3' = dataset.totals.hgab3_php != null ? 'hgab3' : 'hgab2';
   const pap = papLabel(dataset.key);
+  // DPWH offices are named as such, so a DEO's number is never read as a legislative district's.
+  const officeHeading = dataset.key === 'dpwh' ? 'DPWH office' : 'Office';
   const colCount = 7 + (twoReadings ? 1 : 0) + (pap ? 1 : 0);
   const sortLabel = (k: SortKey) =>
     !twoReadings && (k === 'hgab3' || k === 'hgab2') ? 'House amount' : SORT_LABELS[k];
@@ -384,20 +386,20 @@ export default function HgabProjects({
       </div>
 
       {filters.deo && (
-        <div className="hgab-ds-chips" role="group" aria-label="Active office filter">
+        <div className="hgab-ds-chips" role="group" aria-label="Active DPWH office filter">
           <span className="hgab-ds-chip">
-            <em>Office</em>
+            <em>DPWH office</em>
             {filters.deo}
             <button
               type="button"
-              aria-label={`Remove the office filter ${filters.deo}`}
+              aria-label={`Remove the DPWH office filter ${filters.deo}`}
               title="Remove this filter"
               onClick={() => update({ deo: '' })}
             >
               ×
             </button>
           </span>
-          <Link className="hgab-ds-chip-link" to={districtPath()} title="District engineering offices and the districts they serve">
+          <Link className="hgab-ds-chip-link" to={districtPath()} title="DPWH district engineering offices and the legislative districts they serve">
             All districts →
           </Link>
         </div>
@@ -493,7 +495,7 @@ export default function HgabProjects({
             <tr>
               {head('title', 'Project', 'nep-th-name')}
               <th className="hgab-ds-col-region">Region</th>
-              <th className="hgab-ds-col-office">Office</th>
+              <th className="hgab-ds-col-office">{officeHeading}</th>
               {pap && <th className="hgab-ds-col-pap">{pap}</th>}
               <th title="Which of the six groups this line falls in">What happened</th>
               {head('nep', STAGE_LABELS.nep.short, 'num', STAGE_LABELS.nep.label)}
@@ -590,7 +592,7 @@ export default function HgabProjects({
       <p className="nep-hier-note">
         Rows are lines in the documents, not unique projects. A House line and an unmatched NEP
         line for the same project can both appear. Amounts are the pesos published in each document, not
-        money spent. A dash means that document has no such line; it is not zero. Region, office and
+        money spent. A dash means that document has no such line; it is not zero. Region, {officeHeading.toLowerCase().replace('dpwh', 'DPWH')} and
         {pap ? ` ${pap.toLowerCase()}` : ' program'} are as each document lists them; a project’s own page shows both sides.{' '}
         {dataset.has_readings
           ? '“Change” is the third reading minus the NEP, when both exist.'

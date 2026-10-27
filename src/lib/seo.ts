@@ -287,9 +287,9 @@ export function pageMeta(pathname: string): PageMeta {
   // image on R2; an unknown board id falls back to the gallery.
   if (p === LEADERBOARD_ROOT || p.startsWith(`${LEADERBOARD_ROOT}/`)) {
     const gallery: PageMeta = {
-      title: `House Budget Analysis 2027 Leaderboards — DPWH District Offices and House Members Ranked · ${SITE}`,
+      title: `House Budget Analysis 2027 Leaderboards — DPWH Offices and House Members Ranked · ${SITE}`,
       description:
-        "DPWH district offices ranked by their budgets in the FY 2027 House bill and the NEP, and by " +
+        "DPWH district engineering offices (DEOs) ranked by their budgets in the FY 2027 House bill and the NEP, and by " +
         "enacted budgets from 2020 to 2026; district representatives ranked by bills authored. " +
         "Each board is an image to download and share. Amounts belong to offices, not people.",
     };

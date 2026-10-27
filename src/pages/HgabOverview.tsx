@@ -192,9 +192,9 @@ function DistrictsCallout({ index }: { index: HgabDistrictIndex | null }) {
     <section className="hgab-dx-callout" aria-labelledby="hgab-districts-callout">
       <div>
         <p className="hgab-dx-callout-eyebrow">By district engineering office · DPWH only</p>
-        <h3 id="hgab-districts-callout">District engineering offices and the districts they serve</h3>
+        <h3 id="hgab-districts-callout">DPWH district engineering offices and the legislative districts they serve</h3>
         <p>
-          One card per congressional district. Each card names the district’s representative in the
+          One card per legislative district. Each card names the district’s representative in the
           20th Congress. It lists the DPWH district engineering office, or offices, that serve it. It
           shows that office’s budget by Congress and by year, from the enacted budgets (GAA) of 2020 to
           2026. It then sets the 2027 House bill against the NEP for the office’s

@@ -65,4 +65,4 @@ export function disclaimerText(list: readonly Disclaimer[]): string {
  * core in two sentences of at most 20 words.
  */
 export const CARD_DISCLAIMER =
-  'Figures belong to DPWH district offices, not to representatives. A candidate is a document comparison, not evidence of wrongdoing.';
+  'Figures belong to DPWH offices, not to representatives. A candidate is a document comparison, not evidence of wrongdoing.';

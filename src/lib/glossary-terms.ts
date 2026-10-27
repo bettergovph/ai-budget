@@ -331,9 +331,9 @@ export const TERMS: Term[] = [
     term: 'District Engineering Office',
     aka: 'DEO',
     cat: 'structure',
-    def: 'The DPWH’s field office for one engineering district — often one per congressional district, sometimes shared by several. The operating unit that actually builds and maintains national roads, bridges and flood works, and the office most local infrastructure projects are implemented through.',
-    detail: 'Some 200 DEOs sit under the regional offices. In the budget volumes a project is tagged to its implementing office, so a DEO is the nearest thing the documents have to a place; the central and regional offices, which hold most of the money, are not tied to any district.',
-    see: { to: '/hgab/2027/dpwh?view=projects', label: 'Browse DPWH projects by implementing office' },
+    def: 'The DPWH’s field office for one engineering district — often one per legislative district, sometimes shared by several. The operating unit that actually builds and maintains national roads, bridges and flood works, and the office most local infrastructure projects are implemented through. A DEO’s number is its own and need not match the legislative district it serves.',
+    detail: 'The Davao de Oro 1st DEO, for example, serves the province’s 2nd legislative district, so this site always names a DEO beside the district it serves (“DPWH office: Davao de Oro 1st DEO”). Some 200 DEOs sit under the regional offices. In the budget volumes a project is tagged to its implementing office, so a DEO is the nearest thing the documents have to a place; the central and regional offices, which hold most of the money, are not tied to any district.',
+    see: { to: '/hgab/2027/districts', label: 'See which legislative districts each DEO serves' },
   },
   {
     term: 'Chainage / station',

@@ -8,9 +8,14 @@
  * about ten portraits; a gallery of seventeen canvases would load hundreds.
  *
  * Integrity rules carried from the section: amounts belong to DPWH district
- * offices, never to the people shown; a shared office (Tier B) is listed with
- * every district it serves and its amount is never split; nothing here says
- * who asked for a project.
+ * engineering offices (DEOs), never to the people shown; a shared office
+ * (Tier B) is listed with every legislative district it serves and its amount
+ * is never split; nothing here says who asked for a project.
+ *
+ * Office and district always appear together, each named as what it is: a
+ * one-district row is headed by the legislative district with "DPWH office:
+ * Davao de Oro 1st DEO" under it (a DEO's number is its own); a shared row is
+ * headed by the office ("DPWH Isabela 4th DEO") with each legislative district.
  *
  * Styles: src/hgab-leaderboard.css (.hgab-lb-*).
  */
@@ -18,8 +23,8 @@ import { Component, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { REGION_LABELS, type RegionKey } from '../lib/hgab';
 import {
-  BOARDS, displayName, entryTitle, formatPesoFull, formatValue, leaderboardPath, rankByCongress, rankEntries, seatHolders,
-  rankMembers, rankRegions, residualLine, shortDistrict, tierText,
+  BOARDS, displayName, entryTitle, formatPesoFull, formatValue, leaderboardPath, officeLabel, officeLine, rankByCongress,
+  rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
 } from '../lib/hgab-leaderboard';
@@ -180,6 +185,41 @@ function personLabel(p: LeaderPerson | undefined): string {
   return p.name ? displayName(p.name) : p.district;
 }
 
+/** Each legislative district's office group, per data file, for the members board. */
+const ENTRY_BY_DISTRICT = new WeakMap<LeaderboardData, Map<string, LeaderEntry>>();
+
+/**
+ * "DPWH office: Davao de Oro 1st DEO" for one legislative district, from the
+ * office group that serves it; "DPWH office: Isabela 4th DEO, shared" when that
+ * office also serves other districts. Empty when no office serves it.
+ */
+function districtOfficeLine(data: LeaderboardData, districtId: string): string {
+  let map = ENTRY_BY_DISTRICT.get(data);
+  if (!map) {
+    map = new Map();
+    for (const e of data.entries) for (const p of e.people) map.set(p.district_id, e);
+    ENTRY_BY_DISTRICT.set(data, map);
+  }
+  const e = map.get(districtId);
+  if (!e) return '';
+  const line = officeLine(e);
+  return line && e.people.length > 1 ? `${line}, shared` : line;
+}
+
+/**
+ * The labelled office line under a legislative district: "DPWH office:" in
+ * small caps, then the office's own name. Always visible, never only on hover.
+ */
+function OfficeLine({ text, className = '' }: { text: string; className?: string }) {
+  if (!text) return null;
+  const at = text.indexOf(': ');
+  return (
+    <span className={`hgab-lb-office ${className}`.trim()}>
+      {at > 0 ? <><span className="hgab-lb-office-k">{text.slice(0, at + 1)}</span> {text.slice(at + 2)}</> : text}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Gallery tile
 // ---------------------------------------------------------------------------
@@ -190,7 +230,9 @@ interface TileRow {
   people: LeaderPerson[];
   label: string;
   sub: string;
-  /** A second small line: the tier (and, for a shared office, its districts). */
+  /** One-district rows: "DPWH office: Davao de Oro 1st DEO", under the legislative district. */
+  office?: string;
+  /** A second small line: the tier (and, for a shared office, its legislative districts). */
   sub2?: string;
   /** Every district served, for the title tooltip. */
   title?: string;
@@ -212,20 +254,22 @@ function districtList(people: LeaderPerson[]): string {
 }
 
 /**
- * A tile row for an office group, headlined by the place: the district for a
- * one-district office, the office for a shared one. The amount is the
- * office's, so it never reads as a person's; the seat holder(s) and the tier
- * (with every district a shared office serves) sit underneath.
+ * A tile row for an office group, headlined by the place: the legislative
+ * district for a one-district office (with its DPWH office under the seat
+ * holder), the DPWH office for a shared one. The amount is the office's, so it
+ * never reads as a person's; the seat holder(s) and the tier (with every
+ * legislative district a shared office serves) sit underneath.
  */
 function entryTileRow(rank: number, e: LeaderEntry, value: number): TileRow {
-  const shared = e.people.length > 1;
+  const shared = officeLabel(e) != null;
   return {
     key: e.key,
     rank,
     people: e.people,
     label: entryTitle(e),
     sub: seatHolders(e, 2),
-    sub2: shared ? `${tierText(e, true)}: ${districtList(e.people)}` : tierText(e),
+    office: shared ? undefined : officeLine(e),
+    sub2: shared ? `Tier B · legislative districts: ${districtList(e.people)}` : tierText(e),
     title: shared ? `${tierText(e)}: ${e.people.map((p) => p.district).join('; ')}` : tierText(e),
     value,
   };
@@ -287,6 +331,7 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
               <span className="hgab-lb-top-who">
                 <strong>{row.label}</strong>
                 <small>{row.sub}</small>
+                {row.office && <small><OfficeLine text={row.office} /></small>}
                 <small title={row.title}>{t.years} · {row.sub2}</small>
               </span>
               <span className="hgab-lb-top-val" title={formatPesoFull(r.value)}>{formatValue(r.value, 'php')}</span>
@@ -301,7 +346,7 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
       : rankEntries(data, board, { region: scoped, limit: 3 }).rows.map((r) => entryTileRow(r.rank, r.entry, r.value));
     const max = Math.max(...rows.map((r) => Math.abs(r.value)), 0) || 1;
     body = rows.length === 0 ? (
-      <p className="hgab-lb-top-none">No district office {scoped ? `in ${regionName(scoped)} ` : ''}is on this board.</p>
+      <p className="hgab-lb-top-none">No DPWH office {scoped ? `in ${regionName(scoped)} ` : ''}is on this board.</p>
     ) : (
       <ol className="hgab-lb-top">
         {rows.map((r, i) => (
@@ -311,6 +356,7 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
             <span className="hgab-lb-top-who">
               <strong>{r.label}</strong>
               <small>{r.sub}</small>
+              {r.office && <small><OfficeLine text={r.office} /></small>}
               {r.sub2 && <small title={r.title}>{r.sub2}</small>}
               <span className="hgab-lb-top-bar" aria-hidden="true">
                 <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
@@ -346,7 +392,7 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
 
 type KindKey = keyof LeaderboardData['totals']['by_office_kind'];
 const KINDS: ReadonlyArray<{ key: KindKey; label: string; note?: string }> = [
-  { key: 'deo', label: 'District offices' },
+  { key: 'deo', label: 'District engineering offices' },
   { key: 'central', label: 'Central Office' },
   { key: 'regional', label: 'Regional offices' },
   { key: 'no_office', label: 'Lines with no office', note: 'The source lists these lines under no office. In no district.' },
@@ -406,7 +452,7 @@ function RegionsMini({ data, board }: { data: LeaderboardData; board: BoardDef }
           <span className="hgab-lb-top-rank">{r.rank}</span>
           <span className="hgab-lb-top-who">
             <strong>{regionName(r.region.region)}</strong>
-            <small>{REGION_LABELS[r.region.region as RegionKey]?.short ?? r.region.region} · {r.region.units.toLocaleString()} district offices</small>
+            <small>{REGION_LABELS[r.region.region as RegionKey]?.short ?? r.region.region} · {r.region.units.toLocaleString()} DEOs</small>
             <span className="hgab-lb-top-bar" aria-hidden="true">
               <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
             </span>
@@ -460,8 +506,8 @@ function TierTag({ entry, className = '' }: { entry: LeaderEntry; className?: st
     <span
       className={`hgab-lb-tier is-${entry.tier} ${className}`.trim()}
       title={entry.tier === 'A'
-        ? 'Tier A: the office serves only this district, so its figure is the district’s.'
-        : 'Tier B: one DPWH office serves these districts. Its amount is shown whole, not split between them.'}
+        ? 'Tier A: the DPWH office serves only this legislative district, so its figure is the district’s.'
+        : 'Tier B: one DPWH office serves these legislative districts. Its amount is shown whole, not split between them.'}
     >
       {tierText(entry)}
     </span>
@@ -505,8 +551,12 @@ function RowNotes({ board, entry }: { board: BoardDef; entry: LeaderEntry }) {
   );
 }
 
-/** The members board only (person-first): photo and name linking to the district page. */
-function PeopleCell({ people }: { people: LeaderPerson[] }) {
+/**
+ * The members board only (person-first): photo and name linking to the
+ * district page; on phones, the legislative district and its DPWH office
+ * under the name (desktop has them in their own column).
+ */
+function PeopleCell({ people, office }: { people: LeaderPerson[]; office: (p: LeaderPerson) => string }) {
   return (
     <td className="hgab-lb-people-cell">
       <ul className="hgab-lb-lines">
@@ -518,6 +568,7 @@ function PeopleCell({ people }: { people: LeaderPerson[] }) {
                 {p.name ? displayName(p.name) : 'No representative found'}
               </Link>
               <small className="hgab-lb-phone">{p.district}</small>
+              <OfficeLine text={office(p)} className="hgab-lb-phone" />
             </span>
           </li>
         ))}
@@ -527,13 +578,16 @@ function PeopleCell({ people }: { people: LeaderPerson[] }) {
 }
 
 /**
- * An office group, place first: the district (Tier A, linking to its page)
- * or the shared office (Tier B), then each seat holder with their photo and,
- * for a shared office, the district they hold (linking to its page), then the
- * tier. The amount beside it is the office's, never a person's.
+ * An office group, place first. One district (Tier A): the legislative
+ * district (linking to its page), the seat holder, then "DPWH office: Davao de
+ * Oro 1st DEO", so the district and the office that serves it are always read
+ * together. Shared (Tier B): the DPWH office ("DPWH Isabela 4th DEO"), then
+ * each seat holder with the legislative district they hold (linking to its
+ * page). The tier closes both. The amount beside it is the office's, never a
+ * person's.
  */
 function PlaceCell({ entry, face = 28 }: { entry: LeaderEntry; face?: number }) {
-  const shared = entry.people.length > 1;
+  const shared = officeLabel(entry) != null;
   return (
     <td className="hgab-lb-place-cell">
       <p className="hgab-lb-place">
@@ -552,6 +606,7 @@ function PlaceCell({ entry, face = 28 }: { entry: LeaderEntry; face?: number }) 
           </li>
         ))}
       </ul>
+      {!shared && <OfficeLine text={officeLine(entry)} className="is-row" />}
       <TierTag entry={entry} />
     </td>
   );
@@ -591,7 +646,7 @@ export function RankingTable({ data, board, region }: { data: LeaderboardData; b
           <thead>
             <tr>
               <th className="num hgab-lb-rank">Rank</th>
-              <th>District or shared office · representative</th>
+              <th className="is-wrap">Legislative district or DPWH office · representative</th>
               {!region && <th className="hgab-lb-col-wide">Region</th>}
               <th className="num">{valueHeading(board)}</th>
               {detail && <th className="hgab-lb-col-wide">{DETAIL_HEADING[board.id] ?? 'Detail'}</th>}
@@ -599,7 +654,7 @@ export function RankingTable({ data, board, region }: { data: LeaderboardData; b
           </thead>
           <tbody>
             {shown.length === 0 && (
-              <EmptyRow cols={cols}>No district office {region ? `in ${regionName(region)} ` : ''}is on this board.</EmptyRow>
+              <EmptyRow cols={cols}>No DPWH office {region ? `in ${regionName(region)} ` : ''}is on this board.</EmptyRow>
             )}
             {shown.map((r) => (
               <tr key={r.entry.key} className={r.entry.tier === 'B' ? 'is-shared' : undefined}>
@@ -633,6 +688,7 @@ export function MembersTable({ data, board, region }: { data: LeaderboardData; b
   const [open, setOpen] = useState(false);
   const { rows, eligible } = rankMembers(data, { region });
   const shown = open ? rows : rows.slice(0, FIRST);
+  const office = (p: LeaderPerson) => districtOfficeLine(data, p.district_id);
   return (
     <>
       <div className="nep-table-wrap">
@@ -644,7 +700,7 @@ export function MembersTable({ data, board, region }: { data: LeaderboardData; b
             <tr>
               <th className="num hgab-lb-rank">Rank</th>
               <th>Representative</th>
-              <th className="hgab-lb-col-wide">District</th>
+              <th className="hgab-lb-col-wide is-wrap">Legislative district · DPWH office</th>
               {!region && <th className="hgab-lb-col-wide">Region</th>}
               <th className="num">{valueHeading(board)}</th>
               <th className="hgab-lb-col-wide">Roles and record</th>
@@ -655,8 +711,11 @@ export function MembersTable({ data, board, region }: { data: LeaderboardData; b
             {shown.map((r) => (
               <tr key={r.person.district_id}>
                 <td className="num hgab-lb-rank">{r.rank}</td>
-                <PeopleCell people={[r.person]} />
-                <td className="hgab-lb-districts-cell hgab-lb-col-wide">{r.person.district}</td>
+                <PeopleCell people={[r.person]} office={office} />
+                <td className="hgab-lb-districts-cell hgab-lb-col-wide">
+                  {r.person.district}
+                  <OfficeLine text={office(r.person)} className="is-cell" />
+                </td>
                 {!region && <td className="hgab-lb-region hgab-lb-col-wide">{regionName(r.person.region)}</td>}
                 <ValueCell value={r.value} kind={board.value} />
                 <td className="hgab-lb-detail hgab-lb-col-wide">
@@ -693,7 +752,7 @@ export function CongressTables({ data, board, region }: { data: LeaderboardData;
               <thead>
                 <tr>
                   <th className="num hgab-lb-rank">Rank</th>
-                  <th>District or shared office</th>
+                  <th>Legislative district or DPWH office</th>
                   <th className="num">Enacted</th>
                 </tr>
               </thead>
@@ -762,7 +821,7 @@ export function ShiftTable({ data }: { data: LeaderboardData }) {
   );
 }
 
-/** A regions board: each region's district offices summed, with a link to the offices behind it. */
+/** A regions board: each region's DPWH district engineering offices summed, with a link to the offices behind it. */
 export function RegionsTable({ data, board }: { data: LeaderboardData; board: BoardDef }) {
   const rows = rankRegions(data, board);
   const offices = (r: LeaderRegion, v: number) => {
@@ -780,9 +839,9 @@ export function RegionsTable({ data, board }: { data: LeaderboardData; board: Bo
             <th className="num">{valueHeading(board)}</th>
             <th className="num hgab-lb-col-wide">NEP</th>
             <th className="num hgab-lb-col-wide">House bill</th>
-            <th className="num hgab-lb-col-wide">District offices</th>
-            <th className="num hgab-lb-col-wide">Districts</th>
-            <th><span className="visually-hidden">Offices in the region</span></th>
+            <th className="num hgab-lb-col-wide" title="DPWH district engineering offices">DEOs</th>
+            <th className="num hgab-lb-col-wide is-wrap">Legislative districts</th>
+            <th><span className="visually-hidden">DPWH offices in the region</span></th>
           </tr>
         </thead>
         <tbody>
@@ -803,7 +862,7 @@ export function RegionsTable({ data, board }: { data: LeaderboardData; board: Bo
               <td className="num hgab-lb-col-wide">{r.region.units.toLocaleString()}</td>
               <td className="num hgab-lb-col-wide">{r.region.districts.toLocaleString()}</td>
               <td className="hgab-lb-go">
-                <Link to={offices(r.region, r.value)} aria-label={`District offices in ${regionName(r.region.region)}`}>Offices →</Link>
+                <Link to={offices(r.region, r.value)} aria-label={`DPWH offices in ${regionName(r.region.region)}`}>Offices →</Link>
               </td>
             </tr>
           ))}

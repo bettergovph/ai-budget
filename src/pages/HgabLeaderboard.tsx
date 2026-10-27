@@ -1,11 +1,13 @@
 /**
  * `/hgab/2027/leaderboard` and `/hgab/2027/leaderboard/:board` — rankings of
- * DPWH district offices (and, on one board, district representatives), each
- * with an image formatted for social sharing.
+ * DPWH district engineering offices (DEOs) (and, on one board, district
+ * representatives), each with an image formatted for social sharing. Every
+ * view names the office and the legislative district it serves together, and
+ * says once what "DEO" means (DEO_MEANING).
  *
  *   Gallery: a compact page head, then the boards in `BOARD_SECTIONS` order
  *   as light HTML tiles (kicker, title, the top three with round portraits).
- *   `?region=` narrows every board that ranks district offices.
+ *   `?region=` narrows every board that ranks DPWH offices.
  *
  *   Board (`?region=&format=`): the share image (`HgabShareCard`, a canvas
  *   drawn at native size and scaled to fit the viewport) beside the format
@@ -16,7 +18,7 @@
  * Every board, its ranking rule and its wording live in
  * `lib/hgab-leaderboard.ts`, shared with the image renderer, the builder and
  * the Worker's link previews, so the page, the image and the preview always
- * agree. Amounts belong to DPWH district offices; the representative shown
+ * agree. Amounts belong to DPWH offices; the representative shown
  * holds the district's seat in the 20th Congress; the documents do not say
  * who asked for any project.
  */
@@ -32,7 +34,7 @@ import { copyText, downloadBlob, shareImage } from '../lib/hgab-share';
 import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadHgabLeaderboard, type RegionKey } from '../lib/hgab';
 import {
-  BOARDS, BOARD_SECTIONS, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
+  BOARDS, BOARD_SECTIONS, DEO_MEANING, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
   asOfText, leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
@@ -47,7 +49,7 @@ const SOURCE_LINE =
   'SOURCE: NEP 2027 · HOUSE BILL 10858, THIRD READING · ENACTED BUDGETS (GAA) 2020–2026 · DEO2LEG OFFICE-TO-DISTRICT MAP · BILLS.JURIS.PH';
 const NEP_MEANS = 'The NEP is the budget the President submits to Congress each August.';
 const NEP_GLOSS = `${NEP_MEANS} The House bill is House Bill 10858, third reading.`;
-const SEAT_NOW = 'The representative shown holds the seat now, in the 20th Congress.';
+const SEAT_NOW = 'The representative shown holds the legislative district’s seat now, in the 20th Congress.';
 const SEAT_NOTE = `${SEAT_NOW} The 2020 to 2025 budgets were passed by the 18th and 19th Congresses.`;
 
 function isRegionKey(v: string | null): v is RegionKey {
@@ -178,7 +180,7 @@ function RegionSelect({
 }
 
 function headerMeta(data: LeaderboardData): string {
-  return `${BOARDS.length} boards · ${data.totals.units.toLocaleString()} district offices`;
+  return `${BOARDS.length} boards · ${data.totals.units.toLocaleString()} DPWH offices`;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +207,12 @@ function Gallery({
         title="Leaderboards"
         dek={
           <>
-            DPWH district offices ranked by their budgets in the 2027 House bill and the NEP, and by enacted
-            budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.{' '}
+            DPWH district engineering offices (DEOs) ranked by their budgets in the 2027 House bill and the NEP,
+            and by enacted budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.{' '}
             <span className="hgab-lb-asof">{asOfText(data)}.</span>
           </>
         }
-        note="Amounts belong to DPWH district offices, not to people. The representative shown holds the district’s seat in the 20th Congress. The documents do not say who asked for any project."
+        note={`${DEO_MEANING} Amounts belong to DPWH offices, not to people. The representative shown holds the legislative district’s seat in the 20th Congress. The documents do not say who asked for any project.`}
       />
 
       <main className="nep-main hgab-lb-main">
@@ -218,8 +220,8 @@ function Gallery({
           <RegionSelect value={region} regions={regions} onChange={onRegion} />
           <p>
             {region
-              ? `Boards that rank district offices show ${regionName(region)} only. The big picture covers the whole country.`
-              : 'Pick a region to rank only its district offices.'}
+              ? `Boards that rank DPWH offices show ${regionName(region)} only. The big picture covers the whole country.`
+              : 'Pick a region to rank only its DPWH offices.'}
           </p>
         </div>
 
@@ -374,7 +376,13 @@ function BoardPage({
         crumb={<><Link to={leaderboardPath(undefined, { region })}>Leaderboards</Link> › {board.title}</>}
         compiledMeta={headerMeta(data)}
       />
-      <HgabHero compact crumb={crumb} title={titled} dek={board.subtitle} note={residualText(data, board) ?? undefined} />
+      <HgabHero
+        compact
+        crumb={crumb}
+        title={titled}
+        dek={<>{board.subtitle} {DEO_MEANING}</>}
+        note={residualText(data, board) ?? undefined}
+      />
 
       <main className="nep-main hgab-lb-main">
         <div className="hgab-lb-board" ref={boardRef}>
@@ -467,20 +475,20 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
     case 'ranking': {
       const n = rankEntries(data, board, { region }).eligible;
       heading = 'The full ranking';
-      line = `${n.toLocaleString()} district ${n === 1 ? 'office' : 'offices'}${where}. An office that serves several districts is listed once, with all of them.`;
+      line = `${n.toLocaleString()} DPWH ${n === 1 ? 'office' : 'offices'}${where}. An office that serves several legislative districts is listed once, with all of them.`;
       table = <RankingTable data={data} board={board} region={region} />;
       break;
     }
     case 'members': {
       const n = rankMembers(data, { region }).eligible;
       heading = 'The full ranking';
-      line = `${n.toLocaleString()} district ${n === 1 ? 'representative' : 'representatives'}${where} with a count on bills.juris.ph.`;
+      line = `${n.toLocaleString()} district ${n === 1 ? 'representative' : 'representatives'}${where} with a count on bills.juris.ph. Each is shown with their legislative district and the DPWH office that serves it.`;
       table = <MembersTable data={data} board={board} region={region} />;
       break;
     }
     case 'congress':
-      heading = 'Each top five, with every district served';
-      line = `District offices${where}, by enacted DPWH budgets added up per Congress. ${SEAT_NOW}`;
+      heading = 'Each top five, with every legislative district served';
+      line = `DPWH offices${where}, by enacted budgets added up per Congress. ${SEAT_NOW}`;
       table = <CongressTables data={data} board={board} region={region} />;
       break;
     case 'shift':
@@ -491,7 +499,7 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
     case 'regions': {
       const n = rankRegions(data, board).length;
       heading = `All ${n} regions`;
-      line = 'Each region adds up its district offices. Central Office and regional office projects are in no region.';
+      line = 'Each region adds up its DEOs. Central Office and regional office projects are in no region.';
       table = <RegionsTable data={data} board={board} />;
       break;
     }

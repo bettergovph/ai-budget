@@ -347,6 +347,38 @@ export function districtLabel(index: HgabDistrictIndex, id: string): string {
 }
 
 /**
+ * An office named as a DPWH office, so it is never read as a legislative
+ * district: "Davao de Oro 1st DEO" → "DPWH Davao de Oro 1st DEO". A DEO's
+ * number is its own (that office serves the 2nd legislative district).
+ */
+export function dpwhOfficeName(name: string): string {
+  return /^DPWH\b/.test(name) ? name : `DPWH ${name}`;
+}
+
+/**
+ * The legislative districts an office serves, in words for a heading:
+ * "the Davao de Oro 2nd legislative district", "the Isabela 4th and 6th
+ * legislative districts", "the Abra lone legislative district"; across
+ * several provinces or cities, "4 legislative districts: Mandaluyong lone;
+ * Marikina 1st, 2nd; Pasig lone".
+ */
+export function servedDistrictsText(index: HgabDistrictIndex, ids: readonly string[]): string {
+  const byJur = new Map<string, string[]>();
+  for (const id of ids) {
+    const d = index.districts.find((x) => x.id === id);
+    const jur = d?.jurisdiction ?? id;
+    const ord = (d?.district_label ?? '').replace(/\s*District$/i, '').replace(/^Lone$/i, 'lone');
+    byJur.set(jur, [...(byJur.get(jur) ?? []), ord]);
+  }
+  const n = ids.length;
+  if (byJur.size === 1) {
+    const [[jur, ords]] = [...byJur];
+    return `the ${jur} ${andList(ords.filter(Boolean))} legislative ${n === 1 ? 'district' : 'districts'}`.replace(/\s+/g, ' ');
+  }
+  return `${n} legislative districts: ${[...byJur].map(([jur, ords]) => `${jur} ${ords.join(', ')}`).join('; ')}`;
+}
+
+/**
  * The office ledgers a card points at, in the card's order. Ids with no ledger
  * are dropped, and so are regional groupings (BARMM), which the lens must not
  * count as offices; see `cardRegionalGroups` for those.
@@ -662,7 +694,7 @@ export interface OfficeGroup {
   region: RegionSectionKey;
   /** A: the offices serve one district. B: several; the figures are shared and not split. Null: no district office. */
   tier: 'A' | 'B' | null;
-  /** "Abra DEO", "Apayao 1st DEO and Apayao 2nd DEO", "No district office". */
+  /** "Abra DEO", "Apayao 1st DEO and Apayao 2nd DEO", "No DPWH office found" (show with `dpwhOfficeName`). */
   name: string;
   /** 2027 on the compared population (the offices' `fy2027` blocks), summed undivided; null when no office has a figure, never 0. */
   nep_php: number | null;
@@ -679,7 +711,7 @@ export interface OfficeGroupIndex {
   byOffice: ReadonlyMap<string, OfficeGroup>;
 }
 
-export const NO_OFFICE_GROUP_NAME = 'No district office';
+export const NO_OFFICE_GROUP_NAME = 'No DPWH office found';
 
 const byLabelNumeric = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
 
@@ -807,7 +839,7 @@ export function officeGroupTitle(group: Pick<OfficeGroup, 'offices' | 'name'>): 
   return `${group.name}: ${group.offices.length} DPWH district engineering offices (DEOs), shown together`;
 }
 
-/** "Tier A · only this district", "Tier B · shared by 5 districts, not split", "No district office". */
+/** "Tier A · only this district", "Tier B · shared by 5 districts, not split", "No DPWH office found". */
 export function officeGroupTierText(tier: OfficeGroup['tier'], districts: number): string {
   if (tier === 'A') return 'Tier A · only this district';
   if (tier === 'B') return `Tier B · shared by ${districts} districts, not split`;

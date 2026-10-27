@@ -21,6 +21,7 @@ import {
 import ts from "typescript";
 import { DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers.ts";
 import { pageMeta } from "../src/lib/seo.ts";
+import { DEO_MEANING } from "../src/lib/hgab-leaderboard.ts";
 
 function ensure(cond: unknown, msg: string): asserts cond {
   if (!cond) { console.error(`build-hgab-not-ignorant: ${msg}`); process.exit(1); }
@@ -79,10 +80,13 @@ function metaText(r: ChangesListRow): { lead: string; reps: string } {
   const region = regionText(r.r);
   if (region) parts.push(region);
   if (r.pv) parts.push(r.pv);
-  if (r.o && r.w !== "central") parts.push(shortOffice(r.o));
+  // The DPWH office and the legislative district(s) it serves, named as such: a DEO's number
+  // is its own (the Davao de Oro 1st DEO serves the 2nd legislative district).
+  if (r.o && r.w !== "central") parts.push(`DPWH office: ${shortOffice(r.o)}`);
   if (r.w === "office" && r.ds) {
-    if (r.tr === "B") parts.push(`shared by ${r.rp?.length ?? 0} districts, not split`);
-    parts.push(`serves ${r.ds}`);
+    const n = r.rp?.length ?? 1;
+    if (r.tr === "B") parts.push(`shared by ${n} legislative districts, not split`);
+    parts.push(`serves legislative district${n > 1 ? "s" : ""} ${r.ds}`);
   } else if (r.w && r.w !== "office") parts.push(NO_DISTRICT_TEXT[r.w]);
   return { lead: parts.join(" · "), reps: r.w === "office" ? seatHoldersText(r.rp) : "" };
 }
@@ -157,7 +161,7 @@ ${css}
 <a href="/hgab/2027/overview" class="hgab-wani-logo" aria-label="BetterGov.ph House Budget Analysis"><img src="/brand/bettergov-horizontal-primary.png" alt="BetterGov.ph" width="800" height="206"></a>
 <h1 class="hgab-wani-h1" aria-label="${esc(CHANGES_LIST_TITLE)}"><span aria-hidden="true">We are</span><span aria-hidden="true" class="is-red">not</span><span aria-hidden="true">ignorant</span></h1>
 <p class="hgab-wani-sub">${total.toLocaleString("en-US")} inserted and adjusted projects in the 2027 House budget bill. We read every single one.</p>
-<p class="hgab-wani-count">DPWH, farm-to-market roads, health facilities and irrigation. Inserted first, then increased, then decreased, largest first.</p>
+<p class="hgab-wani-count">DPWH, farm-to-market roads, health facilities and irrigation. Inserted first, then increased, then decreased, largest first. ${esc(DEO_MEANING)}</p>
 <p class="hgab-wani-dl"><a href="${DATA_HOST}/${CHANGES_LIST_CSV_PATH}" download="${CHANGES_LIST_CSV_NAME}">Download the full list (CSV)</a></p>
 </div>
 </header>

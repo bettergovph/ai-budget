@@ -724,6 +724,9 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
   cursor: help;
 }
 .hgab-dx-office-title:focus { outline: none; }
+/* "· serves the Davao de Oro 2nd legislative district": the office and the
+   district it serves read together, the district a step quieter. */
+.hgab-dx-office-serves { font-family: var(--font-body); font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--ink-2); }
 .hgab-dx-office-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .hgab-dx-office-meta {
   display: flex;
@@ -1088,8 +1091,9 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
 }
 .hgab-dc-office {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 4px 7px;
   max-width: 100%;
   padding: 4px 9px 4px 5px;
   border: 1px solid var(--rule);
@@ -1101,6 +1105,17 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
   color: var(--ink);
 }
 .hgab-dc-office a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+/* "DPWH office:" before the office's own name, so a DEO number is never read
+   as the legislative district's (the Davao de Oro 1st DEO serves the 2nd). */
+.hgab-dc-office-name { min-width: 0; }
+.hgab-dc-office-k {
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
 .hgab-dc-office a:hover { color: var(--accent); border-color: var(--accent); }
 .hgab-dc-nooffice {
   font-family: var(--font-body);
