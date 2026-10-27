@@ -25,7 +25,6 @@ const HgabRecord = lazy(() => import('./pages/HgabRecord'));
 const HgabDistricts = lazy(() => import('./pages/HgabDistricts'));
 const HgabDistrict = lazy(() => import('./pages/HgabDistrict'));
 const HgabLeaderboard = lazy(() => import('./pages/HgabLeaderboard'));
-const HgabNotIgnorant = lazy(() => import('./pages/HgabNotIgnorant'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -46,6 +45,18 @@ function RouteMeta() {
   useEffect(() => {
     document.title = pageMeta(pathname).title;
   }, [pathname]);
+  return null;
+}
+
+/**
+ * Routes the Worker serves as static files (they are not part of this app).
+ * A client-side navigation to one reloads the page from the server; the
+ * Worker always answers these paths itself, so this cannot loop.
+ */
+function ServerPage() {
+  useEffect(() => {
+    window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+  }, []);
   return null;
 }
 
@@ -103,7 +114,8 @@ export default function App() {
           <Route path="/hgab/2027/leaderboard" element={<HgabLeaderboard />} />
           <Route path="/hgab/2027/leaderboard/:board" element={<HgabLeaderboard />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
-          <Route path="/hgab/2027/we-are-not-ignorant" element={<HgabNotIgnorant />} />
+          {/* A static page published with the data and served by the Worker: load it from the server. */}
+          <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />
           <Route path="/hgab/2027/:dataset" element={<HgabDataset />} />
           <Route path="/hgab/2027/:dataset/p/:id" element={<HgabRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

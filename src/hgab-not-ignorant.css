@@ -1,133 +1,207 @@
 /* "We are not ignorant" (/hgab/2027/we-are-not-ignorant): the whole list of
-   inserted and adjusted projects as one wall. Logo, title, one line, the CSV
-   link, then every item in dense columns; no site chrome.
+   inserted and adjusted projects as one wall, styled after the campaign
+   poster (npm run build:hgab-poster): newsprint paper, the stacked condensed
+   headline with a red NOT, the red screen-print fist, solid red INSERTED
+   labels, a black footer band. No site chrome.
 
-   The list is cut into chunks (one <ol> each); every chunk is its own
-   multi-column block, so reading runs down each column of a screen-sized
-   block and on to the next, and `content-visibility: auto` skips layout for
-   the chunks off screen. Tokens are the portal's (src/styles.css). */
+   The list is cut into chunks (one <ol> each); every chunk is a grid filled
+   left to right, so the running numbers read 1, 2, 3 … across the page and
+   on into the next chunk, and `content-visibility: auto` skips layout for
+   the chunks off screen. */
 
 .hgab-wani {
-  padding: 28px 28px 40px;
-  color: var(--ink);
-  background: var(--paper);
+  --wani-paper: #f3eee4;
+  --wani-ink: #141414;
+  --wani-red: #d62828;
+  --wani-red-deep: #b3121f;
+  --wani-grey: rgba(20, 20, 20, 0.55);
+  --wani-faint: rgba(20, 20, 20, 0.4);
+  min-height: 100vh;
+  color: var(--wani-ink);
+  background: var(--wani-paper);
 }
 
-/* --- top -------------------------------------------------------------- */
+/* --- top: the poster ------------------------------------------------------ */
 
-.hgab-wani-top { max-width: 1100px; margin-bottom: 22px; }
-.hgab-wani-logo { display: inline-block; line-height: 0; }
-.hgab-wani-logo img { height: 34px; width: auto; }
+.hgab-wani-top {
+  position: relative;
+  overflow: hidden;
+  padding: 26px 28px 30px;
+  border-bottom: 3px solid var(--wani-ink);
+}
+/* The faint wall of the first projects behind the headline. */
+.hgab-wani-headwall {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  line-height: 1.25;
+  text-align: justify;
+  color: rgba(20, 20, 20, 0.22);
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+/* The fist, printed in red over the wall on the right. */
+.hgab-wani-art {
+  position: absolute;
+  right: max(0px, calc(50% - 640px));
+  bottom: -22%;
+  width: auto;
+  height: 135%;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.hgab-wani-head { position: relative; max-width: 760px; }
+.hgab-wani-logo { display: inline-block; line-height: 0; padding: 4px 6px; background: var(--wani-paper); }
+.hgab-wani-logo img { height: 30px; width: auto; }
 .hgab-wani-h1 {
-  margin: 18px 0 8px;
-  font-family: var(--font-hero);
-  font-size: clamp(34px, 5.2vw, 64px);
-  font-weight: 800;
-  line-height: 1.02;
-  letter-spacing: -0.02em;
+  margin: 16px 0 14px;
+  font-family: Anton, Impact, 'Arial Narrow', sans-serif;
+  font-weight: 400;
+  font-size: clamp(64px, 11vw, 168px);
+  line-height: 0.86;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+}
+.hgab-wani-h1 span {
+  display: block;
+  width: fit-content;
+  padding: 0 0.06em;
+  background: var(--wani-paper);
+  box-shadow: 0 0 0 0.04em var(--wani-paper);
+}
+.hgab-wani-h1 span + span { margin-top: 0.06em; }
+.hgab-wani-h1 .is-red { color: var(--wani-red); }
+.hgab-wani-sub {
+  display: inline-block;
+  max-width: 34em;
+  margin: 0;
+  padding: 4px 8px;
+  font-family: var(--font-body);
+  font-size: clamp(18px, 2.1vw, 28px);
+  font-weight: 700;
+  line-height: 1.18;
+  background: var(--wani-paper);
 }
 .hgab-wani-count {
-  margin: 0;
+  max-width: 44em;
+  width: fit-content;
+  margin: 10px 0 0;
+  padding: 2px 8px;
   font-family: var(--font-body);
-  font-size: 16px;
-  color: var(--ink-2);
+  font-size: 13px;
+  color: var(--wani-ink);
+  background: var(--wani-paper);
 }
-.hgab-wani-dl { margin: 8px 0 0; font-size: 14px; font-weight: 600; }
-.hgab-wani-dl a { color: var(--accent); }
-.hgab-wani-dl a:hover { color: var(--accent-deep); }
+.hgab-wani-dl { margin: 12px 0 0; }
+.hgab-wani-dl a {
+  display: inline-block;
+  padding: 8px 14px;
+  background: var(--wani-ink);
+  color: var(--wani-paper);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.hgab-wani-dl a:hover,
+.hgab-wani-dl a:focus-visible { background: var(--wani-red); }
 
 /* --- the wall ----------------------------------------------------------- */
 
-.hgab-wani-list { border-top: 2px solid var(--ink); padding-top: 14px; }
+.hgab-wani-list { padding: 14px 28px 0; }
 
 .hgab-wani-chunk {
-  margin: 0;
+  margin: 0 0 8px;
   padding: 0;
   list-style: none;
   /* Rows, filled left to right, so the numbers run on across the page and
      from one chunk to the next (60 items fill 1–6 columns evenly). */
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 9px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 8px 14px;
   align-items: start;
-  margin-bottom: 9px;
   content-visibility: auto;
   /* Estimated chunk height until it has been laid out once ("auto" then keeps
-     the real one), measured per column count: 6 columns ≈ 1,050px. */
-  contain-intrinsic-size: auto 1050px;
+     the real one). */
+  contain-intrinsic-size: auto 900px;
 }
-@media (max-width: 1451px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1400px; } }  /* 5 columns */
-@media (max-width: 1215px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1750px; } }  /* 4 */
-@media (max-width: 979px) { .hgab-wani-chunk { contain-intrinsic-size: auto 2200px; } }   /* 3 */
-@media (max-width: 743px) { .hgab-wani-chunk { contain-intrinsic-size: auto 3200px; } }   /* 2 */
-@media (max-width: 507px) { .hgab-wani-chunk { contain-intrinsic-size: auto 6000px; } }   /* 1 */
+@media (max-width: 1451px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1150px; } }
+@media (max-width: 1215px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1450px; } }
+@media (max-width: 979px) { .hgab-wani-chunk { contain-intrinsic-size: auto 1900px; } }
+@media (max-width: 743px) { .hgab-wani-chunk { contain-intrinsic-size: auto 2800px; } }
+@media (max-width: 507px) { .hgab-wani-chunk { contain-intrinsic-size: auto 5400px; } }
 
 .hgab-wani-item {
   break-inside: avoid;
   margin: 0;
   padding-left: 7px;
-  border-left: 2px solid var(--rule);
+  border-left: 2px solid rgba(20, 20, 20, 0.18);
   font-family: var(--font-body);
-  font-size: 10.5px;
-  line-height: 1.33;
+  font-size: 10px;
+  line-height: 1.32;
   overflow-wrap: anywhere;
 }
-/* Insertions stand out: a red edge and a solid red tag. */
-.hgab-wani-item.is-in { border-left: 3px solid #d62828; }
+/* Insertions shout: red edge, solid red label, red amount. */
+.hgab-wani-item.is-in { border-left: 3px solid var(--wani-red); }
+
 .hgab-wani-n {
-  margin-right: 5px;
+  margin-right: 4px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--ink-mute);
+  font-size: 8.5px;
+  color: var(--wani-faint);
 }
 .hgab-wani-tag {
   display: inline-block;
   padding: 0 4px;
-  border-radius: 2px;
   font-family: var(--font-mono);
   font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  line-height: 1.5;
+  letter-spacing: 0.05em;
+  line-height: 1.55;
   text-transform: uppercase;
   vertical-align: 1px;
 }
-.hgab-wani-tag.is-in { background: #d62828; color: #fff; }
-.hgab-wani-tag.is-up { border: 1px solid var(--positive); color: var(--positive); }
-.hgab-wani-tag.is-down { border: 1px solid var(--negative); color: var(--negative); }
+.hgab-wani-tag.is-in { background: var(--wani-red); color: #fff; }
+.hgab-wani-tag.is-up,
+.hgab-wani-tag.is-down { box-shadow: inset 0 0 0 1px var(--wani-ink); color: var(--wani-ink); }
 
-.hgab-wani-amt { font-family: var(--font-mono); font-size: 10px; }
-.hgab-wani-item.is-in .hgab-wani-amt b { color: #b3121f; }
-.hgab-wani-amt b { font-weight: 700; color: var(--ink); }
-.hgab-wani-kind { color: var(--ink-mute); font-size: 10px; }
+.hgab-wani-amt { font-family: var(--font-mono); font-size: 9.5px; }
+.hgab-wani-amt b { font-weight: 700; color: var(--wani-ink); }
+.hgab-wani-item.is-in .hgab-wani-amt b { color: var(--wani-red-deep); }
+.hgab-wani-kind { color: var(--wani-grey); font-size: 9px; }
 .hgab-wani-num,
 .hgab-wani-chg { white-space: nowrap; }
-.hgab-wani-item.is-up .hgab-wani-chg { color: var(--positive); }
-.hgab-wani-item.is-down .hgab-wani-chg { color: var(--negative); }
+.hgab-wani-item.is-up .hgab-wani-chg { color: #1a7f37; }
+.hgab-wani-item.is-down .hgab-wani-chg { color: var(--wani-red-deep); }
 .hgab-wani-flag {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: 5px;
   padding: 0 4px;
-  border: 1px solid var(--neutral);
-  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--wani-grey);
   font-family: var(--font-body);
-  font-size: 9.5px;
-  line-height: 1.4;
-  color: var(--neutral);
+  font-size: 8.5px;
+  line-height: 1.45;
+  color: var(--wani-grey);
   white-space: nowrap;
 }
 
 .hgab-wani-ttl {
   display: block;
   margin-top: 1px;
-  color: var(--ink);
+  color: var(--wani-ink);
   text-decoration: none;
 }
-.hgab-wani-ttl:hover { color: var(--accent); text-decoration: underline; }
-.hgab-wani-ttl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hgab-wani-ttl:hover { color: var(--wani-red-deep); text-decoration: underline; }
+.hgab-wani-ttl:focus-visible { outline: 2px solid var(--wani-red); outline-offset: 1px; }
 
-.hgab-wani-meta { display: block; margin-top: 1px; font-size: 9.5px; color: var(--ink-3); }
-.hgab-wani-reps { color: var(--ink-2); font-weight: 600; }
+.hgab-wani-meta { display: block; margin-top: 1px; font-size: 9px; color: var(--wani-grey); }
+.hgab-wani-reps { color: var(--wani-ink); font-weight: 600; }
 
 .hgab-wani-sr {
   position: absolute;
@@ -138,47 +212,63 @@
   white-space: nowrap;
 }
 
-/* --- footer ------------------------------------------------------------- */
+/* --- footer: the poster's black band ----------------------------------------- */
 
 .hgab-wani-foot {
-  margin-top: 26px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
+  margin-top: 24px;
+  padding: 18px 28px 22px;
+  background: var(--wani-ink);
+  color: rgba(243, 238, 228, 0.82);
+  font-family: var(--font-body);
   font-size: 12px;
-  color: var(--ink-3);
+  line-height: 1.45;
 }
+.hgab-wani-foot img { display: block; height: 26px; width: auto; margin-bottom: 10px; }
 .hgab-wani-foot p { margin: 0; max-width: 1100px; }
-.hgab-wani-foot a { color: var(--accent); }
+.hgab-wani-foot .hgab-wani-foot-url {
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+.hgab-wani-foot a { color: #fff; }
 
 /* --- phones -------------------------------------------------------------- */
 
 @media (max-width: 640px) {
-  .hgab-wani { padding: 18px 16px 32px; }
-  .hgab-wani-logo img { height: 28px; }
-  .hgab-wani-count { font-size: 15px; }
-  .hgab-wani-item { font-size: 11.5px; }
-  .hgab-wani-meta { font-size: 10.5px; }
-  .hgab-wani-amt { font-size: 11px; }
+  .hgab-wani-top { padding: 18px 16px 22px; }
+  .hgab-wani-art { right: -18%; bottom: -8%; height: 105%; opacity: 0.85; }
+  .hgab-wani-logo img { height: 24px; }
+  .hgab-wani-list { padding: 12px 16px 0; }
+  .hgab-wani-item { font-size: 11px; }
+  .hgab-wani-meta { font-size: 10px; }
+  .hgab-wani-amt { font-size: 10.5px; }
+  .hgab-wani-foot { padding: 16px; }
 }
 
 /* --- print: a long poster ----------------------------------------------- */
 
 @media print {
   @page { margin: 10mm; }
-  .hgab-wani { padding: 0; }
+  .hgab-wani { min-height: 0; }
+  .hgab-wani-top { padding: 0 0 8pt; }
   .hgab-wani-dl { display: none; }
-  .hgab-wani-h1 { font-size: 30pt; margin-top: 8pt; }
-  .hgab-wani-count { font-size: 11pt; }
+  .hgab-wani-h1 { font-size: 54pt; }
+  .hgab-wani-sub { font-size: 14pt; }
+  .hgab-wani-list { padding: 8pt 0 0; }
   .hgab-wani-chunk {
     content-visibility: visible;
     contain-intrinsic-size: none;
     grid-template-columns: repeat(5, 1fr);
     column-gap: 10pt;
   }
-  .hgab-wani-item { font-size: 6.5pt; margin-bottom: 5pt; }
+  .hgab-wani-item { font-size: 6.5pt; }
   .hgab-wani-meta { font-size: 6pt; }
   .hgab-wani-amt { font-size: 6.5pt; }
   .hgab-wani a { color: inherit; text-decoration: none; }
-  .hgab-wani-item.is-up .hgab-wani-chg,
-  .hgab-wani-item.is-down .hgab-wani-chg { color: inherit; }
+  .hgab-wani-foot { padding: 8pt 0 0; background: none; color: #141414; border-top: 1pt solid #141414; }
+  .hgab-wani-foot img { display: none; }
+  .hgab-wani-foot .hgab-wani-foot-url,
+  .hgab-wani-foot a { color: #141414; }
 }
