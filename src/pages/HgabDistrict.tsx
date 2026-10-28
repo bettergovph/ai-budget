@@ -11,6 +11,10 @@
  * undivided; nothing here attributes a project or an amount to the
  * representative.
  *
+ * One section places single lines instead of offices: "Projects placed in
+ * this district" (`HgabDistrictLocated`), the lines the source workbench's
+ * location lens places here, provisional, with the office group's reconciliation.
+ *
  * A sidebar lists every region and district (`HgabDistrictSidebar`, page
  * mode): this district is current and its region open, and every row links
  * straight to that district's page, so a reader can move between districts
@@ -33,6 +37,7 @@ import {
   RepresentativeBlock, TierBadge,
 } from '../components/HgabDistrictBits';
 import DistrictSidebar from '../components/HgabDistrictSidebar';
+import DistrictLocated from '../components/HgabDistrictLocated';
 import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import {
@@ -181,8 +186,9 @@ export default function HgabDistrict() {
         }
         note={
           <>
-            This page follows the office, not the district. It shows which districts an office serves, never
-            which district a project is in. Figures are the office’s, as each document publishes them.{' '}
+            This page follows the office, not the district: its figures are the office’s, as each document
+            publishes them. Only “Projects placed in this district” puts single lines here, by the place each
+            title names or an office that serves only this district.{' '}
             {offices.length > 0 && DEO_MEANING}
           </>
         }
@@ -251,6 +257,9 @@ export default function HgabDistrict() {
               )}
             </section>
 
+            {/* ---- lines the source's location lens places here (provisional) ---- */}
+            <DistrictLocated card={card} index={index} />
+
             {/* ---- one section per office ---- */}
             {offices.map((o, i) => (
               <OfficeSection
@@ -282,6 +291,10 @@ export default function HgabDistrict() {
                   <strong>Most DPWH money is on no district card.</strong> Money listed under the DPWH Central Office or
                   a regional office is not assigned to a district. <Link to={districtPath()}>The Districts overview</Link> shows
                   how much, every year.
+                </li>
+                <li>
+                  <strong>A project placed here is not the representative’s.</strong> The documents put the work here.
+                  They do not certify sites, and do not say who asked for a project.
                 </li>
                 <li>
                   <strong>2027 changes are leads, not findings.</strong> An <Term>insertion candidate</Term> is a House

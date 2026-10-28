@@ -62,6 +62,10 @@
  *     the annexes = the group's office lines of the list and its deletion candidates read again from the
  *     parquet, figures = the leaderboard entry; every office line in exactly one group; each text file =
  *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text.
+ *   - project placements (`npm run build:hgab-locations`): every DPWH line once, basis/target/place/gate
+ *     consistent; totals per basis, each district's cells, kinds, offices and list order recomputed from the
+ *     parquet; each office group's parts add up; the DEO lines (no office-change, no-office) all in a group;
+ *     no representative's name anywhere in the file.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -101,6 +105,9 @@ import {
   districtsServedText, type ChangesListData,
 } from "../src/lib/hgab-changes-list";
 import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
+import {
+  DISTRICT_BASES, LOCATION_BASES, LOCATION_REVIEWS, LOCATIONS_SCHEMA, type LocatedCell, type LocationsData,
+} from "../src/lib/hgab-locations";
 import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 
 const argv = process.argv.slice(2);
@@ -671,6 +678,7 @@ async function main(): Promise<void> {
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
   await verifyLetters(overview, c);
+  await verifyLocations(overview, c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -2240,3 +2248,94 @@ async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<v
   check("every PDF is a PDF printed after its JSON", bad.pdf.length === 0, firstFew(bad.pdf));
   check("every letter states the disclaimers in plain words, links the full disclaimer, credits the template, and quotes none of the technical paragraphs", bad.disclaimer.length === 0, firstFew(bad.disclaimer));
 }
+
+// ---------------------------------------------------------------------------
+// Project placements (locations.json, npm run build:hgab-locations)
+// ---------------------------------------------------------------------------
+
+async function verifyLocations(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nlocations.json (projects placed in each district)\n");
+  const path = resolve(OUT, "locations.json");
+  check("locations.json present (npm run build:hgab-locations)", existsSync(path), path);
+  if (!existsSync(path)) return;
+  const text = readFileSync(path, "utf8");
+  const L = JSON.parse(text) as LocationsData;
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  check(`schema ${LOCATIONS_SCHEMA}, built from the current source commit, lens commit pinned`,
+    L.schema === LOCATIONS_SCHEMA && L.source_commit === overview.source_commit && /^[0-9a-f]{40}$/.test(L.lens_commit));
+
+  const traceGroup = new Map<string, { group: string; held: boolean }>();
+  const block = /export const TRACE_LABELS[^{]*\{([\s\S]*?)\n\};/.exec(readFileSync(CONTRACT, "utf8"))?.[1] ?? "";
+  for (const m of block.matchAll(/^\s*([a-z0-9_]+):\s*\{\s*label:\s*'[^']*',\s*group:\s*'([a-z_]+)'(?:,\s*held:\s*(true|false))?/gm)) traceGroup.set(m[1], { group: m[2], held: m[3] === "true" });
+  const KIND: Record<string, string> = { house_only: "inserted", increased: "increased", decreased: "decreased", scope_review: "scope_review", unchanged: "unchanged", nep_only: "dropped" };
+
+  const rows = (await c.runAndReadAll(`SELECT id, trace, office, office_kind, nep_php, hgab3_php FROM read_parquet('${resolve(OUT, "dpwh", "projects.parquet").replace(/'/g, "''")}')`)).getRows();
+  const P = new Map(rows.map((r) => [String(r[0]), {
+    trace: String(r[1]), office: r[2] == null ? null : String(r[2]), kind: r[3] == null ? null : String(r[3]),
+    nep: r[4] == null ? null : Number(r[4]), house: r[5] == null ? null : Number(r[5]),
+  }]));
+  const seen = new Set<string>();
+  const bad: string[] = [];
+  for (const l of L.lines) {
+    if (seen.has(l.id) || !P.has(l.id)) bad.push(`${l.id}: duplicate or not in the parquet`);
+    seen.add(l.id);
+    const inDistrict = (DISTRICT_BASES as readonly string[]).includes(l.basis);
+    if (!(LOCATION_BASES as readonly string[]).includes(l.basis)) bad.push(`${l.id}: basis ${l.basis}`);
+    else if (l.review ? !(l.basis === "title_psgc" && l.district == null && l.flags.includes("office_location_mismatch")) : l.flags.includes("office_location_mismatch")) bad.push(`${l.id}: review ${l.review} as ${l.basis}, district ${l.district}, flags ${l.flags.join(" ")}`);
+    else if (!l.review && (inDistrict ? !(l.district && l.district === l.target && D.districts.some((d) => d.id === l.district)) : l.district != null)) bad.push(`${l.id}: ${l.basis} with district ${l.district}, target ${l.target}`);
+    else if (l.basis === "deo" && !l.target.startsWith("office-group:")) bad.push(`${l.id}: deo target ${l.target}`);
+    else if ((l.basis === "title_psgc") !== (l.gate != null) || (l.basis !== "title_psgc" && l.place != null)) bad.push(`${l.id}: gate/place on a ${l.basis} line`);
+  }
+  check(`every DPWH line placed exactly once: ${L.lines.length.toLocaleString()} = ${P.size.toLocaleString()}`, L.lines.length === P.size && seen.size === P.size);
+  check("basis, district, target, gate and place consistent on every line", bad.length === 0, firstFew(bad));
+
+  const sumCell = (ids: string[]): LocatedCell => ids.reduce((a, id) => {
+    const r = P.get(id)!;
+    return { rows: a.rows + 1, nep_php: a.nep_php + (r.nep ?? 0), house_php: a.house_php + (r.house ?? 0) };
+  }, { rows: 0, nep_php: 0, house_php: 0 });
+  const same = (x: LocatedCell, y: LocatedCell) => x.rows === y.rows && x.nep_php === y.nep_php && x.house_php === y.house_php;
+  const byBasis = (b: string) => L.lines.filter((l) => l.basis === b).map((l) => l.id);
+  check("totals per basis recomputed from the parquet", LOCATION_BASES.every((b) => same(L.totals[b], sumCell(byBasis(b)))),
+    LOCATION_BASES.map((b) => `${b} ${L.totals[b].rows}`).join(", "));
+  check(`held out for review recomputed (every office/location mismatch): ${LOCATION_REVIEWS.map((r) => `${r} ${L.held_out[r].rows}`).join(", ")}`,
+    LOCATION_REVIEWS.every((r) => same(L.held_out[r], sumCell(L.lines.filter((l) => l.review === r).map((l) => l.id)))));
+
+  const loc = new Map(L.lines.map((l) => [l.id, l]));
+  const badD: string[] = [];
+  const placedIds = new Map<string, string[]>();
+  for (const l of L.lines) if (l.district) (placedIds.get(l.district) ?? placedIds.set(l.district, []).get(l.district)!).push(l.id);
+  check(`one entry per district with placed lines (${placedIds.size})`, L.districts.length === placedIds.size && L.districts.every((d) => placedIds.has(d.district)));
+  for (const d of L.districts) {
+    const ids = placedIds.get(d.district) ?? [];
+    if (d.ids.length !== ids.length || !ids.every((id) => d.ids.includes(id))) { badD.push(`${d.district}: ids`); continue; }
+    const order = d.ids.every((id, i) => i === 0 || (P.get(d.ids[i - 1])!.house ?? -1) >= (P.get(id)!.house ?? -1));
+    if (!order) badD.push(`${d.district}: not House amount largest first`);
+    if (!same(d.all, sumCell(ids))) badD.push(`${d.district}: all`);
+    for (const [k, cl] of Object.entries(d.kinds)) if (!same(cl, sumCell(ids.filter((id) => KIND[traceGroup.get(P.get(id)!.trace)?.group ?? ""] === k)))) badD.push(`${d.district}: kind ${k}`);
+    for (const b of ["title_psgc", "deo_to_leg"] as const) if (!same(d.by_basis[b], sumCell(ids.filter((id) => loc.get(id)!.basis === b)))) badD.push(`${d.district}: basis ${b}`);
+    const held = ids.filter((id) => traceGroup.get(P.get(id)!.trace)?.held);
+    if (d.unconfirmed.rows !== held.length || d.unconfirmed.php !== held.reduce((a, id) => a + (P.get(id)!.house ?? 0), 0)) badD.push(`${d.district}: unconfirmed`);
+    const parts = Object.values(d.by_office);
+    if (parts.reduce((a, x) => a + x.rows, 0) !== d.all.rows || parts.reduce((a, x) => a + x.house_php, 0) !== d.all.house_php) badD.push(`${d.district}: by_office parts`);
+    const central = sumCell(ids.filter((id) => P.get(id)!.kind === "Central Office")), regional = sumCell(ids.filter((id) => P.get(id)!.kind === "Regional offices"));
+    if (!same(d.by_office.central, central) || !same(d.by_office.regional, regional)) badD.push(`${d.district}: central/regional`);
+  }
+  check("each district's cells, kinds, bases, offices and order recomputed from the parquet", badD.length === 0, firstFew(badD));
+
+  const badO = L.offices.filter((o) => Object.values(o.per_district).reduce((a, x) => a + x.rows, 0) + o.elsewhere.rows + o.shared.rows + o.unplaced.rows + o.held_out.rows !== o.all.rows
+    || Object.keys(o.per_district).some((id) => !D.districts.some((d) => d.id === id))).map((o) => o.group);
+  check("each office group: placed in its districts + elsewhere + shared + region only + held out = its lines", badO.length === 0, firstFew(badO));
+  const out = new Set([...D.office_change.row_ids, ...D.no_office.row_ids]);
+  const deoLines = [...P].filter(([id, r]) => r.kind === "District engineering offices (DEOs)" && !out.has(id)).length;
+  const inGroups = L.offices.reduce((a, o) => a + o.all.rows, 0);
+  check(`every DEO line (office-change and no-office aside) in exactly one office group: ${inGroups.toLocaleString()} = ${deoLines.toLocaleString()}`, inGroups === deoLines);
+  check("lens flags counted from the lines", (Object.keys(L.flags) as Array<keyof typeof L.flags>).every((f) => L.flags[f] === L.lines.filter((l) => l.flags.includes(f)).length));
+
+  const names = D.districts.flatMap((d) => [d.representative?.name, ...((d.representative as { candidates?: Array<{ name: string }> } | null)?.candidates ?? []).map((x) => x.name)])
+    .filter((n): n is string => Boolean(n && n.length > 4));
+  const named = [...new Set(names)].filter((n) => text.includes(n));
+  check("no representative's name anywhere in locations.json", named.length === 0, firstFew(named));
+  check("notes are plain sentences of at most 20 words; upstream's not-claimed statement kept",
+    L.notes.every((n) => words(n) <= 20) && /does not establish|nothing here establishes/i.test(L.lens.not_claimed));
+}
+
