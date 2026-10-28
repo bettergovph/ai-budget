@@ -28,6 +28,7 @@
 import { dataUrl } from './data-url';
 import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
+import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -739,6 +740,11 @@ export function loadHgabLetterIndex(): Promise<LetterIndex> {
 /** One district's letter data. */
 export function loadHgabLetter(slug: string): Promise<LetterData> {
   return cached(`letter:${slug}`, () => getJson<LetterData>(dataUrl(letterFile(slug, 'json')), `Failed to load the letter for ${slug}`));
+}
+
+/** Where each DPWH line's title places it (`npm run build:hgab-locations`); the contract lives in `lib/hgab-locations.ts`. */
+export function loadHgabLocations(): Promise<LocationsData> {
+  return cached('locations', () => getJson<LocationsData>(dataUrl(LOCATIONS_DATA_PATH), 'Failed to load the project locations'));
 }
 
 export function districtPath(id?: string): string {
