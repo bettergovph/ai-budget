@@ -50,6 +50,7 @@ import {
 } from '../lib/hgab-districts';
 import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-query';
 import { DEO_MEANING } from '../lib/hgab-leaderboard';
+import { letterPath, letterSlug } from '../lib/hgab-letter';
 import '../hgab-districts.css';
 
 const TOP_N = 15;
@@ -216,6 +217,12 @@ export default function HgabDistrict() {
                 {ambiguous && rep?.candidates?.map((c) => <PortraitCredit key={c.name} rep={c} />)}
                 <p className="hgab-dd-rep-source">The seat holder is from the House of Representatives’ member list for the 20th Congress.</p>
                 <CongressCaveat />
+                <p className="hgab-dd-letter">
+                  <Link to={letterPath(letterSlug(card.id))}>
+                    Write to {coServed.length ? 'the representatives this DPWH office serves' : 'your representative'} →
+                  </Link>
+                  <span>A formal letter asking about these projects, as a PDF to sign or text to edit.</span>
+                </p>
               </div>
             </section>
 

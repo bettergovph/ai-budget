@@ -15,6 +15,7 @@
 
 import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
+import { LETTER_ROOT } from "./hgab-letter";
 
 export interface PageMeta {
   title: string;
@@ -280,6 +281,25 @@ export function pageMeta(pathname: string): PageMeta {
       imageWidth: "1200",
       imageHeight: "630",
       imageAlt: "WE ARE NOT IGNORANT: 7,465 inserted and adjusted projects in the 2027 House budget bill, over the list of the projects themselves.",
+    };
+  }
+  // Write to your representative: before the dataset pattern, which would read "letter" as a program key.
+  if (p === LETTER_ROOT) {
+    return {
+      title: `Write to Your Representative — a Letter on the 2027 House Bill for Every District · ${SITE}`,
+      description:
+        "A formal letter for each of the 254 legislative districts, addressed to its representative and, where a DPWH " +
+        "office serves several districts, to every representative it serves. It asks them to explain the DPWH projects " +
+        "House Bill 10858 lists for that office but the NEP does not, and to share the documents behind them. PDF or text.",
+    };
+  }
+  if (p.startsWith(`${LETTER_ROOT}/`)) {
+    return {
+      title: `Letter to Your Representative on the 2027 House Bill · ${SITE}`,
+      description:
+        "A formal letter from a legislative district's constituents to its representative(s): the DPWH projects House " +
+        "Bill 10858 lists for the office serving the district with no match in the NEP, with changed amounts, or dropped, " +
+        "and a request for the documents behind them. Download as PDF to sign or as text to edit.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"

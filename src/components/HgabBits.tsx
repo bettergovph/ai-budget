@@ -45,6 +45,7 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/overview`,
   },
   { to: `${HGAB_ROOT}/intro`, label: 'Explainer' },
+  { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
   { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
