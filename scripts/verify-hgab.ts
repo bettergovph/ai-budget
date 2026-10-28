@@ -57,6 +57,11 @@
  *     kind = candidate_changes; every representative = the districts.json seat holders of the districts the
  *     office's (leaderboard) group serves, none on Central/regional/office-change/no-office lines; the CSV
  *     parsed on its own, row for row with the JSON.
+ *   - the letters to representatives (`npm run build:hgab-letters`): one per district, each with its JSON,
+ *     text and PDF; recipients = the seat holders of every district the office group serves, own seat first;
+ *     the annexes = the group's office lines of the list and its deletion candidates read again from the
+ *     parquet, figures = the leaderboard entry; every office line in exactly one group; each text file =
+ *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -79,7 +84,7 @@
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -95,6 +100,8 @@ import {
   CHANGES_LIST_CSV_COLUMNS, CHANGES_LIST_LEGEND, CHANGES_LIST_SCHEMA, CHANGES_LIST_SITE, CHANGE_PROGRAM_LABELS, NO_DISTRICT_REASON,
   districtsServedText, type ChangesListData,
 } from "../src/lib/hgab-changes-list";
+import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
+import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -663,6 +670,7 @@ async function main(): Promise<void> {
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
+  await verifyLetters(overview, c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -2150,3 +2158,85 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
+
+// ---------------------------------------------------------------------------
+// Letters to representatives (letters/, npm run build:hgab-letters)
+// ---------------------------------------------------------------------------
+
+async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nletters/ (write to your representative)\n");
+  const dir = resolve(OUT, "letters");
+  const indexPath = resolve(dir, "index.json");
+  check("letters/index.json present (npm run build:hgab-letters)", existsSync(indexPath), indexPath);
+  if (!existsSync(indexPath)) return;
+  const ix = readJson<LetterIndex>(indexPath);
+  const D = readJson<DistrictIndex>(resolve(OUT, "districts.json"));
+  const LB = readJson<LeaderboardData>(resolve(OUT, "leaderboard.json"));
+  const CL = readJson<ChangesListData>(resolve(OUT, "changes-list.json"));
+  check(`schema ${LETTER_SCHEMA}, built from the current source commit`, ix.schema === LETTER_SCHEMA && ix.source_commit === overview.source_commit);
+  const ids = ix.letters.map((l) => l.district_id);
+  check(`one letter per district: ${ix.letters.length} = ${D.districts.length}, slugs unique and derived from the district id`,
+    ix.letters.length === D.districts.length && new Set(ids).size === ids.length && D.districts.every((d) => ids.includes(d.id))
+    && new Set(ix.letters.map((l) => l.slug)).size === ix.letters.length && ix.letters.every((l) => l.slug === letterSlug(l.district_id)));
+  const missing = ix.letters.flatMap((l) => (["json", "txt", "pdf"] as const).filter((e) => !existsSync(resolve(dir, `${l.slug}.${e}`))).map((e) => `${l.slug}.${e}`));
+  check("every letter has its JSON, text and PDF", missing.length === 0, firstFew(missing));
+  const stray = readdirSync(dir).filter((f) => f !== "index.json" && !ix.letters.some((l) => f.startsWith(`${l.slug}.`)));
+  check("no stray files in letters/", stray.length === 0, firstFew(stray));
+  if (missing.length) return;
+
+  // Expected groups and annexes, read again: office labels from districts.json, lines from the list and the parquet.
+  const entryOf = new Map<string, LeaderEntry>();
+  for (const e of LB.entries) for (const p of e.people) entryOf.set(p.district_id, e);
+  const labelOf = new Map<string, string>();
+  for (const o of Object.values(D.offices)) {
+    const l = o.years.find((y) => y.fy === 2027 && y.stage === "hgab3" && y.matched_label)?.matched_label;
+    if (l && o.kind !== "regional_group") labelOf.set(o.id, l);
+  }
+  const listed = new Map<string, string[]>();
+  for (const r of CL.rows) if (r.p === "dpwh" && r.w === "office" && r.o) listed.set(r.o, [...(listed.get(r.o) ?? []), r.i]);
+  const dropped = new Map<string, string[]>();
+  for (const r of (await c.runAndReadAll(`SELECT id, office FROM read_parquet('${q(resolve(OUT, "dpwh", "projects.parquet"))}') WHERE trace = 'nep_only_candidate' AND office IS NOT NULL`)).getRows()) {
+    dropped.set(String(r[1]), [...(dropped.get(String(r[1])) ?? []), String(r[0])]);
+  }
+  const same = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+  const cards = new Map(D.districts.map((d) => [d.id, d] as const));
+
+  const bad: Record<string, string[]> = { recipients: [], annexes: [], figures: [], text: [], pdf: [], disclaimer: [] };
+  const inLetters = new Set<string>();
+  for (const l of ix.letters) {
+    const L = readJson<LetterData>(resolve(dir, `${l.slug}.json`));
+    const e = entryOf.get(l.district_id) ?? null;
+    // Recipients: own seat first, then the group's other districts, names as districts.json lists them.
+    const want = e ? [l.district_id, ...e.people.map((p) => p.district_id).filter((x) => x !== l.district_id)] : [l.district_id];
+    const names = (id: string) => { const r = cards.get(id)?.representative; return !r ? [] : r.status === "ambiguous" ? (r.candidates ?? []).map((x) => x.name) : [r.name]; };
+    if (L.recipients.map((r) => r.district_id).join() !== want.join() || !L.recipients[0]?.own || L.recipients.slice(1).some((r) => r.own)
+      || L.recipients.some((r) => r.names.join("|") !== names(r.district_id).filter(Boolean).join("|"))) bad.recipients.push(l.slug);
+    // Annexes.
+    const labels = (e?.offices ?? []).map((o) => labelOf.get(o.id) ?? "");
+    const wantList = labels.flatMap((x) => listed.get(x) ?? []), wantDrop = labels.flatMap((x) => dropped.get(x) ?? []);
+    if (!same([...L.inserted, ...L.adjusted].map((r) => r.i), wantList) || !same(L.dropped.map((r) => r.i), wantDrop)) bad.annexes.push(l.slug);
+    for (const r of [...L.inserted, ...L.adjusted]) inLetters.add(r.i);
+    // Figures = the leaderboard entry.
+    const f = L.figures;
+    if (e ? !f || f.nep_php !== e.nep_php || f.house_php !== e.hgab3_php || f.inserted_rows !== e.added_rows + e.held_rows || f.inserted_php !== e.added_php + e.held_php
+      || f.unconfirmed_rows !== e.held_rows || f.dropped_rows !== e.dropped_rows || f.dropped_php !== e.dropped_php || L.tier !== e.tier : f !== null || L.tier !== null) bad.figures.push(l.slug);
+    // The text file is the current composition; the PDF was printed after the JSON was written.
+    const text = letterText(composeLetter(L));
+    if (readFileSync(resolve(dir, `${l.slug}.txt`), "utf8") !== `\uFEFF${text}`) bad.text.push(l.slug);
+    const pdf = resolve(dir, `${l.slug}.pdf`);
+    if (!readFileSync(pdf).subarray(0, 5).equals(Buffer.from("%PDF-")) || statSync(pdf).mtimeMs < statSync(resolve(dir, `${l.slug}.json`)).mtimeMs) bad.pdf.push(l.slug);
+    // Plain words, not the technical paragraphs: the link to the full disclaimer, who asked, candidates, offices, shared totals.
+    const plain = [`${LETTER_SITE}${DISCLAIMERS_PATH}`, "do not say who asked for any project", LETTER_CREDIT,
+      ...(L.figures ? ["not a finding of wrongdoing", "not to any representative", "are not in this letter"] : []),
+      ...(L.tier === "B" ? ["shared and not split", "may be in any of these districts"] : [])];
+    if (plain.some((x) => !text.includes(x)) || /API snapshot|attribution tiers|upstream uncertainty/i.test(text)) bad.disclaimer.push(l.slug);
+  }
+  check("recipients: the district's own seat first, then every other district its DPWH office group serves, names as districts.json lists them", bad.recipients.length === 0, firstFew(bad.recipients));
+  check("annexes: exactly the group's office lines of changes-list.json and its deletion candidates in the parquet", bad.annexes.length === 0, firstFew(bad.annexes));
+  check("figures and tier equal the group's leaderboard entry (none for districts with no engineering office)", bad.figures.length === 0, firstFew(bad.figures));
+  const officeRows = CL.rows.filter((r) => r.p === "dpwh" && r.w === "office").length;
+  check(`every office line of the list is in a letter: ${inLetters.size.toLocaleString("en-US")} = ${officeRows.toLocaleString("en-US")}`, inLetters.size === officeRows);
+  check("every text file = letterText(composeLetter(json)), UTF-8 with BOM (rerun npm run build:hgab-letters)", bad.text.length === 0, firstFew(bad.text));
+  check("every PDF is a PDF printed after its JSON", bad.pdf.length === 0, firstFew(bad.pdf));
+  check("every letter states the disclaimers in plain words, links the full disclaimer, credits the template, and quotes none of the technical paragraphs", bad.disclaimer.length === 0, firstFew(bad.disclaimer));
+}

@@ -20,6 +20,7 @@ import {
 } from "../lib/seo";
 import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
 import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
+import { LETTER_ROOT } from "../lib/hgab-letter";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -163,6 +164,8 @@ const STATIC_SITEMAP_PATHS = [
   ...BOARDS.map((b) => `${LEADERBOARD_ROOT}/${b.id}`),
   // Every inserted and adjusted project, one page.
   CHANGES_LIST_ROOT,
+  // Write to your representative: the picker; the 254 letters are linked from it.
+  LETTER_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

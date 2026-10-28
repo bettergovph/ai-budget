@@ -85,6 +85,7 @@ builder emit for readers:
 | `npm run import:hgab` | `scripts/import-hgab.ts` | Reads the workbench payloads, writes `data/hgab/2027/`. Flags: `--src=<clone>` (default `/tmp/dpwh-nep-review/repo`), `--out=data/hgab/2027`, `--nep=data/2027`, `--dataset=dpwh[,fmr,…]`, `--no-pdf` |
 | `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys, reconciliation and the reader-facing copy rules above. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`, `--d1=local` (also check the local D1, see "D1 layer"). Exit 1 on failure |
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
+| `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
@@ -831,3 +832,47 @@ production). Updating it is regenerate + upload, never a redeploy. `verify:hgab`
 has one item per list row, numbered continuously, each linking to its row's record page,
 built from the current list, with the counts line and the disclaimer. The campaign poster
 is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`).
+
+## Letters to representatives
+
+`/hgab/2027/letter` lists every legislative district; `/hgab/2027/letter/<slug>` is
+that district's formal letter to its representative, to download as a PDF (print,
+sign, collect signatures) or as text (edit). `npm run build:hgab-letters`
+(`scripts/build-hgab-letters.ts`) writes, for each of the 254 districts:
+
+```
+data/hgab/2027/letters/
+  index.json        LetterIndex: one line per district (the picker)
+  <slug>.json       LetterData: what composeLetter() reads (the page)
+  <slug>.txt        letterText(composeLetter(data)), UTF-8 with BOM
+  <slug>.pdf        letterHtml(composeLetter(data)) on A4, page footer on every page (headless Chromium)
+```
+
+The contract, the wording and the three renderers are in `src/lib/hgab-letter.ts`, so the
+preview, the text and the PDF always say the same thing. Recipients are the seat holders of
+every district the district's office group serves (the leaderboard's connected groups; Tier B
+offices are never split, so every one of those representatives is written to), the district's
+own seat first. The annexes are the group's DPWH lines: inserted and adjusted (the office lines
+of `changes-list.json`) and the deletion candidates (`nep_only_candidate`, read from the
+parquet by the office label the House bill lists). Central Office, regional, office-change and
+no-office lines name no district and are in no letter; the notes say so with the national
+residual. Every group's counts and pesos must equal its leaderboard entry and its offices'
+bridges, or nothing is written. Letters are documents citizens send, so they state the
+disclaimers in plain words (the amounts are the office's, shared totals are not split, a
+candidate is not a finding, the documents do not say who asked) and link the full text on
+the Methodology page instead of quoting the technical paragraphs. The letterhead and every
+page footer credit the People's Budget Coalition and BetterGov.ph; the sender's name, group,
+address, email, mobile and the date are blanks under the signature.
+
+Contacts: the address is the House's (Batasang Pambansa Complex, Constitution Hills, Quezon
+City 1126). bills.juris.ph `/api/authors` carries no email or phone (checked 2026-10-28, list
+and per-author endpoints); the builder prints `email` / `phone` from a member's cached author
+record when one appears, so adding them to juris and re-running `build:hgab-districts` and
+`build:hgab-letters` is enough. congress.gov.ph member pages block automated fetches (403).
+
+Run after `build:hgab-districts`, `build:hgab-leaderboard` and `build:hgab-changes-list`
+(`--only=<slug,…>` and `--no-pdf` while iterating; about 2½ minutes for all PDFs, ~77 MB).
+`upload:hgab` publishes `letters/` with `Content-Disposition: attachment` and a 5-minute cache
+on every file. `verify:hgab` checks one letter per district with all three files, recipients,
+annexes against the list and the parquet, figures against the leaderboard, every text file
+against a fresh composition, and the plain disclaimers with their link.

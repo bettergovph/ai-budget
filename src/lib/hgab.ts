@@ -27,6 +27,7 @@
  */
 import { dataUrl } from './data-url';
 import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
+import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -728,6 +729,16 @@ export function loadHgabLeaderboard(): Promise<LeaderboardData> {
   return cached('leaderboard', () =>
     getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
   );
+}
+
+/** The letters' picker list (`npm run build:hgab-letters`); the letters themselves live in `lib/hgab-letter.ts`. */
+export function loadHgabLetterIndex(): Promise<LetterIndex> {
+  return cached('letters', () => getJson<LetterIndex>(dataUrl(LETTER_INDEX_PATH), 'Failed to load the list of letters'));
+}
+
+/** One district's letter data. */
+export function loadHgabLetter(slug: string): Promise<LetterData> {
+  return cached(`letter:${slug}`, () => getJson<LetterData>(dataUrl(letterFile(slug, 'json')), `Failed to load the letter for ${slug}`));
 }
 
 export function districtPath(id?: string): string {

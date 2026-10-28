@@ -4,7 +4,8 @@
  * Modelled on upload-nep-2027-to-r2.ts. Everything under the tree is uploaded
  * — manifest.json, overview.json, each dataset's summary.json and
  * projects.parquet, the "We are not ignorant" list (changes-list.json and
- * changes-list.csv), and the source PDFs under pdf/ (about 140 MB) — because
+ * changes-list.csv), the letters to representatives (letters/: JSON, text and
+ * PDF per district), and the source PDFs under pdf/ (about 140 MB) — because
  * the /hgab section fetches all of it from the data host.
  *
  * Objects already in the bucket are skipped when their size matches and, for
@@ -22,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
+import { letterDownloadName } from "../src/lib/hgab-letter";
 
 interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string }
 function parseArgs(): Args {
@@ -68,16 +70,24 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".csv")) return "text/csv; charset=utf-8";
   // we-are-not-ignorant.html (npm run build:hgab-not-ignorant): a static page the Worker serves.
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
+  // letters/<slug>.txt (npm run build:hgab-letters): UTF-8 with BOM, linked as a download.
+  if (path.endsWith(".txt")) return "text/plain; charset=utf-8";
   return "application/octet-stream";
 }
-/** JSON and CSV change with every rebuild; parquet and PDFs are pinned to the manifest commit. */
+/** A file directly in letters/: every one is rebuilt with the data. */
+const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
+/** JSON, CSV and the letters change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) ? "public, max-age=300" : "public, max-age=86400";
 }
-/** A CSV is a download: the page links it cross-origin, where the `download` attribute is ignored. */
+/** A CSV or a letter is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {
+  const name = path.split(sep).pop()!;
+  if (isLetter(path) && /\.(pdf|txt)$/.test(name)) {
+    return `attachment; filename="${letterDownloadName(name.replace(/\.(pdf|txt)$/, ""), name.endsWith(".pdf") ? "pdf" : "txt")}"`;
+  }
   if (!path.endsWith(".csv")) return undefined;
-  return `attachment; filename="bettergov-house-bill-2027-${path.split(sep).pop()}"`;
+  return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
