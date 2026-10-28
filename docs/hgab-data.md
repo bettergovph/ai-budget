@@ -86,6 +86,7 @@ builder emit for readers:
 | `npm run verify:hgab` | `scripts/verify-hgab.ts` | Re-reads the tree and asserts totals, bridges, readings, parquet shape, document keys, reconciliation and the reader-facing copy rules above. Flags: `--out`, `--src` (for the main_overview comparison), `--no-pdf`, `--hash-pdfs`, `--d1=local` (also check the local D1, see "D1 layer"). Exit 1 on failure |
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
 | `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
+| `npm run build:hgab-og` | `scripts/build-hgab-og.ts` | Draws the 1200 × 630 link-preview cards under `og/` for the section pages, every district and every letter (see "Link-preview cards"). Flags: `--out`, `--only=pages,districts,letters`, `--slugs=<slug,…>` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
@@ -876,3 +877,32 @@ Run after `build:hgab-districts`, `build:hgab-leaderboard` and `build:hgab-chang
 on every file. `verify:hgab` checks one letter per district with all three files, recipients,
 annexes against the list and the parquet, figures against the leaderboard, every text file
 against a fresh composition, and the plain disclaimers with their link.
+
+## Link-preview cards (og:image)
+
+`npm run build:hgab-og` (`scripts/build-hgab-og.ts`) draws a 1200 × 630 card for every
+House bill page that has no picture of its own, in headless Chromium, from the data files:
+
+```
+data/hgab/2027/og/
+  <page>.png              overview, explainer, dpwh, fmr, hfep, nia, districts, leaderboard, letter, sources, methodology
+  districts/<slug>.png    one per legislative district page (254)
+  letters/<slug>.png      one per letter page (254)
+```
+
+`src/lib/hgab-og.ts` maps routes to cards (`ogImageKey`); `pageMeta` in `src/lib/seo.ts`
+attaches them, so the Worker sends them as og:image. Record pages show their program's
+card; each leaderboard board keeps its share image (`build:hgab-share`) and "We are not
+ignorant" its poster. The Worker also puts the district's name (D1 `hgab_districts`) in
+the title of district and letter pages. The cards follow the share images (blue band,
+logo, link; figures; a footer), pair every district with its DEO badge, and carry
+CARD_DISCLAIMER wherever representatives appear beside amounts; the letter cards also
+carry the People's Budget Coalition and BetterGov.ph credit.
+
+Run after `build:hgab-letters` (the district and letter cards read `letters/`): about
+5 minutes, needs network for fonts and portraits; `--only=pages|districts|letters` and
+`--slugs=a,b` while iterating. `upload:hgab` publishes `og/` with a 5-minute cache.
+Social sites cache a preview per URL for days; after a change, re-scrape a page in
+Facebook's Sharing Debugger to refresh it. `verify:hgab` checks one card per page,
+district and letter, all 1200 × 630, drawn after their data, none stray, and that every
+route resolves to an existing card.

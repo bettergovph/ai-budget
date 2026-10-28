@@ -21,6 +21,7 @@ import {
 import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
 import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
 import { LETTER_ROOT } from "../lib/hgab-letter";
+import { districtIdFromSlug } from "../lib/hgab-og";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -52,6 +53,27 @@ async function enhanceWithDeptName(env: Env, pathname: string, meta: PageMeta): 
         env, `SELECT description FROM nep_departments WHERE id = ?`, nepDept[1],
       );
       if (row) return { ...meta, title: deptTitle(row.description, "nep") };
+    }
+    // House bill district and letter pages: the district's name in the title (its card is the image).
+    const district = /^\/hgab\/2027\/districts\/([^/]+)\/?$/.exec(pathname);
+    const letter = /^\/hgab\/2027\/letter\/([a-z0-9-]+)\/?$/.exec(pathname);
+    if (district || letter) {
+      let id: string | null = null;
+      try {
+        id = district ? decodeURIComponent(district[1]) : districtIdFromSlug(letter![1]);
+      } catch {
+        id = null;
+      }
+      const row = id ? await one<{ label: string }>(env, `SELECT label FROM hgab_districts WHERE id = ?`, id) : null;
+      if (row) {
+        return {
+          ...meta,
+          title: letter
+            ? `Write to Your Representative: ${row.label} — the 2027 House Bill · BetterGov Budget`
+            : `${row.label} — DPWH Budget by Congress and the 2027 House Bill · BetterGov Budget`,
+          imageAlt: letter ? `A letter from ${row.label} to its representative, on the 2027 House bill` : `${row.label}: its DPWH office in the 2027 House bill`,
+        };
+      }
     }
     const hearing = /^\/hearings\/([A-Za-z0-9_-]{6,20})(?:\/|$)/.exec(pathname);
     if (hearing) {

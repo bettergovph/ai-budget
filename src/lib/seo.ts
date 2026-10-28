@@ -16,6 +16,7 @@
 import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
+import { OG_HEIGHT, OG_WIDTH, ogImageKey, ogUrl } from "./hgab-og";
 
 export interface PageMeta {
   title: string;
@@ -128,6 +129,16 @@ const PORTAL_VIEWS: Record<string, string> = {
 };
 
 export function pageMeta(pathname: string): PageMeta {
+  const meta = routeMeta(pathname);
+  if (meta.image) return meta;
+  // House bill pages without a picture of their own get their link-preview
+  // card (npm run build:hgab-og); everything else keeps the site card.
+  const key = ogImageKey(pathname);
+  if (!key) return meta;
+  return { ...meta, image: ogUrl(key), imageWidth: String(OG_WIDTH), imageHeight: String(OG_HEIGHT), imageAlt: meta.title.replace(/ · BetterGov Budget$/, "") };
+}
+
+function routeMeta(pathname: string): PageMeta {
   const p = pathname.replace(/\/+$/, "") || "/";
 
   if (p === "/" || p === "/2027" || p === "/2027/overview") {
