@@ -62,6 +62,8 @@
  *     the annexes = the group's office lines of the list and its deletion candidates read again from the
  *     parquet, figures = the leaderboard entry; every office line in exactly one group; each text file =
  *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text.
+ *   - the link-preview cards (`npm run build:hgab-og`): one per section page, district and letter, each a
+ *     1200 × 630 PNG drawn after its data, none stray, and every House bill route resolving to one that exists.
  *   - the budget history (`npm run build:hgab-history`): columns and series as the contract lists them; every
  *     enacted-budget cell recomputed from data/<dept>/full_extract.csv (not the PAP tables the builder reads);
  *     the FY2026 NEP/House/Senate cells re-read from the People's Budget Coalition sheets, whose GAA2025
@@ -108,6 +110,7 @@ import {
 } from "../src/lib/hgab-changes-list";
 import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
 import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
+import { OG_DIR, OG_HEIGHT, OG_PAGES, OG_WIDTH, ogDistrictKey, ogImageKey, ogLetterKey, ogPageKey } from "../src/lib/hgab-og";
 import {
   HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
   type HistoryData, type HistoryPartDef,
@@ -683,6 +686,7 @@ async function main(): Promise<void> {
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
   await verifyLetters(overview, c);
+  verifyOg();
   await verifyHistory(c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
@@ -2252,6 +2256,53 @@ async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<v
   check("every text file = letterText(composeLetter(json)), UTF-8 with BOM (rerun npm run build:hgab-letters)", bad.text.length === 0, firstFew(bad.text));
   check("every PDF is a PDF printed after its JSON", bad.pdf.length === 0, firstFew(bad.pdf));
   check("every letter states the disclaimers in plain words, links the full disclaimer, credits the template, and quotes none of the technical paragraphs", bad.disclaimer.length === 0, firstFew(bad.disclaimer));
+}
+
+// ---------------------------------------------------------------------------
+// Link-preview cards (og/, npm run build:hgab-og)
+// ---------------------------------------------------------------------------
+
+function verifyOg(): void {
+  process.stdout.write("\nog/ (link-preview cards)\n");
+  const local = (key: string) => resolve(OUT, key.replace(/^hgab\/2027\//, ""));
+  const ixPath = resolve(OUT, "letters", "index.json");
+  if (!existsSync(resolve(OUT, "og")) || !existsSync(ixPath)) {
+    check("og/ present (npm run build:hgab-og)", false, resolve(OUT, "og"));
+    return;
+  }
+  const ix = readJson<LetterIndex>(ixPath);
+  const pages = OG_PAGES.map((p) => ogPageKey(p.key));
+  const districts = ix.letters.map((l) => ogDistrictKey(l.district_id));
+  const letters = ix.letters.map((l) => ogLetterKey(l.slug));
+  const all = [...pages, ...districts, ...letters];
+  const missing = all.filter((k) => !existsSync(local(k)));
+  check(`one card per section page (${pages.length}), district (${districts.length}) and letter (${letters.length})`, missing.length === 0, firstFew(missing));
+  const files = (sub: string) => (existsSync(resolve(OUT, "og", sub)) ? readdirSync(resolve(OUT, "og", sub)).map((f) => `${OG_DIR}/${sub}/${f}`) : []);
+  const present = [...readdirSync(resolve(OUT, "og")).filter((f) => f.endsWith(".png")).map((f) => `${OG_DIR}/${f}`), ...files("districts"), ...files("letters")];
+  const stray = present.filter((k) => !all.includes(k));
+  check("no stray cards", stray.length === 0, firstFew(stray));
+  // PNG signature, then IHDR width and height (bytes 16–23).
+  const badSize = all.filter((k) => existsSync(local(k))).filter((k) => {
+    const b = readFileSync(local(k)).subarray(0, 24);
+    return b.readUInt32BE(0) !== 0x89504e47 || b.readUInt32BE(16) !== OG_WIDTH || b.readUInt32BE(20) !== OG_HEIGHT;
+  });
+  check(`every card is a ${OG_WIDTH} × ${OG_HEIGHT} PNG`, badSize.length === 0, firstFew(badSize));
+  // Drawn after the data they show: section cards after the letters index, each district and letter card after its letter.
+  const t = (p: string) => (existsSync(p) ? statSync(p).mtimeMs : Infinity);
+  const stale = [
+    ...pages.filter((k) => t(local(k)) < t(ixPath)),
+    ...ix.letters.flatMap((l) => [ogDistrictKey(l.district_id), ogLetterKey(l.slug)].filter((k) => t(local(k)) < t(resolve(OUT, "letters", `${l.slug}.json`)))),
+  ];
+  check("every card was drawn after its data (rerun npm run build:hgab-og)", stale.length === 0, firstFew(stale));
+  // Every route the Worker gives a card resolves to one that exists.
+  const routes = [
+    ...OG_PAGES.flatMap((p) => p.paths),
+    "/hgab/2027/dpwh/p/house-reading%3A848",
+    ...ix.letters.flatMap((l) => [`/hgab/2027/districts/${encodeURIComponent(l.district_id)}`, `/hgab/2027/letter/${l.slug}`]),
+  ];
+  const unresolved = routes.filter((r) => { const k = ogImageKey(r); return !k || !existsSync(local(k)); });
+  check(`every House bill route with a card resolves to an existing one (${routes.length} routes)`, unresolved.length === 0, firstFew(unresolved));
+  check("district ids and letter slugs map to the same card names", ix.letters.every((l) => ogDistrictKey(l.district_id).endsWith(`/${letterSlug(l.district_id)}.png`)));
 }
 
 // ---------------------------------------------------------------------------

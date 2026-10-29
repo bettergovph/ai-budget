@@ -21,6 +21,7 @@
     "build:hgab-poster-mpb": "tsx scripts/build-hgab-poster-mpb.ts",
     "build:hgab-not-ignorant": "tsx scripts/build-hgab-not-ignorant.ts",
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
+    "build:hgab-og": "tsx scripts/build-hgab-og.ts",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",

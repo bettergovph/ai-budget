@@ -75,10 +75,12 @@ function contentTypeFor(path: string): string {
   return "application/octet-stream";
 }
 /** A file directly in letters/: every one is rebuilt with the data. */
-const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
-/** JSON, CSV and the letters change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
+const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path) && !isOg(path);
+/** A link-preview card under og/ (npm run build:hgab-og): redrawn with the data. */
+const isOg = (path: string) => /[\\/]og[\\/]/.test(path);
+/** JSON, CSV, the letters and the link-preview cards change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isOg(path) ? "public, max-age=300" : "public, max-age=86400";
 }
 /** A CSV or a letter is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {
