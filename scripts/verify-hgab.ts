@@ -2429,6 +2429,21 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
     check("every card's 2027 project list re-queries to its figures (DOH: plus operating costs and the documented NEP list gap)", off.length === 0, off.slice(0, 4).join("; "));
   }
 
+  // 4c. DepEd's and DOH's "every enacted budget" links search the GAA explorer by name: the name must still be the
+  // published description of the series' program code in every year it has an amount (a rename would break the link).
+  {
+    const off: string[] = [];
+    for (const def of HISTORY_SERIES.filter((d) => d.gaaHistory)) {
+      const h = def.gaaHistory!, codes = def.parts.flatMap((p) => p.codes?.prefixes ?? []);
+      const dir = resolve(GAA, "..", h.dept, "fpaps");
+      if (!existsSync(dir)) { off.push(`${def.key}: ${dir} missing`); continue; }
+      const rows = (await c.runAndReadAll(`SELECT DISTINCT year, description FROM read_parquet('${dir}/*/*.parquet', hive_partitioning = true) WHERE code IN (${codes.map((x) => `'${x}'`).join(", ")}) AND amount > 0`)).getRows();
+      const misses = rows.filter((r) => !String(r[1] ?? "").toLowerCase().includes(h.q.toLowerCase()));
+      if (!rows.length || misses.length) off.push(`${def.key}: "${h.q}" not in ${misses.map((r) => `FY${r[0]} "${r[1]}"`).join(", ") || "any year"}`);
+    }
+    check("DepEd's and DOH's enacted-budget links search by a name every year publishes", off.length === 0, off.join("; "));
+  }
+
   // 5. The CSV, parsed on its own.
   const rows = parseCsv(readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "")).filter((r) => r.length > 1);
   const expected: string[][] = [];

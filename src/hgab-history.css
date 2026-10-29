@@ -135,7 +135,8 @@
 }
 .hgab-hy-list a { font-weight: 600; color: var(--accent); text-decoration: none; }
 .hgab-hy-list a:hover { text-decoration: underline; }
-.hgab-hy-list.is-none { color: var(--ink-mute); }
+.hgab-hy-list .is-none { color: var(--ink-mute); }
+.hgab-hy-list-more { display: block; margin-top: 3px; }
 .hgab-hy-uncounted {
   margin: 8px 0;
   padding: 26px 12px;

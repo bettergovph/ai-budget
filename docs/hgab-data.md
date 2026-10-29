@@ -834,7 +834,11 @@ JavaScript); `npm run upload:hgab` publishes it and the Worker serves it at that
 production). Updating it is regenerate + upload, never a redeploy. `verify:hgab` checks it
 has one item per list row, numbered continuously, each linking to its row's record page,
 built from the current list, with the counts line and the disclaimer. The campaign poster
-is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`).
+is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`). The multi-purpose buildings poster
+is `npm run build:hgab-poster-mpb` (`campaign/multi-purpose-*`: 24×36 PDF and PNG, 1080×1350, 1080×1920,
+1200×630 (the page's link preview), Facebook cover). Its figures come from `history.json`. The wall behind them
+lists every multi-purpose building project in the House bill, the same filter the page's card opens. The builder stops
+unless the wall adds up to the House-bill figure and every headline line fits.
 
 ## Letters to representatives
 
@@ -921,6 +925,11 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (13 
   the ₱67,173,000 operating costs (Volume I-A, both stages) and, on the NEP side, the ₱140,000 the published list's
   lines fall short of its own total (the section's documented reconciliation). Earlier years have no list: the GAA
   gives DepEd's and DOH's lines as one amount each.
+- **DepEd and DOH links.** Their cards also open the line in every enacted budget on the GAA explorer
+  (`gaaHistory` in the contract: `/d/07/programs?q=Basic Education Facilities`,
+  `/d/13/programs?q=Health Facilities Enhancement`). DepEd's card links its line as published in Volume I-A.
+  The verifier checks that each search name occurs in the published description every year the code has an amount.
+  FY2020–2024 print HFEP's name with a double space, so its search leaves out "Program".
 - **Known gap.** The FY2024 GAA data has no foreign-assisted DPWH lines with an amount (e.g. the Pasig–Marikina
   River Channel Improvement Project, Phase IV, is ₱0 there and ₱2.56 billion in FY2025); the page says so
   rather than showing zero.

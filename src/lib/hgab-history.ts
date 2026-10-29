@@ -131,6 +131,11 @@ export interface HistorySeriesDef {
    * that the list adds up to the line's FY2027 NEP and House-bill cells.
    */
   list2027?: { dataset: 'dpwh' | 'hfep'; params: Readonly<Record<string, string>> };
+  /**
+   * DepEd and DOH: the line in every enacted budget, FY2020–FY2026, on the GAA explorer (its Programs view
+   * filtered by name, `?q=`). Their budgets give the line as one amount, so there is no project list before 2027.
+   */
+  gaaHistory?: { dept: '07' | '13'; q: string };
 }
 
 export type PbcSheet = 'DPWH' | 'Educ' | 'Health';
@@ -243,6 +248,7 @@ export const HISTORY_SERIES: readonly HistorySeriesDef[] = [
     key: 'deped',
     label: 'DepEd school facilities',
     department: 'DepEd',
+    gaaHistory: { dept: '07', q: 'Basic Education Facilities' },
     plain: "DepEd's Basic Education Facilities line, which pays to build, replace and repair school buildings and classrooms.",
     counted: false,
     parts: [{
@@ -257,6 +263,7 @@ export const HISTORY_SERIES: readonly HistorySeriesDef[] = [
     label: 'DOH health facilities',
     department: 'DOH',
     list2027: { dataset: 'hfep', params: {} },
+    gaaHistory: { dept: '13', q: 'Health Facilities Enhancement' },
     plain: "DOH's Health Facilities Enhancement Program, which pays to build, upgrade and equip public hospitals and health centres.",
     counted: false,
     parts: [{
@@ -372,6 +379,11 @@ export interface HistoryList {
    * section's documented ₱140,000 error in the NEP health-facilities list); 0 elsewhere.
    */
   nep_list_gap_php: number;
+}
+
+/** A DepEd or DOH line in every enacted budget, on the GAA explorer's Programs view. */
+export function gaaHistoryHref(h: { dept: string; q: string }): string {
+  return `/d/${h.dept}/programs?${new URLSearchParams({ q: h.q }).toString()}`;
 }
 
 /** The Projects view a list opens: `/hgab/2027/<dataset>?view=projects&…`. */

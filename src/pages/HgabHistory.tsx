@@ -19,7 +19,7 @@ import { dataUrl } from '../lib/data-url';
 import { asOfText } from '../lib/hgab-leaderboard';
 import {
   HISTORY_COLUMNS, HISTORY_CSV_NAME, HISTORY_CSV_PATH, HISTORY_DEFINITIONS, HISTORY_SERIES, HISTORY_TITLE, HISTORY_VOL_IA_PATH,
-  columnIndex, listHref, seriesOf,
+  columnIndex, gaaHistoryHref, listHref, seriesOf,
   type HistoryData, type HistorySeries, type HistorySeriesKey,
 } from '../lib/hgab-history';
 import '../nep2027.css';
@@ -91,29 +91,49 @@ const EXTRA_NOTE: Partial<Record<HistorySeriesKey, string>> = {
 };
 
 /** The card's way into its 2027 projects, or why there is none. */
-function ListLink({ s }: { s: HistorySeries }) {
+/** The card's way into its projects, its other budgets, or the line as published. */
+function ListLink({ s, printed }: { s: HistorySeries; printed?: HistoryData['printed'][number] }) {
   const l = s.list2027;
-  if (!l) {
-    if (s.key === 'deped') return <p className="hgab-hy-list is-none">No project list: every budget gives this line as one amount.</p>;
-    return null;
-  }
+  const def = HISTORY_SERIES.find((d) => d.key === s.key);
+  const history = def?.gaaHistory ? (
+    <Link to={gaaHistoryHref(def.gaaHistory)}>See this line in every enacted budget, 2020–2026 →</Link>
+  ) : null;
+  if (!l && !history) return null;
   return (
     <p className="hgab-hy-list">
-      <Link to={listHref(l)}>
-        See the 2027 projects: {l.nep_rows.toLocaleString('en-US')} in the NEP, {l.house_rows.toLocaleString('en-US')} in the House bill →
-      </Link>
-      {l.unlisted_php > 0 && (
-        <span> The list leaves out {billions(l.unlisted_php)} in operating costs, which the budget gives as one amount.</span>
+      {l ? (
+        <>
+          <Link to={listHref(l)}>
+            See the 2027 projects: {l.nep_rows.toLocaleString('en-US')} in the NEP, {l.house_rows.toLocaleString('en-US')} in the House bill →
+          </Link>
+          {l.unlisted_php > 0 && (
+            <span> The list leaves out {billions(l.unlisted_php)} in operating costs, which the budget gives as one amount.</span>
+          )}
+        </>
+      ) : (
+        <span className="is-none">No project list: the budget gives this line as one amount. </span>
       )}
-      {s.department !== 'DPWH' && <span> Earlier budgets give this line as one amount, with no list.</span>}
+      {history && <span className="hgab-hy-list-more">{history}</span>}
+      {!l && printed && (
+        <span className="hgab-hy-list-more">
+          <a href={`${dataUrl(HISTORY_VOL_IA_PATH)}#page=${printed.page}`} target="_blank" rel="noopener noreferrer">
+            See the 2027 House bill line as published →
+          </a>
+        </span>
+      )}
     </p>
   );
 }
 
-function ProgramCard({ s, mode, max }: { s: HistorySeries; mode: HistoryMode; max: number }) {
+function ProgramCard({ s, mode, max, printed }: { s: HistorySeries; mode: HistoryMode; max: number; printed?: HistoryData['printed'][number] }) {
   const id = `hgab-hy-${s.key}`;
   const uncounted = mode === 'projects' && s.department !== 'DPWH';
-  const title = s.list2027 ? <Link to={listHref(s.list2027)} title="See the 2027 projects">{s.label}</Link> : s.label;
+  const gaaHistory = HISTORY_SERIES.find((d) => d.key === s.key)?.gaaHistory;
+  const title = s.list2027
+    ? <Link to={listHref(s.list2027)} title="See the 2027 projects">{s.label}</Link>
+    : gaaHistory
+      ? <Link to={gaaHistoryHref(gaaHistory)} title="See this line in every enacted budget, 2020–2026">{s.label}</Link>
+      : s.label;
   return (
     <article className="hgab-hy-card" aria-labelledby={id}>
       <header className="hgab-hy-card-head">
@@ -129,7 +149,7 @@ function ProgramCard({ s, mode, max }: { s: HistorySeries; mode: HistoryMode; ma
       {(OVERLAP_NOTE[s.key] || EXTRA_NOTE[s.key]) && (
         <p className="hgab-hy-note">{[OVERLAP_NOTE[s.key], EXTRA_NOTE[s.key]].filter(Boolean).join(' ')}</p>
       )}
-      <ListLink s={s} />
+      <ListLink s={s} printed={printed} />
     </article>
   );
 }
@@ -216,7 +236,7 @@ export default function HgabHistory() {
   const v = (s: HistorySeries, i: number) => s.php[i] ?? 0;
   const floodAllForeign26 = flood.php[I.gaa2026] != null && flood.foreign_php[I.gaa2026] === flood.php[I.gaa2026];
   const bipMpbShare = (i: number) => (bip.php[i] ? Math.round((v(mpb, i) / bip.php[i]!) * 100) : null);
-  const card = (k: HistorySeriesKey) => <ProgramCard key={k} s={S(k)} mode={mode} max={max} />;
+  const card = (k: HistorySeriesKey) => <ProgramCard key={k} s={S(k)} mode={mode} max={max} printed={data.printed.find((p) => p.series === k)} />;
   const change = (s: HistorySeries) => v(s, I.house2027) - v(s, I.nep2027);
   const moreLess = (d: number) => (d === 0 ? 'the same amount' : `${billions(Math.abs(d))} ${d > 0 ? 'more' : 'less'}`);
   const sipagGone27 = S('sipag').php[I.nep2027] == null && S('sipag').php[I.house2027] == null;
