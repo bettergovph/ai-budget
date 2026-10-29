@@ -373,8 +373,11 @@ function HgabCallout({ deptId }: { deptId: string }) {
     return () => { live = false; };
   }, [key]);
 
-  const meta = loaded?.key === key ? loaded.meta : null;
-  if (!key || !meta) return null;
+  // `key` is undefined for every group without a House-bill dataset; so is
+  // `loaded?.key` before the fetch, so check `key` first or `undefined ===
+  // undefined` reads `.meta` off null.
+  const meta = key && loaded?.key === key ? loaded.meta : null;
+  if (!meta) return null;
 
   const nep = meta.totals.nep_php;
   const stage: 'hgab2' | 'hgab3' = meta.totals.hgab3_php != null ? 'hgab3' : 'hgab2';
