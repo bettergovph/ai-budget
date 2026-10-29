@@ -10,7 +10,8 @@
  *
  * `npm run upload:hgab` publishes them under the same keys on the data host.
  * Each leaderboard board keeps its own share image (hgab/2027/share/<board>.png)
- * and "We are not ignorant" its poster; this module covers the rest.
+ * and "We are not ignorant" and Multi-purpose buildings (/hgab/2027/multi-purpose) their posters
+ * (hgab/2027/campaign/*-1200x630.png); this module covers the rest.
  *
  * Pure (no `import.meta.env`, no DOM): the Worker's page metadata, the builder
  * and the verifier all read it, so every path points at an image that exists.

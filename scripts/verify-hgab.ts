@@ -64,6 +64,12 @@
  *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text.
  *   - the link-preview cards (`npm run build:hgab-og`): one per section page, district and letter, each a
  *     1200 × 630 PNG drawn after its data, none stray, and every House bill route resolving to one that exists.
+ *   - the budget history (`npm run build:hgab-history`): columns and series as the contract lists them; every
+ *     enacted-budget cell recomputed from data/<dept>/full_extract.csv (not the PAP tables the builder reads);
+ *     the FY2026 NEP/House/Senate cells re-read from the People's Budget Coalition sheets, whose GAA2025
+ *     column must equal FY2025; the FY2027 NEP from the DBM extract; the House bill from the parquet and,
+ *     as published, Volume I-A (DepEd, DOH) and the Volume I-C BIP subtotal; the BIP definition word for word
+ *     against Volume I-B; series = sum of parts; the CSV row for row; reader copy plain and short.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -105,6 +111,10 @@ import {
 import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
 import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 import { OG_DIR, OG_HEIGHT, OG_PAGES, OG_WIDTH, ogDistrictKey, ogImageKey, ogLetterKey, ogPageKey } from "../src/lib/hgab-og";
+import {
+  HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
+  type HistoryData, type HistoryPartDef,
+} from "../src/lib/hgab-history";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -112,6 +122,8 @@ const OUT = resolve(arg("out", "data/hgab/2027"));
 const SRC = resolve(arg("src", "/tmp/dpwh-nep-review/repo"));
 const CONTRACT = resolve(arg("contract", "src/lib/hgab.ts"));
 const GAA = resolve(arg("gaa", "data/18"));
+/** The People's Budget Coalition FY2026 sheets the budget history reads (build-hgab-history.ts --pbc). */
+const PBC = resolve(arg("pbc", process.env.PBC_2026_DIR ?? "/home/jason/projects/2026-budget/public/citizens-report"));
 const CHECK_PDF = !argv.includes("--no-pdf");
 const FULL_HASH = argv.includes("--hash-pdfs");
 /** Opt-in network probe: does the portrait host send the CORP/CORS header this site's COEP needs? Informational only. */
@@ -675,6 +687,7 @@ async function main(): Promise<void> {
   verifyNotIgnorantPage();
   await verifyLetters(overview, c);
   verifyOg();
+  await verifyHistory(c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -2290,4 +2303,211 @@ function verifyOg(): void {
   const unresolved = routes.filter((r) => { const k = ogImageKey(r); return !k || !existsSync(local(k)); });
   check(`every House bill route with a card resolves to an existing one (${routes.length} routes)`, unresolved.length === 0, firstFew(unresolved));
   check("district ids and letter slugs map to the same card names", ix.letters.every((l) => ogDistrictKey(l.district_id).endsWith(`/${letterSlug(l.district_id)}.png`)));
+}
+
+// ---------------------------------------------------------------------------
+// Budget history (history.json + history.csv), recomputed on the verifier's own path: enacted budgets from
+// the row-level extracts (the builder reads the PAP tables), the tracker sheets parsed again, the FY2027 NEP
+// and House bill from their files, and what Volumes I-A, I-B and I-C publish.
+// ---------------------------------------------------------------------------
+
+async function verifyHistory(c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nhistory.json + history.csv (Budget history)\n");
+  const jsonPath = resolve(OUT, "history.json"), csvPath = resolve(OUT, "history.csv");
+  check("history.json and history.csv present (npm run build:hgab-history)", existsSync(jsonPath) && existsSync(csvPath), `${jsonPath} / ${csvPath}`);
+  if (!existsSync(jsonPath) || !existsSync(csvPath)) return;
+  const H = readJson<HistoryData>(jsonPath);
+  const N = HISTORY_COLUMNS.length;
+  const ix = (key: string) => HISTORY_COLUMNS.findIndex((x) => x.key === key);
+  const same = (a: number | null, b: number | null) => (a ?? 0) === (b ?? 0);
+  const fmtCell = (v: number | null) => (v == null ? "null" : peso(v));
+
+  check("schema 1; columns and series exactly as the contract lists them",
+    H.schema === HISTORY_SCHEMA && JSON.stringify(H.columns) === JSON.stringify(HISTORY_COLUMNS)
+      && JSON.stringify(H.series.map((x) => [x.key, x.label, x.parts.map((p) => [p.key, p.label])]))
+        === JSON.stringify(HISTORY_SERIES.map((x) => [x.key, x.label, x.parts.map((p) => [p.key, p.label])])));
+
+  // Shape: integer pesos, series = sum of parts, foreign ≤ amount, uncounted series carry no project counts.
+  const bad: string[] = [];
+  for (const s of H.series) {
+    const def = HISTORY_SERIES.find((d) => d.key === s.key)!;
+    for (const arr of [s.php, s.projects, s.foreign_php, ...s.parts.flatMap((p) => [p.php, p.projects, p.foreign_php])]) {
+      if (arr.length !== N || arr.some((v) => v != null && !(Number.isSafeInteger(v) && v >= 0))) bad.push(`${s.key}: bad cells`);
+    }
+    for (let i = 0; i < N; i++) {
+      const parts = s.parts.map((p) => p.php[i]).filter((v): v is number => v != null);
+      const sum = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+      if (sum !== s.php[i]) bad.push(`${s.key} ${HISTORY_COLUMNS[i].key}: ${fmtCell(s.php[i])} ≠ parts ${fmtCell(sum)}`);
+      if (s.foreign_php[i] != null && (s.php[i] == null || s.foreign_php[i]! > s.php[i]!)) bad.push(`${s.key} ${HISTORY_COLUMNS[i].key}: foreign-assisted exceeds the amount`);
+      if (!def.counted && s.projects[i] != null) bad.push(`${s.key}: a one-line program carries a project count`);
+    }
+  }
+  check("integer pesos; every series equals the sum of its parts; foreign-assisted within the amount; DepEd and DOH uncounted", bad.length === 0, bad.slice(0, 4).join("; "));
+
+  const part = (sk: string, pk: string) => H.series.find((s) => s.key === sk)!.parts.find((p) => p.key === pk)!;
+  const defs = HISTORY_SERIES.flatMap((s) => s.parts.map((p) => ({ s, p })));
+
+  // 1. Enacted budgets FY2020–FY2026 from the row-level extracts.
+  const DATA = resolve(GAA, "..");
+  const extracts = ["18", "07", "13"].map((d) => resolve(DATA, d, "full_extract.csv"));
+  if (!extracts.every((x) => existsSync(x))) {
+    check("GAA extracts present for the enacted-budget recomputation", false, extracts.filter((x) => !existsSync(x)).join(", "));
+  } else {
+    await c.run(`CREATE OR REPLACE TABLE hy_gaa AS
+      SELECT department AS dept, CAST(year AS INTEGER) AS fy, prexc_fpap_id AS code, SUM(CAST(ROUND(TRY_CAST(amt AS DOUBLE) * 1000) AS BIGINT)) AS php
+      FROM read_csv([${extracts.map((x) => `'${x}'`).join(", ")}], all_varchar = true, header = true, union_by_name = true)
+      WHERE prexc_fpap_id NOT LIKE '%\\_%' ESCAPE '\\'
+      GROUP BY ALL HAVING SUM(CAST(ROUND(TRY_CAST(amt AS DOUBLE) * 1000) AS BIGINT)) > 0`);
+    const where = (p: HistoryPartDef) => p.foreign
+      ? "dept = '18' AND code LIKE '3%' AND substr(code, 7, 1) = '3'"
+      : `dept = '${p.codes!.dept}' AND (${p.codes!.prefixes.map((x) => `code LIKE '${x}%'`).join(" OR ")})`;
+    const off: string[] = [];
+    let cells = 0;
+    for (const { s, p } of defs) {
+      if (!p.codes && !p.foreign) continue;
+      const got = new Map((await c.runAndReadAll(`SELECT fy, SUM(php), COUNT(*) FROM hy_gaa WHERE ${where(p)} GROUP BY fy`)).getRows().map((r) => [Number(r[0]), { php: Number(r[1]), n: Number(r[2]) }] as const));
+      const J = part(s.key, p.key);
+      for (const col of HISTORY_COLUMNS.filter((x) => x.stage === "gaa")) {
+        const i = ix(col.key), g = got.get(col.fy) ?? null;
+        cells++;
+        if ((g?.php ?? null) !== J.php[i]) off.push(`${s.key}:${p.key} ${col.key} ${fmtCell(g?.php ?? null)} vs ${fmtCell(J.php[i])}`);
+        if (s.counted && (g?.n ?? null) !== J.projects[i]) off.push(`${s.key}:${p.key} ${col.key} ${g?.n ?? null} vs ${J.projects[i]} projects`);
+      }
+    }
+    check(`every enacted-budget cell equals the row-level GAA extracts (${cells} cells, amounts and project counts)`, off.length === 0, off.slice(0, 4).join("; "));
+  }
+
+  // 2. FY2026 NEP, House and Senate: the tracker's sheets, parsed again.
+  const sheets = new Map<string, string[][]>();
+  for (const [k, f] of Object.entries(PBC_FILES)) if (existsSync(resolve(PBC, f))) sheets.set(k, parseCsv(readFileSync(resolve(PBC, f), "utf8").replace(/^\uFEFF/, "")));
+  if (sheets.size !== Object.keys(PBC_FILES).length) {
+    check("People's Budget Coalition sheets present (--pbc)", false, PBC);
+  } else {
+    const off: string[] = [];
+    const amount = (s: string | undefined) => { const t = (s ?? "").trim(); return t === "" ? null : Number(t.replace(/[,+]/g, "")); };
+    for (const { s, p } of defs) {
+      if (!p.pbc) continue;
+      const table = sheets.get(p.pbc.sheet)!, head = table[0].map((h) => h.trim());
+      const rows = table.slice(1).filter((r) => p.pbc!.rows.test((r[0] ?? "").trim()));
+      const sum = (col: string) => { const vs = rows.map((r) => amount(r[head.indexOf(col)])).filter((v): v is number => v != null); return vs.length ? vs.reduce((a, b) => a + b, 0) : null; };
+      const J = part(s.key, p.key);
+      for (const [col, key] of [[PBC_COLUMNS.nep, "nep-2026"], [PBC_COLUMNS.house, "house-2026"], [PBC_COLUMNS.senate, "senate-2026"]] as const) {
+        if (sum(col) !== J.php[ix(key)]) off.push(`${s.key}:${p.key} ${key} ${fmtCell(sum(col))} vs ${fmtCell(J.php[ix(key)])}`);
+      }
+      if (!same(sum(PBC_COLUMNS.gaa2025), J.php[ix("gaa-2025")])) off.push(`${s.key}:${p.key} tracker GAA2025 ${fmtCell(sum(PBC_COLUMNS.gaa2025))} vs FY2025 ${fmtCell(J.php[ix("gaa-2025")])}`);
+    }
+    for (const s of H.series.filter((x) => !HISTORY_SERIES.find((d) => d.key === x.key)!.parts.some((p) => p.pbc))) {
+      for (const key of ["nep-2026", "house-2026", "senate-2026"]) if (s.php[ix(key)] != null) off.push(`${s.key} ${key}: a figure with no tracker row`);
+    }
+    check("FY2026 NEP, House and Senate cells equal the tracker's rows; its GAA2025 column equals our FY2025", off.length === 0, off.slice(0, 4).join("; "));
+  }
+
+  // 3. FY2027 NEP (DBM extract) and House bill (DPWH lines, third reading).
+  const nepFiles = ["18", "07", "13"].map((d) => resolve(DATA, "2027", d, "line_items.parquet"));
+  const parquet = resolve(OUT, "dpwh", "projects.parquet");
+  if (nepFiles.every((x) => existsSync(x)) && existsSync(parquet)) {
+    const off: string[] = [];
+    for (const { s, p } of defs) {
+      const J = part(s.key, p.key);
+      if (p.codes || p.foreign) {
+        const w = p.foreign ? "department_id = '18' AND fpap_code LIKE '3%' AND substr(fpap_code, 7, 1) = '3'"
+          : `department_id = '${p.codes!.dept}' AND (${p.codes!.prefixes.map((x) => `fpap_code LIKE '${x}%'`).join(" OR ")})`;
+        const v = (await c.runAndReadAll(`SELECT SUM(amount) FROM read_parquet([${nepFiles.map((x) => `'${x}'`).join(", ")}], union_by_name = true) WHERE fy = 2027 AND ${w}`)).getRows()[0][0];
+        const nep = v == null ? null : Number(v);
+        if (nep !== J.php[ix("nep-2027")]) off.push(`${s.key}:${p.key} NEP ${fmtCell(nep)} vs ${fmtCell(J.php[ix("nep-2027")])}`);
+      }
+      if (s.department === "DPWH") {
+        const rows = (await c.runAndReadAll(`SELECT program, pap, hgab3_php, CASE WHEN hgab3_php IS NOT NULL THEN coalesce(json_array_length(record_json->'$.third.records'), 1) ELSE 0 END FROM read_parquet('${parquet}')`)).getRows()
+          .filter((r) => p.house && (!p.house.program || p.house.program.test(String(r[0] ?? ""))) && (!p.house.pap || p.house.pap.test(String(r[1] ?? ""))) && r[2] != null);
+        const house = rows.length ? rows.reduce((a, r) => a + Number(r[2]), 0) : null;
+        const lines = rows.length ? rows.reduce((a, r) => a + Number(r[3]), 0) : null;
+        if (house !== J.php[ix("house-2027")] || lines !== J.projects[ix("house-2027")]) off.push(`${s.key}:${p.key} House ${fmtCell(house)}/${lines} vs ${fmtCell(J.php[ix("house-2027")])}/${J.projects[ix("house-2027")]}`);
+      }
+    }
+    check("FY2027 NEP cells equal the DBM extract; DPWH House-bill cells and line counts equal the parquet", off.length === 0, off.slice(0, 4).join("; "));
+  } else {
+    check("FY2027 NEP extracts and dpwh/projects.parquet present", false);
+  }
+
+  // 4. What the House bill publishes: Volume I-A program lines, the Volume I-C BIP subtotal, the Volume I-B provision.
+  const text = (pdf: string) => (existsSync(pdf) ? execFileSync("pdftotext", ["-layout", pdf, "-"], { maxBuffer: 512 * 1024 * 1024 }).toString("utf8") : null);
+  if (!CHECK_PDF) {
+    process.stdout.write("  · published-volume checks skipped (--no-pdf)\n");
+  } else {
+    const ia = text(resolve(OUT, "pdf", "hb10858-3r-vol-ia.pdf"));
+    check("Volume I-A present (pdf/hb10858-3r-vol-ia.pdf)", ia != null);
+    if (ia) {
+      const off: string[] = [];
+      for (const { s, p } of defs.filter((x) => x.p.printed)) {
+        const hits = ia.split("\n").filter((l) => p.printed!.test(l));
+        const total = hits.length === 1 ? Number(p.printed!.exec(hits[0])![3].replace(/,/g, "")) : null;
+        if (total == null || total !== part(s.key, p.key).php[ix("house-2027")]) off.push(`${s.key}: ${hits.length} lines, ${fmtCell(total)} vs ${fmtCell(part(s.key, p.key).php[ix("house-2027")])}`);
+      }
+      check("DepEd and DOH House-bill cells equal their program lines in Volume I-A", off.length === 0, off.join("; "));
+    }
+    const ic = text(resolve(OUT, "pdf", "hb10858-3r-vol-ic.pdf"));
+    if (ic) {
+      const m = [...ic.matchAll(/^\s*\d*\s*Basic Infrastructure Program \(BIP\)\s+([\d,]+)\s*\d*\s*$/gm)];
+      const bip = H.series.find((s) => s.key === "bip")!.php[ix("house-2027")];
+      check("BIP's House-bill total equals the subtotal Volume I-C publishes", m.length === 1 && Number(m[0][1].replace(/,/g, "")) === bip, `${m.length} lines; ${m[0]?.[1] ?? "—"} vs ${fmtCell(bip)}`);
+    }
+    const ib = text(resolve(OUT, "pdf", "hb10858-3r-vol-ib.pdf"));
+    if (ib) {
+      const norm = (x: string) => x.replace(/\s+\d+\s*$/gm, "").replace(/^\s*\d+\s+/gm, "").replace(/\s+/g, " ").trim();
+      const flat = norm(ib);
+      const q = HISTORY_DEFINITIONS.find((d) => d.key === "bip")!.quote!;
+      check("BIP's definition is word for word the special provision published in Volume I-B", flat.includes(norm(q.text)));
+    }
+  }
+
+  // 4b. The 2027 project lists the cards open: the same exact filters the Projects view applies, re-queried here.
+  {
+    const off: string[] = [];
+    for (const def of HISTORY_SERIES) {
+      const J = H.series.find((x) => x.key === def.key)!;
+      if (!def.list2027) { if (J.list2027) off.push(`${def.key}: a list the contract does not define`); continue; }
+      const L = J.list2027;
+      if (!L || L.dataset !== def.list2027.dataset || JSON.stringify(L.params) !== JSON.stringify(def.list2027.params)) { off.push(`${def.key}: list missing or filters differ`); continue; }
+      if (Object.keys(L.params).some((k) => !["program", "pap", "zone"].includes(k))) off.push(`${def.key}: a filter the Projects view does not read`);
+      const pq = resolve(OUT, L.dataset, "projects.parquet");
+      const cond = Object.entries(L.params).map(([k, v]) => `${k} = '${v.replace(/'/g, "''")}'`);
+      const r = (await c.runAndReadAll(`SELECT SUM(nep_php), SUM(hgab3_php), COUNT(nep_php), COUNT(hgab3_php) FROM read_parquet('${pq}')${cond.length ? ` WHERE ${cond.join(" AND ")}` : ""}`)).getRows()[0].map((v) => Number(v ?? 0));
+      if (r[0] !== L.nep_php || r[1] !== L.house_php || r[2] !== L.nep_rows || r[3] !== L.house_rows) off.push(`${def.key}: list ${peso(r[0])}/${peso(r[1])} ${r[2]}/${r[3]} rows vs ${peso(L.nep_php)}/${peso(L.house_php)} ${L.nep_rows}/${L.house_rows}`);
+      const nepCell = J.php[ix("nep-2027")] ?? 0, houseCell = J.php[ix("house-2027")] ?? 0;
+      if (L.nep_php + L.unlisted_php + L.nep_list_gap_php !== nepCell || L.house_php + L.unlisted_php !== houseCell) off.push(`${def.key}: list + unlisted ≠ the line's 2027 cells`);
+      if (J.department === "DPWH" && (L.unlisted_php !== 0 || L.nep_list_gap_php !== 0)) off.push(`${def.key}: a DPWH list must be the whole line`);
+    }
+    check("every card's 2027 project list re-queries to its figures (DOH: plus operating costs and the documented NEP list gap)", off.length === 0, off.slice(0, 4).join("; "));
+  }
+
+  // 4c. DepEd's and DOH's "every enacted budget" links search the GAA explorer by name: the name must still be the
+  // published description of the series' program code in every year it has an amount (a rename would break the link).
+  {
+    const off: string[] = [];
+    for (const def of HISTORY_SERIES.filter((d) => d.gaaHistory)) {
+      const h = def.gaaHistory!, codes = def.parts.flatMap((p) => p.codes?.prefixes ?? []);
+      const dir = resolve(GAA, "..", h.dept, "fpaps");
+      if (!existsSync(dir)) { off.push(`${def.key}: ${dir} missing`); continue; }
+      const rows = (await c.runAndReadAll(`SELECT DISTINCT year, description FROM read_parquet('${dir}/*/*.parquet', hive_partitioning = true) WHERE code IN (${codes.map((x) => `'${x}'`).join(", ")}) AND amount > 0`)).getRows();
+      const misses = rows.filter((r) => !String(r[1] ?? "").toLowerCase().includes(h.q.toLowerCase()));
+      if (!rows.length || misses.length) off.push(`${def.key}: "${h.q}" not in ${misses.map((r) => `FY${r[0]} "${r[1]}"`).join(", ") || "any year"}`);
+    }
+    check("DepEd's and DOH's enacted-budget links search by a name every year publishes", off.length === 0, off.join("; "));
+  }
+
+  // 5. The CSV, parsed on its own.
+  const rows = parseCsv(readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "")).filter((r) => r.length > 1);
+  const expected: string[][] = [];
+  for (const s of H.series) {
+    const outs = [...s.parts.map((p) => ({ label: p.label, php: p.php, projects: p.projects })), ...(s.parts.length > 1 ? [{ label: "Total", php: s.php, projects: s.projects }] : [])];
+    for (const o of outs) HISTORY_COLUMNS.forEach((col, i) => expected.push([s.label, o.label, s.department, String(col.fy), col.stage, col.label, o.php[i] == null ? "" : String(o.php[i]), o.projects[i] == null ? "" : String(o.projects[i]), col.source]));
+  }
+  check("history.csv: the header, then one row per part and column, amounts exact", JSON.stringify(rows[0]) === JSON.stringify([...HISTORY_CSV_COLUMNS])
+    && rows.length - 1 === expected.length && expected.every((e, i) => JSON.stringify(e) === JSON.stringify(rows[i + 1])), `${rows.length - 1} rows vs ${expected.length}`);
+
+  // 6. Reader copy: plain words, sentences of at most 20 words.
+  const copy = [...HISTORY_SERIES.map((s) => s.plain), ...HISTORY_DEFINITIONS.flatMap((d) => d.plain)];
+  const hits = copy.flatMap((t) => readerCopyHits(t).map((h) => `${h} in "${t.slice(0, 40)}…"`));
+  const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((x) => x.split(/\s+/).length > 20);
+  check("history reader copy: no technical words, no sentence over 20 words", hits.length === 0 && long.length === 0, [...hits, ...long].slice(0, 3).join("; "));
 }

@@ -22,6 +22,7 @@ import { BOARDS, LEADERBOARD_ROOT } from "../lib/hgab-leaderboard";
 import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
 import { LETTER_ROOT } from "../lib/hgab-letter";
 import { districtIdFromSlug } from "../lib/hgab-og";
+import { HISTORY_ROOT } from "../lib/hgab-history";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -188,6 +189,8 @@ const STATIC_SITEMAP_PATHS = [
   CHANGES_LIST_ROOT,
   // Write to your representative: the picker; the 254 letters are linked from it.
   LETTER_ROOT,
+  // Budget history, FY2020 to the 2027 House bill.
+  HISTORY_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

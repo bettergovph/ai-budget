@@ -87,6 +87,7 @@ builder emit for readers:
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
 | `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
 | `npm run build:hgab-og` | `scripts/build-hgab-og.ts` | Draws the 1200 × 630 link-preview cards under `og/` for the section pages, every district and every letter (see "Link-preview cards"). Flags: `--out`, `--only=pages,districts,letters`, `--slugs=<slug,…>` |
+| `npm run build:hgab-history` | `scripts/build-hgab-history.ts` | Writes `history.json` and `history.csv`: multi-purpose buildings, flood control, BIP, SIPAG and four other lines from the FY2020 GAA to the FY2027 House bill (see "Budget history"). Flags: `--out`, `--data=data`, `--pbc=<dir>` (or `PBC_2026_DIR`), `--vol-ia=<pdf>` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
@@ -108,6 +109,8 @@ data/hgab/2027/
   <dataset>/summary.json     HgabDatasetSummary: controls, dims, top (25 per bridge group), readings (DPWH)
   <dataset>/projects.parquet one row per comparison record, PROJECT_COLUMNS in order, ZSTD
   pdf/<doc_key>.pdf          the eight source documents the evidence links open
+  pdf/hb10858-3r-vol-ia.pdf  House bill Volume I-A (third reading): DepEd and DOH program lines for the budget history
+  history.json, history.csv  the budget history (npm run build:hgab-history)
 ```
 
 `data/` is a symlink to the main checkout's data dir, so the dev server
@@ -832,7 +835,11 @@ JavaScript); `npm run upload:hgab` publishes it and the Worker serves it at that
 production). Updating it is regenerate + upload, never a redeploy. `verify:hgab` checks it
 has one item per list row, numbered continuously, each linking to its row's record page,
 built from the current list, with the counts line and the disclaimer. The campaign poster
-is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`).
+is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`). The multi-purpose buildings poster
+is `npm run build:hgab-poster-mpb` (`campaign/multi-purpose-*`: 24×36 PDF and PNG, 1080×1350, 1080×1920,
+1200×630 (the page's link preview), Facebook cover). Its figures come from `history.json`. The wall behind them
+lists every multi-purpose building project in the House bill, the same filter the page's card opens. The builder stops
+unless the wall adds up to the House-bill figure and every headline line fits.
 
 ## Letters to representatives
 
@@ -906,3 +913,54 @@ Social sites cache a preview per URL for days; after a change, re-scrape a page 
 Facebook's Sharing Debugger to refresh it. `verify:hgab` checks one card per page,
 district and letter, all 1200 × 630, drawn after their data, none stray, and that every
 route resolves to an existing card.
+
+## Budget history
+
+`npm run build:hgab-history` writes `data/hgab/2027/history.json` (`HistoryData`, contract
+`src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Multi-purpose buildings" in the DPWH menu). R2 key
+`hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
+Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (13 checks; a missing file fails).
+
+| Column | Source |
+| --- | --- |
+| FY2020–FY2026 GAA | `data/<dept>/fpaps` (PAP level, thousands of pesos × 1,000), departments 18, 07, 13; the verifier recomputes every cell from `data/<dept>/full_extract.csv` |
+| FY2026 NEP, House bill, Senate bill | the People's Budget Coalition FY2026 tracker (`[PBC] 2026 Budget Data Analysis - DPWH/Educ/Health.csv`, columns `NEP2026`, `HGAB2026`, `SGAB2026`); default folder `~/projects/2026-budget/public/citizens-report` |
+| FY2027 NEP | `data/2027/<dept>/line_items.parquet`, `fy = 2027` |
+| FY2027 House bill | DPWH: `dpwh/projects.parquet` (`hgab3_php`, third reading); DepEd and DOH: their program lines in Volume I-A as published (`pdftotext`) |
+
+- **The lines.** Multi-purpose buildings = BIP 300226 + SIPAG 300220 + the Local Program's
+  multipurpose/facilities 300103–300104 (the National Building Program, 300105, is left out: most of its
+  titles are government offices). Flood control = the Flood Management Program 3201 + BIP 300225/300237 +
+  SIPAG 300219/300234 + Local Program 300106–300109 (drainage along national roads, 310110–310112, is left
+  out). BIP and SIPAG = every line of each, by what it builds (multi-purpose buildings, roads and bridges,
+  flood mitigation, other). Local Program roads and bridges = 300111–300119. Foreign-assisted = every DPWH
+  Operations line whose seventh code digit is 3. DepEd school facilities = Basic Education Facilities
+  (310200100006000); DOH health facilities = HFEP (310201100002000, then 350202100002000 from FY2025), whole
+  program lines in every stage.
+- **Cells.** Integer pesos; null = no line with an amount in that budget, or a stage the sources do not cover
+  (foreign-assisted FY2026 NEP/House/Senate); 0 = a line the tracker lists with no amount. Project lines are
+  the PAP codes with an amount (enacted budgets) or the lines the House-bill comparison lists (2027); the FY2026
+  stages carry none, and DepEd and DOH are one line each, so they are not counted. `foreign_php` is the
+  foreign-assisted part of each cell.
+- **Reconciliations (the build fails otherwise).** The tracker's GAA2025 column equals our FY2025 GAA for all
+  15 parts it carries; its BIP and SIPAG subtotals equal their rows and every row maps to one part; the
+  House-bill data's NEP side equals the DBM NEP extract for every DPWH part (incl. foreign-assisted); every
+  FY2027 BIP line maps to one part; the Volume I-A lines occur once and MOOE + capital outlays = total. The
+  verifier adds: BIP's House total equals the subtotal Volume I-C publishes (₱221,070,362,000), and the BIP
+  definition is word for word DPWH Special Provision No. 3 in Volume I-B (page 10).
+- **2027 project lists.** Four cards open a hub's Projects view with exact filters (`list2027` in the contract):
+  multi-purpose buildings → `dpwh` `pap=BIP - Multi-Purpose Buildings/ Facilities to support Social Services`; flood
+  control → `dpwh` `program=Flood Management Program`; foreign-assisted → `dpwh` `zone=fap`; DOH health facilities →
+  `hfep`. The builder fails unless each list adds up to the card's FY2027 NEP and House cells; DOH's list leaves out
+  the ₱67,173,000 operating costs (Volume I-A, both stages) and, on the NEP side, the ₱140,000 the published list's
+  lines fall short of its own total (the section's documented reconciliation). Earlier years have no list: the GAA
+  gives DepEd's and DOH's lines as one amount each.
+- **DepEd and DOH links.** Their cards also open the line in every enacted budget on the GAA explorer
+  (`gaaHistory` in the contract: `/d/07/programs?q=Basic Education Facilities`,
+  `/d/13/programs?q=Health Facilities Enhancement`). DepEd's card links its line as published in Volume I-A.
+  The verifier checks that each search name occurs in the published description every year the code has an amount.
+  FY2020–2024 print HFEP's name with a double space, so its search leaves out "Program".
+- **Known gap.** The FY2024 GAA data has no foreign-assisted DPWH lines with an amount (e.g. the Pasig–Marikina
+  River Channel Improvement Project, Phase IV, is ₱0 there and ₱2.56 billion in FY2025); the page says so
+  rather than showing zero.
+
