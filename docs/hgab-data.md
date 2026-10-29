@@ -841,6 +841,11 @@ has a grey extension for DepEd's other lines for school facilities (`extras`), l
 also list them and their total under it. The wall behind them
 lists every multi-purpose building project in the House bill, the same filter the page's card opens. The builder stops
 unless the wall adds up to the House-bill figure and every headline line, including the grey bar's label, fits.
+The data host caches images, PDFs and the ZIP for a day, and the tokens we have cannot purge that cache. A rebuilt poster keeps
+its file name, so bump `?v=` on its link-preview URL in `src/lib/seo.ts`. The campaign gallery, `campaign/index.html`
+(<https://budget-assets.bettergov.ph/hgab/2027/campaign/index.html>), lists every poster with a download-all ZIP,
+`campaign/bettergov-campaign-posters.zip`. Both live only in the data tree; no script builds them. After a rebuild, update the
+gallery's cards and the ZIP, and link each changed file with `?v=<first 8 hex of its md5>`. `upload:hgab` publishes both.
 
 ## Letters to representatives
 

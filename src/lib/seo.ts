@@ -311,11 +311,12 @@ export function pageMeta(pathname: string): PageMeta {
         "DPWH multi-purpose buildings, flood control, the Basic Infrastructure Program (BIP), SIPAG, foreign-assisted projects, " +
         "DepEd school facilities and DOH health facilities in every enacted budget from FY 2020, the FY 2026 NEP, House and Senate " +
         "bills, and the FY 2027 NEP and House bill. Amounts and project counts, with definitions of BIP and SIPAG.",
-      // The campaign poster's link-preview size (npm run build:hgab-poster-mpb, published with upload:hgab).
-      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/multi-purpose-1200x630.png",
+      // The campaign poster's link-preview size (npm run build:hgab-poster-mpb, published with upload:hgab). Bump ?v= when
+      // the poster is rebuilt: the data host caches images for a day and link previews keep them longer.
+      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/multi-purpose-1200x630.png?v=2",
       imageWidth: "1200",
       imageHeight: "630",
-      imageAlt: "₱83.7 billion for multi-purpose buildings, ₱27.5 billion for school facilities, ₱10.1 billion for health facilities in the 2027 House budget bill, with bars to scale, over the list of the projects.",
+      imageAlt: "₱83.7 billion for multi-purpose buildings, ₱27.5 billion for school facilities plus ₱4.3 billion in DepEd's other lines, ₱10.1 billion for health facilities in the 2027 House budget bill, with bars to scale, over the list of the projects.",
     };
   }
   // Leaderboards: before the dataset pattern, which would read "leaderboard"
