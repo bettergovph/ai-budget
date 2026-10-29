@@ -891,7 +891,7 @@ against a fresh composition, and the plain disclaimers with their link.
 `npm run build:hgab-history` writes `data/hgab/2027/history.json` (`HistoryData`, contract
 `src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Multi-purpose buildings" in the DPWH menu). R2 key
 `hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
-Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (16 checks; a missing file fails).
+Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 checks; a missing file fails).
 
 | Column | Source |
 | --- | --- |
@@ -944,6 +944,15 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (16 
   them beside the line, never added into the chart. The verifier re-reads each within DepEd's pages (bounded by the
   odd pages' running head) and requires exactly one line, expense classes adding up, and the amount and page
   `history.json` has.
+- **DOH has no such lines.** HFEP is the only DOH line whose provision says it pays for health facilities. DOH's
+  capital outlays in the House bill, ₱14,365,058,000 as Volume I-A prints them, are HFEP ₱10,021,659,000 + the
+  World Bank Health System Resilience Project (loan 9781-PH, p.1080) ₱3,698,000,000 + communicable-disease
+  commodities ₱540,399,000 + Quick Response Fund ₱50,000,000 + Health Promotion ₱50,000,000 + non-communicable
+  diseases ₱5,000,000; hospital operations carry none. The Quick Response Fund (₱100,000,000; ₱500,000,000 in the
+  NEP; provision No. 4, p.1039) also pays for emergency supplies, staff and operations. The World Bank project
+  (₱6,727,110,000; ₱7,727,110,000 in the NEP, which itemises ₱2.9 billion for buildings and ₱1.3 billion for
+  equipment) has no provision in Volumes I-A, I-B or I-C. So the DOH card adds a note instead of figures, and the
+  poster keeps HFEP alone. The verifier checks the note's two document claims.
 - **Known gap.** The FY2024 GAA data has no foreign-assisted DPWH lines with an amount (e.g. the Pasig–Marikina
   River Channel Improvement Project, Phase IV, is ₱0 there and ₱2.56 billion in FY2025); the page says so
   rather than showing zero.

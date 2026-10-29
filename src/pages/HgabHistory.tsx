@@ -88,6 +88,8 @@ const OVERLAP_NOTE: Partial<Record<HistorySeriesKey, string>> = {
 };
 const EXTRA_NOTE: Partial<Record<HistorySeriesKey, string>> = {
   fap: 'FY2024: the GAA data lists no foreign-assisted DPWH lines. FY2026 NEP, House and Senate figures were not compiled.',
+  // verify:hgab checks the two document claims against Volume I-A; docs/hgab-data.md records the first.
+  hfep: 'DOH has no other line that pays only for health facilities. Its Quick Response Fund also pays for emergency supplies and staff. The bill does not say what its World Bank health project pays for.',
 };
 
 /** "₱3.0B" for the compact lists. */

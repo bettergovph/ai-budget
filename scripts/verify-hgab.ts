@@ -69,6 +69,7 @@
  *     as published, Volume I-A (DepEd, DOH) and the Volume I-C BIP subtotal; the BIP definition word for word
  *     against Volume I-B; DepEd's other lines for school facilities printed once in its pages of Volume I-A
  *     (NEP from the DBM extract); each program line and special provision on the page the card links to;
+ *     the DOH card's note (its Quick Response Fund's provision, the World Bank project's missing provision);
  *     series = sum of parts; the CSV row for row; reader copy plain and short.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
@@ -2442,6 +2443,16 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
         }
       }
       check(`DepEd's other lines for school facilities (${DEPED_EXTRA_LINES.length}): each printed once in DepEd's pages of Volume I-A, amount and page as history.json has them`, exOff.length === 0, exOff.join("; "));
+
+      // The DOH card's note: its Quick Response Fund's provision also names emergency supplies and staff, and the
+      // World Bank health project (loan 9781-PH) is printed once, as its program line, with no provision.
+      const r = span("13");
+      const flat = r ? pages.slice(r[0] - 1, r[1]).join("\n").split("\n").map((l) => l.replace(/^\s*\d+\s+/, "").replace(/\s+\d+\s*$/, "")).join(" ").replace(/\s+/g, " ") : "";
+      const qrf = /\d+\. Quick Response Fund\. The amount (.{0,1200})/.exec(flat)?.[1] ?? "";
+      const named = ["repair of health facilities", "emergency health commodities/supplies", "emergency engagement of health personnel"].every((w) => qrf.includes(w));
+      const wb = (ia.match(/Health System Resilience Project/g) ?? []).length;
+      check("DOH's note: its Quick Response Fund's provision also names emergency supplies and staff; the World Bank health project has no provision in Volume I-A",
+        r != null && named && wb === 1, `${r ? "" : "no DOH pages; "}${named ? "" : "the Quick Response Fund provision changed; "}${wb} mentions of the World Bank project`);
     }
     const ic = text(resolve(OUT, "pdf", "hb10858-3r-vol-ic.pdf"));
     if (ic) {
