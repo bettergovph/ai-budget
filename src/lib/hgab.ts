@@ -28,6 +28,7 @@
 import { dataUrl } from './data-url';
 import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
+import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -725,6 +726,11 @@ export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
 }
 
 /** The leaderboards file (`npm run build:hgab-leaderboard`); the boards themselves live in `lib/hgab-leaderboard.ts`. */
+/** Budget history, FY2020 GAA to the 2027 House bill (`npm run build:hgab-history`). */
+export function loadHgabHistory(): Promise<HistoryData> {
+  return cached('history', () => getJson<HistoryData>(dataUrl(HISTORY_DATA_PATH), 'Failed to load the budget history'));
+}
+
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {
   return cached('leaderboard', () =>
     getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
