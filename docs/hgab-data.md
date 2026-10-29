@@ -836,9 +836,11 @@ has one item per list row, numbered continuously, each linking to its row's reco
 built from the current list, with the counts line and the disclaimer. The campaign poster
 is `npm run build:hgab-poster` (outputs in `data/hgab/2027/campaign/`). The multi-purpose buildings poster
 is `npm run build:hgab-poster-mpb` (`campaign/multi-purpose-*`: 24×36 PDF and PNG, 1080×1350, 1080×1920,
-1200×630 (the page's link preview), Facebook cover). Its figures come from `history.json`. The wall behind them
+1200×630 (the page's link preview), Facebook cover). Its figures come from `history.json`. The school-facilities bar
+has a grey extension for DepEd's other lines for school facilities (`extras`), labelled beside it; the tall formats
+also list them and their total under it. The wall behind them
 lists every multi-purpose building project in the House bill, the same filter the page's card opens. The builder stops
-unless the wall adds up to the House-bill figure and every headline line fits.
+unless the wall adds up to the House-bill figure and every headline line, including the grey bar's label, fits.
 
 ## Letters to representatives
 
@@ -889,7 +891,7 @@ against a fresh composition, and the plain disclaimers with their link.
 `npm run build:hgab-history` writes `data/hgab/2027/history.json` (`HistoryData`, contract
 `src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Multi-purpose buildings" in the DPWH menu). R2 key
 `hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
-Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (13 checks; a missing file fails).
+Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (16 checks; a missing file fails).
 
 | Column | Source |
 | --- | --- |
@@ -927,9 +929,21 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (13 
   gives DepEd's and DOH's lines as one amount each.
 - **DepEd and DOH links.** Their cards also open the line in every enacted budget on the GAA explorer
   (`gaaHistory` in the contract: `/d/07/programs?q=Basic Education Facilities`,
-  `/d/13/programs?q=Health Facilities Enhancement`). DepEd's card links its line as published in Volume I-A.
-  The verifier checks that each search name occurs in the published description every year the code has an amount.
+  `/d/13/programs?q=Health Facilities Enhancement`). Both cards link the line's special provision in Volume I-A,
+  which says what it pays for (`printed[].provision_page`: Basic Education Facilities p.271, HFEP p.1039; the program
+  lines themselves are on pp.312 and 1067). The verifier checks that each search name occurs in the published
+  description every year the code has an amount, and that each linked page carries its program line or provision.
   FY2020–2024 print HFEP's name with a double space, so its search leaves out "Program".
+- **DepEd's other lines for school facilities (2027 only).** Basic Education Facilities is one line held by DepEd's
+  Central Office, which Volume I-A prints under NCR. DepEd has three other lines for school facilities, kept apart
+  from the series as `extras` (`DEPED_EXTRA_LINES` in the contract): Quick Response Fund 310200100010000 (repairs
+  after disasters, p.312), Infrastructure for Safer and Resilient Schools, World Bank loan 9704-PH, 310200300001000
+  (p.457), and Improvement and Acquisition of School Sites 310200100001000 (p.311). The NEP side comes from the DBM
+  extract by exact code, the House side from Volume I-A (the Quick Response Fund name recurs in other departments,
+  so the builder takes the first one within 20 lines after Basic Education Facilities). The card and the poster show
+  them beside the line, never added into the chart. The verifier re-reads each within DepEd's pages (bounded by the
+  odd pages' running head) and requires exactly one line, expense classes adding up, and the amount and page
+  `history.json` has.
 - **Known gap.** The FY2024 GAA data has no foreign-assisted DPWH lines with an amount (e.g. the Pasig–Marikina
   River Channel Improvement Project, Phase IV, is ₱0 there and ₱2.56 billion in FY2025); the page says so
   rather than showing zero.

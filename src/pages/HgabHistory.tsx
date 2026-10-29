@@ -90,8 +90,47 @@ const EXTRA_NOTE: Partial<Record<HistorySeriesKey, string>> = {
   fap: 'FY2024: the GAA data lists no foreign-assisted DPWH lines. FY2026 NEP, House and Senate figures were not compiled.',
 };
 
-/** The card's way into its 2027 projects, or why there is none. */
-/** The card's way into its projects, its other budgets, or the line as published. */
+/** "₱3.0B" for the compact lists. */
+const bShort = (v: number | null | undefined) => (v == null ? '—' : `₱${(v / 1e9).toFixed(1)}B`);
+
+/**
+ * DepEd: what the one line is, and its other school-facility lines in the 2027 House bill (from Volume I-A;
+ * the NEP figure only where the House changed it), with the total of all four.
+ */
+function DepedLines({ s, printed, extras }: { s: HistorySeries; printed?: HistoryData['printed'][number]; extras: HistoryData['extras'] }) {
+  const mine = extras.filter((x) => x.series === s.key);
+  if (!printed && !mine.length) return null;
+  const house = (printed?.total_php ?? 0) + mine.reduce((a, x) => a + (x.house_php ?? 0), 0);
+  const nep = (s.php[I.nep2027] ?? 0) + mine.reduce((a, x) => a + (x.nep_php ?? 0), 0);
+  return (
+    <div className="hgab-hy-extra">
+      {printed && (
+        <p>
+          One line, held by DepEd’s Central Office: {billions(printed.co_php)} in capital spending, {billions(printed.mooe_php)} in
+          operating costs. The bill lists it under NCR because the Central Office is there. It does not say which schools get it.
+        </p>
+      )}
+      {mine.length > 0 && (
+        <>
+          <p>
+            DepEd’s other lines for school facilities:{' '}
+            {mine.map((x, i) => (
+              <span key={x.key}>
+                {i > 0 && ' · '}
+                {x.plain} <strong>{bShort(x.house_php)}</strong>
+                {x.nep_php != null && x.house_php != null && x.nep_php !== x.house_php && <> ({bShort(x.nep_php)} in the NEP)</>}
+              </span>
+            ))}
+            .
+          </p>
+          <p>All four lines: <strong>{billions(house)}</strong>, {house < nep ? 'down' : 'up'} from {billions(nep)} in the NEP.</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The card's way into its projects, its other budgets, and what the bill says the line pays for. */
 function ListLink({ s, printed }: { s: HistorySeries; printed?: HistoryData['printed'][number] }) {
   const l = s.list2027;
   const def = HISTORY_SERIES.find((d) => d.key === s.key);
@@ -113,19 +152,21 @@ function ListLink({ s, printed }: { s: HistorySeries; printed?: HistoryData['pri
       ) : (
         <span className="is-none">No project list: the budget gives this line as one amount. </span>
       )}
-      {history && <span className="hgab-hy-list-more">{history}</span>}
-      {!l && printed && (
+      {printed?.provision_page != null && (
         <span className="hgab-hy-list-more">
-          <a href={`${dataUrl(HISTORY_VOL_IA_PATH)}#page=${printed.page}`} target="_blank" rel="noopener noreferrer">
-            See the 2027 House bill line as published →
+          <a href={`${dataUrl(HISTORY_VOL_IA_PATH)}#page=${printed.provision_page}`} target="_blank" rel="noopener noreferrer">
+            See what the House bill says it pays for →
           </a>
         </span>
       )}
+      {history && <span className="hgab-hy-list-more">{history}</span>}
     </p>
   );
 }
 
-function ProgramCard({ s, mode, max, printed }: { s: HistorySeries; mode: HistoryMode; max: number; printed?: HistoryData['printed'][number] }) {
+function ProgramCard({ s, mode, max, printed, extras }: {
+  s: HistorySeries; mode: HistoryMode; max: number; printed?: HistoryData['printed'][number]; extras: HistoryData['extras'];
+}) {
   const id = `hgab-hy-${s.key}`;
   const uncounted = mode === 'projects' && s.department !== 'DPWH';
   const gaaHistory = HISTORY_SERIES.find((d) => d.key === s.key)?.gaaHistory;
@@ -149,6 +190,7 @@ function ProgramCard({ s, mode, max, printed }: { s: HistorySeries; mode: Histor
       {(OVERLAP_NOTE[s.key] || EXTRA_NOTE[s.key]) && (
         <p className="hgab-hy-note">{[OVERLAP_NOTE[s.key], EXTRA_NOTE[s.key]].filter(Boolean).join(' ')}</p>
       )}
+      {s.key === 'deped' && <DepedLines s={s} printed={printed} extras={extras} />}
       <ListLink s={s} printed={printed} />
     </article>
   );
@@ -236,7 +278,9 @@ export default function HgabHistory() {
   const v = (s: HistorySeries, i: number) => s.php[i] ?? 0;
   const floodAllForeign26 = flood.php[I.gaa2026] != null && flood.foreign_php[I.gaa2026] === flood.php[I.gaa2026];
   const bipMpbShare = (i: number) => (bip.php[i] ? Math.round((v(mpb, i) / bip.php[i]!) * 100) : null);
-  const card = (k: HistorySeriesKey) => <ProgramCard key={k} s={S(k)} mode={mode} max={max} printed={data.printed.find((p) => p.series === k)} />;
+  const card = (k: HistorySeriesKey) => (
+    <ProgramCard key={k} s={S(k)} mode={mode} max={max} printed={data.printed.find((p) => p.series === k)} extras={data.extras ?? []} />
+  );
   const change = (s: HistorySeries) => v(s, I.house2027) - v(s, I.nep2027);
   const moreLess = (d: number) => (d === 0 ? 'the same amount' : `${billions(Math.abs(d))} ${d > 0 ? 'more' : 'less'}`);
   const sipagGone27 = S('sipag').php[I.nep2027] == null && S('sipag').php[I.house2027] == null;

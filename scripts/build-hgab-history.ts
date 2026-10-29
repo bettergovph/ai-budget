@@ -32,7 +32,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES, sumRows,
+  DEPED_EXTRA_LINES, HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES, sumRows,
   type HistoryCells, type HistoryData, type HistoryList, type HistoryPart, type HistoryPartDef, type HistorySeries, type PbcSheet,
 } from "../src/lib/hgab-history";
 
@@ -235,6 +235,16 @@ async function main(): Promise<void> {
     }
   }
   const printed: HistoryData["printed"] = [];
+  /** Where each printed program line sits in Volume I-A (line index), for lines that must follow it. */
+  const printedAt = new Map<string, number>();
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  /** The special provision that says what a line pays for: "<n>. <Label>. The amount …", once, or none. */
+  function provisionPage(label: string): number | null {
+    const re = new RegExp(`^\\s*\\d+\\s+\\d+\\.\\s+${esc(label)}\\.\\s+The amount`);
+    const hits = volLines.map((line, i) => (re.test(line) ? i : -1)).filter((i) => i >= 0);
+    ensure(hits.length <= 1, `${hits.length} special provisions for ${label} in Volume I-A`);
+    return hits.length ? pageOfLine[hits[0]] : null;
+  }
 
   // -------------------------------------------------------------------------
   // Assemble every series
@@ -286,7 +296,8 @@ async function main(): Promise<void> {
           const n = (v: string) => Number(v.replace(/,/g, ""));
           ensure(n(mooe) + n(co) === n(total), `${owner}: Volume I-A MOOE ${mooe} + CO ${co} ≠ ${total}`);
           php[col("house-2027")] = n(total);
-          printed.push({ series: s.key, label: p.label, mooe_php: n(mooe), co_php: n(co), total_php: n(total), page: pageOfLine[hits[0].i] });
+          printed.push({ series: s.key, label: p.label, mooe_php: n(mooe), co_php: n(co), total_php: n(total), page: pageOfLine[hits[0].i], provision_page: provisionPage(p.label) });
+          printedAt.set(s.key, hits[0].i);
         }
       }
       if (!s.counted) projects.fill(null);
@@ -378,6 +389,25 @@ async function main(): Promise<void> {
   check("nep2027_dbm", "House-bill data NEP side equals the DBM NEP extract", "every DPWH part with an FY2027 line, to the peso");
   check("vol_ia_lines", "Volume I-A program lines found once, MOOE + CO = total", printed.map((p) => `${p.label} p.${p.page}`).join("; "));
 
+  // DepEd's other school-facility lines (2027): NEP from the DBM extract, House bill as published in Volume I-A.
+  const extras: HistoryData["extras"] = [];
+  for (const x of DEPED_EXTRA_LINES) {
+    let hits = volLines.map((line, i) => ({ m: x.printed.exec(line), i })).filter((h) => h.m);
+    if (x.after != null) {
+      const from = printedAt.get(x.series);
+      ensure(from != null, `${x.key}: no ${x.series} program line to follow`);
+      hits = hits.filter((h) => h.i > from && h.i <= from + x.after!).slice(0, 1);
+    }
+    ensure(hits.length === 1, `${x.key}: ${hits.length} lines in Volume I-A match ${x.printed}`);
+    const nums = hits[0].m!.slice(1).map((v) => Number(v.replace(/,/g, "")));
+    const total = nums[nums.length - 1];
+    ensure(nums.slice(0, -1).reduce((a, b) => a + b, 0) === total, `${x.key}: Volume I-A expense classes do not add up to ${total}`);
+    const v = (await rows(c, `SELECT SUM(php) FROM nep WHERE dept = '07' AND code = '${x.code}'`))[0][0];
+    extras.push({ series: x.series, key: x.key, label: x.label, plain: x.plain, nep_php: v == null ? null : num(v), house_php: total, page: pageOfLine[hits[0].i] });
+  }
+  check("deped_extras", "DepEd's other school-facility lines found in Volume I-A and the NEP",
+    extras.map((x) => `${x.label}: NEP ${peso(x.nep_php)}, House ${peso(x.house_php)} (p.${x.page})`).join("; "));
+
   const data: HistoryData = {
     schema: HISTORY_SCHEMA,
     built_at: builtAt,
@@ -392,6 +422,7 @@ async function main(): Promise<void> {
     ],
     checks,
     printed,
+    extras,
   };
 
   const jsonPath = resolve(args.out, "history.json");

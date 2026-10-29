@@ -408,9 +408,57 @@ export interface HistoryData {
   sources: HistorySource[];
   /** Reconciliations the builder ran; each must hold or nothing is written. */
   checks: Array<{ key: string; label: string; ok: true; detail: string }>;
-  /** FY2027 House bill figures read from Volume I-A: the program line and its page. */
-  printed: Array<{ series: HistorySeriesKey; label: string; mooe_php: number; co_php: number; total_php: number; page: number }>;
+  /**
+   * FY2027 House bill figures read from Volume I-A: the program line and its page, and the page of the special
+   * provision that says what the line pays for (null when the bill has none).
+   */
+  printed: Array<{ series: HistorySeriesKey; label: string; mooe_php: number; co_php: number; total_php: number; page: number; provision_page: number | null }>;
+  /** Other FY2027 lines for the same kind of facility (DEPED_EXTRA_LINES): NEP and House bill, with the bill's page. */
+  extras: HistoryExtra[];
 }
+
+export interface HistoryExtra {
+  series: HistorySeriesKey;
+  key: string;
+  label: string;
+  plain: string;
+  nep_php: number | null;
+  house_php: number | null;
+  page: number;
+}
+
+/**
+ * DepEd's other lines for school facilities, besides Basic Education Facilities (2027 only):
+ * - the Quick Response Fund, a standby fund to rebuild and repair school buildings after disasters;
+ * - Infrastructure for Safer and Resilient Schools, a World Bank loan project;
+ * - Improvement and Acquisition of School Sites.
+ * NEP: the DBM extract by PAP code. House bill: the line in Volume I-A. Every capture but the last are its
+ * expense classes, which must add up to the last (the total). "Quick Response Fund" also names other agencies'
+ * lines, so DepEd's is the first one after its Basic Education Facilities line (`after`, in lines).
+ */
+export interface HistoryExtraDef {
+  key: 'qrf' | 'isrs' | 'sites';
+  series: 'deped';
+  code: string;
+  label: string;
+  plain: string;
+  printed: RegExp;
+  after?: number;
+}
+export const DEPED_EXTRA_LINES: readonly HistoryExtraDef[] = [
+  {
+    key: 'qrf', series: 'deped', code: '310200100010000', label: 'Quick Response Fund', plain: 'repairs after disasters',
+    printed: /^\s*\d+\s+Quick Response Fund\s+([\d,]+)\s+([\d,]+)\s+\d+\s*$/, after: 20,
+  },
+  {
+    key: 'isrs', series: 'deped', code: '310200300001000', label: 'Infrastructure for Safer and Resilient Schools (World Bank loan)', plain: 'a World Bank school project',
+    printed: /^\s*\d+\s+Project WB Loan No\. 9704-PH\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+\d+\s*$/,
+  },
+  {
+    key: 'sites', series: 'deped', code: '310200100001000', label: 'Improvement and Acquisition of School Sites', plain: 'school sites',
+    printed: /^\s*\d+\s+Improvement and Acquisition of School Sites\s+([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+\d+\s*$/,
+  },
+];
 
 export const HISTORY_CSV_COLUMNS = [
   'series', 'part', 'department', 'fiscal_year', 'stage', 'column', 'amount_php', 'project_lines', 'source',
