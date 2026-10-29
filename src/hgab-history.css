@@ -1,0 +1,262 @@
+/* Multi-purpose buildings (/hgab/2027/multi-purpose, DPWH menu): .hgab-hy-* only.
+   Cards in a two-column grid, each with one inline-SVG bar chart drawn in the
+   section's bar styles (enacted ink, NEP hatched, House accent) plus the one
+   new style, the Senate bill (amber; validated against the House accent for
+   colour-blind and normal vision, ≥3:1 on paper). Imports the section's base
+   rules for the toggle (.hgab-ds-dims), details, caveats and the CTA. */
+@import './hgab-dataset.css';
+
+/* The section's bar styles (hgab-districts.css defines the same values for the
+   district charts; this page does not load that sheet), plus the Senate bill. */
+:root {
+  --hgab-hy-gaa: var(--hgab-gaa, var(--ink-2));
+  --hgab-hy-nep: var(--hgab-nep, var(--ink-3));
+  --hgab-hy-house: var(--hgab-house, var(--accent));
+  --hgab-hy-senate: #c2741b;
+}
+
+.hgab-hy-main { padding-top: 8px; }
+
+/* --- the one control row: amounts / projects, and the key ---------------- */
+
+.hgab-hy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgab-hy-mode { margin: 0; }
+.hgab-hy-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.hgab-hy-key li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.hgab-hy-key i { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px 2px 0 0; }
+.hgab-hy-key i.is-gaa { background: var(--hgab-hy-gaa); }
+.hgab-hy-key i.is-nep { background: repeating-linear-gradient(135deg, var(--hgab-hy-nep) 0 1px, transparent 1px 3px); border: 1px solid var(--hgab-hy-nep); }
+.hgab-hy-key i.is-house { background: var(--hgab-hy-house); }
+.hgab-hy-key i.is-senate { background: var(--hgab-hy-senate); }
+.hgab-hy-key i.is-empty { border: 1px dashed var(--ink-mute); border-radius: 1px; }
+
+.hgab-hy-section { margin-top: 36px; }
+
+/* --- cards ----------------------------------------------------------------- */
+
+.hgab-hy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.hgab-hy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+}
+.hgab-hy-card-head h3 {
+  margin: 0;
+  font-family: var(--font-hero);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-hy-dept {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  vertical-align: 2px;
+  color: var(--ink-3);
+}
+.hgab-hy-fig {
+  margin: 3px 0 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+.hgab-hy-fig strong { font-family: var(--font-hero); font-size: 15px; color: var(--ink); }
+.hgab-hy-delta {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hgab-hy-delta.is-up { color: var(--accent-deep); background: var(--accent-soft); }
+.hgab-hy-delta.is-down { color: var(--ink-2); background: var(--paper-3); }
+.hgab-hy-plain {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.hgab-hy-note {
+  margin: 2px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule-soft);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.hgab-hy-card-head h3 a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-hy-card-head h3 a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.hgab-hy-list {
+  margin: 2px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule-soft);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+.hgab-hy-list a { font-weight: 600; color: var(--accent); text-decoration: none; }
+.hgab-hy-list a:hover { text-decoration: underline; }
+.hgab-hy-list.is-none { color: var(--ink-mute); }
+.hgab-hy-uncounted {
+  margin: 8px 0;
+  padding: 26px 12px;
+  border: 1px dashed var(--rule);
+  border-radius: 3px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+
+/* --- the chart (inline SVG) -------------------------------------------------- */
+
+.hgab-hy-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+  overflow: visible;
+  font-family: var(--font-mono);
+}
+.hgab-hy-gridline { stroke: var(--rule-soft); stroke-width: 1; }
+.hgab-hy-axis { stroke: var(--rule); stroke-width: 1; }
+.hgab-hy-tick { font-size: 9px; fill: var(--ink-mute); text-anchor: end; }
+.hgab-hy-bar.is-gaa { fill: var(--hgab-hy-gaa); }
+.hgab-hy-bar.is-nep { stroke: var(--hgab-hy-nep); stroke-width: 1; }
+.hgab-hy-hatch path { stroke: var(--hgab-hy-nep); stroke-width: 1; }
+.hgab-hy-bar.is-house { fill: var(--hgab-hy-house); }
+.hgab-hy-bar.is-senate { fill: var(--hgab-hy-senate); }
+.hgab-hy-empty { fill: none; stroke: var(--ink-mute); stroke-width: 1; stroke-dasharray: 3 2; }
+.hgab-hy-zero { stroke: var(--ink-2); stroke-width: 2; }
+.hgab-hy-val { font-size: 9.5px; font-weight: 600; fill: var(--ink-2); text-anchor: middle; }
+.hgab-hy-x { font-size: 9px; fill: var(--ink-mute); text-anchor: middle; }
+.hgab-hy-x.is-stage { fill: var(--ink-3); }
+.hgab-hy-group { stroke: var(--rule); stroke-width: 1; }
+.hgab-hy-group-label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; fill: var(--ink-2); text-anchor: middle; }
+.hgab-hy-hit { fill: transparent; }
+.hgab-hy-slot path, .hgab-hy-slot rect.hgab-hy-empty { transition: opacity 0.12s; }
+.hgab-hy-slot:hover .hgab-hy-bar { opacity: 0.78; }
+.hgab-hy-slot:hover .hgab-hy-hit { fill: var(--paper-2); }
+
+/* --- BIP and SIPAG ------------------------------------------------------------ */
+
+.hgab-hy-defs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.hgab-hy-def {
+  min-width: 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--accent);
+  background: var(--paper-2);
+}
+.hgab-hy-def h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-hero);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.hgab-hy-def h3 abbr { text-decoration: none; }
+.hgab-hy-def h3 span { margin-left: 6px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.hgab-hy-def p {
+  margin: 0 0 6px;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hgab-hy-def .hgab-details { margin-top: 8px; }
+.hgab-hy-quote {
+  margin: 0 0 8px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hgab-hy-where { font-size: 12px; color: var(--ink-3); }
+
+/* --- the table ----------------------------------------------------------------- */
+
+.hgab-hy-table th[scope="col"] { text-align: right; white-space: nowrap; }
+.hgab-hy-table th[scope="col"].nep-th-name { text-align: left; }
+.hgab-hy-table th[scope="col"].is-stage { font-size: 10.5px; line-height: 1.2; }
+.hgab-hy-table td {
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.hgab-hy-table tbody th { text-align: left; font-weight: 400; white-space: nowrap; }
+.hgab-hy-table tr.is-series th,
+.hgab-hy-table tr.is-series td { font-weight: 600; color: var(--ink); border-top: 1px solid var(--rule); }
+.hgab-hy-table tr.is-part th { padding-left: 22px; color: var(--ink-3); font-size: 12.5px; }
+.hgab-hy-table tr.is-part td { color: var(--ink-3); }
+
+.hgab-hy-codes {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hgab-hy-codes li { margin: 0 0 2px; }
+
+@media (max-width: 860px) {
+  .hgab-hy-grid,
+  .hgab-hy-defs { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .hgab-hy-card { padding: 12px 10px 10px; }
+  .hgab-hy-controls { align-items: flex-start; }
+  /* The chart scales down to about 60% on a phone; larger type in chart units
+     keeps its labels near 7–8 px there (still clear of the next slot). */
+  .hgab-hy-x { font-size: 11.5px; }
+  .hgab-hy-tick { font-size: 11px; }
+  .hgab-hy-val { font-size: 12px; }
+  .hgab-hy-group-label { font-size: 12px; }
+}
