@@ -7,7 +7,10 @@
  * (npm run build:hgab-history): multi-purpose buildings (DPWH, BIP line), DepEd's
  * Basic Education Facilities and DOH's Health Facilities Enhancement Program, the
  * NEP beside them, and the FY2026 NEP and GAA for the line under the headline. Each
- * figure has a bar drawn to scale.
+ * figure has a bar drawn to scale. The school-facilities bar has a grey extension for
+ * DepEd's other lines for school facilities in the House bill (Quick Response Fund, the
+ * World Bank school project, school sites; history.json "extras"), labelled beside it
+ * and listed under it on the tall formats.
  *
  * The background is the real list, as on the "We are not ignorant" poster: every
  * multi-purpose building project the House bill lists (dpwh/projects.parquet, the
@@ -71,12 +74,27 @@ const F = {
 };
 const list = mpb.list2027;
 ensure(list && list.dataset === "dpwh", "history.json has no 2027 list for multi-purpose buildings");
+/** DepEd's other lines for school facilities (Volume I-A), drawn as the school bar's grey extension. */
+const more = (H.extras ?? []).filter((x) => x.series === "deped");
+ensure(more.length > 0 && more.every((x) => x.house_php != null && x.house_php > 0 && x.nep_php != null),
+  "history.json has no House-bill amounts for DepEd's other lines; run npm run build:hgab-history");
+const sum = (xs: Array<number | null>) => xs.reduce<number>((a, v) => a + (v ?? 0), 0);
+const MORE = { house: sum(more.map((x) => x.house_php)), nep: sum(more.map((x) => x.nep_php)) };
 
 /** "₱83.7 billion" (one decimal; the page's rounding). */
 const billion = (v: number) => `₱${(v / 1e9).toFixed(1)} billion`;
+/** "₱3.0B" for the list under the school bar. */
+const bShort = (v: number) => `₱${(v / 1e9).toFixed(1)}B`;
 const ratio = F.mpb / F.mpbNep;
 const twice = Math.abs(ratio - 2) < 0.05 ? "Twice" : `${ratio.toFixed(1)} times`;
-const bothLess = F.deped < F.depedNep && F.hfep < F.hfepNep;
+// "Less than in the NEP" must hold for the line and for all of DepEd's lines for school facilities.
+const bothLess = F.deped < F.depedNep && F.deped + MORE.house < F.depedNep + MORE.nep && F.hfep < F.hfepNep;
+const MORE_LABEL = `+ ${billion(MORE.house)} in DepEd’s other lines`;
+/** Under the school bar on the tall formats: the other lines, then the total on its own line. */
+const MORE_LIST = [
+  more.map((x, i) => `${i === 0 ? x.plain[0].toUpperCase() + x.plain.slice(1) : x.plain} ${bShort(x.house_php!)}`).join(" · ") + ".",
+  `All ${more.length === 3 ? "four" : more.length + 1} lines: ${billion(F.deped + MORE.house)}.`,
+];
 const asOf = (() => {
   const d = new Date(H.built_at);
   return Number.isNaN(d.getTime()) ? "" : `As of ${d.toLocaleDateString("en-US", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric" })}`;
@@ -140,16 +158,18 @@ const COVER_SAFE: [number, number] = [265, 1375];
 /** Sizes per format, in units of 1% of the poster width (the cover in px). */
 function sizes(f: Format) {
   const u = f.w / 100;
-  if (f.key === "cover") return { u, foot: 74, kicker: 15, a1: 90, f1: 43, a2: 33, bar1: 17, bar2: 13, sub: 19, cta: 15, gap: 8, top: 24, left: COVER_SAFE[0] + 10, width: 700 };
-  if (f.w > f.h) return { u, foot: 10 * u, kicker: 1.35 * u, a1: 8.2 * u, f1: 3.95 * u, a2: 3.35 * u, bar1: 1.9 * u, bar2: 1.4 * u, sub: 1.8 * u, cta: 1.45 * u, gap: 0.8 * u, top: 2.4 * u, left: 3 * u, width: 62 * u };
-  if (f.key === "print") return { u, foot: 13 * u, kicker: 2.4 * u, a1: 15.2 * u, f1: 7.3 * u, a2: 5.6 * u, bar1: 3.8 * u, bar2: 2.9 * u, sub: 3.25 * u, cta: 2.6 * u, gap: 2.1 * u, top: 5.5 * u, left: 4 * u, width: 92 * u };
-  if (f.h / f.w > 1.6) return { u, foot: 17 * u, kicker: 2.6 * u, a1: 15.4 * u, f1: 7.4 * u, a2: 5.6 * u, bar1: 3.8 * u, bar2: 2.9 * u, sub: 3.6 * u, cta: 2.7 * u, gap: 1.8 * u, top: 9 * u, left: 4 * u, width: 92 * u };
-  return { u, foot: 14.5 * u, kicker: 2.3 * u, a1: 14 * u, f1: 6.8 * u, a2: 5.4 * u, bar1: 3.4 * u, bar2: 2.6 * u, sub: 3.25 * u, cta: 2.4 * u, gap: 1.5 * u, top: 4.5 * u, left: 4 * u, width: 92 * u };
+  if (f.key === "cover") return { u, foot: 74, kicker: 15, a1: 90, f1: 43, a2: 33, bar1: 17, bar2: 13, more: 13, sub: 19, cta: 15, gap: 8, top: 24, left: COVER_SAFE[0] + 10, width: 700 };
+  if (f.w > f.h) return { u, foot: 10 * u, kicker: 1.35 * u, a1: 8.2 * u, f1: 3.95 * u, a2: 3.35 * u, bar1: 1.9 * u, bar2: 1.4 * u, more: 1.3 * u, sub: 1.8 * u, cta: 1.45 * u, gap: 0.8 * u, top: 2.4 * u, left: 3 * u, width: 62 * u };
+  if (f.key === "print") return { u, foot: 13 * u, kicker: 2.4 * u, a1: 15.2 * u, f1: 7.3 * u, a2: 5.6 * u, bar1: 3.8 * u, bar2: 2.9 * u, more: 2.2 * u, sub: 3.25 * u, cta: 2.6 * u, gap: 2.1 * u, top: 5.5 * u, left: 4 * u, width: 92 * u };
+  if (f.h / f.w > 1.6) return { u, foot: 17 * u, kicker: 2.6 * u, a1: 15.4 * u, f1: 7.4 * u, a2: 5.6 * u, bar1: 3.8 * u, bar2: 2.9 * u, more: 2.3 * u, sub: 3.6 * u, cta: 2.7 * u, gap: 1.8 * u, top: 9 * u, left: 4 * u, width: 92 * u };
+  return { u, foot: 14.5 * u, kicker: 2.3 * u, a1: 14 * u, f1: 6.8 * u, a2: 5.4 * u, bar1: 3.4 * u, bar2: 2.6 * u, more: 2.1 * u, sub: 3.25 * u, cta: 2.4 * u, gap: 1.5 * u, top: 4.5 * u, left: 4 * u, width: 92 * u };
 }
 
 function html(f: Format): string {
   const z = sizes(f);
   const pct = (v: number) => `${((v / F.mpb) * 100).toFixed(2)}%`;
+  /** The same scale in px, for the school bar's two segments (its row sizes to fit them and the label). */
+  const px = (v: number) => `${((v / F.mpb) * z.width).toFixed(2)}px`;
   const wide = f.w > f.h; // og and cover: no 2026 line
   return `<!doctype html><html><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -185,6 +205,12 @@ function html(f: Format): string {
   .r2 .fig span { font-size: ${z.a2}px; }
   .bar { display: block; height: ${z.bar2}px; margin-top: ${0.6 * z.gap}px; background: #111; box-shadow: 0 0 0 ${0.35 * z.u}px var(--paper); border-radius: 0 4px 4px 0; }
   .r1 .bar { height: ${z.bar1}px; background: var(--red); }
+  /* The school bar: the line, a paper gap, DepEd's other lines in grey, then their label. */
+  .bars { display: flex; align-items: center; width: fit-content; max-width: 100%; margin-top: ${0.6 * z.gap}px; background: var(--paper); box-shadow: 0 0 0 ${0.35 * z.u}px var(--paper); }
+  .bars .bar { flex: none; margin: 0; box-shadow: none; border-radius: 0; }
+  .bars .bar.more { margin-left: ${Math.max(2, 0.15 * z.u)}px; background: #7d776c; border-radius: 0 4px 4px 0; }
+  .more-lab { margin-left: ${0.8 * z.u}px; font-family: Inter, sans-serif; font-weight: 700; font-size: ${z.more}px; line-height: 1.1; white-space: nowrap; color: #111; }
+  .more-list { margin-top: ${0.5 * z.gap}px; font-family: Inter, sans-serif; font-weight: 600; font-size: ${z.more * 0.92}px; line-height: 1.25; color: #111; padding: 0 ${0.3 * z.u}px; max-width: 100%; }
   .sub { margin-top: ${z.gap * 1.2}px; font-family: Inter, sans-serif; font-weight: 700; font-size: ${z.sub}px; line-height: 1.2; color: #111; padding: ${0.35 * z.u}px ${0.6 * z.u}px; max-width: 100%; }
   .sub.s2 { margin-top: ${0.4 * z.gap}px; font-weight: 600; font-size: ${z.sub * 0.74}px; }
   .cta { display: inline-block; margin-top: ${z.gap}px; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: ${z.cta}px; color: #fff; background: #c8102e; padding: ${0.35 * z.u}px ${0.8 * z.u}px; }
@@ -216,7 +242,8 @@ ${f.key === "cover" ? `  .foot { grid-template-columns: auto 1fr auto; grid-temp
     </div>
     <div class="row r2">
       <div class="fig"><span>${billion(F.deped)} for school facilities</span></div>
-      <i class="bar" style="width: ${pct(F.deped)}"></i>
+      <div class="bars"><i class="bar" style="width: ${px(F.deped)}"></i><i class="bar more" style="width: ${px(MORE.house)}"></i><span class="more-lab" id="more-lab">${esc(MORE_LABEL)}</span></div>
+      ${wide ? "" : `<p class="more-list pap">${MORE_LIST.map(esc).join("<br>")}</p>`}
     </div>
     <div class="row r2">
       <div class="fig"><span>${billion(F.hfep)} for health facilities</span></div>
@@ -244,7 +271,7 @@ async function main(): Promise<void> {
   const fineAll = (shown: number) =>
     `<strong>${shown === lines.length ? `Background: all ${lines.length.toLocaleString("en-US")}` : `Background: the largest ${shown.toLocaleString("en-US")} of the ${lines.length.toLocaleString("en-US")}`} multi-purpose building projects in the House bill</strong>` +
     `${shown === lines.length ? "" : " (all of them at the link)"}, largest first; ${inserted.toLocaleString("en-US")} are INSERTED: no matching line in the NEP (${unconfirmed.toLocaleString("en-US")} of them unconfirmed matches), a candidate from comparing the two documents, not a finding of wrongdoing. ` +
-    `Amounts as published in House Bill 10858 (third reading) and the 2027 NEP; allocations, not spending. School facilities: DepEd’s Basic Education Facilities. Health facilities: DOH’s Health Facilities Enhancement Program. ` +
+    `Amounts as published in House Bill 10858 (third reading) and the 2027 NEP; allocations, not spending. School facilities: DepEd’s Basic Education Facilities; grey adds its ${more.map((x) => x.label).join(", ").replace(/, ([^,]*)$/, " and $1")} lines. Health facilities: DOH’s Health Facilities Enhancement Program. ` +
     `The documents do not say who asked for any project. People’s Budget Coalition × BetterGov.PH. ${asOf}.`;
 
   mkdirSync(OUT, { recursive: true });
@@ -284,11 +311,12 @@ async function main(): Promise<void> {
       const lay = await page.evaluate(() => {
         const head = document.getElementById("head")!.getBoundingClientRect();
         const foot = document.querySelector(".foot")!.getBoundingClientRect();
-        const figs = [...document.querySelectorAll(".fig span")].map((s) => { const r = s.getBoundingClientRect(); return { right: r.right, h: r.height, fs: parseFloat(getComputedStyle(s).fontSize) }; });
-        return { headBottom: head.bottom, footTop: foot.top, width: window.innerWidth, figs };
+        const figs = [...document.querySelectorAll(".fig span, #more-lab")].map((s) => { const r = s.getBoundingClientRect(); return { right: r.right, h: r.height, fs: parseFloat(getComputedStyle(s).fontSize) }; });
+        return { headBottom: head.bottom, footTop: foot.top, width: window.innerWidth, headRight: head.right, figs };
       });
       ensure(lay.headBottom <= lay.footTop - 4, `${f.key}: the headline runs into the footer (${lay.headBottom} > ${lay.footTop})`);
-      ensure(lay.figs.every((x) => x.right <= lay.width - 4 && x.h < x.fs * 1.4), `${f.key}: a figure wraps or leaves the poster`);
+      ensure(lay.figs.every((x) => x.right <= lay.width - 4 && x.h < x.fs * 1.4), `${f.key}: a figure or the school bar's label wraps or leaves the poster`);
+      ensure(lay.figs.every((x) => x.right <= lay.headRight + 1), `${f.key}: a figure or the school bar's label runs past the headline column`);
       ensure(fit.fits, `${f.key}: the wall overflows`);
       if (f.wall === "all") ensure(fit.shown === ENTRIES.length, `${f.key}: not every project fits`);
       const png = join(OUT, `${f.file}.png`);
@@ -302,7 +330,7 @@ async function main(): Promise<void> {
   }
   writeFileSync(join(OUT, "README-multi-purpose.txt"), [
     "MULTI-PURPOSE BUILDINGS — campaign poster (npm run build:hgab-poster-mpb)",
-    `From data/hgab/2027/history.json (${H.built_at}): ${billion(F.mpb)} multi-purpose buildings, ${billion(F.deped)} school facilities, ${billion(F.hfep)} health facilities (2027 House bill).`,
+    `From data/hgab/2027/history.json (${H.built_at}): ${billion(F.mpb)} multi-purpose buildings, ${billion(F.deped)} school facilities (${MORE_LABEL}: ${more.map((x) => `${x.label} ${bShort(x.house_php!)}`).join(", ")}), ${billion(F.hfep)} health facilities (2027 House bill).`,
     `Wall: ${lines.length} multi-purpose building projects in the House bill (${inserted} inserted). Link: https://${URL_TEXT}`,
     "",
   ].join("\n"));

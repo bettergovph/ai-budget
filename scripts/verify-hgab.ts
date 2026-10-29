@@ -67,7 +67,10 @@
  *     the FY2026 NEP/House/Senate cells re-read from the People's Budget Coalition sheets, whose GAA2025
  *     column must equal FY2025; the FY2027 NEP from the DBM extract; the House bill from the parquet and,
  *     as published, Volume I-A (DepEd, DOH) and the Volume I-C BIP subtotal; the BIP definition word for word
- *     against Volume I-B; series = sum of parts; the CSV row for row; reader copy plain and short.
+ *     against Volume I-B; DepEd's other lines for school facilities printed once in its pages of Volume I-A
+ *     (NEP from the DBM extract); each program line and special provision on the page the card links to;
+ *     the DOH card's note (its Quick Response Fund's provision, the World Bank project's missing provision);
+ *     series = sum of parts; the CSV row for row; reader copy plain and short.
 
  *   - with `--d1=local`: the hgab_* tables loaded into the local D1 from
  *     `npm run build:hgab-d1` (docs/hgab-api.md), queried through
@@ -109,7 +112,7 @@ import {
 import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
 import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 import {
-  HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
+  DEPED_EXTRA_LINES, HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
   type HistoryData, type HistoryPartDef,
 } from "../src/lib/hgab-history";
 
@@ -2373,7 +2376,13 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
         if (house !== J.php[ix("house-2027")] || lines !== J.projects[ix("house-2027")]) off.push(`${s.key}:${p.key} House ${fmtCell(house)}/${lines} vs ${fmtCell(J.php[ix("house-2027")])}/${J.projects[ix("house-2027")]}`);
       }
     }
-    check("FY2027 NEP cells equal the DBM extract; DPWH House-bill cells and line counts equal the parquet", off.length === 0, off.slice(0, 4).join("; "));
+    for (const x of DEPED_EXTRA_LINES) {
+      const dept = HISTORY_SERIES.find((d) => d.key === x.series)!.parts[0].codes!.dept;
+      const v = (await c.runAndReadAll(`SELECT SUM(amount) FROM read_parquet([${nepFiles.map((f) => `'${f}'`).join(", ")}], union_by_name = true) WHERE fy = 2027 AND department_id = '${dept}' AND fpap_code = '${x.code}'`)).getRows()[0][0];
+      const got = (H.extras ?? []).find((e) => e.key === x.key)?.nep_php ?? null;
+      if ((v == null ? null : Number(v)) !== got) off.push(`${x.key}: NEP ${fmtCell(v == null ? null : Number(v))} vs ${fmtCell(got)}`);
+    }
+    check("FY2027 NEP cells and DepEd's other lines equal the DBM extract; DPWH House-bill cells and line counts equal the parquet", off.length === 0, off.slice(0, 4).join("; "));
   } else {
     check("FY2027 NEP extracts and dpwh/projects.parquet present", false);
   }
@@ -2393,6 +2402,57 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
         if (total == null || total !== part(s.key, p.key).php[ix("house-2027")]) off.push(`${s.key}: ${hits.length} lines, ${fmtCell(total)} vs ${fmtCell(part(s.key, p.key).php[ix("house-2027")])}`);
       }
       check("DepEd and DOH House-bill cells equal their program lines in Volume I-A", off.length === 0, off.join("; "));
+
+      // The pages the cards and the data point to. pdftotext ends each page with a form feed; odd pages carry the
+      // department's running head, which bounds its pages (± 1 for the even pages either side).
+      const pages = ia.split("\f");
+      const HEAD: Record<string, string> = { "07": "DEPARTMENT OF EDUCATION", "13": "DEPARTMENT OF HEALTH" };
+      const span = (dept: string) => {
+        const at = pages.flatMap((t, i) => (t.split("\n").slice(0, 3).some((l) => new RegExp(`^\\s*${HEAD[dept]}\\s+\\d+\\s*$`).test(l)) ? [i + 1] : []));
+        return at.length ? [Math.min(...at) - 1, Math.max(...at) + 1] as const : null;
+      };
+      const escRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pageOff: string[] = [];
+      for (const pr of H.printed) {
+        const def = defs.find((d) => d.s.key === pr.series && d.p.label === pr.label);
+        const onPage = def?.p.printed ? [...(pages[pr.page - 1] ?? "").matchAll(new RegExp(def.p.printed.source, "gm"))].length : 0;
+        if (onPage !== 1) pageOff.push(`${pr.series}: p.${pr.page} has ${onPage} program lines`);
+        const m = pr.provision_page == null ? null
+          : new RegExp(`^\\s*\\d+\\s+\\d+\\.\\s+${escRe(pr.label)}\\.\\s+The amount([^\\n]*)`, "m").exec(pages[pr.provision_page - 1] ?? "");
+        const stated = m ? /\(P([\d,]+)\)/.exec(m[1]) : null;
+        if (!m) pageOff.push(`${pr.series}: no special provision on p.${pr.provision_page}`);
+        else if (stated && Number(stated[1].replace(/,/g, "")) !== pr.total_php) pageOff.push(`${pr.series}: the provision states ₱${stated[1]}, the line ${peso(pr.total_php)}`);
+      }
+      check("each program line and its special provision are on the pages history.json links to; a stated amount equals the line", pageOff.length === 0, pageOff.join("; "));
+
+      // DepEd's other lines for school facilities: each printed once within DepEd's pages, its expense classes adding
+      // up to its total, which with its page must be what history.json has.
+      const exOff: string[] = [];
+      const ex = H.extras ?? [];
+      if (JSON.stringify(ex.map((x) => [x.series, x.key, x.label, x.plain])) !== JSON.stringify(DEPED_EXTRA_LINES.map((x) => [x.series, x.key, x.label, x.plain]))) exOff.push("history.json's extras differ from the contract");
+      for (const x of DEPED_EXTRA_LINES) {
+        const r = span(HISTORY_SERIES.find((d) => d.key === x.series)!.parts[0].codes!.dept);
+        if (!r) { exOff.push(`${x.key}: no ${x.series} pages found`); continue; }
+        const hits = pages.flatMap((t, i) => (i + 1 >= r[0] && i + 1 <= r[1]
+          ? [...t.matchAll(new RegExp(x.printed.source, "gm"))].map((m) => ({ page: i + 1, nums: m.slice(1).map((v) => Number(v.replace(/,/g, ""))) }))
+          : []));
+        const h = hits.length === 1 ? hits[0] : null, total = h ? h.nums[h.nums.length - 1] : null;
+        const got = ex.find((e) => e.key === x.key);
+        if (!h || h.nums.slice(0, -1).reduce((a, b) => a + b, 0) !== total || total !== got?.house_php || h.page !== got?.page) {
+          exOff.push(`${x.key}: ${hits.length} lines in pp.${r[0]}–${r[1]}, ${fmtCell(total)} p.${h?.page ?? "—"} vs ${fmtCell(got?.house_php ?? null)} p.${got?.page ?? "—"}`);
+        }
+      }
+      check(`DepEd's other lines for school facilities (${DEPED_EXTRA_LINES.length}): each printed once in DepEd's pages of Volume I-A, amount and page as history.json has them`, exOff.length === 0, exOff.join("; "));
+
+      // The DOH card's note: its Quick Response Fund's provision also names emergency supplies and staff, and the
+      // World Bank health project (loan 9781-PH) is printed once, as its program line, with no provision.
+      const r = span("13");
+      const flat = r ? pages.slice(r[0] - 1, r[1]).join("\n").split("\n").map((l) => l.replace(/^\s*\d+\s+/, "").replace(/\s+\d+\s*$/, "")).join(" ").replace(/\s+/g, " ") : "";
+      const qrf = /\d+\. Quick Response Fund\. The amount (.{0,1200})/.exec(flat)?.[1] ?? "";
+      const named = ["repair of health facilities", "emergency health commodities/supplies", "emergency engagement of health personnel"].every((w) => qrf.includes(w));
+      const wb = (ia.match(/Health System Resilience Project/g) ?? []).length;
+      check("DOH's note: its Quick Response Fund's provision also names emergency supplies and staff; the World Bank health project has no provision in Volume I-A",
+        r != null && named && wb === 1, `${r ? "" : "no DOH pages; "}${named ? "" : "the Quick Response Fund provision changed; "}${wb} mentions of the World Bank project`);
     }
     const ic = text(resolve(OUT, "pdf", "hb10858-3r-vol-ic.pdf"));
     if (ic) {
@@ -2455,7 +2515,7 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
     && rows.length - 1 === expected.length && expected.every((e, i) => JSON.stringify(e) === JSON.stringify(rows[i + 1])), `${rows.length - 1} rows vs ${expected.length}`);
 
   // 6. Reader copy: plain words, sentences of at most 20 words.
-  const copy = [...HISTORY_SERIES.map((s) => s.plain), ...HISTORY_DEFINITIONS.flatMap((d) => d.plain)];
+  const copy = [...HISTORY_SERIES.map((s) => s.plain), ...HISTORY_DEFINITIONS.flatMap((d) => d.plain), ...DEPED_EXTRA_LINES.map((x) => x.plain)];
   const hits = copy.flatMap((t) => readerCopyHits(t).map((h) => `${h} in "${t.slice(0, 40)}…"`));
   const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((x) => x.split(/\s+/).length > 20);
   check("history reader copy: no technical words, no sentence over 20 words", hits.length === 0 && long.length === 0, [...hits, ...long].slice(0, 3).join("; "));

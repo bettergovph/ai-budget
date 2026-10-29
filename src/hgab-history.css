@@ -137,6 +137,17 @@
 .hgab-hy-list a:hover { text-decoration: underline; }
 .hgab-hy-list .is-none { color: var(--ink-mute); }
 .hgab-hy-list-more { display: block; margin-top: 3px; }
+.hgab-hy-extra {
+  margin: 2px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule-soft);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.hgab-hy-extra p { margin: 0 0 4px; }
+.hgab-hy-extra strong { color: var(--ink); font-weight: 600; }
 .hgab-hy-uncounted {
   margin: 8px 0;
   padding: 26px 12px;
