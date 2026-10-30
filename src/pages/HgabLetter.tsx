@@ -167,6 +167,10 @@ export default function HgabLetter() {
                   Deliver it to {HOUSE_ADDRESS.join(', ')}, or to your representative’s district office. Ask for a
                   stamped receiving copy.
                 </li>
+                <li>
+                  Give a copy to each office under “Copy furnished”: the Speaker, the Majority Leader and the Committee on
+                  Appropriations. All three are at the same address; ask each for a stamped receiving copy.
+                </li>
                 <li>To email it instead, ask the district office for its email address and send a scan.</li>
                 <li>The fifteen working days run from the day it is received. Keep your copy.</li>
               </ol>

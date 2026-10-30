@@ -61,7 +61,8 @@
  *     text and PDF; recipients = the seat holders of every district the office group serves, own seat first;
  *     the annexes = the group's office lines of the list and its deletion candidates read again from the
  *     parquet, figures = the leaderboard entry; every office line in exactly one group; each text file =
- *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text.
+ *     letterText(composeLetter(json)); the disclaimers in plain words and the link to the full text; the copy to
+ *     the Speaker, the Majority Leader and the Committee on Appropriations after the enclosures.
  *   - the budget history (`npm run build:hgab-history`): columns and series as the contract lists them; every
  *     enacted-budget cell recomputed from data/<dept>/full_extract.csv (not the PAP tables the builder reads);
  *     the FY2026 NEP/House/Senate cells re-read from the People's Budget Coalition sheets, whose GAA2025
@@ -110,7 +111,7 @@ import {
   districtsServedText, type ChangesListData,
 } from "../src/lib/hgab-changes-list";
 import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
-import { LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
+import { COPY_FURNISHED, LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 import {
   DEPED_EXTRA_LINES, HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
   type HistoryData, type HistoryPartDef,
@@ -2217,7 +2218,7 @@ async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<v
   const same = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
   const cards = new Map(D.districts.map((d) => [d.id, d] as const));
 
-  const bad: Record<string, string[]> = { recipients: [], annexes: [], figures: [], text: [], pdf: [], disclaimer: [] };
+  const bad: Record<string, string[]> = { recipients: [], annexes: [], figures: [], text: [], pdf: [], disclaimer: [], copies: [] };
   const inLetters = new Set<string>();
   for (const l of ix.letters) {
     const L = readJson<LetterData>(resolve(dir, `${l.slug}.json`));
@@ -2237,8 +2238,13 @@ async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<v
     if (e ? !f || f.nep_php !== e.nep_php || f.house_php !== e.hgab3_php || f.inserted_rows !== e.added_rows + e.held_rows || f.inserted_php !== e.added_php + e.held_php
       || f.unconfirmed_rows !== e.held_rows || f.dropped_rows !== e.dropped_rows || f.dropped_php !== e.dropped_php || L.tier !== e.tier : f !== null || L.tier !== null) bad.figures.push(l.slug);
     // The text file is the current composition; the PDF was printed after the JSON was written.
-    const text = letterText(composeLetter(L));
+    const doc = composeLetter(L);
+    const text = letterText(doc);
     if (readFileSync(resolve(dir, `${l.slug}.txt`), "utf8") !== `\uFEFF${text}`) bad.text.push(l.slug);
+    // Copied to the Speaker, the Majority Leader and the Committee on Appropriations, right after the enclosures.
+    const at = doc.blocks.findIndex((b) => b.kind === "copies"), cc = doc.blocks[at];
+    if (!cc || cc.kind !== "copies" || doc.blocks[at - 1]?.kind !== "enclosures" || JSON.stringify(cc.items) !== JSON.stringify(COPY_FURNISHED)
+      || !text.includes(["Copy furnished:", ...COPY_FURNISHED.map((x) => `  ${x}`)].join("\n"))) bad.copies.push(l.slug);
     const pdf = resolve(dir, `${l.slug}.pdf`);
     if (!readFileSync(pdf).subarray(0, 5).equals(Buffer.from("%PDF-")) || statSync(pdf).mtimeMs < statSync(resolve(dir, `${l.slug}.json`)).mtimeMs) bad.pdf.push(l.slug);
     // Plain words, not the technical paragraphs: the link to the full disclaimer, who asked, candidates, offices, shared totals.
@@ -2254,6 +2260,7 @@ async function verifyLetters(overview: Overview, c: DuckDBConnection): Promise<v
   check(`every office line of the list is in a letter: ${inLetters.size.toLocaleString("en-US")} = ${officeRows.toLocaleString("en-US")}`, inLetters.size === officeRows);
   check("every text file = letterText(composeLetter(json)), UTF-8 with BOM (rerun npm run build:hgab-letters)", bad.text.length === 0, firstFew(bad.text));
   check("every PDF is a PDF printed after its JSON", bad.pdf.length === 0, firstFew(bad.pdf));
+  check("every letter copies the Speaker, the Majority Leader and the Committee on Appropriations, after the enclosures", bad.copies.length === 0, firstFew(bad.copies));
   check("every letter states the disclaimers in plain words, links the full disclaimer, credits the template, and quotes none of the technical paragraphs", bad.disclaimer.length === 0, firstFew(bad.disclaimer));
 }
 
