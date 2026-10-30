@@ -12,6 +12,8 @@ const Methodology = lazy(() => import('./pages/Methodology'));
 const Learn = lazy(() => import('./pages/Learn'));
 const Glossary = lazy(() => import('./pages/Glossary'));
 const CitizenReports = lazy(() => import('./pages/CitizenReports'));
+const Disclaimer = lazy(() => import('./pages/Disclaimer'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Nep2027Story = lazy(() => import('./pages/Nep2027Story'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
@@ -92,6 +94,9 @@ export default function App() {
           <Route path="/learn" element={<Learn />} />
           <Route path="/glossary" element={<Glossary />} />
           <Route path="/citizen-reports" element={<CitizenReports />} />
+          {/* Site-wide: what the figures are and are not, and the terms (src/lib/site-legal.ts). */}
+          <Route path="/disclaimer" element={<Disclaimer />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />
           <Route path="/d/:deptId/overview" element={<Portal />} />

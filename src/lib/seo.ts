@@ -14,6 +14,7 @@
  */
 
 import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
+import { DISCLAIMER_PAGE, TERMS_PAGE } from "./site-legal";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
@@ -529,6 +530,22 @@ export function pageMeta(pathname: string): PageMeta {
     };
   }
 
+  if (p === DISCLAIMER_PAGE) {
+    return {
+      title: `Disclaimer · ${SITE}`,
+      description:
+        "BetterGov Budget is an independent analysis, not an official government record: where the figures come from, " +
+        "what an insertion is and is not, projects and representatives, and how to report an error.",
+    };
+  }
+  if (p === TERMS_PAGE) {
+    return {
+      title: `Terms of Service · ${SITE}`,
+      description:
+        "Terms for using BetterGov Budget: licences for its content, data and code, sharing posters and figures, " +
+        "the API and MCP server, the letters to representatives, privacy, and corrections.",
+    };
+  }
   if (p === "/methodology") {
     return {
       title: `Methodology & Data Quality — Philippine GAA Data · ${SITE}`,
