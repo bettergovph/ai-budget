@@ -78,7 +78,9 @@ Analysis**; what the old hero said (what the NEP is, that this covers four of
 the bill's programs, not the whole bill) opens the page under it.
 
 The story page (`/hgab/2027/intro`) is the **Explainer**: that is its sub-nav
-label, right after Overview, and its hero kicker over the same title.
+label, right after Overview, and its hero kicker over the same title. Hidden
+since 2026-11-01: it is out of the sub-nav, the sitemap and the overview, and
+`/intro` redirects to the overview. `HgabIntro.tsx` is kept for its return.
 
 ## Candidate changes
 

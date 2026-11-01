@@ -16,7 +16,6 @@ const Nep2027Explore = lazy(() => import('./pages/Nep2027Explore'));
 const Nep2027Methodology = lazy(() => import('./pages/Nep2027Methodology'));
 const Hearings = lazy(() => import('./pages/Hearings'));
 const HearingDetail = lazy(() => import('./pages/HearingDetail'));
-const HgabIntro = lazy(() => import('./pages/HgabIntro'));
 const HgabOverview = lazy(() => import('./pages/HgabOverview'));
 const HgabSources = lazy(() => import('./pages/HgabSources'));
 const HgabExplorer = lazy(() => import('./pages/HgabExplorer'));
@@ -106,10 +105,10 @@ export default function App() {
               The static pages and the Districts lens are declared before
               `:dataset` so they can never be mistaken for a dataset key. */}
           <Route path="/hgab" element={<Navigate to="/hgab/2027" replace />} />
-          {/* The section lands on the overview; the story-style Explainer
-              stays at /intro, listed right after it in the sub-nav. */}
+          {/* The section lands on the overview. The story-style Explainer
+              (pages/HgabIntro.tsx) is hidden for now; /intro goes to the overview. */}
           <Route path="/hgab/2027" element={<Navigate to="/hgab/2027/overview" replace />} />
-          <Route path="/hgab/2027/intro" element={<HgabIntro />} />
+          <Route path="/hgab/2027/intro" element={<Navigate to="/hgab/2027/overview" replace />} />
           <Route path="/hgab/2027/overview" element={<HgabOverview />} />
           <Route path="/hgab/2027/sources" element={<HgabSources />} />
           <Route path="/hgab/2027/methodology" element={<HgabMethodology />} />

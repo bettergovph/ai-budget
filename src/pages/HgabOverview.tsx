@@ -1,8 +1,8 @@
 /**
  * `/hgab/2027/overview` — what House Bill 10858 changed against the NEP, for
  * the four programs where the bill prints project-level detail. The section's
- * landing page (`/hgab` and `/hgab/2027` redirect here); the story version,
- * the Explainer, is `/hgab/2027/intro`.
+ * landing page (`/hgab` and `/hgab/2027` redirect here, and for now so does
+ * `/hgab/2027/intro`, the hidden story-style Explainer).
  *
  * Everything on this page comes from one `overview.json`. Counts and money
  * stay separate per dataset on purpose: the four programs have different
@@ -87,9 +87,6 @@ export default function HgabOverview() {
             This is not the whole bill. The bill covers every department. Only four programs list
             named projects in both documents, so only those four can be compared line by line.
             Totals for everything else are in <Link to="/2027/browse">the NEP browser</Link>.
-          </p>
-          <p className="hgab-recon-note">
-            For a short, guided version, <Link to={`${HGAB_ROOT}/intro`}>read the explainer</Link>.
           </p>
         </div>
         <HgabStageStrip />
