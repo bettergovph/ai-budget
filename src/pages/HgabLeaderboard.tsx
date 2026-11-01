@@ -28,7 +28,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import {
-  BoardLinks, BoardPager, BoardTile, CardBoundary, CongressTables, MembersTable, RankingTable, RegionsTable, ShiftTable,
+  BoardLinks, BoardPager, BoardTile, CardBoundary, CongressTables, LinesTable, MembersTable, RankingTable, RegionsTable, ShiftTable,
 } from '../components/HgabLeaderboardBits';
 import type { ShareCardApi } from '../components/HgabShareCard';
 import { copyText, downloadBlob, shareImage } from '../lib/hgab-share';
@@ -36,7 +36,7 @@ import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadHgabLeaderboard, type RegionKey } from '../lib/hgab';
 import {
   BOARDS, BOARD_SECTIONS, DEO_MEANING, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
-  asOfText, leaderboardPath, rankEntries, rankMembers, rankRegions, residualLine,
+  asOfText, boardBuiltAt, leaderboardPath, lineUnit, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
 import '../nep2027.css';
@@ -50,6 +50,7 @@ const SOURCE_LINE =
   'SOURCE: NEP 2027 · HOUSE BILL 10858, THIRD READING · ENACTED BUDGETS (GAA) 2020–2026 · DEO2LEG OFFICE-TO-DISTRICT MAP · BILLS.JURIS.PH';
 const NEP_MEANS = 'The NEP is the budget the President submits to Congress each August.';
 const NEP_GLOSS = `${NEP_MEANS} The House bill is House Bill 10858, third reading.`;
+const WHOLE_DOCS = 'the NEP 2027 data from the budget department, and House Bill 10858 Volumes I-A and I-B (third reading).';
 const SEAT_NOW = 'The representative shown holds the legislative district’s seat now, in the 20th Congress.';
 const SEAT_NOTE = `${SEAT_NOW} The 2020 to 2025 budgets were passed by the 18th and 19th Congresses.`;
 
@@ -209,7 +210,8 @@ function Gallery({
         dek={
           <>
             DPWH district engineering offices (DEOs) ranked by their budgets in the 2027 House bill and the NEP,
-            and by enacted budgets since 2020. {NEP_MEANS} Each board opens as an image to download and share.{' '}
+            and by enacted budgets since 2020, then departments, agencies and budget lines across the whole House
+            bill. {NEP_MEANS} Each board opens as an image to download and share.{' '}
             <span className="hgab-lb-asof">{asOfText(data)}.</span>
           </>
         }
@@ -369,7 +371,7 @@ function BoardPage({
       <span className="hgab-crumb-here">{board.kicker}</span>
     </>
   );
-  const built = data.built_at ? new Date(data.built_at) : null;
+  const built = boardBuiltAt(data, board) ? new Date(boardBuiltAt(data, board)) : null;
 
   return (
     <>
@@ -434,22 +436,22 @@ function BoardPage({
               </button>
             </div>
             <p className="hgab-lb-status" role="status">
-              {problem ?? (api ? `PNG, ${api.width.toLocaleString()} × ${api.height.toLocaleString()} pixels · ${asOfText(data)}` : 'Drawing the image…')}
+              {problem ?? (api ? `PNG, ${api.width.toLocaleString()} × ${api.height.toLocaleString()} pixels · ${asOfText({ built_at: boardBuiltAt(data, board) })}` : 'Drawing the image…')}
             </p>
 
             {/* Right beside the actions: what a shared image must not be read as saying. */}
-            <DisclaimerNotice compact offices heading="Before you share" className="hgab-lb-share-note" />
+            <DisclaimerNotice compact offices={board.kind !== 'lines'} heading="Before you share" className="hgab-lb-share-note" />
 
             <section className="hgab-lb-about" aria-labelledby="hgab-lb-about-h">
               <h2 id="hgab-lb-about-h">About this board</h2>
               <ul>
                 {board.notes.map((n) => <li key={n}>{n}</li>)}
-                {(board.section === 'fy2027' || board.section === 'picture') && <li>{NEP_GLOSS}</li>}
+                {(board.section === 'fy2027' || board.section === 'picture' || board.section === 'wholebill') && <li>{NEP_GLOSS}</li>}
                 {board.section === 'history' && <li>{SEAT_NOTE}</li>}
               </ul>
               <p className="hgab-lb-about-credits">
                 {showsPeople(board) && <>{sentence(data.credits.portraits)} {sentence(data.credits.representatives)} </>}
-                Documents: {sentence(data.credits.documents)}
+                Documents: {board.kind === 'lines' ? WHOLE_DOCS : sentence(data.credits.documents)}
                 {built && <> Built {built.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}.</>}{' '}
                 <Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
               </p>
@@ -504,6 +506,13 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
       table = <RegionsTable data={data} board={board} />;
       break;
     }
+    case 'lines': {
+      const n = rankLines(data, board).eligible;
+      heading = 'The full ranking';
+      line = `${n.toLocaleString()} ${lineUnit(board, n)}. Open one to see its lines, office by office, in the line-by-line explorer.`;
+      table = <LinesTable data={data} board={board} />;
+      break;
+    }
   }
   return (
     <section className="hgab-lb-ranking" aria-labelledby="hgab-lb-table-h">
@@ -513,7 +522,7 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
       </header>
       {table}
       <p className="hgab-lb-credit">
-        {DEO_MEANING} {showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
+        {board.kind !== 'lines' && <>{DEO_MEANING} </>}{showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
         <Link to={`${HGAB_ROOT}/methodology`}>How the figures are built</Link>
       </p>
     </section>

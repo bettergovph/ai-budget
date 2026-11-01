@@ -87,7 +87,11 @@ async function main() {
     console.error(`${opts.data} not found — run \`npm run build:hgab-leaderboard\` first.`);
     process.exit(1);
   }
-  const data = JSON.parse(readFileSync(opts.data, "utf8")) as unknown;
+  const data = JSON.parse(readFileSync(opts.data, "utf8")) as Record<string, unknown>;
+  // The whole-bill boards read their rows from the line-by-line explorer's boards.json (the page's loader attaches it the same way).
+  const wholeBill = resolve(opts.data, "..", "explorer", "boards.json");
+  if (existsSync(wholeBill)) data.whole_bill = JSON.parse(readFileSync(wholeBill, "utf8"));
+  else console.warn(`${wholeBill} not found — the whole-bill boards will draw empty (npm run build:hgab-lines).`);
   mkdirSync(opts.out, { recursive: true });
 
   const jobs: Job[] = [];
