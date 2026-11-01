@@ -10,7 +10,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
-  EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl, volumeName,
+  EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, NEP_HOW_NOTE, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl, volumeName,
   type ExLine, type ExNode, type LineStatus,
 } from '../lib/hgab-explorer';
 
@@ -142,6 +142,7 @@ function useMarks(nodes: ExNode[], query: string) {
 
 export function ExTree({ nodes, changedOnly, query, openDepth = 1 }: TreeProps) {
   const marks = useMarks(nodes, query);
+  const [firsts] = useState(() => new WeakMap<ExNode, Refs>());  // keyed by node, so new data just misses
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
 
@@ -193,7 +194,7 @@ export function ExTree({ nodes, changedOnly, query, openDepth = 1 }: TreeProps) 
             {moved ? <span className="hgab-ex-moved" title="The total is the same in both, but some lines under it moved between places or names.">Same total, moved within</span>
               : marks.changed.get(n) ? null : <span className="hgab-ex-none">All same</span>}
           </td>
-          <td />
+          <td className="hgab-ex-page"><PageRefs {...firstRefs(n, firsts)} group={KIND_LABEL[n.k]?.toLowerCase() || 'group'} /></td>
         </tr>,
       );
       if (!on) return;
@@ -213,7 +214,7 @@ export function ExTree({ nodes, changedOnly, query, openDepth = 1 }: TreeProps) 
             <th className="num">House bill</th>
             <th className="num">Change</th>
             <th>Label</th>
-            <th>Page</th>
+            <th title="The page that prints each line in the NEP and in the House bill. A group links to the first page where it appears.">Pages</th>
           </tr>
         </thead>
         <tbody>
@@ -225,6 +226,83 @@ export function ExTree({ nodes, changedOnly, query, openDepth = 1 }: TreeProps) 
         </tbody>
       </table>
     </div>
+  );
+}
+
+type Refs = { p?: ExLine['p']; q?: ExLine['q'] };
+
+/** The earlier of two page references, in document order (volume, then PDF page). */
+function earlier<T extends [string, number, ...unknown[]]>(a: T | undefined, b: T | undefined): T | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return b[0] < a[0] || (b[0] === a[0] && b[1] < a[1]) ? b : a;
+}
+
+/** A group's first page in each document, from the lines under it (memoised per tree). */
+function firstRefs(n: ExNode, memo: WeakMap<ExNode, Refs>): Refs {
+  const hit = memo.get(n);
+  if (hit) return hit;
+  let p: Refs['p'];
+  let q: Refs['q'];
+  let absent: Refs['q'];  // NEP tables that lack a House-bill-only line: only if nothing better
+  for (const x of n.x ?? []) {
+    p = earlier(p, x.p);
+    if (x.q?.[3] === 'x') absent = earlier(absent, x.q);
+    else q = earlier(q, x.q);
+  }
+  for (const c of n.c ?? []) {
+    const r = firstRefs(c, memo);
+    p = earlier(p, r.p);
+    q = earlier(q, r.q);
+  }
+  const out = { p, q: q ?? absent };
+  memo.set(n, out);
+  return out;
+}
+
+const pageText = (r: [string, number, number, ...unknown[]]) =>
+  `${volumeName(r[0]).replace('Vol. ', '')} p.${r[2] || `${r[1]} (PDF)`}`;
+
+/**
+ * Proof of reference: the NEP page and the House bill page that print a line (or, for a group, the
+ * first page where it appears). Each opens the published PDF at that page.
+ */
+function PageRefs({ p, q, a, status, group }: Refs & { a?: 1; status?: ExLine['s']; group?: string }) {
+  const where = group ? `Where this ${group} begins in` : 'The page that prints this line in';
+  return (
+    <span className="hgab-ex-refs">
+      {q ? (
+        <a
+          className="hgab-ex-ref"
+          href={linePdf(q)}
+          target="_blank"
+          rel="noreferrer"
+          title={`NEP ${volumeName(q[0])}, page ${q[2] || '(none printed)'}, PDF page ${q[1]}. ${!group && q[3] ? NEP_HOW_NOTE[q[3]].help : `${where} the NEP.`}`}
+        >
+          <span className="hgab-ex-ref-doc">NEP</span> {pageText(q)}
+          {!group && q[3] && <span className="hgab-ex-ref-how"> · {NEP_HOW_NOTE[q[3]].short}</span>}
+        </a>
+      ) : (
+        <span className="hgab-ex-ref is-none" title={status === 'house_only' ? 'Not in the NEP, and no NEP table for its activity was found.' : 'No NEP page found for this line yet.'}>
+          <span className="hgab-ex-ref-doc">NEP</span> —
+        </span>
+      )}
+      {p ? (
+        <a
+          className="hgab-ex-ref"
+          href={linePdf(p)}
+          target="_blank"
+          rel="noreferrer"
+          title={`House bill ${volumeName(p[0])}, page ${p[2]}${!group && p[3] ? `, line ${p[3]}` : ''}${a ? ' (list of non-implementing schools)' : ''}, PDF page ${p[1]}. ${where} the House bill.`}
+        >
+          <span className="hgab-ex-ref-doc">HB</span> {pageText(p)}{a && <span className="hgab-ex-ref-how"> · list</span>}
+        </a>
+      ) : (
+        <span className="hgab-ex-ref is-none" title={status === 'nep_only' ? 'Not in the House bill.' : 'No House bill page for this line.'}>
+          <span className="hgab-ex-ref-doc">HB</span> —
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -244,18 +322,7 @@ function LineRow({ x, depth }: { x: ExLine; depth: number }) {
       <td className="num"><Amount v={x.h} strong /></td>
       <td className="num"><ExChange nep={x.n} house={x.h} /></td>
       <td className="hgab-ex-status"><ExStatusChip status={x.s} /></td>
-      <td className="hgab-ex-page">
-        {x.p ? (
-          <a
-            href={linePdf(x.p)}
-            target="_blank"
-            rel="noreferrer"
-            title={`House bill ${volumeName(x.p[0])}, page ${x.p[2]}${x.p[3] ? `, line ${x.p[3]}` : ''}${x.a ? ' (list of non-implementing schools)' : ''} — PDF page ${x.p[1]}`}
-          >
-            {volumeName(x.p[0]).replace('Vol. ', '')} p.{x.p[2]}{x.a ? ' ·list' : ''}
-          </a>
-        ) : null}
-      </td>
+      <td className="hgab-ex-page"><PageRefs p={x.p} q={x.q} a={x.a} status={x.s} /></td>
     </tr>
   );
 }

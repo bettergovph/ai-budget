@@ -8,7 +8,7 @@ by expense class. NEP rows no bill leaf claims are reported as NEP-only.
 
 Usage: compare.py hb_line_items.csv nep.duckdb out_dir [deped_annex.csv [reading_changes.csv]]
 """
-import csv, collections, difflib, json, re, sys
+import csv, collections, difflib, json, os, re, sys
 import duckdb
 
 REG_CODE = {'NCR': '13', 'I': '01', 'CAR': '14', 'II': '02', 'III': '03', 'IVA': '04', 'IVB': '17',
@@ -71,6 +71,19 @@ def fund_kind_nep(fundcd):
     return None
 
 
+# How firmly nep_pages.py pinned a row to its page, strongest first.
+PAGE_HOW = ['line', 'amount', 'division', 'division_list', 'program', 'activity']
+
+
+def nep_page(rows):
+    """The NEP page for a line made of these NEP rows: the most firmly pinned, then the largest."""
+    pinned = [n for n in rows if n.get('pg')]
+    if not pinned:
+        return {'nep_doc': '', 'nep_pdf_page': '', 'nep_printed_page': '', 'nep_page_how': ''}
+    n = min(pinned, key=lambda n: (PAGE_HOW.index(n['pg']['nep_page_how']), -n['amt']))
+    return {k: n['pg'][k] for k in ('nep_doc', 'nep_pdf_page', 'nep_printed_page', 'nep_page_how')}
+
+
 def best(name, choices, cutoff=0.86):
     m = difflib.get_close_matches(name, choices, n=1, cutoff=cutoff)
     return m[0] if m else None
@@ -90,7 +103,13 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
         order by all""").fetchall()  # fixed order: claim() takes the first free candidate
     cols = ['sorder', 'dept', 'dept_dsc', 'agency', 'agy_dsc', 'pap', 'dsc', 'reg', 'operdiv', 'div_dsc',
             'operunit', 'oper_dsc', 'fundcd', 'exp', 'amt']
-    nep = [dict(zip(cols, r)) for r in nep]
+    raw, nep = nep, [dict(zip(cols, r)) for r in nep]
+    # The NEP page that prints each row (nep_pages.py), keyed on every grouping column.
+    pages = {}
+    if os.path.exists(f'{out_dir}/nep_pages.csv'):
+        pages = {x['nep_key']: x for x in csv.DictReader(open(f'{out_dir}/nep_pages.csv')) if x['nep_doc']}
+    for n, r in zip(nep, raw):
+        n['pg'] = pages.get('|'.join('' if v is None else str(v) for v in r[:14]))
     hdr = {}
     for so, d, a, code, dsc in con.execute("""select distinct SORDER, DEPARTMENT, AGENCY, PREXC_FPAP_ID, DSC
                                               from nep where PREXC_FPAP_ID is not null""").fetchall():
@@ -302,6 +321,7 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
             claimed_by[n['i']] = (sp['ak'], sp['nact'], r['uacs_exp_cd'])
             sp['nep_amt'] += n['amt']
             sp['paps'].add(n['pap'])
+            sp.setdefault('pgs', []).append(n)
             got = True
         if got and sp['match'] is None:
             sp['match'] = how
@@ -387,6 +407,14 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
         elif re.search(r'health facilities enhancement', r['pap_path'], re.I):
             scope = 'infra: DOH HFEP (workbench)'
         rec['scope'] = scope
+        pg = nep_page(sp.get('pgs', []))
+        if not pg['nep_doc'] and status == 'house_only_line':
+            # Proof of absence: the page where the NEP prints this activity, without this line.
+            first = min((n for n in sp.get('cand') or () if n.get('pg')),
+                        key=lambda n: (n['pg']['nep_doc'], int(n['pg']['nep_pdf_page'])), default=None)
+            if first:
+                pg = {**{k: first['pg'][k] for k in ('nep_doc', 'nep_pdf_page', 'nep_printed_page')}, 'nep_page_how': 'activity_table'}
+        rec.update(pg)
         rec.update({'activity_match': act_how, 'location_match': sp['match'],
                     'nep_prexc_fpap_id': ';'.join(sorted(p for p in sp['paps'] if p)),
                     'nep_amount': nep_amt, 'hb_amount': hb_amt, 'delta': hb_amt - nep_amt, 'status': status})
@@ -395,12 +423,14 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
     # NEP rows nobody claimed, rolled up to activity x region x OU x sub x fund x exp
     mapped_agencies = {(h['sorder'], h['dept'], h['agency']) for h, _, _ in agency_map.values() if h}
     rest = collections.defaultdict(int)
+    rest_rows = collections.defaultdict(list)
     for n in nep:
         if n['i'] in used:
             continue
         key = (n['sorder'], n['dept'], n['dept_dsc'], n['agency'], n['agy_dsc'], n['pap'], n['dsc'], n['reg'],
                n['div_dsc'] if n['operdiv'] and n['operdiv'] != n['operunit'] else None, n['oper_dsc'], n['fk'], n['exp'])
         rest[key] += n['amt']
+        rest_rows[key].append(n)
     nep_only = []
     for key, amt in rest.items():
         so, d, dd, a, ad, pap, dsc, reg, div, ou, fk, exp = key
@@ -408,7 +438,8 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
                          'nep_prexc_fpap_id': pap, 'activity': dsc, 'uacs_reg_id': reg, 'division': div,
                          'operating_unit': ou, 'fund_kind': fk, 'uacs_exp_cd': exp, 'nep_amount': amt,
                          'agency_in_bill': (so, d, a) in mapped_agencies,
-                         'status': 'nep_only_line' if (so, d, a) in mapped_agencies else 'nep_only_agency'})
+                         'status': 'nep_only_line' if (so, d, a) in mapped_agencies else 'nep_only_agency',
+                         **nep_page(rest_rows[key])})
 
     with open(f'{out_dir}/hb_vs_nep_lines.csv', 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=list(out[0].keys()))

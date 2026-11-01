@@ -156,8 +156,14 @@
 .hgab-ex-moved { font-size: 11px; color: var(--neutral); }
 .hgab-ex-chip { font-size: 9.5px; padding: 1px 6px; }
 .hgab-ex-page { white-space: nowrap; font-family: var(--font-mono); font-size: 11px; }
-.hgab-ex-page a { color: var(--ink-3); text-decoration: none; border-bottom: 1px solid var(--rule); }
-.hgab-ex-page a:hover { color: var(--accent); border-color: var(--accent); }
+/* Proof of reference: NEP page, then House bill page, stacked so the column stays narrow. */
+.hgab-ex-refs { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.hgab-ex-page a.hgab-ex-ref { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft, #e8efff); }
+.hgab-ex-page a.hgab-ex-ref:hover { border-color: var(--accent); }
+.hgab-ex-ref-doc { display: inline-block; min-width: 2.4em; color: var(--ink-3); font-weight: 700; letter-spacing: 0.04em; }
+.hgab-ex-ref-how { color: var(--ink-3); }
+.hgab-ex-ref.is-none { color: var(--ink-mute); }
+.hgab-ex-row .hgab-ex-ref { opacity: 0.85; }
 
 /* --- downloads --------------------------------------------------------------- */
 
