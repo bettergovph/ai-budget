@@ -131,8 +131,8 @@ export default function HgabExplorerDept() {
         {!shown.length && <p className="nep-empty">No agency here has a line that matches.</p>}
 
         <p className="nep-provenance">
-          <Link to={explorerPath()}>All departments</Link> · amounts in pesos as published · the page link opens the
-          House bill PDF at that page
+          <Link to={explorerPath()}>All departments</Link> · <Link to={`${explorerPath()}#downloads`}>download the whole dataset</Link>{' '}
+          · amounts in pesos as published · the page link opens the House bill PDF at that page
         </p>
         <DisclaimerNotice />
       </main>

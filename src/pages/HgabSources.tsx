@@ -23,9 +23,18 @@ import {
 } from '../lib/hgab';
 import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
 import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
+import { EXPLORER_ROOT, downloadUrl } from '../lib/hgab-explorer';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
+
+/** The line-by-line dataset's headline files (the explorer lists every one, from its manifest). */
+const LINE_FILES = [
+  { file: 'house-bill-2027-line-by-line.zip', kind: 'Every CSV' },
+  { file: 'house-bill-2027-lines.parquet', kind: 'Every line' },
+  { file: 'house-bill-2027-lines-vs-nep.parquet', kind: 'Against the NEP' },
+  { file: 'README.md', kind: 'Columns' },
+] as const;
 
 export default function HgabSources() {
   const [ov, setOv] = useState<HgabOverview | null>(null);
@@ -143,7 +152,7 @@ export default function HgabSources() {
         <section className="nep-section" aria-labelledby="hgab-src-dl">
           <SectionHead
             eyebrow="Downloads"
-            headline={<span id="hgab-src-dl">The {(2 + DATASET_ORDER.length * 2).toLocaleString()} files this section reads</span>}
+            headline={<span id="hgab-src-dl">The {(2 + DATASET_ORDER.length * 2 + LINE_FILES.length).toLocaleString()} files this section reads</span>}
             dek="Every figure on these pages comes from these files, so you can check or reuse them. Amounts are in whole pesos; an empty value means that document has no such line, not zero."
           />
           <div className="hgab-downloads">
@@ -153,6 +162,17 @@ export default function HgabSources() {
               <ul>
                 <li><a href={dataUrl(`${HGAB_BASE}/overview.json`)}>overview.json</a><span className="hgab-dl-kind">JSON</span></li>
                 <li><a href={dataUrl(`${HGAB_BASE}/manifest.json`)}>manifest.json</a><span className="hgab-dl-kind">JSON</span></li>
+              </ul>
+            </div>
+            <div className="hgab-dl-group">
+              <h3>Line by line: the whole House bill</h3>
+              <p className="hgab-dl-sub">
+                every line, matched to the NEP · <Link to={`${EXPLORER_ROOT}#downloads`}>all files, with what each holds</Link>
+              </p>
+              <ul>
+                {LINE_FILES.map((f) => (
+                  <li key={f.file}><a href={downloadUrl(f.file)}>{f.file}</a><span className="hgab-dl-kind">{f.kind}</span></li>
+                ))}
               </ul>
             </div>
             {DATASET_ORDER.map((k) => {

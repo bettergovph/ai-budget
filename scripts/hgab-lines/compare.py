@@ -207,6 +207,7 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
                     if int(x[col]):
                         e = dict(r)
                         e.update({'sub_unit': x['school'], 'amount': int(x[col]), 'leaf_type': 'ANNEX_SCHOOL',
+                                  'volume': '1b',  # the schools list is in Vol I-B; the division line it splits is in I-A
                                   'pdf_page': x['pdf_page'], 'printed_page': x['printed_page'], 'line': '',
                                   'warn': 'from the non-implementing-schools annex'})
                         expanded.append(e)

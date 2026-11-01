@@ -15,8 +15,8 @@ import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, pdfUrl } from '../lib/hgab';
 import {
-  EXPLORER_ROOT, STATUS_LABEL, explorerPath, fullPhp, loadExplorerIndex, titleCase,
-  type ExIndex, type ExIndexRow, type LineStatus,
+  EXPLORER_ROOT, STATUS_LABEL, downloadUrl, explorerPath, fileSize, fullPhp, loadExplorerDownloads, loadExplorerIndex, titleCase,
+  type DownloadsManifest, type ExIndex, type ExIndexRow, type LineStatus,
 } from '../lib/hgab-explorer';
 import '../nep2027.css';
 import '../hgab-explorer.css';
@@ -163,6 +163,8 @@ export default function HgabExplorer() {
           </div>
         </section>
 
+        <ExplorerDownloads />
+
         <section className="nep-section hgab-ex-legend" aria-label="What the labels mean">
           <SectionHead eyebrow="Labels" headline="What each line's label means" />
           <dl className="hgab-ex-legend-list">
@@ -199,5 +201,77 @@ export default function HgabExplorer() {
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+/**
+ * "Download the data": the extracted dataset behind this page, as published files (CSV for
+ * spreadsheets, Parquet for analysts, one zip with every CSV and the column guide). Read from
+ * downloads/manifest.json, so sizes and row counts are the files' own.
+ */
+function ExplorerDownloads() {
+  const [m, setM] = useState<DownloadsManifest | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    loadExplorerDownloads().then(setM).catch(() => setErr(true));
+  }, []);
+  if (err) return null;
+  return (
+    <section className="nep-section hgab-ex-downloads" id="downloads" aria-labelledby="hgab-ex-dl-h">
+      <SectionHead
+        eyebrow="Download the data"
+        headline={<span id="hgab-ex-dl-h">Every line, as files you can reuse</span>}
+        dek="The lines on these pages, extracted from the House bill and matched to the NEP. CSV opens in any spreadsheet; Parquet is for analysts."
+      />
+      {!m ? <p className="hgab-ex-none">Loading the list of files…</p> : (
+        <>
+          <p className="hgab-ex-dl-all">
+            <a className="hgab-ex-dl-zip" href={downloadUrl(m.zip.file)} download>
+              Download everything <span>({fileSize(m.zip.bytes)} zip: {m.files.length} CSV files and a column guide)</span>
+            </a>
+            <a href={downloadUrl(m.readme.file)}>What every column means</a>
+          </p>
+          <div className="nep-table-wrap">
+            <table className="nep-table hgab-ex-dl-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th className="num">Rows</th>
+                  <th>CSV</th>
+                  <th>Parquet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {m.files.map((f) => (
+                  <tr key={f.key}>
+                    <td>
+                      <strong>{f.title}</strong>
+                      <span className="hgab-ex-dl-about">{f.about}</span>
+                    </td>
+                    <td className="num">{f.rows.toLocaleString()}</td>
+                    <td className="hgab-ex-dl-link">
+                      <a href={downloadUrl(f.csv.file)} download title={`SHA-256 ${f.csv.sha256}`}>{f.csv.file}</a>
+                      <small>{fileSize(f.csv.bytes)}</small>
+                    </td>
+                    <td className="hgab-ex-dl-link">
+                      {f.parquet ? (
+                        <>
+                          <a href={downloadUrl(f.parquet.file)} download title={`SHA-256 ${f.parquet.sha256}`}>{f.parquet.file}</a>
+                          <small>{fileSize(f.parquet.bytes)}</small>
+                        </>
+                      ) : <span className="hgab-ex-none">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="nep-provenance">
+            Integer pesos, as published; an empty amount means the document has no such line. {m.notice} Built{' '}
+            {m.built_at.slice(0, 10)}{m.pipeline_commit ? ` from pipeline commit ${m.pipeline_commit}` : ''}. Hover a file name for its SHA-256.
+          </p>
+        </>
+      )}
+    </section>
   );
 }

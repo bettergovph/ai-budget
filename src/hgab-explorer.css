@@ -159,6 +159,25 @@
 .hgab-ex-page a { color: var(--ink-3); text-decoration: none; border-bottom: 1px solid var(--rule); }
 .hgab-ex-page a:hover { color: var(--accent); border-color: var(--accent); }
 
+/* --- downloads --------------------------------------------------------------- */
+
+.hgab-ex-dl-all { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 24px; margin: 0 0 14px; }
+.hgab-ex-dl-zip {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 2px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.hgab-ex-dl-zip:hover, .hgab-ex-dl-zip:focus-visible { background: var(--accent-deep); }
+.hgab-ex-dl-zip span { font-weight: 400; opacity: 0.85; }
+.hgab-ex-dl-table td { vertical-align: top; }
+.hgab-ex-dl-about { display: block; margin-top: 3px; font-size: 12px; line-height: 1.45; color: var(--ink-3); max-width: 720px; }
+.hgab-ex-dl-link { white-space: nowrap; font-family: var(--font-mono); font-size: 11.5px; }
+.hgab-ex-dl-link small { display: block; color: var(--ink-mute); }
+
 @media (max-width: 760px) {
   .hgab-ex-name { min-width: 220px; }
   .hgab-ex-controls { position: static; }
