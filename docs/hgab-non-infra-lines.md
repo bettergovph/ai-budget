@@ -213,14 +213,14 @@ none is assigned.
 
 ## Leaderboards (section "2027: the whole House bill, by department")
 
-There are eight boards of kind `lines` in `src/lib/hgab-leaderboard.ts`. They rank rows from
+There are nine boards of kind `lines` in `src/lib/hgab-leaderboard.ts`. They rank rows from
 `explorer/boards.json`, which `build_explorer.py` writes and the leaderboard loader attaches as
 `whole_bill`. `leaderboard.json` itself is unchanged.
 
 | Board | Ranks | Top of the board |
 | --- | --- | --- |
 | `departments-increase` / `departments-cuts` | departments and special purpose funds, House bill minus the NEP | DSWD +₱22.07B; DOTr −₱40.45B |
-| `departments-pct` | the same, by percent, rises and cuts together (₱1B+ in the NEP) | DICT −33.3%, CSC −27.8%, Congress +18.5% |
+| `departments-increase-pct` / `departments-cuts-pct` | the same, in percent (₱1B+ in the NEP); the mixed-sign `departments-pct` was split on 2026-11-01 and its links open the cuts board | Congress +18.5%, DOLE +13.1%; DICT −33.3%, CSC −27.8% |
 | `agencies-increase` / `agencies-cuts` | agencies, GOCC subsidies and funds | DSWD Office of the Secretary +₱22.07B; DOTr Office of the Secretary −₱40.45B |
 | `lines-increase` / `lines-cuts` | budget lines in both documents, all regions, offices and expense classes added up | DSWD crisis assistance +₱24.81B; Metro Manila Subway −₱19.70B |
 | `lines-added` | budget lines with no line of that name in the NEP (candidates) | DA Presidential Assistance for Farmers and Fisherfolk ₱10.00B |
@@ -245,10 +245,12 @@ There are eight boards of kind `lines` in `src/lib/hgab-leaderboard.ts`. They ra
 - every row's change equals House bill minus NEP, and every row has an explorer link;
 - the line boards contain no farm-to-market, HFEP or NIA lines.
 
-It also checks every whole-bill board's first row is the true extreme of its pool.
+It also checks that every whole-bill board's first row is the true extreme of its pool, that an
+increases board holds no cut and a cuts board no increase, and that every retired board id opens a
+current board.
 
 **Link previews.** Build them with
-`npm run build:hgab-share -- --boards=departments-increase,departments-cuts,departments-pct,agencies-increase,agencies-cuts,lines-increase,lines-cuts,lines-added`.
+`npm run build:hgab-share -- --boards=departments-increase,departments-cuts,departments-increase-pct,departments-cuts-pct,agencies-increase,agencies-cuts,lines-increase,lines-cuts,lines-added`.
 They land in `data/hgab/2027/share/`. Rebuild them after `npm run build:hgab-lines` whenever the
 figures change.
 
@@ -256,7 +258,7 @@ figures change.
 
 - Review `review_matches.csv` (309 lines) before publishing: fuzzy agency, activity, office and
   school names, and 51 House-bill-only activities.
-- Deploy: merge the branch, then publish `data/hgab/2027/explorer/` (with `boards.json`) and the
-  eight new `share/*.png` previews with `npm run upload:hgab`. That uploads the whole `hgab/2027`
-  tree.
+- Live since 2026-11-01 (PRs #34 and #36). A data refresh means `npm run build:hgab-lines`, then
+  the whole-bill previews with `build:hgab-share`, then `upload:hgab`. That uploads the whole
+  `hgab/2027` tree, including anything else built locally, so check its dry run first.
 - Not yet in the D1 API or MCP.

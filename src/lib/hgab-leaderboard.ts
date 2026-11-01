@@ -280,8 +280,6 @@ export interface BoardDef {
   rowMetric?: (r: WholeBillRow) => number | null;
   rowKeep?: (r: WholeBillRow) => boolean;
   rowDetail?: (r: WholeBillRow) => string | null;
-  /** Rank by size whatever the sign (a percent board that shows rises and falls together). */
-  byMagnitude?: boolean;
 }
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
@@ -293,6 +291,7 @@ const SHARED_NOTE = 'A DPWH office that serves several legislative districts is 
 const GAA_NOTE = 'Enacted budgets list the whole office. New or renamed offices have fewer years; earlier years stay with their old office.';
 
 const WHOLE_NOTE = 'Every appropriation line of the House bill (third reading) against the NEP. Unprogrammed appropriations are not in the NEP data and are left out.';
+const PCT_FLOOR_NOTE = 'Only departments and funds with ₱1 billion or more in the NEP, so small budgets do not dominate.';
 const DPWH_IN_NOTE = 'DPWH figures include its project list, which the DPWH boards rank by office.';
 const LINE_NOTE = 'A budget line is a program, activity or project, all its regions, offices and expense classes added up. DPWH projects, farm-to-market roads, health facilities and irrigation have their own pages and are left out.';
 const MATCH_NOTE = 'Lines are matched by name within each agency. A line renamed between the two documents is matched through the House bill’s second reading where it can be.';
@@ -451,12 +450,21 @@ export const BOARDS: readonly BoardDef[] = [
     regionFilter: false,
   },
   {
-    id: 'departments-pct', section: 'wholebill', kind: 'lines', value: 'pct', order: 'desc', byMagnitude: true,
+    id: 'departments-increase-pct', section: 'wholebill', kind: 'lines', value: 'pct', order: 'desc',
     kicker: '2027 · whole House bill · by department',
-    title: 'Largest changes in percent, by department',
-    subtitle: 'Percent change from the NEP to the House bill, up or down, for departments and funds with ₱1 billion or more in the NEP.',
-    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) !== 0, rowDetail: nepToHouse,
-    notes: ['Ranked by the size of the change, rises and cuts together. Only departments and funds with ₱1 billion or more in the NEP.', WHOLE_NOTE],
+    title: 'Biggest increases in percent, by department',
+    subtitle: 'Percent change from the NEP to the House bill, for departments and funds with ₱1 billion or more in the NEP.',
+    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) > 0, rowDetail: nepToHouse,
+    notes: [PCT_FLOOR_NOTE, WHOLE_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'departments-cuts-pct', section: 'wholebill', kind: 'lines', value: 'pct', order: 'asc',
+    kicker: '2027 · whole House bill · by department',
+    title: 'Biggest cuts in percent, by department',
+    subtitle: 'Percent change from the NEP to the House bill, for departments and funds with ₱1 billion or more in the NEP.',
+    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) < 0, rowDetail: nepToHouse,
+    notes: [PCT_FLOOR_NOTE, WHOLE_NOTE],
     regionFilter: false,
   },
   {
@@ -568,8 +576,16 @@ export const BOARDS: readonly BoardDef[] = [
   },
 ];
 
+/**
+ * Board ids that were retired, and the board their links now open. "departments-pct"
+ * ranked rises and cuts together by size; it was split on 2026-11-01, and its old
+ * links open the cuts board, which held most of its top rows.
+ */
+export const BOARD_ALIASES: Readonly<Record<string, string>> = { 'departments-pct': 'departments-cuts-pct' };
+
 export function boardById(id: string | undefined): BoardDef | undefined {
-  return BOARDS.find((b) => b.id === id);
+  const want = id != null ? BOARD_ALIASES[id] ?? id : id;
+  return BOARDS.find((b) => b.id === want);
 }
 
 // ---------------------------------------------------------------------------
@@ -734,18 +750,17 @@ export function lineUnit(board: BoardDef, n: number): string {
   return n === 1 ? one : many;
 }
 
-/** A lines board's rows, best first (by size for `byMagnitude`), ties by label. Empty when the data is not loaded. */
+/** A lines board's rows, best first, ties by label. Empty when the data is not loaded. */
 export function rankLines(data: LeaderboardData, board: BoardDef, opts: { limit?: number } = {}): { rows: RankedLine[]; eligible: number } {
   const set = board.rowSet ? data.whole_bill?.[board.rowSet] : undefined;
   if (!set || !board.rowMetric) return { rows: [], eligible: 0 };
   const m = board.rowMetric;
   const dir = board.order === 'asc' ? 1 : -1;
-  const key = (v: number) => (board.byMagnitude ? Math.abs(v) : v);
   const pool = set
     .map((r) => ({ r, v: m(r) }))
     .filter((x): x is { r: WholeBillRow; v: number } => x.v != null && Number.isFinite(x.v) && (!board.rowKeep || board.rowKeep(x.r)))
-    .sort((a, b) => (key(a.v) - key(b.v)) * dir || a.r.label.localeCompare(b.r.label));
-  const ranks = competitionRanks(pool, (x) => key(x.v));
+    .sort((a, b) => (a.v - b.v) * dir || a.r.label.localeCompare(b.r.label));
+  const ranks = competitionRanks(pool, (x) => x.v);
   const rows = pool.map((x, i) => ({ rank: ranks[i], row: x.r, value: x.v }));
   return { rows: opts.limit != null ? rows.slice(0, opts.limit) : rows, eligible: pool.length };
 }

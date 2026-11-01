@@ -24,7 +24,7 @@
  * who asked for any project.
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import {
@@ -102,6 +102,12 @@ export default function HgabLeaderboard() {
   const region = isRegionKey(rawRegion) && (!board || board.regionFilter) ? rawRegion : null;
   const rawFormat = params.get('format');
   const format: ShareFormat = isShareFormat(rawFormat) ? rawFormat : 'portrait';
+
+  // A retired board id (BOARD_ALIASES) opens its replacement, at the replacement's own address.
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (board && boardId && board.id !== boardId) navigate(leaderboardPath(board.id, { region, format }), { replace: true });
+  }, [board, boardId, region, format, navigate]);
 
   const unknown = Boolean(boardId && !board);
   useEffect(() => {
