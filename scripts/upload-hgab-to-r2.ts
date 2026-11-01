@@ -72,13 +72,18 @@ function contentTypeFor(path: string): string {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
   // letters/<slug>.txt (npm run build:hgab-letters): UTF-8 with BOM, linked as a download.
   if (path.endsWith(".txt")) return "text/plain; charset=utf-8";
+  // explorer/downloads/README.md (npm run build:hgab-lines): the data dictionary, opened in the browser.
+  if (path.endsWith(".md")) return "text/plain; charset=utf-8";
+  if (path.endsWith(".zip")) return "application/zip";
   return "application/octet-stream";
 }
 /** A file directly in letters/: every one is rebuilt with the data. */
 const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
-/** JSON, CSV and the letters change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
+/** explorer/downloads/: the line-by-line dataset, fixed names rebuilt with the data. */
+const isLineDownload = (path: string) => /[\\/]explorer[\\/]downloads[\\/][^\\/]+$/.test(path);
+/** JSON, CSV, the letters and the line-by-line downloads change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isLineDownload(path) ? "public, max-age=300" : "public, max-age=86400";
 }
 /** A CSV or a letter is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {
@@ -86,6 +91,8 @@ function contentDispositionFor(path: string): string | undefined {
   if (isLetter(path) && /\.(pdf|txt)$/.test(name)) {
     return `attachment; filename="${letterDownloadName(name.replace(/\.(pdf|txt)$/, ""), name.endsWith(".pdf") ? "pdf" : "txt")}"`;
   }
+  // Their names already say what they are (house-bill-2027-lines.csv, nep-2027-...).
+  if (isLineDownload(path) && /\.(csv|parquet|zip)$/.test(name)) return `attachment; filename="bettergov-${name}"`;
   if (!path.endsWith(".csv")) return undefined;
   return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }

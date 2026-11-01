@@ -5,8 +5,9 @@
 #   HB_PDF_GLOB   3rd-reading volumes          (default: ~/.paseo/uploads/*/hb-10858-vol-{v}.pdf)
 #   HB2_DIR       2nd-reading volumes          (default: the workbench clone's HB_BUDGET/)
 #   NEP_CSV       the DBM NEP extract           (default: ~/projects/2027-budget/NEP-FY2027.csv)
-#   OUT           output directory              (default: data/hgab-lines/2027, NOT under data/hgab/2027,
-#                                                which upload:hgab publishes wholesale)
+#   OUT           working outputs               (default: data/hgab-lines/2027, NOT under data/hgab/2027,
+#                                                which upload:hgab publishes wholesale). The explorer data and
+#                                                the public downloads go to data/hgab/2027/explorer/.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
@@ -49,3 +50,6 @@ echo "== NEP comparison"
 
 echo "== Explorer data (/hgab/2027/explorer; published with the rest of hgab/2027 by upload:hgab)"
 "$py" build_explorer.py "$OUT" "${EXPLORER_OUT:-$root/data/hgab/2027/explorer}"
+
+echo "== Downloads (the extracted dataset, published with the explorer)"
+"$py" build_downloads.py "$OUT" "${EXPLORER_OUT:-$root/data/hgab/2027/explorer}/downloads"

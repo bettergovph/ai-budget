@@ -1,7 +1,7 @@
 # House bill line by line (HB 10858 against the NEP)
 
-Status: built 2026-10-31 and run locally. The explorer at `/hgab/2027/explorer` is not yet deployed,
-and its data is not yet uploaded to R2.
+Status: live since 2026-11-01. The explorer is at `/hgab/2027/explorer`, and the line-by-line
+dataset downloads from its "Download the data" section (`#downloads`).
 
 | | |
 | --- | --- |
@@ -9,6 +9,7 @@ and its data is not yet uploaded to R2.
 | Run | `npm run build:hgab-lines` (`scripts/hgab-lines/run.sh`, about 2 minutes) |
 | Working outputs | `data/hgab-lines/2027/`, deliberately not under `data/hgab/2027/`, which `upload:hgab` publishes wholesale |
 | Explorer data | `data/hgab/2027/explorer/`, published with the next `upload:hgab` |
+| Downloads | `data/hgab/2027/explorer/downloads/` (`build_downloads.py`, the last step of `run.sh`) |
 | UI | `src/pages/HgabExplorer*.tsx`, `src/components/HgabExplorerBits.tsx`, `src/lib/hgab-explorer.ts`, `src/hgab-explorer.css` |
 
 Every money line in the House bill's appropriation tables is set beside the NEP line it matches,
@@ -211,6 +212,52 @@ none is assigned.
   - every House bill line links to its PDF page.
 - Copy follows `docs/hgab-copy.md`, and every page carries the comparison disclaimer.
 
+## Downloads (`explorer/downloads/`)
+
+`build_downloads.py` turns the working outputs into reader-facing files. The columns are renamed
+for readers, amounts are in whole pesos, and the status codes are spelled out. It writes:
+
+| File | Rows | From |
+| --- | --- | --- |
+| `house-bill-2027-lines.csv` + `.parquet` | 29,022 | every 3rd-reading line (`hb_line_items.csv`) |
+| `house-bill-2027-lines-2nd-reading.csv` | 29,021 | the 2nd-reading print |
+| `house-bill-2027-reading-changes.csv` | 7 | lines that differ between the readings |
+| `house-bill-2027-lines-vs-nep.csv` + `.parquet` | 49,084 | `hb_vs_nep_lines.csv`, DepEd schools expanded from the annex |
+| `nep-2027-lines-not-in-house-bill.csv` | 257 | `nep_only_lines.csv` |
+| `house-bill-2027-objects-vs-nep.csv` + `.parquet` | 10,959 | `object_compare.csv`; thousands × 1,000, and multi-page references kept as text (`27;33;34`) |
+| `house-bill-2027-deped-schools.csv` | 8,811 | the Vol I-B non-implementing schools list |
+| `house-bill-2027-sbdp-barangays.csv` | 1,948 | the SBDP barangay list (no amounts) |
+
+It also writes:
+
+- `README.md`, the data dictionary, generated from the same `FILES` table that writes the CSVs, so the
+  two cannot drift;
+- `manifest.json`, with the build time, the pipeline commit, totals, and each file's rows, columns,
+  size and SHA-256;
+- `house-bill-2027-line-by-line.zip` (2.3 MB), which holds every CSV and the README.
+
+The vs-NEP status values are `same`, `higher`, `lower`, `house_bill_only_line`,
+`house_bill_only_activity`, `unprogrammed` and `agency_not_in_nep`. The `scope` column marks lines
+covered by a workbench page: `dpwh_projects`, `farm_to_market_roads`, `health_facilities`,
+`nia_irrigation`; everything else is `whole_bill`.
+
+**Where they show.** The explorer index has a "Download the data" section (`#downloads`): the zip, the
+README, and a table of files with rows, sizes, and CSV and Parquet links. Each department page links
+to it, and `/hgab/2027/sources` lists the zip, the two main Parquet files and the README.
+
+**Checks.** `verify:hgab` adds five:
+
+- the manifest is present;
+- every listed file matches its size and SHA-256;
+- rows and columns match the manifest, and each CSV matches its Parquet;
+- lines add up to the House bill, vs-NEP rows add up to both documents (NEP plus NEP-only rows
+  equals the NEP), and the bill minus unprogrammed equals the NEP;
+- the zip holds the README and every CSV.
+
+**Fixes made while building them.** Annex school rows now point to Vol I-B, where the schools list
+is printed; they used to point to the Vol I-A division line. A printed page number ("711") no longer
+leaks into the first school name on an annex page.
+
 ## Leaderboards (section "2027: the whole House bill, by department")
 
 There are nine boards of kind `lines` in `src/lib/hgab-leaderboard.ts`. They rank rows from
@@ -258,7 +305,9 @@ figures change.
 
 - Review `review_matches.csv` (309 lines) before publishing: fuzzy agency, activity, office and
   school names, and 51 House-bill-only activities.
-- Live since 2026-11-01 (PRs #34 and #36). A data refresh means `npm run build:hgab-lines`, then
-  the whole-bill previews with `build:hgab-share`, then `upload:hgab`. That uploads the whole
-  `hgab/2027` tree, including anything else built locally, so check its dry run first.
+- Live since 2026-11-01 (PRs #34 and #36). A data refresh means `npm run build:hgab-lines` (which
+  rebuilds the downloads too), then the whole-bill previews with `build:hgab-share`, then
+  `upload:hgab`. That uploads the whole `hgab/2027` tree, including anything else built locally, so
+  check its dry run first. Rebuild the downloads after committing, so `manifest.json` names a commit
+  that exists.
 - Not yet in the D1 API or MCP.

@@ -103,6 +103,49 @@ export function loadExplorerDept(id: string): Promise<ExDept> {
     getJson<ExDept>(dataUrl(`${BASE}/d/${encodeURIComponent(id)}.json`), 'Failed to load this department'));
 }
 
+// ---------------------------------------------------------------------------
+// The extracted dataset as downloads (explorer/downloads/, scripts/hgab-lines/build_downloads.py)
+// ---------------------------------------------------------------------------
+
+export interface DownloadFile { file: string; bytes: number; sha256: string }
+
+export interface DownloadEntry {
+  key: string;
+  title: string;
+  about: string;
+  rows: number;
+  csv: DownloadFile;
+  parquet?: DownloadFile;
+  /** Column → what it means (also in README.md). */
+  columns: Record<string, string>;
+}
+
+export interface DownloadsManifest {
+  schema: 1;
+  built_at: string;
+  pipeline_commit: string;
+  notice: string;
+  totals: { house_bill_php: number; house_bill_unprogrammed_php: number; nep_php: number; lines: number; lines_vs_nep: number };
+  readme: DownloadFile;
+  zip: DownloadFile;
+  files: DownloadEntry[];
+}
+
+export function loadExplorerDownloads(): Promise<DownloadsManifest> {
+  return cached('explorer:downloads', () =>
+    getJson<DownloadsManifest>(dataUrl(`${BASE}/downloads/manifest.json`), 'Failed to load the list of downloads'));
+}
+
+/** Address of one download (R2 in production, public/data in development). */
+export function downloadUrl(file: string): string {
+  return dataUrl(`${BASE}/downloads/${file}`);
+}
+
+/** "9.0 MB", "245 KB". */
+export function fileSize(bytes: number): string {
+  return bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+}
+
 export function explorerPath(deptId?: string): string {
   return deptId ? `${EXPLORER_ROOT}/${deptId}` : EXPLORER_ROOT;
 }

@@ -683,6 +683,7 @@ async function main(): Promise<void> {
   }
 
   await verifyLeaderboard(overview, c, lens);
+  await verifyLineDownloads(c);
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
@@ -883,6 +884,55 @@ function contractFields(src: string, name: string, indent = 2): string[] {
   if (!m) throw new Error(`interface ${name} not found in ${LEADERBOARD_CONTRACT}`);
   const own = [...m[2].matchAll(new RegExp(`^ {${indent}}([a-z0-9_]+)\\??:`, "gm"))].map((x) => x[1]);
   return m[1] ? [...contractFields(src, m[1]), ...own] : own;
+}
+
+// ---------------------------------------------------------------------------
+// The line-by-line dataset as downloads (npm run build:hgab-lines): explorer/downloads/
+// ---------------------------------------------------------------------------
+
+async function verifyLineDownloads(c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nexplorer/downloads (the line-by-line dataset)\n");
+  const dir = resolve(OUT, "explorer", "downloads");
+  const mpath = resolve(dir, "manifest.json");
+  check("explorer/downloads/manifest.json present (npm run build:hgab-lines)", existsSync(mpath), mpath);
+  if (!existsSync(mpath)) return;
+  interface F { file: string; bytes: number; sha256: string }
+  const M = readJson<{ totals: { house_bill_php: number; house_bill_unprogrammed_php: number; nep_php: number; lines: number; lines_vs_nep: number };
+    readme: F; zip: F; files: { key: string; rows: number; csv: F; parquet?: F; columns: Record<string, string> }[] }>(mpath);
+  const listed: F[] = [M.readme, M.zip, ...M.files.flatMap((f) => (f.parquet ? [f.csv, f.parquet] : [f.csv]))];
+  const badFiles = listed.filter((f) => {
+    const p = resolve(dir, f.file);
+    return !existsSync(p) || statSync(p).size !== f.bytes || createHash("sha256").update(readFileSync(p)).digest("hex") !== f.sha256;
+  });
+  check(`every listed file is present with its size and SHA-256 (${listed.length} files)`, badFiles.length === 0, badFiles.map((f) => f.file).join(", "));
+  const q = async (sql: string) => (await (await c.runAndReadAll(sql)).getRowObjects())[0] as Record<string, unknown>;
+  const csvOf = (key: string) => `read_csv('${resolve(dir, `${key}.csv`).replace(/'/g, "''")}', header = true, sample_size = -1)`;
+  const num = (v: unknown) => Number(v ?? 0);
+  // Rows and headers equal the manifest; the CSV and the Parquet hold the same rows.
+  const badRows: string[] = [];
+  for (const f of M.files) {
+    const r = await q(`SELECT count(*) AS n FROM ${csvOf(f.key)}`);
+    const cols = (await (await c.runAndReadAll(`DESCRIBE SELECT * FROM ${csvOf(f.key)}`)).getRowObjects()).map((x) => String(x.column_name));
+    if (num(r.n) !== f.rows || JSON.stringify(cols) !== JSON.stringify(Object.keys(f.columns))) badRows.push(`${f.key}: ${num(r.n)} rows`);
+    if (f.parquet) {
+      const p = await q(`SELECT count(*) AS n FROM read_parquet('${resolve(dir, f.parquet.file).replace(/'/g, "''")}')`);
+      if (num(p.n) !== f.rows) badRows.push(`${f.parquet.file}: ${num(p.n)} rows`);
+    }
+  }
+  check(`every file has the rows and columns its manifest entry and README list (${M.files.length} datasets)`, badRows.length === 0, badRows.join("; "));
+  // Totals: the lines add up to the bill; against the NEP, the House side is the bill and NEP plus NEP-only is the NEP.
+  const lines = await q(`SELECT sum(amount_php) AS h, count(*) AS n FROM ${csvOf("house-bill-2027-lines")}`);
+  const vs = await q(`SELECT sum(house_bill_php) AS h, sum(nep_php) AS n FROM ${csvOf("house-bill-2027-lines-vs-nep")}`);
+  const nepOnly = await q(`SELECT sum(nep_php) AS n FROM ${csvOf("nep-2027-lines-not-in-house-bill")}`);
+  const unprog = M.totals.house_bill_unprogrammed_php;
+  check(`lines add up to the House bill (${num(lines.h).toLocaleString()} pesos, ${num(lines.n).toLocaleString()} lines); against the NEP, the House side is the bill and NEP + NEP-only lines = the NEP; without unprogrammed the two are equal`,
+    num(lines.h) === M.totals.house_bill_php && num(vs.h) === M.totals.house_bill_php && num(vs.n) + num(nepOnly.n) === M.totals.nep_php
+      && M.totals.house_bill_php - unprog === M.totals.nep_php,
+    `lines ${num(lines.h)}, vs-NEP house ${num(vs.h)}, NEP ${num(vs.n)} + ${num(nepOnly.n)} vs ${M.totals.nep_php}, unprogrammed ${unprog}`);
+  // The zip holds the README and every CSV.
+  const zip = readFileSync(resolve(dir, M.zip.file)).toString("latin1");
+  const missingInZip = ["README.md", ...M.files.map((f) => f.csv.file)].filter((n) => !zip.includes(n));
+  check("the zip holds README.md and every CSV", missingInZip.length === 0, missingInZip.join(", "));
 }
 
 async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: LensCheck | null): Promise<void> {

@@ -42,13 +42,15 @@ def main(out, a=728, b=873):
                 printed = int(ws[0][4])
             elif y < 40 and ws and ws[-1][4].isdigit():
                 printed = int(ws[-1][4])
+            elif y > 730 and len(ws) == 1 and ws[0][4].isdigit():
+                printed = int(ws[0][4])  # the list's first page numbers itself at the foot ("711")
         started = False
         for y, ws in rows:
             toks = [w[4] for w in ws]
             if toks == ['PS', 'MOOE', 'TOTAL', 'MOOE']:
                 started = True
                 continue
-            if not started or y > 745:
+            if not started or y > 745 or (y > 730 and len(ws) == 1 and ws[0][4].isdigit()):
                 continue
             amt_zone = cols[0][1] - 40
             amts = [w for w in ws if (AMT.match(w[4]) or w[4] == '-') and w[0] > amt_zone]
