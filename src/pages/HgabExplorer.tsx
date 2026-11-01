@@ -226,10 +226,10 @@ function ExplorerDownloads() {
       {!m ? <p className="hgab-ex-none">Loading the list of files…</p> : (
         <>
           <p className="hgab-ex-dl-all">
-            <a className="hgab-ex-dl-zip" href={downloadUrl(m.zip.file)} download>
+            <a className="hgab-ex-dl-zip" href={downloadUrl(m.zip)} download>
               Download everything <span>({fileSize(m.zip.bytes)} zip: {m.files.length} CSV files and a column guide)</span>
             </a>
-            <a href={downloadUrl(m.readme.file)}>What every column means</a>
+            <a href={downloadUrl(m.readme)}>What every column means</a>
           </p>
           <div className="nep-table-wrap">
             <table className="nep-table hgab-ex-dl-table">
@@ -250,13 +250,13 @@ function ExplorerDownloads() {
                     </td>
                     <td className="num">{f.rows.toLocaleString()}</td>
                     <td className="hgab-ex-dl-link">
-                      <a href={downloadUrl(f.csv.file)} download title={`SHA-256 ${f.csv.sha256}`}>{f.csv.file}</a>
+                      <a href={downloadUrl(f.csv)} download title={`SHA-256 ${f.csv.sha256}`}>{f.csv.file}</a>
                       <small>{fileSize(f.csv.bytes)}</small>
                     </td>
                     <td className="hgab-ex-dl-link">
                       {f.parquet ? (
                         <>
-                          <a href={downloadUrl(f.parquet.file)} download title={`SHA-256 ${f.parquet.sha256}`}>{f.parquet.file}</a>
+                          <a href={downloadUrl(f.parquet)} download title={`SHA-256 ${f.parquet.sha256}`}>{f.parquet.file}</a>
                           <small>{fileSize(f.parquet.bytes)}</small>
                         </>
                       ) : <span className="hgab-ex-none">—</span>}
