@@ -99,7 +99,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
-  BOARDS, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
+  BOARDS, BOARD_ALIASES, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
   type LeaderEntry, type LeaderSlice, type LeaderboardData, type WholeBillData,
 } from "../src/lib/hgab-leaderboard";
 import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
@@ -1185,12 +1185,13 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
     if (b.kind === "lines") {
       const r = LB.rankLines(L, b);
       const set = (b.rowSet && L.whole_bill?.[b.rowSet]) || [];
-      const mag = (v: number) => (b.byMagnitude ? Math.abs(v) : v);
-      const pool = set.filter((x) => { const v = b.rowMetric!(x); return v != null && Number.isFinite(v) && (!b.rowKeep || b.rowKeep(x)); }).map((x) => mag(b.rowMetric!(x)!));
+      const pool = set.filter((x) => { const v = b.rowMetric!(x); return v != null && Number.isFinite(v) && (!b.rowKeep || b.rowKeep(x)); }).map((x) => b.rowMetric!(x)!);
       const n = r.rows.length;
+      // One direction per board: an increases board holds no cut, a cuts board no increase.
+      const oneSign = b.value === "php" || r.rows.every((x) => (b.order === "asc" ? x.value < 0 : x.value > 0));
       return {
-        ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && mag(r.rows[0].value) === best(pool, b.order)
-          && r.rows.every((x, i) => i === 0 || (b.order === "asc" ? mag(x.value) >= mag(r.rows[i - 1].value) : mag(x.value) <= mag(r.rows[i - 1].value))),
+        ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && r.rows[0].value === best(pool, b.order) && oneSign
+          && r.rows.every((x, i) => i === 0 || (b.order === "asc" ? x.value >= r.rows[i - 1].value : x.value <= r.rows[i - 1].value)),
         detail: `${n} rows; first ${r.rows[0] ? `${r.rows[0].row.label} ${LB.formatValue(r.rows[0].value, b.value)}` : "none"}`,
       };
     }
@@ -1228,6 +1229,8 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
     const n = [BK.deo, BK.central, BK.regional].filter((s) => s.nep_php > 0 && s.hgab3_php > 0).length;
     return { ok: n === 3, detail: `${n} office kinds with both figures` };
   };
+  const aliasBad = Object.entries(BOARD_ALIASES).filter(([from, to]) => LB.BOARDS.some((b) => b.id === from) || !LB.BOARDS.some((b) => b.id === to));
+  check(`retired board ids open a current board (${Object.keys(BOARD_ALIASES).join(", ")})`, aliasBad.length === 0, aliasBad.map(([f, t]) => `${f} → ${t}`).join("; "));
   for (const b of LB.BOARDS) {
     const { ok, detail } = boardResult(b);
     check(`board ${b.id}: at least ${EXPECTED_LEADERBOARD.min_rows} rows and the first is the ${b.order === "asc" ? "minimum" : "maximum"} of its pool (${detail})`, ok, detail);
