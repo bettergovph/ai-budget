@@ -53,6 +53,13 @@ export const HOUSE_ADDRESS: readonly string[] = [
 /** Who prepared the template: in the letterhead, on every page's footer and in the notes. */
 export const LETTER_CREDIT = 'People’s Budget Coalition and BetterGov.ph';
 
+/** Copied on every letter, after the enclosures: the House leadership and the committee that shape the budget bill. */
+export const COPY_FURNISHED: readonly string[] = [
+  'The Speaker of the House of Representatives',
+  'The Majority Leader, House of Representatives',
+  'The Chairperson, Committee on Appropriations, House of Representatives',
+];
+
 /** Blank rows on the signature sheet (one A4 page). */
 export const SIGNATURE_ROWS = 20;
 
@@ -273,6 +280,7 @@ export type LetterBlock =
   | { kind: 'requests'; items: Array<{ text: string; sub?: string[] }> }
   | { kind: 'closing'; lines: string[] }
   | { kind: 'enclosures'; items: string[] }
+  | { kind: 'copies'; items: string[] }
   | { kind: 'signatures'; title: string; intro: string; columns: string[]; rows: number }
   | { kind: 'annex'; id: 'A' | 'B' | 'C'; title: string; intro: string; columns: LetterColumn[]; rows: LetterPart[][][]; total: string }
   | { kind: 'notes'; title: string; items: string[] };
@@ -478,6 +486,7 @@ export function composeLetter(data: LetterData): LetterDoc {
   if (drop) enclosures.push(`Annex C: ${count(drop, 'project')} in the NEP that the House bill does not list`);
   enclosures.push('About these figures');
   blocks.push({ kind: 'enclosures', items: enclosures });
+  blocks.push({ kind: 'copies', items: [...COPY_FURNISHED] });
 
   // Signature sheet.
   const names = recipients.map((r) => (r.status === 'resolved' && r.names[0] ? `Hon. ${formalName(r.names[0]).full}` : `the Representative of ${r.district}`));
@@ -609,6 +618,9 @@ export function letterText(doc: LetterDoc): string {
       case 'enclosures':
         out.push('Enclosures:', ...b.items.map((t) => `  ${t}`), '');
         break;
+      case 'copies':
+        out.push('Copy furnished:', ...b.items.map((t) => `  ${t}`), '');
+        break;
       case 'signatures':
         out.push(rule, b.title.toLocaleUpperCase('en-US'), '', b.intro, '');
         for (let k = 1; k <= b.rows; k++) {
@@ -713,6 +725,9 @@ export function letterHtml(doc: LetterDoc): string {
         break;
       case 'enclosures':
         h.push(`<div class="lt-enc"><p>Enclosures:</p><ul>${b.items.map((t) => `<li>${inline(t)}</li>`).join('')}</ul></div>`);
+        break;
+      case 'copies':
+        h.push(`<div class="lt-enc lt-cc"><p>Copy furnished:</p><ul>${b.items.map((t) => `<li>${inline(t)}</li>`).join('')}</ul></div>`);
         break;
       case 'signatures':
         h.push(

@@ -876,7 +876,10 @@ disclaimers in plain words (the amounts are the office's, shared totals are not 
 candidate is not a finding, the documents do not say who asked) and link the full text on
 the Methodology page instead of quoting the technical paragraphs. The letterhead and every
 page footer credit the People's Budget Coalition and BetterGov.ph; the sender's name, group,
-address, email, mobile and the date are blanks under the signature.
+address, email, mobile and the date are blanks under the signature. After the enclosures, every
+letter is copied ("Copy furnished") to the Speaker, the Majority Leader and the Chairperson of
+the Committee on Appropriations, by title, not by name (`COPY_FURNISHED`). The page's sending
+steps ask the sender to give each office a copy and get a stamped receiving copy.
 
 Contacts: the address is the House's (Batasang Pambansa Complex, Constitution Hills, Quezon
 City 1126). bills.juris.ph `/api/authors` carries no email or phone (checked 2026-10-28, list
@@ -889,7 +892,8 @@ Run after `build:hgab-districts`, `build:hgab-leaderboard` and `build:hgab-chang
 `upload:hgab` publishes `letters/` with `Content-Disposition: attachment` and a 5-minute cache
 on every file. `verify:hgab` checks one letter per district with all three files, recipients,
 annexes against the list and the parquet, figures against the leaderboard, every text file
-against a fresh composition, and the plain disclaimers with their link.
+against a fresh composition, the copy to those three offices right after the enclosures, and
+the plain disclaimers with their link.
 
 ## Budget history
 
