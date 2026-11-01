@@ -27,7 +27,9 @@ irrigation keep their workbench pages. Their lines appear here too, tagged with 
 HB 10858 as published for the 3rd reading, Vols I-A and I-B. These are byte-identical to
 `hgab/2027/pdf/hb10858-3r-vol-i{a,b}.pdf` and to the workbench's `HB_BUDGET_3rd_reading/`. The 2nd
 reading is the workbench's `HB_BUDGET/` copy. The NEP side is `NEP-FY2027.csv`, fund 101\* (new
-appropriations).
+appropriations). For the NEP page of each line, the NEP itself: Vols I, II-A, II-B and III, the
+machine-read scans in the workbench's `dbm-nep-data/` (`NEP_PDF_DIR`), hosted as
+`hgab/2027/pdf/nep2027-vol-{i,iia,iib,iii}.pdf` (II-B was already hosted for DPWH, byte-identical).
 
 | Volume | Holds | Parsed |
 | --- | --- | --- |
@@ -214,8 +216,57 @@ none is assigned.
   - "Same total, moved within" on rolled-up rows;
   - a search box, and an "Only lines that differ" toggle (on by default; `?all=1` turns it off);
   - a CSV download per agency;
-  - every House bill line links to its PDF page.
+  - every row links the page that prints it in the NEP and in the House bill (below). A group row
+    links the first page where it appears in each.
 - Copy follows `docs/hgab-copy.md`, and every page carries the comparison disclaimer.
+
+## Proof of reference: NEP pages (`nep_pages.py`)
+
+The NEP CSV has no page numbers. The NEP volumes print the same lines in each agency's table "New
+Appropriations, by Programs/Activities/Projects (Cash-Based), by Operating Units". Each activity's
+UACS code is printed, then each region and office on one visual line, with amounts by expense class.
+
+`nep_pages.py` reads every page into visual lines of label, amounts and the activity code in force,
+in about 17 seconds, cached as `nep_pdf_lines.json.gz`. Running heads give each page's department
+or fund; within a department, an agency's pages are where its amounts cluster. It then gives each of
+the 48,910 NEP rows (compare.py's grouping) a page, in this order:
+
+| How | Rows | Share of NEP pesos | What the page prints |
+| --- | --- | --- | --- |
+| line | 27,436 | 89.3% | this line: same activity code, the office's name, the amount |
+| amount | 392 | 3.3% | this line: same activity code and amount (activity-level rows, or a name the scan garbled) |
+| division | 20,297 | 1.7% | a DepEd school with no budget of its own (on the bill's Vol I-B list): its division's "Division Office - Proper" line |
+| division_list | 149 | 0.0% | another DepEd school whose name was not found: where its division's list begins |
+| program | 93 | 3.1% | an activity printed only inside its program total (GOCC subsidies, e.g. PhilHealth's two activities inside "National Health Insurance Program") |
+| activity | 515 | 2.5% | where the activity's table begins (e.g. DPWH Central Office projects printed on the NCR line) |
+| none | 28 | 0.0% | no page |
+
+`compare.py` gives each line the page of its most firmly pinned NEP row. A House-bill-only line
+gets the NEP's table for its activity, which has no such line: the proof of absence. In the
+explorer these are `q` (`[volume, PDF page, printed page, how?]`) beside the House bill's `p`.
+
+The rules that keep false pages out came from checking against the PDFs:
+
+- **Generic words.** Names are compared on their distinctive words. "Tinubdan Integrated School"
+  otherwise looks like "Tabunan Integrated School".
+- **Crowded activities.** Under an activity with many lines, such as DepEd's junior high schools
+  (3,380 lines), an equal amount alone is not enough; the label must agree, and a school must sit
+  under its own division.
+- **OCR variants.** A running head read as "DEPARTMENT DF EDUCATION" does not count as a new section.
+- **Missing page numbers.** Printed page numbers missing from the scan are filled from neighbouring
+  pages when both sides agree.
+
+**Spot check** (independent, from the PDFs): of 1,800 random lines linked to their own NEP line,
+1,793 have the amount printed on that page and 7 have the name, with an amount the scan misread.
+All 150 sampled division links land on a page with a Division Office line, and 400 of 400 House
+bill links have the House bill amount printed on the page.
+
+**Checks** in `verify:hgab`:
+
+- every House bill line links its House bill page;
+- at least 99.5% of NEP lines link their NEP page (48,827 of 48,855);
+- House-bill-only links are marked as such;
+- every linked PDF is in the tree.
 
 ## Downloads (`explorer/downloads/`)
 

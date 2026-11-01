@@ -684,6 +684,7 @@ async function main(): Promise<void> {
 
   await verifyLeaderboard(overview, c, lens);
   await verifyLineDownloads(c);
+  verifyLineSources();
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
@@ -889,6 +890,39 @@ function contractFields(src: string, name: string, indent = 2): string[] {
 // ---------------------------------------------------------------------------
 // The line-by-line dataset as downloads (npm run build:hgab-lines): explorer/downloads/
 // ---------------------------------------------------------------------------
+
+/**
+ * Proof of reference on the line-by-line pages: every line links the page that prints it in the House
+ * bill and in the NEP (scripts/hgab-lines/nep_pages.py), and every linked PDF is in the tree.
+ */
+function verifyLineSources(): void {
+  process.stdout.write("\nexplorer pages (proof of reference)\n");
+  const dir = resolve(OUT, "explorer", "d");
+  if (!existsSync(dir)) return;
+  type Ref = [string, number, number, ...unknown[]];
+  interface X { n: number; h: number; s: string; p?: Ref; q?: Ref }
+  interface N { x?: X[]; c?: N[] }
+  const lines: X[] = [];
+  const walk = (ns: N[]) => ns.forEach((n) => { lines.push(...(n.x ?? [])); walk(n.c ?? []); });
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    for (const a of readJson<{ agencies: { tree: N[] }[] }>(resolve(dir, f)).agencies) walk(a.tree);
+  }
+  const hb = lines.filter((x) => x.h > 0);
+  const hbMissing = hb.filter((x) => !x.p).length;
+  check(`every House bill line links its House bill page (${hb.length.toLocaleString()} lines)`, hbMissing === 0, `${hbMissing} without`);
+  const nep = lines.filter((x) => x.n > 0);
+  const nepMissing = nep.filter((x) => !x.q).length;
+  check(`at least 99.5% of NEP lines link their NEP page (${(nep.length - nepMissing).toLocaleString()} of ${nep.length.toLocaleString()})`,
+    nepMissing <= nep.length * 0.005, `${nepMissing} without`);
+  const houseOnly = lines.filter((x) => x.s === "house_only" && x.q);
+  check("a House-bill-only line's NEP page is marked as the activity's table without it", houseOnly.every((x) => x.q?.[3] === "x"),
+    `${houseOnly.filter((x) => x.q?.[3] !== "x").length} unmarked`);
+  const docs = new Set(lines.flatMap((x) => [x.p?.[0], x.q?.[0]]).filter((d): d is string => !!d));
+  const missingPdf = [...docs].filter((d) => !existsSync(resolve(OUT, "pdf", `${d}.pdf`)));
+  check(`every linked PDF is in the tree (${[...docs].sort().join(", ")})`, missingPdf.length === 0, missingPdf.join(", "));
+  const badPage = lines.filter((x) => [x.p, x.q].some((r) => r && !(Number.isInteger(r[1]) && r[1] >= 1))).length;
+  check("every page reference has a PDF page from 1", badPage === 0, `${badPage} bad`);
+}
 
 async function verifyLineDownloads(c: DuckDBConnection): Promise<void> {
   process.stdout.write("\nexplorer/downloads (the line-by-line dataset)\n");

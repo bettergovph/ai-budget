@@ -5,6 +5,8 @@
 #   HB_PDF_GLOB   3rd-reading volumes          (default: ~/.paseo/uploads/*/hb-10858-vol-{v}.pdf)
 #   HB2_DIR       2nd-reading volumes          (default: the workbench clone's HB_BUDGET/)
 #   NEP_CSV       the DBM NEP extract           (default: ~/projects/2027-budget/NEP-FY2027.csv)
+#   NEP_PDF_DIR   the NEP volumes I, II-A, II-B, III (machine-read scans; default: the workbench clone's
+#                 dbm-nep-data/), for the NEP page of each line
 #   OUT           working outputs               (default: data/hgab-lines/2027, NOT under data/hgab/2027,
 #                                                which upload:hgab publishes wholesale). The explorer data and
 #                                                the public downloads go to data/hgab/2027/explorer/.
@@ -14,6 +16,7 @@ root="$(cd "$here/../.." && pwd)"
 OUT="${OUT:-$root/data/hgab-lines/2027}"
 NEP_CSV="${NEP_CSV:-$HOME/projects/2027-budget/NEP-FY2027.csv}"
 HB2_DIR="${HB2_DIR:-/tmp/dpwh-nep-head/HB_BUDGET}"
+NEP_PDF_DIR="${NEP_PDF_DIR:-/tmp/dpwh-nep-head/dbm-nep-data}"
 VENV="${VENV:-/tmp/hgab-lines-venv}"
 mkdir -p "$OUT/reading2"
 [ -x "$VENV/bin/python" ] || { uv venv -q "$VENV" && uv pip install -q --python "$VENV/bin/python" pymupdf duckdb; }
@@ -44,6 +47,12 @@ echo "== Vol I-B annexes"
 
 echo "== NEP comparison"
 [ -f "$OUT/nep.duckdb" ] || "$py" build_nep_db.py "$NEP_CSV" "$OUT/nep.duckdb"
+# The NEP page that prints each NEP row (needs the NEP PDF volumes; without them lines carry no NEP page)
+if [ -f "$NEP_PDF_DIR/NEP-2027-VOLUME-1_OCR.pdf" ]; then
+  NEP_PDF_DIR="$NEP_PDF_DIR" "$py" -W ignore nep_pages.py "$OUT/nep.duckdb" "$OUT" "$OUT/deped_niu_schools.csv"
+else
+  echo "   (NEP pages skipped: no NEP volumes in $NEP_PDF_DIR)"; rm -f "$OUT/nep_pages.csv"
+fi
 "$py" compare.py "$OUT/hb_line_items.csv" "$OUT/nep.duckdb" "$OUT" "$OUT/deped_niu_schools.csv" \
   "$( [ -f "$OUT/reading_changes.csv" ] && echo "$OUT/reading_changes.csv" )"
 "$py" compare_objects.py "$OUT/tables-vol1a.json" "$OUT/tables-vol1b.json" "$OUT/agency_map.json" "$OUT/nep.duckdb" "$OUT/object_compare.csv"

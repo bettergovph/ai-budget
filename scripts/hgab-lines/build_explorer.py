@@ -28,6 +28,22 @@ REGION_NAME = {'13': 'National Capital Region (NCR)', '01': 'Region I - Ilocos',
                '12': 'Region XII - SOCCSKSARGEN', '16': 'Region XIII - Caraga',
                '19': 'Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)', '00': 'Nationwide'}
 DOC = {'1a': 'hb10858-3r-vol-ia', '1b': 'hb10858-3r-vol-ib'}
+# nep_pages.py: how a line's NEP page was found. The line itself (no flag), or the line that holds it:
+# a DepEd school inside its division office ('d') or listed under its division from that page ('v'), an
+# activity inside its program total ('g'), the activity's page ('t');
+# for a House-bill-only line, the NEP's table for its activity, which does not have it ('x').
+NEP_HOW = {'line': None, 'amount': None, 'division': 'd', 'division_list': 'v', 'program': 'g', 'activity': 't',
+           'activity_table': 'x'}
+
+
+def nep_ref(r):
+    """[NEP volume, PDF page, printed page(, how)] for a compare.py row, or None."""
+    if not r.get('nep_doc'):
+        return None
+    q = [r['nep_doc'], int(r['nep_pdf_page']), int(r['nep_printed_page'] or 0)]
+    if NEP_HOW.get(r['nep_page_how']):
+        q.append(NEP_HOW[r['nep_page_how']])
+    return q
 LEVELS = [('section', 'section'), ('project_kind', 'kind'), ('class', 'class'), ('program', 'program'),
           ('subprogram', 'subprogram'), ('activity', 'activity'), ('region', 'region'),
           ('operating_unit', 'office'), ('sub_unit', 'unit'), ('fund_source', 'fund')]
@@ -239,6 +255,8 @@ def main(lines_dir, out_dir):
         x = {'e': r['uacs_exp_cd'], 'n': int(r['nep_amount']), 'h': int(r['hb_amount']), 's': STATUS[r['status']]}
         if r['pdf_page']:
             x['p'] = [DOC.get(r['volume'], r['volume']), int(r['pdf_page']), int(r['printed_page'] or 0), int(r['line'] or 0)]
+        if (q := nep_ref(r)):
+            x['q'] = q
         if r['leaf_type'] == 'ANNEX_SCHOOL':
             x['a'] = 1  # from the non-implementing-schools annex
         scope = SCOPE.get(r['scope'])
@@ -282,7 +300,10 @@ def main(lines_dir, out_dir):
             node = node.child('unit' if r['division'] else 'office', r['operating_unit'])
         if r['fund_kind']:
             node = node.child('fund', {'GOP': 'GOP Counterpart', 'LOAN': 'Loan Proceeds'}.get(r['fund_kind'], r['fund_kind']))
-        node.x.append({'e': r['uacs_exp_cd'], 'n': int(r['nep_amount']), 'h': 0, 's': 'nep_only'})
+        x = {'e': r['uacs_exp_cd'], 'n': int(r['nep_amount']), 'h': 0, 's': 'nep_only'}
+        if (q := nep_ref(r)):
+            x['q'] = q
+        node.x.append(x)
 
     objects = collections.defaultdict(list)
     if os.path.exists(f'{lines_dir}/object_compare.csv'):

@@ -42,8 +42,16 @@ export interface ExLine {
   n: number;
   h: number;
   s: LineStatus;
-  /** Published page: [document key, PDF page, page number shown on the page, line]. */
+  /** House bill page: [document key, PDF page, page number shown on the page, line]. */
   p?: [string, number, number, number];
+  /**
+   * NEP page: [document key, PDF page, page number shown on the page, how?]. Without `how` the page
+   * prints this line. Otherwise it prints the line that holds it: `d` a DepEd school inside its
+   * division office's line, `v` where its division's list begins, `g` an activity inside its program
+   * total, `t` the activity's opening page; `x` (House-bill-only lines) the NEP's table for the
+   * activity, which has no such line.
+   */
+  q?: [string, number, number, NepHow?];
   /** From the DepEd non-implementing-schools list (Vol I-B), not the main table. */
   a?: 1;
   /** Infrastructure covered in depth by the program pages. */
@@ -51,6 +59,8 @@ export interface ExLine {
   /** How a near-but-not-exact name was paired. */
   m?: string;
 }
+
+export type NepHow = 'd' | 'v' | 'g' | 't' | 'x';
 
 export type NodeKind =
   | 'section' | 'kind' | 'class' | 'program' | 'subprogram' | 'activity'
@@ -227,13 +237,24 @@ export function fullPhp(n: number): string {
   return `${n < 0 ? '−' : ''}₱${Math.abs(n).toLocaleString('en-US')}`;
 }
 
-export function linePdf(p: NonNullable<ExLine['p']>): string {
+export function linePdf(p: NonNullable<ExLine['p']> | NonNullable<ExLine['q']>): string {
   return pdfUrl(p[0], p[1]);
 }
 
+/** "Vol. I-A" (House bill), "Vol. II-B" (NEP). */
 export function volumeName(doc: string): string {
-  return doc.endsWith('-ia') ? 'Vol. I-A' : doc.endsWith('-ib') ? 'Vol. I-B' : doc;
+  const m = /-vol-(i{1,3}v?)(a|b)?$/.exec(doc);
+  return m ? `Vol. ${m[1].toUpperCase()}${m[2] ? `-${m[2].toUpperCase()}` : ''}` : doc;
 }
+
+/** What an NEP page holds when it is not the line itself (see ExLine.q). */
+export const NEP_HOW_NOTE: Record<NepHow, { short: string; help: string }> = {
+  d: { short: 'in division', help: 'This school has no line of its own in the NEP. Its amount is inside its division office’s line on this page.' },
+  v: { short: 'division list', help: 'Where the NEP’s list for this school’s division begins. The school is on this page or the pages after.' },
+  g: { short: 'in program', help: 'The NEP prints this activity only inside its program’s total, on this page.' },
+  t: { short: 'activity', help: 'The page where the NEP’s table for this activity begins.' },
+  x: { short: 'not listed', help: 'The NEP’s table for this activity. It has no line for this office and expense class.' },
+};
 
 /** Bill-style capitals ("DEPARTMENT OF HEALTH") read better in title case on screen. */
 export function titleCase(s: string): string {
@@ -307,6 +328,10 @@ export function agencyCsvRows(dept: ExDept, agency: ExAgency): Array<Record<stri
         house_bill_page: x.p ? x.p[2] : '',
         house_bill_pdf_page: x.p ? x.p[1] : '',
         house_bill_line: x.p ? x.p[3] : '',
+        nep_volume: x.q ? volumeName(x.q[0]) : '',
+        nep_page: x.q ? x.q[2] || '' : '',
+        nep_pdf_page: x.q ? x.q[1] : '',
+        nep_page_holds: x.q ? (x.q[3] ? NEP_HOW_NOTE[x.q[3]].help : 'this line') : '',
         note: [x.a ? 'from the non-implementing schools list' : '', x.m ?? ''].filter(Boolean).join('; '),
       });
     }

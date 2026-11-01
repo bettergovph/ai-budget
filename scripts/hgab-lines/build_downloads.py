@@ -60,6 +60,26 @@ COMMON = {
     'page': 'Page number shown on the page.',
     'line': 'Printed line number on the page (blank for the DepEd schools list).',
 }
+# The NEP page that prints a line (nep_pages.py), in the NEP volumes on R2 (hgab/2027/pdf/nep2027-vol-*.pdf).
+NEP_PAGE_COLUMNS = {
+    'nep_volume': 'NEP volume with the page (I, II-A, II-B or III); blank when no page was found.',
+    'nep_pdf_page': 'Page of that NEP PDF file.',
+    'nep_page': 'Page number shown on that NEP page (blank where the scan lost it).',
+    'nep_page_holds': 'What that page prints: line (this line), division_office (a DepEd school inside its division '
+                      'office’s line), division_list (where its division’s list begins), program_total (an activity '
+                      'printed only inside its program’s total), activity_start (where the activity’s table begins), '
+                      'activity_without_line (House-bill-only lines: the NEP’s table for the activity, without this line).',
+}
+NEP_VOL = {'nep2027-vol-i': 'I', 'nep2027-vol-iia': 'II-A', 'nep2027-vol-iib': 'II-B', 'nep2027-vol-iii': 'III'}
+NEP_HOLDS = {'line': 'line', 'amount': 'line', 'division': 'division_office', 'division_list': 'division_list',
+             'program': 'program_total', 'activity': 'activity_start', 'activity_table': 'activity_without_line'}
+
+
+def nep_page_cols(r):
+    if not r.get('nep_doc'):
+        return {'nep_volume': '', 'nep_pdf_page': '', 'nep_page': '', 'nep_page_holds': ''}
+    return {'nep_volume': NEP_VOL.get(r['nep_doc'], r['nep_doc']), 'nep_pdf_page': i(r['nep_pdf_page']),
+            'nep_page': i(r['nep_printed_page']), 'nep_page_holds': NEP_HOLDS.get(r['nep_page_how'], r['nep_page_how'])}
 FILES = {
     'house-bill-2027-lines': {
         'title': 'Every House bill line, third reading',
@@ -100,6 +120,7 @@ FILES = {
             'status': 'same, higher, lower, house_bill_only_line (activity found, place not), house_bill_only_activity (no NEP activity of that name), unprogrammed (not in the NEP data), agency_not_in_nep.',
             'activity_match': 'How the activity was matched: name, name at program level, fuzzy name, second-reading label, or unmatched.',
             'location_match': 'How the place was matched: exact, fuzzy office or school name, or division remainder.',
+            **NEP_PAGE_COLUMNS,
         },
     },
     'nep-2027-lines-not-in-house-bill': {
@@ -112,6 +133,7 @@ FILES = {
             'region_code': 'NEP region code.', 'region': 'Region name.', 'division': 'DepEd schools division.',
             'operating_unit': 'NEP operating unit.', 'fund_kind': 'GOP (counterpart) or LOAN for foreign-assisted funds.',
             'expense_class_code': COMMON['expense_class_code'], 'nep_php': 'NEP amount, pesos.',
+            **NEP_PAGE_COLUMNS,
         },
     },
     'house-bill-2027-objects-vs-nep': {
@@ -214,7 +236,7 @@ def main(lines_dir, out_dir):
         'nep_department_code': r['nep_dept'], 'nep_agency_code': r['nep_agency'], 'nep_agency': r['nep_agency_dsc'],
         'nep_prexc_fpap_id': r['nep_prexc_fpap_id'], 'nep_php': int(r['nep_amount']), 'house_bill_php': int(r['hb_amount']),
         'change_php': int(r['delta']), 'status': STATUS[r['status']], 'activity_match': r['activity_match'],
-        'location_match': r['location_match'],
+        'location_match': r['location_match'], **nep_page_cols(r),
     } for r in read(f'{lines_dir}/hb_vs_nep_lines.csv')]
 
     data['nep-2027-lines-not-in-house-bill'] = [{
@@ -222,7 +244,7 @@ def main(lines_dir, out_dir):
         'nep_agency': r['nep_agency_dsc'], 'nep_prexc_fpap_id': r['nep_prexc_fpap_id'], 'activity': r['activity'],
         'region_code': r['uacs_reg_id'], 'region': REGION_NAME.get(r['uacs_reg_id'], ''), 'division': r['division'],
         'operating_unit': r['operating_unit'], 'fund_kind': r['fund_kind'], 'expense_class_code': r['uacs_exp_cd'],
-        'nep_php': int(r['nep_amount']),
+        'nep_php': int(r['nep_amount']), **nep_page_cols(r),
     } for r in read(f'{lines_dir}/nep_only_lines.csv')]
 
     th = lambda v: int(v) * 1000 if v not in ('', None) else ''
@@ -295,7 +317,9 @@ def main(lines_dir, out_dir):
         '- House Bill 10858, General Appropriations Bill FY2027, third reading, Vols. I-A and I-B (Senate Budget Transparency Portal). '
         f'SHA-256 begins {DOC_SHA["I-A"]} (I-A) and {DOC_SHA["I-B"]} (I-B); copies at budget-assets.bettergov.ph/hgab/2027/pdf/.',
         '- The second reading, for the reading comparison.',
-        '- The FY2027 NEP data from the Department of Budget and Management: new appropriations (fund 101).', '',
+        '- The FY2027 NEP data from the Department of Budget and Management: new appropriations (fund 101).',
+        '- The FY2027 NEP itself, Vols. I, II-A, II-B and III (machine-read scans), for the NEP page of each line; '
+        'copies at budget-assets.bettergov.ph/hgab/2027/pdf/nep2027-vol-i.pdf, -vol-iia, -vol-iib and -vol-iii.', '',
         '## Totals', '',
         f'- House bill: ₱{totals["house_bill_php"]:,} in {totals["lines"]:,} lines, the total in the bill’s own Summary of New Appropriations.',
         f'- Without unprogrammed appropriations (₱{totals["house_bill_unprogrammed_php"]:,}): '
@@ -305,6 +329,7 @@ def main(lines_dir, out_dir):
         '- Names are as published, including the documents’ own spelling.',
         '- Lines are matched by name within each agency, at the level the House bill lists (activity, region, office, school, fund source). A line with no match may be new, renamed or moved.',
         '- DPWH’s project list (Vol. I-C), farm-to-market roads, HFEP and NIA irrigation are compared project by project on their own pages; their lines here are tagged in `scope`.',
+        '- Every line carries the page that prints it: in the House bill (`volume`, `pdf_page`, `page`, `line`) and in the NEP (`nep_volume`, `nep_pdf_page`, `nep_page`, `nep_page_holds`). Add `#page=` and the PDF page to a PDF address to open it there. NEP pages were found by matching each NEP line’s activity code, office and amount to the scan; `nep_page_holds` says when the page holds a line that contains this one instead.',
         '', '## Files', '',
     ]
     for e in files:

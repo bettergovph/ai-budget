@@ -193,8 +193,17 @@ export default function HgabExplorer() {
             DPWH's project list (Vol. I-C) is on the <Link to={`${HGAB_ROOT}/dpwh`}>DPWH pages</Link>.
           </p>
           <p>
+            Every line links the page that prints it in both documents. NEP pages were found by matching each
+            NEP line's activity code, office and amount to the NEP's pages. A DepEd school with no budget of
+            its own links its division office's line, which holds it. A line only in the House bill links the
+            NEP's table for its activity, which does not have it.
+          </p>
+          <p>
             Sources: <a href={pdfUrl('hb10858-3r-vol-ia')}>House bill Vol. I-A</a> ·{' '}
-            <a href={pdfUrl('hb10858-3r-vol-ib')}>Vol. I-B</a> · built {idx.built_at.slice(0, 10)}.
+            <a href={pdfUrl('hb10858-3r-vol-ib')}>Vol. I-B</a> · NEP{' '}
+            <a href={pdfUrl('nep2027-vol-i')}>Vol. I</a> · <a href={pdfUrl('nep2027-vol-iia')}>Vol. II-A</a> ·{' '}
+            <a href={pdfUrl('nep2027-vol-iib')}>Vol. II-B</a> · <a href={pdfUrl('nep2027-vol-iii')}>Vol. III</a> ·
+            built {idx.built_at.slice(0, 10)}.
           </p>
         </HgabDetails>
 
