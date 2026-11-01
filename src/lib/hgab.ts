@@ -26,7 +26,7 @@
  *   pdf/<doc_key>.pdf             the source documents the evidence links open
  */
 import { dataUrl } from './data-url';
-import { LEADERBOARD_DATA_PATH, type LeaderboardData } from './hgab-leaderboard';
+import { LEADERBOARD_DATA_PATH, WHOLE_BILL_DATA_PATH, type LeaderboardData, type WholeBillData } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
 
@@ -732,9 +732,14 @@ export function loadHgabHistory(): Promise<HistoryData> {
 }
 
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {
-  return cached('leaderboard', () =>
-    getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
-  );
+  return cached('leaderboard', async () => {
+    const [data, whole] = await Promise.all([
+      getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
+      // The whole-bill boards' rows come from the line-by-line explorer; without them those boards say so.
+      getJson<WholeBillData>(dataUrl(WHOLE_BILL_DATA_PATH), 'Failed to load the whole-bill boards').catch(() => undefined),
+    ]);
+    return whole ? { ...data, whole_bill: whole } : data;
+  });
 }
 
 /** The letters' picker list (`npm run build:hgab-letters`); the letters themselves live in `lib/hgab-letter.ts`. */

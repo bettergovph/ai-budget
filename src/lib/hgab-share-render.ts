@@ -29,6 +29,9 @@ import {
   officeName,
   rankByCongress,
   rankEntries,
+  rankLines,
+  lineUnit,
+  boardBuiltAt,
   rankMembers,
   asOfText,
   rankRegions,
@@ -41,6 +44,7 @@ import {
   type LeaderSlice,
   type LeaderPerson,
   type LeaderboardData,
+  type RankedLine,
   type ShareFormat,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
@@ -110,7 +114,7 @@ const THEME = {
 } satisfies Record<string, Theme>;
 
 function boardTheme(board: BoardDef): Theme {
-  if (board.id.startsWith('added') || board.id === 'regions-added') return THEME.gold;
+  if (board.id.startsWith('added') || board.id === 'regions-added' || board.id === 'lines-added') return THEME.gold;
   if (board.id.startsWith('increase') || board.id === 'growth') return THEME.green;
   if (board.id === 'cuts' || board.id === 'decline') return THEME.red;
   if (board.id === 'dropped') return THEME.dropped;
@@ -835,7 +839,7 @@ function heroText(board: BoardDef, region: string | null, count: string | null):
 function shortCount(count: string): string {
   return count
     .replace(/ shown for each Congress$/, ' per Congress')
-    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions)$/, '');
+    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions|departments and funds|department or fund|agencies|agency|budget lines|budget line)$/, '');
 }
 
 interface CountRow {
@@ -995,7 +999,9 @@ function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
     ? 'Source: GAA 2020 to 2026, DPWH offices'
     : board.section === 'members'
       ? 'Source: bills.juris.ph, 20th Congress bill authors'
-      : 'Source: NEP 2027 and House Bill 10858, DPWH project lists';
+      : board.section === 'wholebill'
+        ? 'Source: NEP 2027 and House Bill 10858 (third reading), every appropriation line'
+        : 'Source: NEP 2027 and House Bill 10858, DPWH project lists';
   const out = [withPhotos ? `${src} · Photos: House of Representatives, public domain` : src];
   if (withPhotos && (board.section === 'history' || board.kind === 'congress')) out.push('The representative shown holds the seat in the 20th Congress.');
   // The lines are run together in the footer: end each but the last with a full stop.
@@ -1572,7 +1578,9 @@ function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: n
 
 function countLine(board: BoardDef, shown: number, eligible: number): string | null {
   if (!eligible) return null;
-  const unit = board.kind === 'members' ? ['representative', 'representatives'] : ['DPWH office', 'DPWH offices'];
+  const unit = board.kind === 'members' ? ['representative', 'representatives']
+    : board.kind === 'lines' ? [lineUnit(board, 1), lineUnit(board, 2)]
+      : ['DPWH office', 'DPWH offices'];
   const u = eligible === 1 ? unit[0] : unit[1];
   return shown < eligible ? `Top ${shown} of ${eligible.toLocaleString('en-US')} ${u}` : `${eligible.toLocaleString('en-US')} ${u}`;
 }
@@ -1864,6 +1872,7 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
 }
 
 function emptyMessage(board: BoardDef, region: string | null): string {
+  if (board.kind === 'lines') return board.rowSet && !region ? `No ${lineUnit(board, 1)} fits this board` : 'Nothing fits this board';
   const who = board.kind === 'members' ? 'representative' : 'DPWH office';
   return `No ${who} in ${regionName(region) ?? 'this region'} fits this board`;
 }
@@ -2480,6 +2489,99 @@ function drawShiftVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareC
   }), NO_PEOPLE);
 }
 
+// --- whole-bill lines ------------------------------------------------------------
+
+interface LineSizes { name: number; sub: number; value: number; detail: number; rank: number; rowMin: number; rowMax: number }
+
+const LINE_SIZES: Record<ShareFormat, LineSizes> = {
+  portrait: { name: 28, sub: 20, value: 31, detail: 19, rank: 26, rowMin: 82, rowMax: 104 },
+  square: { name: 27, sub: 19, value: 29, detail: 18, rank: 25, rowMin: 74, rowMax: 98 },
+  story: { name: 33, sub: 24, value: 37, detail: 22, rank: 30, rowMin: 108, rowMax: 150 },
+  landscape: { name: 23, sub: 17, value: 26, detail: 17, rank: 22, rowMin: 58, rowMax: 72 },
+};
+
+/**
+ * One row per department, agency or budget line: rank, the name in bold with
+ * where it sits under it and a bar for the size, the figure on the right with
+ * "NEP → House bill" under it. Names are cut with an ellipsis, never wrapped,
+ * so every row is the same height.
+ */
+function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: number, sz: LineSizes): Body {
+  const n = rows.length;
+  const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
+  return {
+    minH: n * sz.rowMin,
+    idealH: n * sz.rowMax,
+    draw(y0, hAvail) {
+      const rowH = Math.max(sz.rowMin, Math.min(sz.rowMax, hAvail / n));
+      const top = y0 + Math.max(0, hAvail - rowH * n) * 0.4;
+      const rankW = sz.rank * 1.8;
+      setFont(ctx, 700, sz.value, F.display);
+      let valW = Math.max(...rows.map((r) => tabWidth(ctx, formatValue(r.value, board.value))));
+      setFont(ctx, 500, sz.detail, F.body);
+      for (const r of rows) {
+        const d = board.rowDetail?.(r.row);
+        if (d) valW = Math.max(valW, tw(ctx, d));
+      }
+      valW = Math.min(Math.ceil(valW) + sz.value * 0.8, w * 0.42);
+      const tx = x + rankW;
+      const tmax = w - rankW - valW;
+      rows.forEach((r, i) => {
+        const y = top + i * rowH;
+        if (i % 2 === 0) {
+          ctx.fillStyle = 'rgba(244, 247, 252, 0.9)';
+          ctx.fillRect(x, y, w, rowH);
+        }
+        const th = valueTheme(board, r.value);
+        const base = y + rowH * 0.4;
+        setFont(ctx, 700, sz.rank, F.display);
+        ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
+        drawTab(ctx, String(r.rank), tx - sz.rank * 0.55, base, 'right');
+        setFont(ctx, 600, sz.name, F.body);
+        text(ctx, ellipsize(ctx, r.row.label, tmax - sz.name * 0.4), tx, base, C.ink);
+        setFont(ctx, 500, sz.sub, F.body);
+        text(ctx, ellipsize(ctx, r.row.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
+        const bh = Math.max(4, Math.round(sz.sub * 0.28));
+        const len = Math.max(bh, (Math.abs(r.value) / maxAbs) * (tmax - sz.name * 0.6));
+        ctx.fillStyle = th.solid;
+        roundRect(ctx, tx, base + sz.sub * 1.3 + sz.sub * 0.42, len, bh, bh / 2);
+        ctx.fill();
+        setFont(ctx, 700, sz.value, F.display, -sz.value * 0.01);
+        ctx.fillStyle = th.text;
+        drawTab(ctx, formatValue(r.value, board.value), x + w - sz.value * 0.3, base, 'right');
+        const d = board.rowDetail?.(r.row);
+        if (d) {
+          setFont(ctx, 500, sz.detail, F.body);
+          text(ctx, d, x + w - sz.value * 0.3, base + sz.sub * 1.3, C.mute, 'right');
+        }
+      });
+    },
+  };
+}
+
+/** Departments, agencies and budget lines: as many rows as fit, at least three. */
+function drawLinesVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareCardInput): void {
+  const { data, board } = input;
+  const { rows: all, eligible } = rankLines(data, board, { limit: SHARE_FORMATS[format].rows });
+  if (!all.length) {
+    layoutVertical(ctx, s, input, heroText(board, null, null), () => ({ extra: null, body: emptyBody(ctx, s, board, null) }), NO_PEOPLE);
+    return;
+  }
+  const sz = LINE_SIZES[format];
+  const attempt = (k: number, dry: boolean) =>
+    layoutVertical(ctx, s, input, heroText(board, null, countLine(board, k, eligible)),
+      () => ({ extra: null, body: linesBody(ctx, board, all.slice(0, k), s.pad, s.W - s.pad * 2, sz) }), NO_PEOPLE, dry);
+  for (let k = all.length; k >= 1; k--) {
+    if (attempt(k, true)) {
+      if (k < Math.min(3, all.length)) layoutSparse = true;
+      attempt(k, false);
+      return;
+    }
+  }
+  layoutFits = false;
+  attempt(Math.min(3, all.length), false);
+}
+
 // --- regions -------------------------------------------------------------------
 
 interface RegionRow { rank: number; region: string; value: number }
@@ -2715,8 +2817,9 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   badgeExpected = 0;
   badgeShown = 0;
   placeCut = false;
-  cardAsOf = asOfText(input.data);
-  const built = new Date(input.data.built_at);
+  const builtAt = boardBuiltAt(input.data, input.board);
+  cardAsOf = asOfText({ built_at: builtAt });
+  const built = new Date(builtAt);
   cardAsOfShort = cardAsOf && !Number.isNaN(built.getTime())
     ? `As of ${built.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })}`
     : cardAsOf;
@@ -2733,10 +2836,12 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   if (format === 'landscape') {
     if (board.kind === 'congress') drawCongressLandscape(ctx, inp);
     else if (board.kind === 'ranking' || board.kind === 'members') drawRankingVertical(ctx, LAND, format, inp);
+    else if (board.kind === 'lines') drawLinesVertical(ctx, LAND, format, inp);
     else drawLandscape(ctx, inp);
   } else {
     const s = SPECS[format];
     if (board.kind === 'shift') drawShiftVertical(ctx, s, format, inp);
+    else if (board.kind === 'lines') drawLinesVertical(ctx, s, format, inp);
     else if (board.kind === 'regions') drawRegionsVertical(ctx, s, format, inp);
     else if (board.kind === 'congress') drawCongressVertical(ctx, s, format, inp);
     else drawRankingVertical(ctx, s, format, inp);
@@ -2807,6 +2912,12 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     }
   } else if (board.kind === 'regions') {
     top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}`);
+  } else if (board.kind === 'lines') {
+    const { rows, eligible } = rankLines(data, board, { limit: 3 });
+    top = rows.length
+      ? [`${countLine(board, eligible, eligible)}; the top three`,
+        ...rows.map((r) => `${r.rank}. ${r.row.label} (${r.row.sub}): ${formatValue(r.value, board.value)}${board.rowDetail ? `, ${board.rowDetail(r.row)}` : ''}`)]
+      : [emptyMessage(board, null)];
   } else if (board.kind === 'shift') {
     const part = (label: string, nep: number, house: number) => `${label}: NEP ${formatValue(nep, 'php')}, House bill ${formatValue(house, 'php')}, change ${formatValue(house - nep, 'signed_php')}`;
     top = shiftKinds(data).flatMap((kk) => {
