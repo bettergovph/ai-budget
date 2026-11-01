@@ -86,7 +86,8 @@ def main(hb_csv, nep_db, out_dir, annex_csv=None, relabels_csv=None):
                UACS_REG_ID, UACS_OPERDIV_ID, UACS_DIV_DSC, OPERUNIT, UACS_OPER_DSC, FUNDCD, UACS_EXP_CD,
                sum(pesos) as amt
         from nep where pesos is not null and FUNDCD like '101%' and pesos <> 0
-        group by all""").fetchall()
+        group by all
+        order by all""").fetchall()  # fixed order: claim() takes the first free candidate
     cols = ['sorder', 'dept', 'dept_dsc', 'agency', 'agy_dsc', 'pap', 'dsc', 'reg', 'operdiv', 'div_dsc',
             'operunit', 'oper_dsc', 'fundcd', 'exp', 'amt']
     nep = [dict(zip(cols, r)) for r in nep]
