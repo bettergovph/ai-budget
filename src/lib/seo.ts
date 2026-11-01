@@ -231,6 +231,23 @@ export function pageMeta(pathname: string): PageMeta {
         "reading-to-reading difference, in short chapters.",
     };
   }
+  if (p === "/hgab/2027/explorer") {
+    return {
+      title: `House Bill 2027 Line by Line — Every Appropriation Line against the NEP · ${SITE}`,
+      description:
+        "Every money line of House Bill 10858 (third reading) beside the matching FY 2027 NEP line: " +
+        "by department, agency, program, region, office and school, with what is higher, lower or " +
+        "found in only one document, and the page each line is published on.",
+    };
+  }
+  if (p.startsWith("/hgab/2027/explorer/")) {
+    return {
+      title: `House Bill 2027 Line by Line — One Department against the NEP · ${SITE}`,
+      description:
+        "One department's FY 2027 House bill lines beside the NEP, agency by agency, with the " +
+        "published page of each House bill line.",
+    };
+  }
   if (p === "/hgab/2027/sources") {
     return {
       title: `House Budget Analysis 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,

@@ -19,6 +19,8 @@ const HearingDetail = lazy(() => import('./pages/HearingDetail'));
 const HgabIntro = lazy(() => import('./pages/HgabIntro'));
 const HgabOverview = lazy(() => import('./pages/HgabOverview'));
 const HgabSources = lazy(() => import('./pages/HgabSources'));
+const HgabExplorer = lazy(() => import('./pages/HgabExplorer'));
+const HgabExplorerDept = lazy(() => import('./pages/HgabExplorerDept'));
 const HgabMethodology = lazy(() => import('./pages/HgabMethodology'));
 const HgabDataset = lazy(() => import('./pages/HgabDataset'));
 const HgabRecord = lazy(() => import('./pages/HgabRecord'));
@@ -124,6 +126,8 @@ export default function App() {
           {/* Every inserted and adjusted project as one list, no site chrome. */}
           {/* A static page published with the data and served by the Worker: load it from the server. */}
           <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />
+          <Route path="/hgab/2027/explorer" element={<HgabExplorer />} />
+          <Route path="/hgab/2027/explorer/:deptId" element={<HgabExplorerDept />} />
           <Route path="/hgab/2027/:dataset" element={<HgabDataset />} />
           <Route path="/hgab/2027/:dataset/p/:id" element={<HgabRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,0 +1,166 @@
+/* House bill explorer (/hgab/2027/explorer): department table, agency blocks, line tree. */
+
+.hgab-ex-main { padding-top: 8px; }
+
+.hgab-ex-sub {
+  margin-left: 8px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.hgab-ex-none { color: var(--ink-mute); font-size: 11.5px; }
+.hgab-ex-zero { color: var(--ink-mute); font-family: var(--font-mono); }
+
+/* --- labels legend ---------------------------------------------------------- */
+
+.hgab-ex-legend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px 28px;
+  margin: 0;
+}
+.hgab-ex-legend-list div { display: flex; gap: 10px; align-items: baseline; }
+.hgab-ex-legend-list dt { flex: 0 0 auto; min-width: 118px; }
+.hgab-ex-legend-list dd { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+
+/* --- controls --------------------------------------------------------------- */
+
+.hgab-ex-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 28px 0 14px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 10px 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.hgab-ex-controls .nep-filter { flex: 1 1 340px; max-width: 460px; }
+.hgab-ex-legend-inline { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+/* --- agency blocks ---------------------------------------------------------- */
+
+.hgab-ex-agency {
+  border-top: 1px solid var(--rule);
+  padding: 4px 0 6px;
+}
+.hgab-ex-agency:last-of-type { border-bottom: 1px solid var(--rule); }
+.hgab-ex-agency-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 18px;
+  padding: 8px 0;
+}
+.hgab-ex-agency-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+}
+.hgab-ex-agency-toggle:hover .hgab-ex-agency-name,
+.hgab-ex-agency-toggle:focus-visible .hgab-ex-agency-name { color: var(--accent); }
+.hgab-ex-agency-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-ex-agency-figs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.hgab-ex-fig-label {
+  font-family: var(--font-body);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-mute);
+}
+.hgab-ex-csv {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-3);
+}
+.hgab-ex-csv:hover, .hgab-ex-csv:focus-visible { color: var(--accent); border-color: var(--accent); }
+.hgab-ex-nepname { margin: -2px 0 8px 22px; font-size: 12px; color: var(--ink-3); }
+
+/* --- the line tree ---------------------------------------------------------- */
+
+.hgab-ex-tree-wrap { border-top: 0; margin-bottom: 10px; }
+.hgab-ex-tree { font-size: 12.5px; }
+.hgab-ex-tree th, .hgab-ex-tree td { padding-top: 5px; padding-bottom: 5px; }
+.hgab-ex-tree thead th { position: static; }
+.hgab-ex-name { min-width: 320px; }
+.hgab-ex-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: inherit;
+}
+.hgab-ex-toggle:hover .hgab-ex-label, .hgab-ex-toggle:focus-visible .hgab-ex-label { color: var(--accent); }
+.hgab-ex-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hgab-ex-caret { display: inline-block; width: 10px; font-size: 10px; color: var(--ink-mute); }
+.hgab-ex-kind {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-mute);
+}
+.hgab-ex-row.is-section .hgab-ex-label,
+.hgab-ex-row.is-class .hgab-ex-label,
+.hgab-ex-row.is-kind .hgab-ex-label,
+.hgab-ex-row.is-group .hgab-ex-label { font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; font-size: 11.5px; }
+.hgab-ex-row.is-program .hgab-ex-label,
+.hgab-ex-row.is-subprogram .hgab-ex-label { font-weight: 600; }
+.hgab-ex-row.is-activity .hgab-ex-label { color: var(--ink); }
+.hgab-ex-row.is-region .hgab-ex-label,
+.hgab-ex-row.is-office .hgab-ex-label,
+.hgab-ex-row.is-unit .hgab-ex-label,
+.hgab-ex-row.is-fund .hgab-ex-label { color: var(--ink-2); }
+.hgab-ex-amt { color: var(--ink-3); }
+.hgab-ex-amt.is-strong { color: var(--ink); font-weight: 600; }
+
+.hgab-ex-line td { background: color-mix(in srgb, var(--paper-2) 55%, var(--paper)); }
+.hgab-ex-line.is-same td { background: transparent; }
+.hgab-ex-exp { color: var(--ink-3); font-size: 12px; }
+.hgab-ex-scope, .hgab-ex-fuzzy {
+  margin-left: 8px;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--rule);
+}
+.hgab-ex-scope:hover { color: var(--accent); border-color: var(--accent); }
+.hgab-ex-status { white-space: nowrap; }
+.hgab-ex-moved { font-size: 11px; color: var(--neutral); }
+.hgab-ex-chip { font-size: 9.5px; padding: 1px 6px; }
+.hgab-ex-page { white-space: nowrap; font-family: var(--font-mono); font-size: 11px; }
+.hgab-ex-page a { color: var(--ink-3); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-ex-page a:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 760px) {
+  .hgab-ex-name { min-width: 220px; }
+  .hgab-ex-controls { position: static; }
+
+}

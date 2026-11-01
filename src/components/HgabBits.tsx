@@ -34,11 +34,12 @@ import '../hgab.css';
 
 /**
  * Section entries that are plain links (programs and Districts are dropdowns,
- * see PROGRAM_NAV). The first two lead the nav: Overview (the landing page,
- * where `/hgab` and `/hgab/2027` redirect) and the story-style Explainer
- * (`/intro`); the rest follow Districts, in order.
+ * see PROGRAM_NAV). The first three lead the nav: Overview (the landing page,
+ * where `/hgab` and `/hgab/2027` redirect), the story-style Explainer
+ * (`/intro`) and Line by line (the whole-bill explorer); the rest follow
+ * Districts, in order.
  */
-const LEAD_LINKS = 2;
+const LEAD_LINKS = 3;
 const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
   {
     to: `${HGAB_ROOT}/overview`,
@@ -46,6 +47,7 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/overview`,
   },
   { to: `${HGAB_ROOT}/intro`, label: 'Explainer' },
+  { to: `${HGAB_ROOT}/explorer`, label: 'Line by line' },
   { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
   { to: `${HGAB_ROOT}/sources`, label: 'Sources' },

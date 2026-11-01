@@ -908,14 +908,14 @@ export function loadHgabMap(key: DatasetKey): Promise<HgabDatasetMap> {
 export const DATA_BASE_OVERRIDE =
   (import.meta.env.VITE_DATA_BASE_URL as string | undefined)?.trim() || null;
 
-async function getJson<T>(url: string, hint: string): Promise<T> {
+export async function getJson<T>(url: string, hint: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${hint} — HTTP ${res.status} for ${url}`);
   return (await res.json()) as T;
 }
 
 const cache = new Map<string, Promise<unknown>>();
-function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+export function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   let p = cache.get(key) as Promise<T> | undefined;
   if (!p) {
     p = load();
