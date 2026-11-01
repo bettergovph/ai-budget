@@ -99,8 +99,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
-  BOARDS, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions, residualLine,
-  type LeaderEntry, type LeaderSlice, type LeaderboardData,
+  BOARDS, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
+  type LeaderEntry, type LeaderSlice, type LeaderboardData, type WholeBillData,
 } from "../src/lib/hgab-leaderboard";
 import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
 import {
@@ -890,7 +890,7 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
   const path = resolve(OUT, "leaderboard.json");
   check("leaderboard.json present (npm run build:hgab-leaderboard)", existsSync(path), path);
   if (!existsSync(path)) return;
-  const LB = { BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankMembers, rankRegions };
+  const LB = { BOARDS, LEADERBOARD_SCHEMA, formatValue, rankByCongress, rankEntries, rankLines, rankMembers, rankRegions };
   type Entry = LeaderEntry;
   type Slice = LeaderSlice;
   const raw = readFileSync(path, "utf8");
@@ -933,7 +933,7 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
   const badRegions = L.regions.filter((r) => !(sameKeys(r, F.region) && K.regionOrder.includes(r.region) && isInt(r.units) && isInt(r.districts) && isInt(r.delta_php) && intOrNull(r.gaa2026_php)
     && F.slice.every((k) => isInt(r[k as keyof Slice]) && r[k as keyof Slice] >= 0)));
   check(`every field the contract names, and only those, with the right types (${F.entry.length} per entry, ${F.person.length} per person, ${F.slice.length} per slice, ${F.region.length} per region)`,
-    sameKeys(L, F.data) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional", "office_change", "no_office"]) && sliceOk(L.totals.all)
+    sameKeys(L, F.data.filter((k) => k !== "whole_bill")) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional", "office_change", "no_office"]) && sliceOk(L.totals.all)
       && [L.totals.by_office_kind.deo, L.totals.by_office_kind.central, L.totals.by_office_kind.regional].every(sliceOk)
       && [L.totals.by_office_kind.office_change, L.totals.by_office_kind.no_office].every(({ rows, ...rest }) => isInt(rows) && sliceOk(rest))
       && Array.isArray(L.totals.gaa_residual) && L.totals.gaa_residual.every((y) => sameKeys(y, ["fy", "total_php", "deo_php", "central_office_php", "regional_offices_php", "unmatched_php"]) && Object.values(y).every(isInt))
@@ -1157,9 +1157,43 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
       const s = entrySum([]); for (const r of L.regions) for (const k of F.slice) s[k as keyof Slice] += r[k as keyof Slice]; return s;
     })()), badReg.map((r) => r.region).join(", "));
 
+  // Whole-bill boards: their rows come from the line-by-line explorer (npm run build:hgab-lines), attached
+  // here as the page's loader attaches them. Departments and agencies each add up to the bill's programmed
+  // total and to the NEP's new appropriations; lines carry no DPWH, farm-to-market, HFEP or NIA projects.
+  const wbPath = resolve(OUT, "explorer", "boards.json");
+  const wbBoards = LB.BOARDS.filter((b) => b.kind === "lines");
+  check(`explorer/boards.json present for the ${wbBoards.length} whole-bill boards (npm run build:hgab-lines)`, existsSync(wbPath), wbPath);
+  if (existsSync(wbPath)) {
+    const W = readJson<WholeBillData>(wbPath);
+    L.whole_bill = W;
+    const sum = (rows: WholeBillData["departments"], k: "nep_php" | "hgab3_php") => rows.reduce((a, r) => a + r[k], 0);
+    check(`whole-bill departments and agencies each add up to the House bill's programmed total (${LB.formatValue(W.scope.hgab3_php, "php")}) and the NEP (${LB.formatValue(W.scope.nep_php, "php")})`,
+      sum(W.departments, "hgab3_php") === W.scope.hgab3_php && sum(W.agencies, "hgab3_php") === W.scope.hgab3_php
+        && sum(W.departments, "nep_php") === W.scope.nep_php && sum(W.agencies, "nep_php") === W.scope.nep_php
+        && W.scope.hgab3_php === W.scope.nep_php,
+      `departments ${sum(W.departments, "hgab3_php")} / ${sum(W.departments, "nep_php")}, agencies ${sum(W.agencies, "hgab3_php")} / ${sum(W.agencies, "nep_php")}`);
+    const badRows = [...W.departments, ...W.agencies, ...W.lines].filter((r) => r.delta_php !== r.hgab3_php - r.nep_php || !r.href.startsWith("/hgab/2027/explorer/") || !r.label);
+    check("whole-bill rows: change = House bill − NEP, a label, and an explorer link on every row", badRows.length === 0, badRows.slice(0, 3).map((r) => r.label).join("; "));
+    // DPWH's administration and support lines stay (only its project list is left out), so DPWH is not tested by name.
+    const infra = W.lines.filter((r) => /farm-to-market|health facilities enhancement/i.test(r.label) || /irrigation administration/i.test(r.sub));
+    check(`whole-bill lines leave out farm-to-market, HFEP and NIA projects (${W.lines.length.toLocaleString()} lines)`, infra.length === 0, infra.slice(0, 3).map((r) => `${r.label} (${r.sub})`).join("; "));
+  }
+
   // Boards: each returns at least three rows and leads with the true extreme of its eligible pool.
   const best = (vals: number[], order: "asc" | "desc") => (order === "asc" ? Math.min(...vals) : Math.max(...vals));
   const boardResult = (b: (typeof LB.BOARDS)[number]): { ok: boolean; detail: string } => {
+    if (b.kind === "lines") {
+      const r = LB.rankLines(L, b);
+      const set = (b.rowSet && L.whole_bill?.[b.rowSet]) || [];
+      const mag = (v: number) => (b.byMagnitude ? Math.abs(v) : v);
+      const pool = set.filter((x) => { const v = b.rowMetric!(x); return v != null && Number.isFinite(v) && (!b.rowKeep || b.rowKeep(x)); }).map((x) => mag(b.rowMetric!(x)!));
+      const n = r.rows.length;
+      return {
+        ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && mag(r.rows[0].value) === best(pool, b.order)
+          && r.rows.every((x, i) => i === 0 || (b.order === "asc" ? mag(x.value) >= mag(r.rows[i - 1].value) : mag(x.value) <= mag(r.rows[i - 1].value))),
+        detail: `${n} rows; first ${r.rows[0] ? `${r.rows[0].row.label} ${LB.formatValue(r.rows[0].value, b.value)}` : "none"}`,
+      };
+    }
     if (b.kind === "ranking") {
       const r = LB.rankEntries(L, b);
       const pool = L.entries.filter((e) => { const v = b.metric!(e); return v != null && Number.isFinite(v) && (!b.keep || b.keep(e)); }).map((e) => b.metric!(e)!);
@@ -1211,9 +1245,10 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
     JSON.stringify(L.totals.gaa_residual) === JSON.stringify(gaaSlots.map((r) => ({ fy: r.fy, total_php: r.total_php, deo_php: r.deo_php, central_office_php: r.central_office_php, regional_offices_php: r.regional_offices_php, unmatched_php: r.unmatched_php })))
       && L.totals.gaa_residual.every((y) => y.deo_php + y.central_office_php + y.regional_offices_php + y.unmatched_php === y.total_php)
       && JSON.stringify(L.totals.gaa_residual.map((y) => y.fy)) === JSON.stringify([2020, 2021, 2022, 2023, 2024, 2025, 2026]));
-  const lines = LB.BOARDS.map((b) => [b.id, residualLine(L, b)] as const);
-  const badLines = lines.filter(([id, t]) => (id === "shift" || id === "bills") ? t !== null : (typeof t !== "string" || !/^Not in any district: /.test(t) || /NaN|undefined|Infinity|—/.test(t)));
-  check(`residualLine() gives a sentence for every board but shift and bills (${lines.filter(([, t]) => t).length} boards)`, badLines.length === 0, badLines.map(([id, t]) => `${id}: ${t}`).join("; "));
+  // The whole-bill boards rank departments, agencies and lines, not offices: no district residual applies.
+  const lines = LB.BOARDS.map((b) => [b.id, residualLine(L, b), b.kind] as const);
+  const badLines = lines.filter(([id, t, kind]) => (id === "shift" || id === "bills" || kind === "lines") ? t !== null : (typeof t !== "string" || !/^Not in any district: /.test(t) || /NaN|undefined|Infinity|—/.test(t)));
+  check(`residualLine() gives a sentence for every office board, none for shift, bills and the whole-bill boards (${lines.filter(([, t]) => t).length} boards)`, badLines.length === 0, badLines.map(([id, t]) => `${id}: ${t}`).join("; "));
 
   // Reader-facing strings: credits and notes.
   const portraits = L.entries.flatMap((e) => e.people).filter((p) => p.portrait_url);

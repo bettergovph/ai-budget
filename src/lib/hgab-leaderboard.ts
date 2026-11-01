@@ -21,6 +21,12 @@
  *   they hold the district's seat in the 20th Congress; the documents do not
  *   say who asked for any project.
  * - Integer pesos; null is "no figure", never zero.
+ *
+ * The whole-bill boards (section "wholebill", kind "lines") are the exception:
+ * they rank departments, agencies and budget lines across the whole House
+ * bill, from the line-by-line explorer's boards.json (WholeBillData), with no
+ * offices, districts or people, so none of the office rules above apply to
+ * them and they carry the comparison disclaimer, not the office one.
  */
 
 import { CARD_DISCLAIMER } from './hgab-disclaimers';
@@ -182,19 +188,65 @@ export interface LeaderboardData {
   regions: LeaderRegion[];
   credits: { portraits: string; representatives: string; documents: string };
   notes: string[];
+  /** The whole-bill boards' rows, attached by the loader from WHOLE_BILL_DATA_PATH (absent in leaderboard.json). */
+  whole_bill?: WholeBillData;
+}
+
+// ---------------------------------------------------------------------------
+// Whole House bill (data/hgab/2027/explorer/boards.json)
+// ---------------------------------------------------------------------------
+
+/**
+ * R2 key of the whole-bill boards' rows, built with the line-by-line explorer
+ * (`npm run build:hgab-lines`, scripts/hgab-lines/build_explorer.py). The
+ * leaderboard loader attaches it to LeaderboardData as `whole_bill`; it is not
+ * part of leaderboard.json, and the DPWH boards never read it.
+ */
+export const WHOLE_BILL_DATA_PATH = 'hgab/2027/explorer/boards.json';
+
+export type WholeBillSet = 'departments' | 'agencies' | 'lines';
+
+/** One department (or fund), agency or budget line, the NEP against the House bill (third reading). */
+export interface WholeBillRow {
+  /** "DSWD", "DOH Office of the Secretary", "Medical Assistance Program (MAP)". */
+  label: string;
+  /** Where it sits: the department's full name, or "DOH · Office of the Secretary" for a line. */
+  sub: string;
+  nep_php: number;
+  hgab3_php: number;
+  /** hgab3_php − nep_php. */
+  delta_php: number;
+  /** Percent; null when the NEP has nothing for it. */
+  delta_pct: number | null;
+  /** The explorer page that lists its lines. */
+  href: string;
+  /** Lines only: "house_only" when no line of that name is in the NEP for the agency (a candidate). */
+  status?: 'same' | 'higher' | 'lower' | 'house_only' | 'nep_only';
+  note?: string | null;
+}
+
+export interface WholeBillData {
+  schema: 1;
+  built_at: string;
+  scope: { hgab3_php: number; nep_php: number; unprogrammed_php: number; line_groups: number };
+  departments: WholeBillRow[];
+  agencies: WholeBillRow[];
+  /** Programs, activities and projects outside the DPWH, farm-to-market road, HFEP and NIA project lists. */
+  lines: WholeBillRow[];
 }
 
 // ---------------------------------------------------------------------------
 // Boards
 // ---------------------------------------------------------------------------
 
-export type BoardKind = 'ranking' | 'members' | 'congress' | 'shift' | 'regions';
-export type BoardSection = 'fy2027' | 'history' | 'members' | 'picture';
+export type BoardKind = 'ranking' | 'members' | 'congress' | 'shift' | 'regions' | 'lines';
+export type BoardSection = 'fy2027' | 'wholebill' | 'history' | 'members' | 'picture';
 export type ValueKind = 'php' | 'signed_php' | 'count' | 'pct' | 'share';
 
 export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; blurb: string }> = [
   { key: 'picture', label: 'The big picture', blurb: 'Where the DPWH budget sits in the NEP and in the House bill.' },
   { key: 'fy2027', label: '2027: the House bill against the NEP', blurb: 'DPWH projects by DPWH office (DEO), as listed in each document.' },
+  { key: 'wholebill', label: '2027: the whole House bill, by department', blurb: 'Departments, agencies and budget lines across the House bill, against the NEP. Not tied to any district.' },
   { key: 'history', label: '2020 to 2026: enacted budgets', blurb: 'What each DPWH office (DEO) received in the enacted budgets.' },
   { key: 'members', label: 'The members', blurb: 'The representatives themselves, from their legislative records.' },
 ];
@@ -223,6 +275,13 @@ export interface BoardDef {
   notes: string[];
   /** Whether `?region=` applies. */
   regionFilter: boolean;
+  /** Lines boards: which whole-bill rows are ranked, by what, and who may appear. */
+  rowSet?: WholeBillSet;
+  rowMetric?: (r: WholeBillRow) => number | null;
+  rowKeep?: (r: WholeBillRow) => boolean;
+  rowDetail?: (r: WholeBillRow) => string | null;
+  /** Rank by size whatever the sign (a percent board that shows rises and falls together). */
+  byMagnitude?: boolean;
 }
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
@@ -232,6 +291,17 @@ export const PEOPLE_LINE = CARD_DISCLAIMER;
 const ADDED_NOTE = '“Added” means no matching line was found in the NEP: a candidate, not a confirmed insertion. Projects whose NEP match is unconfirmed are left out.';
 const SHARED_NOTE = 'A DPWH office that serves several legislative districts is shown with all of them. Its amount is not split.';
 const GAA_NOTE = 'Enacted budgets list the whole office. New or renamed offices have fewer years; earlier years stay with their old office.';
+
+const WHOLE_NOTE = 'Every appropriation line of the House bill (third reading) against the NEP. Unprogrammed appropriations are not in the NEP data and are left out.';
+const DPWH_IN_NOTE = 'DPWH figures include its project list, which the DPWH boards rank by office.';
+const LINE_NOTE = 'A budget line is a program, activity or project, all its regions, offices and expense classes added up. DPWH projects, farm-to-market roads, health facilities and irrigation have their own pages and are left out.';
+const MATCH_NOTE = 'Lines are matched by name within each agency. A line renamed between the two documents is matched through the House bill’s second reading where it can be.';
+const ADDED_LINE_NOTE = '“No match” means no line of that name was found in the NEP for the agency: a candidate, not a confirmed insertion. It may be renamed or moved.';
+
+/** "₱240.69B → ₱262.76B": a row's NEP and House bill figures. */
+function nepToHouse(r: WholeBillRow): string {
+  return `${formatValue(r.nep_php, 'php')} → ${formatValue(r.hgab3_php, 'php')}`;
+}
 
 const REORG_NOTE = 'Offices created, renamed or carved out since 2020 are left out: part of their earlier budget sits with another office.';
 
@@ -359,6 +429,80 @@ export const BOARDS: readonly BoardDef[] = [
     detail: (e) => `${formatValue(e.added_php, 'php')} of ${formatValue(e.hgab3_php, 'php')}`,
     notes: ['Only offices with at least ₱1 billion in the House bill.', ADDED_NOTE, PEOPLE_NOTE],
     regionFilter: true,
+  },
+
+  // 2027: the whole House bill, by department
+  {
+    id: 'departments-increase', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'desc',
+    kicker: '2027 · whole House bill · by department',
+    title: 'Departments with the biggest increases over the NEP',
+    subtitle: 'House bill minus the NEP for each department and fund, every one of its lines added up.',
+    rowSet: 'departments', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.delta_php > 0, rowDetail: nepToHouse,
+    notes: [WHOLE_NOTE, DPWH_IN_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'departments-cuts', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'asc',
+    kicker: '2027 · whole House bill · by department',
+    title: 'Departments with the biggest cuts from the NEP',
+    subtitle: 'Departments and funds whose total is lower in the House bill than in the NEP.',
+    rowSet: 'departments', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.delta_php < 0, rowDetail: nepToHouse,
+    notes: [WHOLE_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'departments-pct', section: 'wholebill', kind: 'lines', value: 'pct', order: 'desc', byMagnitude: true,
+    kicker: '2027 · whole House bill · by department',
+    title: 'Largest changes in percent, by department',
+    subtitle: 'Percent change from the NEP to the House bill, up or down, for departments and funds with ₱1 billion or more in the NEP.',
+    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) !== 0, rowDetail: nepToHouse,
+    notes: ['Ranked by the size of the change, rises and cuts together. Only departments and funds with ₱1 billion or more in the NEP.', WHOLE_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'agencies-increase', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'desc',
+    kicker: '2027 · whole House bill · by agency',
+    title: 'Agencies with the biggest increases over the NEP',
+    subtitle: 'House bill minus the NEP for each agency, GOCC subsidy and fund, every one of its lines added up.',
+    rowSet: 'agencies', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.delta_php > 0, rowDetail: nepToHouse,
+    notes: [WHOLE_NOTE, DPWH_IN_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'agencies-cuts', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'asc',
+    kicker: '2027 · whole House bill · by agency',
+    title: 'Agencies with the biggest cuts from the NEP',
+    subtitle: 'Agencies, GOCC subsidies and funds whose total is lower in the House bill than in the NEP.',
+    rowSet: 'agencies', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.delta_php < 0, rowDetail: nepToHouse,
+    notes: [WHOLE_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'lines-increase', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'desc',
+    kicker: '2027 · whole House bill · budget lines',
+    title: 'Budget lines with the biggest increases',
+    subtitle: 'Programs, activities and projects found in both documents, House bill minus the NEP.',
+    rowSet: 'lines', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.status === 'higher', rowDetail: nepToHouse,
+    notes: [LINE_NOTE, MATCH_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'lines-cuts', section: 'wholebill', kind: 'lines', value: 'signed_php', order: 'asc',
+    kicker: '2027 · whole House bill · budget lines',
+    title: 'Budget lines with the biggest cuts',
+    subtitle: 'Programs, activities and projects found in both documents, House bill minus the NEP.',
+    rowSet: 'lines', rowMetric: (r) => r.delta_php, rowKeep: (r) => r.status === 'lower', rowDetail: nepToHouse,
+    notes: [LINE_NOTE, MATCH_NOTE],
+    regionFilter: false,
+  },
+  {
+    id: 'lines-added', section: 'wholebill', kind: 'lines', value: 'php', order: 'desc',
+    kicker: '2027 · whole House bill · budget lines',
+    title: 'Largest budget lines with no match in the NEP',
+    subtitle: 'House bill programs, activities and projects with no line of the same name in the NEP for that agency.',
+    rowSet: 'lines', rowMetric: (r) => r.hgab3_php, rowKeep: (r) => r.status === 'house_only',
+    notes: [ADDED_LINE_NOTE, LINE_NOTE],
+    regionFilter: false,
   },
 
   // 2020 to 2026: enacted budgets
@@ -573,6 +717,39 @@ export function rankRegions(data: LeaderboardData, board: BoardDef): RankedRegio
   return pool.map((x, i) => ({ rank: ranks[i], region: x.r, value: x.v }));
 }
 
+export interface RankedLine {
+  rank: number;
+  row: WholeBillRow;
+  value: number;
+}
+
+/** What a lines board counts: "departments and funds", "agencies", "budget lines". */
+export function lineUnit(board: BoardDef, n: number): string {
+  const u: Record<WholeBillSet, [string, string]> = {
+    departments: ['department or fund', 'departments and funds'],
+    agencies: ['agency', 'agencies'],
+    lines: ['budget line', 'budget lines'],
+  };
+  const [one, many] = u[board.rowSet ?? 'lines'];
+  return n === 1 ? one : many;
+}
+
+/** A lines board's rows, best first (by size for `byMagnitude`), ties by label. Empty when the data is not loaded. */
+export function rankLines(data: LeaderboardData, board: BoardDef, opts: { limit?: number } = {}): { rows: RankedLine[]; eligible: number } {
+  const set = board.rowSet ? data.whole_bill?.[board.rowSet] : undefined;
+  if (!set || !board.rowMetric) return { rows: [], eligible: 0 };
+  const m = board.rowMetric;
+  const dir = board.order === 'asc' ? 1 : -1;
+  const key = (v: number) => (board.byMagnitude ? Math.abs(v) : v);
+  const pool = set
+    .map((r) => ({ r, v: m(r) }))
+    .filter((x): x is { r: WholeBillRow; v: number } => x.v != null && Number.isFinite(x.v) && (!board.rowKeep || board.rowKeep(x.r)))
+    .sort((a, b) => (key(a.v) - key(b.v)) * dir || a.r.label.localeCompare(b.r.label));
+  const ranks = competitionRanks(pool, (x) => key(x.v));
+  const rows = pool.map((x, i) => ({ rank: ranks[i], row: x.r, value: x.v }));
+  return { rows: opts.limit != null ? rows.slice(0, opts.limit) : rows, eligible: pool.length };
+}
+
 // ---------------------------------------------------------------------------
 // Value text (shared by the cards, the tables and the pre-rendered images)
 // ---------------------------------------------------------------------------
@@ -775,6 +952,11 @@ export function asOfText(data: Pick<LeaderboardData, 'built_at'>): string {
   const d = new Date(data.built_at);
   if (Number.isNaN(d.getTime())) return '';
   return `As of ${d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' })}`;
+}
+
+/** The build the board's figures come from: the whole-bill boards have their own. */
+export function boardBuiltAt(data: Pick<LeaderboardData, 'built_at' | 'whole_bill'>, board: Pick<BoardDef, 'kind'>): string {
+  return board.kind === 'lines' && data.whole_bill ? data.whole_bill.built_at : data.built_at;
 }
 
 /**
