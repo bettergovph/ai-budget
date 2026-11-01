@@ -194,7 +194,9 @@
   padding: 8px 0;
   border-bottom: 1px solid var(--rule-soft);
 }
-.hgab-lb-top.is-regions li { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.hgab-lb-top.is-regions li,
+.hgab-lb-top.is-lines li { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.hgab-lb-top.is-lines .hgab-lb-top-val { white-space: nowrap; }
 .hgab-lb-top.is-congress li { grid-template-columns: 34px auto minmax(0, 1fr) auto; }
 .hgab-lb-top.is-congress .hgab-lb-top-who small { white-space: normal; }
 .hgab-lb-top-rank {
@@ -751,3 +753,6 @@
   .hgab-lb-card-wait { animation: none; }
   .hgab-lb-tile, .hgab-lb-format > span, .hgab-lb-btn { transition: none; }
 }
+
+/* Whole-bill boards: a line's agency under its name. */
+.hgab-lb-line-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }

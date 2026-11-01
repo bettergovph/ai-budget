@@ -29,6 +29,7 @@ import {
   rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
+  rankLines, type RankedLine,
 } from '../lib/hgab-leaderboard';
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,14 @@ const VALUE_HEADING: Record<string, string> = {
   growth: 'Change in yearly average',
   decline: 'Change in yearly average',
   bills: 'Bills as principal author',
+  'departments-increase': 'Change from the NEP',
+  'departments-cuts': 'Change from the NEP',
+  'departments-pct': 'Change from the NEP',
+  'agencies-increase': 'Change from the NEP',
+  'agencies-cuts': 'Change from the NEP',
+  'lines-increase': 'Change from the NEP',
+  'lines-cuts': 'Change from the NEP',
+  'lines-added': 'In the House bill',
 };
 
 const DETAIL_HEADING: Record<string, string> = {
@@ -308,6 +317,8 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
     body = <ShiftMini data={data} />;
   } else if (board.kind === 'regions') {
     body = <RegionsMini data={data} board={board} />;
+  } else if (board.kind === 'lines') {
+    body = <LinesMini data={data} board={board} />;
   } else if (board.kind === 'congress') {
     const terms = rankByCongress(data, { region: scoped, limit: 1 });
     body = (
@@ -448,6 +459,33 @@ function RegionsMini({ data, board }: { data: LeaderboardData; board: BoardDef }
             </span>
           </span>
           <span className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()} title={formatPesoFull(r.value)}>
+            {formatValue(r.value, board.value)}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The top three departments, agencies or budget lines, with a bar each. */
+function LinesMini({ data, board }: { data: LeaderboardData; board: BoardDef }) {
+  const rows = rankLines(data, board, { limit: 3 }).rows;
+  if (!data.whole_bill) return <p className="hgab-lb-top-none">This board’s figures are not published yet.</p>;
+  if (!rows.length) return <p className="hgab-lb-top-none">Nothing is on this board.</p>;
+  const max = Math.max(...rows.map((r) => Math.abs(r.value)), 0) || 1;
+  return (
+    <ol className="hgab-lb-top is-lines">
+      {rows.map((r, i) => (
+        <li key={`${r.row.label}|${r.row.sub}`} className={i === 0 ? 'is-first' : undefined}>
+          <span className="hgab-lb-top-rank">{r.rank}</span>
+          <span className="hgab-lb-top-who">
+            <strong>{r.row.label}</strong>
+            <small>{r.row.sub}</small>
+            <span className="hgab-lb-top-bar" aria-hidden="true">
+              <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+            </span>
+          </span>
+          <span className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()} title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}>
             {formatValue(r.value, board.value)}
           </span>
         </li>
@@ -857,6 +895,54 @@ export function RegionsTable({ data, board }: { data: LeaderboardData; board: Bo
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** A whole-bill board: every department, agency or budget line that qualifies, with both figures and a link to its lines. */
+export function LinesTable({ data, board }: { data: LeaderboardData; board: BoardDef }) {
+  const [open, setOpen] = useState(false);
+  const { rows, eligible } = rankLines(data, board);
+  const shown: RankedLine[] = open ? rows : rows.slice(0, FIRST);
+  const what = board.rowSet === 'departments' ? 'Department or fund' : board.rowSet === 'agencies' ? 'Agency or fund' : 'Budget line';
+  return (
+    <>
+      <div className="nep-table-wrap">
+        <table className="nep-table hgab-lb-table">
+          <caption className="visually-hidden">{board.title}: {eligible.toLocaleString()} ranked</caption>
+          <thead>
+            <tr>
+              <th className="num hgab-lb-rank">Rank</th>
+              <th className="is-wrap">{what}</th>
+              <th className="num">{valueHeading(board)}</th>
+              <th className="num hgab-lb-col-wide">NEP</th>
+              <th className="num hgab-lb-col-wide">House bill</th>
+              <th><span className="visually-hidden">Lines in the explorer</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data.whole_bill && <EmptyRow cols={6}>This board’s figures are not published yet.</EmptyRow>}
+            {data.whole_bill && shown.length === 0 && <EmptyRow cols={6}>Nothing is on this board.</EmptyRow>}
+            {shown.map((r) => (
+              <tr key={`${r.row.label}|${r.row.sub}`}>
+                <td className="num hgab-lb-rank">{r.rank}</td>
+                <td className="nep-td-name">
+                  <strong>{r.row.label}</strong>
+                  <span className="hgab-lb-line-sub">{r.row.sub}</span>
+                  {r.row.note && <span className="hgab-lb-line-sub">{r.row.note}</span>}
+                </td>
+                <ValueCell value={r.value} kind={board.value} sub={board.rowDetail?.(r.row) ?? null} />
+                <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.nep_php)}>{r.row.nep_php ? formatValue(r.row.nep_php, 'php') : '—'}</td>
+                <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.hgab3_php)}>{formatValue(r.row.hgab3_php, 'php')}</td>
+                <td className="hgab-lb-go">
+                  <Link to={r.row.href} aria-label={`Lines of ${r.row.label}`}>Lines →</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TableFoot shown={shown.length} total={eligible} open={open} onOpen={() => setOpen(true)} />
+    </>
   );
 }
 

@@ -15,6 +15,7 @@ Usage: build_explorer.py <lines_dir> <out_dir>
              object_compare.csv optional)
 """
 import collections, csv, datetime, json, os, re, sys
+from urllib.parse import quote as urlquote
 
 STATUS = {'same': 'same', 'increased': 'higher', 'decreased': 'lower', 'house_only_line': 'house_only',
           'house_only_activity': 'house_only', 'agency_unmatched': 'house_only',
@@ -68,6 +69,145 @@ class Node:
         if self.x:
             d['x'] = self.x
         return d
+
+
+# Short names for the boards: the NEP's own acronym, plainer where the acronym is not one people use.
+SHORT_FIX = {'CONGRESS': 'Congress', 'JUD': 'Judiciary', 'OMB': 'Ombudsman', 'OEOs': 'Other executive offices',
+             'BSGC': 'GOCC subsidies', 'ALGU': 'LGU allocations', 'SUCs': 'State universities'}
+SPF_SHORT = {'NATIONAL DISASTER RISK REDUCTION AND MANAGEMENT FUND (CALAMITY FUND)': 'Calamity fund (NDRRMF)',
+             'REVISED AFP MODERNIZATION PROGRAM': 'AFP Modernization Program'}
+SMALL = {'of', 'the', 'and', 'for', 'in', 'on', 'to', 'a', 'an', 'at', 'by', 'or'}
+KEEP_UPPER = {'II', 'III', 'IV', 'VI', 'VII', 'VIII', 'IX', 'XI', 'XII', 'XIII', 'AFP', 'NCR', 'BARMM', 'MMDA', 'LGU',
+              'LGUS', 'SUC', 'SUCS', 'GOCC', 'GOCCS', 'NEP', 'UP', 'PNP', 'NBI', 'TESDA', 'CHED', 'PAGASA', 'DOST'}
+
+
+def title_case(s):
+    if s != s.upper():
+        return s
+    out = []
+    for i, w in enumerate(re.split(r'(\s+|-)', s.lower())):
+        core = re.sub(r'[^a-z]', '', w)
+        if core.upper() in KEEP_UPPER:
+            out.append(w.upper().replace('LGUS', 'LGUs').replace('SUCS', 'SUCs').replace('GOCCS', 'GOCCs'))
+        elif i > 0 and w in SMALL:
+            out.append(w)
+        else:
+            out.append(re.sub(r'^([^a-z]*)([a-z])', lambda m: m.group(1) + m.group(2).upper(), w))
+    return ''.join(out)
+
+
+def build_boards(lines_dir, out_dir, index_rows, dept_docs, built_at):
+    """explorer/boards.json: departments, agencies and budget lines ranked by the leaderboards
+    (src/lib/hgab-leaderboard.ts, section "whole-bill"). Integer pesos; the boards rank, this file lists."""
+    import duckdb
+    con = duckdb.connect(f'{lines_dir}/nep.duckdb', read_only=True)
+    dpt = {d: x for d, x in con.execute(
+        "select distinct DEPARTMENT, UACS_DPT_DSC from nep where SORDER = '1' and UACS_DPT_DSC is not null").fetchall()}
+    con.close()
+    amap = json.load(open(f'{lines_dir}/agency_map.json'))
+    nep_dept_of = {}  # bill department name -> NEP department code (section 1)
+    for m in amap:
+        if m['nep'] and m['nep'][0] == '1':
+            nep_dept_of.setdefault(m['hb'][1], m['nep'][1])
+
+    def short_of(dept_name):
+        code = nep_dept_of.get(dept_name)
+        full = dpt.get(code or '')
+        if full and full_matches(full, dept_name):
+            m = re.search(r'\(([^)]+)\)\s*$', full)
+            if m:
+                return SHORT_FIX.get(m.group(1), m.group(1))
+        return title_case(dept_name)
+
+    def full_matches(nep_full, bill_name):
+        a = re.sub(r'\s*\([^)]*\)\s*$', '', nep_full).lower().replace('the ', '')
+        b = bill_name.lower().replace('the ', '')
+        return re.sub(r'[^a-z]', '', a) == re.sub(r'[^a-z]', '', b)
+
+    def pct(n, h):
+        return round((h - n) / n * 100, 2) if n else None
+
+    explorer = '/hgab/2027/explorer'
+    departments, agencies = [], []
+    for r in index_rows:
+        if r['name'] == 'UNPROGRAMMED APPROPRIATIONS':
+            continue
+        spf = r['name'] not in nep_dept_of
+        short = short_of(r['name']) if not spf else SPF_SHORT.get(r['name'], title_case(r['name']))
+        departments.append({'label': short,
+                            'sub': title_case(r['name']) if not spf else 'Special purpose fund',
+                            'nep_php': r['nep'], 'hgab3_php': r['house'], 'delta_php': r['house'] - r['nep'],
+                            'delta_pct': pct(r['nep'], r['house']), 'href': f"{explorer}/{r['id']}"})
+        for a in dept_docs[r['id']]['agencies']:
+            own = a['name'] != r['name']
+            name = title_case(a['name']) if own else (short if spf else (a['nep_name'] or title_case(a['name'])))
+            # "Office of the Secretary" alone says nothing on a board: prefix the department
+            if re.match(r'^Office of the Secretary', name) or not own:
+                label = name if spf else f'{short} {name}' if name != short else name
+            else:
+                label = name
+            agencies.append({'label': label,
+                             'sub': 'Special purpose fund' if spf else title_case(r['name']),
+                             'nep_php': a['nep'], 'hgab3_php': a['house'], 'delta_php': a['house'] - a['nep'],
+                             'delta_pct': pct(a['nep'], a['house']),
+                             'href': f"{explorer}/{r['id']}" + (f"?q={urlquote(a['name'])}" if own else '')})
+
+    # Budget lines: the bill's program, activity or project, all regions, offices and expense classes added up.
+    # Lines the DPWH, farm-to-market, HFEP and NIA pages cover project by project are left out.
+    dept_id = {r['name']: r['id'] for r in index_rows}
+    agency_name = {}
+    for m in amap:
+        if m['nep']:
+            agency_name[(m['nep'][1], m['nep'][2])] = (m['hb'][1], m['hb'][3] if m['hb'][3] != m['hb'][1] else m['nep'][3])
+    groups = collections.OrderedDict()
+    for r in csv.DictReader(open(f'{lines_dir}/hb_vs_nep_lines.csv')):
+        if r['scope'] != 'non-infra' or r['status'] in ('unprogrammed_not_in_nep_extract', 'agency_unmatched'):
+            continue
+        # BARMM's allocations name their purposes one level in, where offices usually sit
+        label = r['activity'] or r['program'] or r['class'] or r['operating_unit'] or r['agency']
+        k = (r['nep_dept'], r['nep_agency'], norm(label))
+        g = groups.setdefault(k, {'label': label, 'dept': r['department'], 'agency': r['agency'], 'nep': 0, 'house': 0,
+                                  'renamed': None})
+        g['nep'] += int(r['nep_amount']); g['house'] += int(r['hb_amount'])
+        if 'renamed' in (r['activity_match'] or ''):
+            g['renamed'] = True
+    for r in csv.DictReader(open(f'{lines_dir}/nep_only_lines.csv')):
+        pap = r['nep_prexc_fpap_id'] or ''
+        infra = ((r['nep_dept'] == '18' and pap.startswith('3')) or 'irrigation' in (r['nep_agency_dsc'] or '').lower()
+                 or re.search(r'farm-to-market|health facilities enhancement', r['activity'] or '', re.I))
+        if infra:
+            continue
+        k = (r['nep_dept'], r['nep_agency'], norm(r['activity']))
+        if k not in groups:
+            d, a = agency_name.get((r['nep_dept'], r['nep_agency']), (None, r['nep_agency_dsc']))
+            if d is None:
+                continue
+            groups[k] = {'label': r['activity'], 'dept': d, 'agency': a, 'nep': 0, 'house': 0, 'renamed': None}
+        groups[k]['nep'] += int(r['nep_amount'])
+    lines = []
+    for (nd, na, _), g in groups.items():
+        if g['nep'] == g['house'] == 0:
+            continue
+        d_short = short_of(g['dept']) if g['dept'] in nep_dept_of else SPF_SHORT.get(g['dept'], title_case(g['dept']))
+        ag = title_case(g['agency'])
+        sub = d_short if ag.lower() in (title_case(g['dept']).lower(), d_short.lower()) else f'{d_short} · {ag}'
+        status = ('house_only' if g['nep'] == 0 else 'nep_only' if g['house'] == 0
+                  else 'same' if g['nep'] == g['house'] else 'higher' if g['house'] > g['nep'] else 'lower')
+        label = title_case(re.sub(r'^\d+\.\s+', '', g['label']))  # funds number their purposes; programs are in capitals
+        lines.append({'label': label, 'sub': sub, 'nep_php': g['nep'], 'hgab3_php': g['house'],
+                      'delta_php': g['house'] - g['nep'], 'delta_pct': pct(g['nep'], g['house']), 'status': status,
+                      'note': 'Renamed in the third reading; same line as in the NEP' if g['renamed'] else None,
+                      'href': f"{explorer}/{dept_id.get(g['dept'], '')}?q={urlquote(g['label'])}"})
+    doc = {'schema': 1, 'built_at': built_at,
+           'scope': {'hgab3_php': sum(r['house'] for r in index_rows if r['name'] != 'UNPROGRAMMED APPROPRIATIONS'),
+                     'nep_php': sum(r['nep'] for r in index_rows),
+                     'unprogrammed_php': sum(r['house'] for r in index_rows if r['name'] == 'UNPROGRAMMED APPROPRIATIONS'),
+                     'line_groups': len(lines)},
+           'departments': departments, 'agencies': agencies, 'lines': lines}
+    with open(f'{out_dir}/boards.json', 'w') as f:
+        json.dump(doc, f, indent=1, ensure_ascii=False)
+    st = collections.Counter(x['status'] for x in lines)
+    print(f"boards.json: {len(departments)} departments, {len(agencies)} agencies, {len(lines)} budget lines {dict(st)}")
 
 
 def main(lines_dir, out_dir):
@@ -151,6 +291,7 @@ def main(lines_dir, out_dir):
 
     counts = collections.Counter()
     index_rows = []
+    dept_docs = {}
     used_slugs = set()
     for d in depts.values():
         ds = slug(d['name'])
@@ -187,6 +328,7 @@ def main(lines_dir, out_dir):
                'agencies': out_agencies}
         with open(f'{out_dir}/d/{ds}.json', 'w') as f:
             json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
+        dept_docs[ds] = doc
         index_rows.append({'id': ds, 'roman': d['roman'], 'name': d['name'], 'nep': dn, 'house': dh,
                            'lines': dl, 'changed': dc, 'agencies': len(out_agencies),
                            'bytes': os.path.getsize(f'{out_dir}/d/{ds}.json')})
@@ -198,6 +340,7 @@ def main(lines_dir, out_dir):
              'lines': sum(r['lines'] for r in index_rows), 'status': dict(counts), 'departments': index_rows}
     with open(f'{out_dir}/index.json', 'w') as f:
         json.dump(index, f, indent=1, ensure_ascii=False)
+    build_boards(lines_dir, out_dir, index_rows, dept_docs, index['built_at'])
     big = sorted(index_rows, key=lambda r: -r['bytes'])[:3]
     print(f"{len(index_rows)} departments, {index['lines']:,} lines; House bill {total_h:,}, NEP {total_n:,}; "
           f"NEP-only rows placed under their activity {placed}, in their own group {unplaced}")
