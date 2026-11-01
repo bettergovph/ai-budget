@@ -10,7 +10,7 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { KpiStrip } from '../components/Nep2027Bits';
-import { ExStatusChip, ExChange } from '../components/HgabExplorerBits';
+import { ExStatusChip, ExChange, UnderReviewBanner } from '../components/HgabExplorerBits';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, pdfUrl } from '../lib/hgab';
@@ -91,6 +91,7 @@ export default function HgabExplorer() {
         }
       />
       <main className="nep-main hgab-ex-main">
+        <UnderReviewBanner />
         <KpiStrip
           items={[
             { label: 'House bill, programmed', value: fmt.shortPhp(programmed, 'T'), sub: `plus ${fmt.shortPhp(idx.unprogrammed, 'B')} unprogrammed` },
@@ -223,6 +224,7 @@ function ExplorerDownloads() {
         headline={<span id="hgab-ex-dl-h">Every line, as files you can reuse</span>}
         dek="The lines on these pages, extracted from the House bill and matched to the NEP. CSV opens in any spreadsheet; Parquet is for analysts."
       />
+      <UnderReviewBanner compact />
       {!m ? <p className="hgab-ex-none">Loading the list of files…</p> : (
         <>
           <p className="hgab-ex-dl-all">

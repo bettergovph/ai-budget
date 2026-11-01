@@ -3,6 +3,11 @@
 Status: live since 2026-11-01. The explorer is at `/hgab/2027/explorer`, and the line-by-line
 dataset downloads from its "Download the data" section (`#downloads`).
 
+It went live before a full review, so every line-by-line page, the downloads section and the whole-bill
+boards carry an "Under citizen review" banner (`UnderReviewBanner`). Its "Report a wrong line" link opens
+a GitHub issue on this repo with the page address filled in. Set `LINES_UNDER_REVIEW` in
+`src/lib/hgab-explorer.ts` to `false` once the review is done.
+
 | | |
 | --- | --- |
 | Code | `scripts/hgab-lines/` (Python, PyMuPDF and DuckDB in a uv venv at `/tmp/hgab-lines-venv`) |
@@ -306,8 +311,8 @@ figures change.
 
 ## Open
 
-- Review `review_matches.csv` (309 lines) before publishing: fuzzy agency, activity, office and
-  school names, and 51 House-bill-only activities.
+- Review `review_matches.csv` (309 lines): fuzzy agency, activity, office and school names, and 51
+  House-bill-only activities. Then switch off the "Under citizen review" banner (`LINES_UNDER_REVIEW`).
 - Live since 2026-11-01 (PRs #34 and #36). A data refresh means `npm run build:hgab-lines` (which
   rebuilds the downloads too), then the whole-bill previews with `build:hgab-share`, then
   `upload:hgab`. That uploads the whole `hgab/2027` tree, including anything else built locally, so

@@ -11,7 +11,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { KpiStrip } from '../components/Nep2027Bits';
-import { ExChange, ExStatusChip, ExTree } from '../components/HgabExplorerBits';
+import { ExChange, ExStatusChip, ExTree, UnderReviewBanner } from '../components/HgabExplorerBits';
 import * as fmt from '../lib/format';
 import { downloadCsv } from '../lib/csv';
 import {
@@ -84,6 +84,7 @@ export default function HgabExplorerDept() {
         }
       />
       <main className="nep-main hgab-ex-main">
+        <UnderReviewBanner />
         <KpiStrip
           items={[
             { label: 'NEP', value: dept.nep ? fmt.shortPhp(dept.nep) : '—', sub: dept.nep ? fullPhp(dept.nep) : 'not in the NEP data' },

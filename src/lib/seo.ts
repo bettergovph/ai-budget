@@ -208,10 +208,10 @@ export function pageMeta(pathname: string): PageMeta {
   }
 
   // --- FY2027 House General Appropriations Bill (HB 10858) ---------------
-  // `/hgab` and `/hgab/2027` redirect to the overview, the section's landing
-  // page, so they share its metadata; the Worker folds their canonical onto
-  // `/hgab/2027/overview` too.
-  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/overview") {
+  // `/hgab`, `/hgab/2027` and (while the Explainer is hidden) `/hgab/2027/intro`
+  // redirect to the overview, the section's landing page, so they share its
+  // metadata; the Worker folds their canonical onto `/hgab/2027/overview` too.
+  if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro" || p === "/hgab/2027/overview") {
     return {
       title: `House Budget Analysis — House Bill 10858 against the 2027 NEP, Four Programs · ${SITE}`,
       description:
@@ -219,16 +219,6 @@ export function pageMeta(pathname: string): PageMeta {
         "with the NEP for DPWH infrastructure, farm-to-market roads, health facilities and " +
         "irrigation: insertion and deletion candidates, increases and decreases per program, " +
         "stage totals, checks against this portal's NEP data, and the published source documents.",
-    };
-  }
-  if (p === "/hgab/2027/intro") {
-    return {
-      title: `House Budget Analysis Explainer — the 2027 House Bill against the NEP in Short Chapters · ${SITE}`,
-      description:
-        "An illustrated explainer of House Bill 10858 against the FY 2027 NEP for DPWH " +
-        "infrastructure, farm-to-market roads, health facilities and irrigation: program and " +
-        "region totals, what the House added and dropped, foreign-assisted projects and the " +
-        "reading-to-reading difference, in short chapters.",
     };
   }
   if (p === "/hgab/2027/explorer") {

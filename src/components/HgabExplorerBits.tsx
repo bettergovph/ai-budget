@@ -7,12 +7,63 @@
  * same amount in both documents.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
-  EXPENSE_LABEL, KIND_LABEL, SCOPE_NOTE, STATUS_LABEL, fullPhp, linePdf, volumeName,
+  EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl, volumeName,
   type ExLine, type ExNode, type LineStatus,
 } from '../lib/hgab-explorer';
+
+/**
+ * "Under citizen review": the whole-bill lines went live before a full review. Full at the top of
+ * each line-by-line page and whole-bill board; compact where a link lands mid-page (#downloads).
+ * Renders nothing once LINES_UNDER_REVIEW is false.
+ */
+export function UnderReviewBanner({ compact = false, subject = 'lines' }: {
+  compact?: boolean;
+  /** What the reader is looking at: the lines themselves, one whole-bill board, or a group of them. */
+  subject?: 'lines' | 'board' | 'boards';
+}) {
+  const { pathname, search } = useLocation();
+  if (!LINES_UNDER_REVIEW) return null;
+  const report = (
+    <a className="hgab-review-report" href={reportLineUrl(`${window.location.origin}${pathname}${search}`)} target="_blank" rel="noopener noreferrer">
+      Report a wrong line ↗
+    </a>
+  );
+  const board = subject !== 'lines';
+  const head = {
+    lines: 'We have not finished checking these lines.',
+    board: 'We have not finished checking the lines behind this board.',
+    boards: 'We have not finished checking the lines behind these boards.',
+  }[subject];
+  if (compact) {
+    return (
+      <aside className="hgab-review is-compact" aria-label="Under citizen review">
+        <p>
+          <strong className="hgab-review-tag">Under citizen review</strong> {head} Confirm a figure on its House bill
+          page before you cite it. {report}
+        </p>
+      </aside>
+    );
+  }
+  return (
+    <aside className="hgab-review" aria-label="Under citizen review">
+      <p className="hgab-review-tag">Under citizen review</p>
+      <p className="hgab-review-head">{head}</p>
+      <p>
+        Every line was read from the House bill by computer and matched to the NEP by name. A line may be
+        misread, or paired with the wrong NEP line. {board
+          ? <>Before you share a figure, find it in the <Link to={explorerPath()}>line-by-line pages</Link> and open its House bill page.</>
+          : <>Before you cite a figure, open its House bill page and confirm it.</>}
+      </p>
+      <p className="hgab-review-actions">
+        {report}
+        <span>Tell us the page and the line. Fixes go into the next build.</span>
+      </p>
+    </aside>
+  );
+}
 
 const STATUS_TONE: Record<LineStatus, string> = {
   same: 'var(--ink-mute)',
