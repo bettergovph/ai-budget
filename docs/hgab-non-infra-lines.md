@@ -244,6 +244,9 @@ covered by a workbench page: `dpwh_projects`, `farm_to_market_roads`, `health_fa
 **Where they show.** The explorer index has a "Download the data" section (`#downloads`): the zip, the
 README, and a table of files with rows, sizes, and CSV and Parquet links. Each department page links
 to it, and `/hgab/2027/sources` lists the zip, the two main Parquet files and the README.
+Links carry `?v=` plus the first 12 characters of the file's SHA-256. Cloudflare caches `.csv` and
+`.zip` under their fixed names, keeps the old headers when it revalidates, and neither of our tokens
+can purge it, so each rebuild gets new addresses.
 
 **Checks.** `verify:hgab` adds five:
 

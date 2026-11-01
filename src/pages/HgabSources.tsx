@@ -23,7 +23,7 @@ import {
 } from '../lib/hgab';
 import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
 import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
-import { EXPLORER_ROOT, downloadUrl } from '../lib/hgab-explorer';
+import { EXPLORER_ROOT, type DownloadFile, downloadFiles, downloadUrl, loadExplorerDownloads } from '../lib/hgab-explorer';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
@@ -39,10 +39,13 @@ const LINE_FILES = [
 export default function HgabSources() {
   const [ov, setOv] = useState<HgabOverview | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Versioned links once the downloads manifest is in; plain ones until then, or if it fails.
+  const [lineFiles, setLineFiles] = useState<Map<string, DownloadFile> | null>(null);
 
   useEffect(() => {
     document.title = pageMeta(PATH).title;
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
+    loadExplorerDownloads().then((m) => setLineFiles(downloadFiles(m))).catch(() => {});
   }, []);
 
   if (err) return <HgabError message={err} />;
@@ -171,7 +174,7 @@ export default function HgabSources() {
               </p>
               <ul>
                 {LINE_FILES.map((f) => (
-                  <li key={f.file}><a href={downloadUrl(f.file)}>{f.file}</a><span className="hgab-dl-kind">{f.kind}</span></li>
+                  <li key={f.file}><a href={downloadUrl(lineFiles?.get(f.file) ?? f.file)}>{f.file}</a><span className="hgab-dl-kind">{f.kind}</span></li>
                 ))}
               </ul>
             </div>

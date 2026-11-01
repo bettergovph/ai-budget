@@ -136,9 +136,20 @@ export function loadExplorerDownloads(): Promise<DownloadsManifest> {
     getJson<DownloadsManifest>(dataUrl(`${BASE}/downloads/manifest.json`), 'Failed to load the list of downloads'));
 }
 
-/** Address of one download (R2 in production, public/data in development). */
-export function downloadUrl(file: string): string {
-  return dataUrl(`${BASE}/downloads/${file}`);
+/**
+ * Address of one download (R2 in production, public/data in development). Given its manifest entry,
+ * `?v=` carries the start of its SHA-256: the CDN caches .csv and .zip under fixed names and keeps
+ * their old headers on revalidation, and we cannot purge it, so each rebuild gets its own address.
+ */
+export function downloadUrl(file: DownloadFile | string): string {
+  if (typeof file === 'string') return dataUrl(`${BASE}/downloads/${file}`);
+  return `${dataUrl(`${BASE}/downloads/${file.file}`)}?v=${file.sha256.slice(0, 12)}`;
+}
+
+/** Every file the manifest lists (zip, README, each CSV and Parquet), by name. */
+export function downloadFiles(m: DownloadsManifest): Map<string, DownloadFile> {
+  const all = [m.zip, m.readme, ...m.files.flatMap((f) => (f.parquet ? [f.csv, f.parquet] : [f.csv]))];
+  return new Map(all.map((f) => [f.file, f]));
 }
 
 /** "9.0 MB", "245 KB". */
