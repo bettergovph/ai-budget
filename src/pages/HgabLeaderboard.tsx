@@ -27,6 +27,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { UnderReviewBanner } from '../components/HgabExplorerBits';
 import {
   BoardLinks, BoardPager, BoardTile, CardBoundary, CongressTables, LinesTable, MembersTable, RankingTable, RegionsTable, ShiftTable,
 } from '../components/HgabLeaderboardBits';
@@ -244,6 +245,7 @@ function Gallery({
                   {sec.label} <small>{boards.length} {boards.length === 1 ? 'board' : 'boards'}</small>
                 </h2>
                 <p>{sec.blurb}</p>
+                {sec.key === 'wholebill' && <UnderReviewBanner compact subject="boards" />}
               </header>
               <div className="hgab-lb-grid">
                 {boards.map((b) => <BoardTile key={b.id} data={data} board={b} region={region} />)}
@@ -394,6 +396,7 @@ function BoardPage({
       />
 
       <main className="nep-main hgab-lb-main">
+        {board.kind === 'lines' && <UnderReviewBanner subject="board" />}
         <div className="hgab-lb-board" ref={boardRef}>
           <figure className={`hgab-lb-stage is-${format}`} style={stageStyle}>
             {/* The frame is as wide as the image may be at the viewport's height; the canvas fills it. */}

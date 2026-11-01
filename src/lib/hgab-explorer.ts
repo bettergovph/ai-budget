@@ -16,6 +16,23 @@ import { HGAB_BASE, HGAB_ROOT, cached, getJson, pdfUrl } from './hgab';
 export const EXPLORER_ROOT = `${HGAB_ROOT}/explorer`;
 const BASE = `${HGAB_BASE}/explorer`;
 
+/**
+ * The whole-bill lines went live before a full review. While true, every line-by-line page, the
+ * downloads and the whole-bill boards carry the "Under citizen review" banner. Set false once reviewed.
+ */
+export const LINES_UNDER_REVIEW = true;
+
+/** Where readers report a wrong line: this repo's issues, with the page they were on filled in. */
+export function reportLineUrl(page: string): string {
+  const body = [
+    `Page: ${page}`, '',
+    'The line (agency, program or activity, region or office, expense class):', '',
+    'What is wrong:', '',
+    'What the House bill or the NEP shows, with its page:', '',
+  ].join('\n');
+  return `https://github.com/bettergovph/ai-budget/issues/new?${new URLSearchParams({ title: 'Line by line: ', body })}`;
+}
+
 export type LineStatus = 'same' | 'higher' | 'lower' | 'house_only' | 'nep_only' | 'unprogrammed';
 
 /** One line: an expense class at the deepest level the bill lists. */
