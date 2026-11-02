@@ -142,6 +142,23 @@ validator, target ≥ 8): blue 25, grey 10, ink 9.3 (with a white edge). Colours
 district or place picked on the map narrows the list only. Every control is in the URL (`years`, `stage`, `q`,
 `region`, `placed`, `rule`, `district`, `place`, `sort`).
 
+## Repeats
+
+Jason (2026-11-02): group repeat projects per title and per barangay. Computed in the browser over the lines the
+control row selects (`repeatGroups` in src/lib/hgab-mpb-years.ts); a "Repeats" select narrows the map, the list and
+the CSV to them, and a "Repeats" section lists the groups (by budgets, then lines, then pesos), each opening to its
+lines (30, then "Show all").
+
+- **Same title**: `titleKey()` sets aside case, accents, punctuation, "multi-purpose"/"MPB"/"Bldg."/"Brgy."
+  spellings, phase numbers and printed GPS. Words that change the work (construction, completion, repair) and the
+  building in brackets stay. The key is joined to the line's place (or its office when the title names none), so a
+  generic title never groups different places. On every year with the House bill: 4,778 groups.
+- **Same barangay**: lines placed at a barangay the title names (GPS lines keep their title's barangay). Lines placed at
+  a town or wider are not grouped. Addition Hills, Mandaluyong leads: 117 lines in all 13 budgets.
+- Amounts add across years; FY2027 counts at the stage chosen. The page CSV adds `same_title_lines`,
+  `same_barangay_lines` and `same_title_key` for the lines written.
+- A repeated title can be phases of one building or repairs: the page says so, and calls nothing irregular.
+
 ## Refresh
 
 ```sh
