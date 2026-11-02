@@ -125,6 +125,42 @@ export function loadExplorerIndex(): Promise<ExIndex> {
     getJson<ExIndex>(dataUrl(`${BASE}/index.json`), 'Failed to load the House bill explorer index'));
 }
 
+/** One ranked row (explorer/boards.json, shared with the whole-bill leaderboards). Percent is in percent. */
+export interface ExRankRow {
+  label: string;
+  sub: string;
+  nep_php: number;
+  hgab3_php: number;
+  delta_php: number;
+  delta_pct: number | null;
+  status?: string;
+  note?: string | null;
+  href: string;
+}
+
+/** explorer/summary.json: the overview's whole-bill figures (scripts/hgab-lines/build_explorer.py). */
+export interface ExSummary {
+  schema: 1;
+  built_at: string;
+  totals: { house_bill_php: number; unprogrammed_php: number; house_bill_programmed_php: number; nep_php: number };
+  /** Line by line, without unprogrammed appropriations: raised or added, and cut or dropped. */
+  moved: { raised_php: number; cut_php: number };
+  lines: { total: number; differ: number; status: Partial<Record<LineStatus, number>> };
+  departments: {
+    count: number; up: number; down: number; same: number;
+    top_up: ExRankRow[]; top_down: ExRankRow[]; top_up_pct: ExRankRow[]; top_down_pct: ExRankRow[]; pct_floor_php: number;
+  };
+  lines_up: ExRankRow[];
+  lines_down: ExRankRow[];
+  new_lines: { count: number; php: number; top: ExRankRow[] };
+  readings: { lines_3rd_reading: number; changed: number; relabel: number; added: number; removed: number } | null;
+}
+
+export function loadExplorerSummary(): Promise<ExSummary> {
+  return cached('explorer:summary', () =>
+    getJson<ExSummary>(dataUrl(`${BASE}/summary.json`), 'Failed to load the whole-bill summary'));
+}
+
 export function loadExplorerDept(id: string): Promise<ExDept> {
   return cached(`explorer:${id}`, () =>
     getJson<ExDept>(dataUrl(`${BASE}/d/${encodeURIComponent(id)}.json`), 'Failed to load this department'));

@@ -685,6 +685,7 @@ async function main(): Promise<void> {
   await verifyLeaderboard(overview, c, lens);
   await verifyLineDownloads(c);
   verifyLineSources();
+  verifyWholeBillSummary();
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
@@ -922,6 +923,53 @@ function verifyLineSources(): void {
   check(`every linked PDF is in the tree (${[...docs].sort().join(", ")})`, missingPdf.length === 0, missingPdf.join(", "));
   const badPage = lines.filter((x) => [x.p, x.q].some((r) => r && !(Number.isInteger(r[1]) && r[1] >= 1))).length;
   check("every page reference has a PDF page from 1", badPage === 0, `${badPage} bad`);
+}
+
+/** explorer/summary.json, the overview's whole-bill section: its figures agree with the explorer and the boards. */
+function verifyWholeBillSummary(): void {
+  process.stdout.write("\nexplorer/summary.json (the overview's whole-bill section)\n");
+  const spath = resolve(OUT, "explorer", "summary.json");
+  check("explorer/summary.json present (npm run build:hgab-lines)", existsSync(spath), spath);
+  if (!existsSync(spath)) return;
+  interface Row { label: string; nep_php: number; hgab3_php: number; delta_php: number; delta_pct: number | null; status?: string }
+  const S = readJson<{
+    totals: { house_bill_php: number; unprogrammed_php: number; house_bill_programmed_php: number; nep_php: number };
+    moved: { raised_php: number; cut_php: number };
+    lines: { total: number; differ: number; status: Record<string, number> };
+    departments: { count: number; up: number; down: number; same: number; top_up: Row[]; top_down: Row[]; top_up_pct: Row[]; top_down_pct: Row[]; pct_floor_php: number };
+    lines_up: Row[]; lines_down: Row[]; new_lines: { count: number; php: number; top: Row[] };
+  }>(spath);
+  const ix = readJson<{ house_total: number; nep_total: number; unprogrammed: number; lines: number }>(resolve(OUT, "explorer", "index.json"));
+  const B = readJson<{ departments: Row[]; lines: Row[] }>(resolve(OUT, "explorer", "boards.json"));
+  const T = S.totals;
+  check("totals equal the explorer index, and without unprogrammed the House bill equals the NEP",
+    T.house_bill_php === ix.house_total && T.nep_php === ix.nep_total && T.unprogrammed_php === ix.unprogrammed
+      && T.house_bill_programmed_php === T.nep_php && S.lines.total === ix.lines,
+    JSON.stringify(T));
+  check(`what was raised or added equals what was cut or dropped (${S.moved.raised_php.toLocaleString()} pesos)`,
+    S.moved.raised_php === S.moved.cut_php && S.moved.raised_php > 0, `${S.moved.raised_php} vs ${S.moved.cut_php}`);
+  const st = S.lines.status;
+  const sumStatus = Object.values(st).reduce((a, b) => a + b, 0);
+  check("line statuses add up to every line, and the lines that differ are all but same and unprogrammed",
+    sumStatus === S.lines.total && S.lines.differ === S.lines.total - (st.same ?? 0) - (st.unprogrammed ?? 0),
+    `${sumStatus} vs ${S.lines.total}; differ ${S.lines.differ}`);
+  const D = S.departments;
+  const byDelta = [...B.departments].sort((a, b) => a.delta_php - b.delta_php);
+  const big = B.departments.filter((d) => d.nep_php >= D.pct_floor_php && d.delta_pct != null).sort((a, b) => (a.delta_pct ?? 0) - (b.delta_pct ?? 0));
+  const same = (a: Row[], b: Row[]) => JSON.stringify(a.map((r) => r.label)) === JSON.stringify(b.map((r) => r.label));
+  check("the department counts and top lists are the leaderboards' (boards.json)",
+    D.count === B.departments.length && D.up + D.down + D.same === D.count
+      && D.up === B.departments.filter((d) => d.delta_php > 0).length
+      && same(D.top_up, byDelta.slice(-5).reverse()) && same(D.top_down, byDelta.slice(0, 5))
+      && same(D.top_up_pct, big.slice(-3).reverse()) && same(D.top_down_pct, big.slice(0, 3)),
+    `up ${D.up}, down ${D.down}, same ${D.same}`);
+  const both = B.lines.filter((l) => l.nep_php && l.hgab3_php).sort((a, b) => a.delta_php - b.delta_php);
+  const added = B.lines.filter((l) => l.status === "house_only");
+  check("the top lines and the new lines are the leaderboards' (boards.json)",
+    same(S.lines_up, both.slice(-5).reverse()) && same(S.lines_down, both.slice(0, 5))
+      && S.new_lines.count === added.length && S.new_lines.php === added.reduce((a, l) => a + l.hgab3_php, 0)
+      && S.new_lines.top.every((l) => l.nep_php === 0),
+    `${S.new_lines.count} new lines vs ${added.length}`);
 }
 
 async function verifyLineDownloads(c: DuckDBConnection): Promise<void> {

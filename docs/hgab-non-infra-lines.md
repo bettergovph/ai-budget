@@ -220,6 +220,26 @@ none is assigned.
     links the first page where it appears in each.
 - Copy follows `docs/hgab-copy.md`, and every page carries the comparison disclaimer.
 
+## On the overview (`HgabWholeBill`, `explorer/summary.json`)
+
+The overview opens with "The whole House bill · line by line", above the four programs' sections,
+which are unchanged. `build_explorer.py` writes `summary.json` from the same rows as the explorer and
+`boards.json`, so the overview, the explorer and the leaderboards cannot disagree. It holds:
+
+- the totals;
+- what was raised or added and what was cut or dropped, line by line without unprogrammed
+  appropriations (equal, ₱219,772,824,000 each, since the programmed totals are equal);
+- the status counts and the number of departments up, down and unchanged;
+- the top 5 departments each way, the top 3 by percent (₱1B or more in the NEP);
+- the top 5 lines each way, and the new lines (43, ₱21.85B, excluding the four project-list
+  programs);
+- the second-to-third-reading changes.
+
+The section carries the compact "Under citizen review" banner. Each list links its leaderboard and
+each row its explorer page. A note says the figures are at the level the bill's tables print, and
+quotes DPWH's insertion candidates from `overview.json` to show projects moving inside lines.
+`verify:hgab` checks `summary.json` against `index.json` and `boards.json` (six checks).
+
 ## Proof of reference: NEP pages (`nep_pages.py`)
 
 The NEP CSV has no page numbers. The NEP volumes print the same lines in each agency's table "New

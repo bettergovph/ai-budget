@@ -213,12 +213,12 @@ export function pageMeta(pathname: string): PageMeta {
   // metadata; the Worker folds their canonical onto `/hgab/2027/overview` too.
   if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro" || p === "/hgab/2027/overview") {
     return {
-      title: `House Budget Analysis — House Bill 10858 against the 2027 NEP, Four Programs · ${SITE}`,
+      title: `House Budget Analysis — House Bill 10858 against the 2027 NEP, Line by Line · ${SITE}`,
       description:
-        "House Bill 10858, the FY 2027 General Appropriations Bill, compared project by project " +
-        "with the NEP for DPWH infrastructure, farm-to-market roads, health facilities and " +
-        "irrigation: insertion and deletion candidates, increases and decreases per program, " +
-        "stage totals, checks against this portal's NEP data, and the published source documents.",
+        "House Bill 10858, the FY 2027 General Appropriations Bill, against the NEP: every line of " +
+        "the bill, with the departments and lines the House raised, cut or added, and four programs " +
+        "(DPWH infrastructure, farm-to-market roads, health facilities, irrigation) project by " +
+        "project, each traceable to a page of the published documents.",
     };
   }
   if (p === "/hgab/2027/explorer") {
