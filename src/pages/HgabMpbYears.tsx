@@ -21,9 +21,9 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, asOfText } from '../lib/hgab-leaderboard';
 import {
-  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_CSV_PATH, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
+  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
   PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
-  onlyRepeats, repeatGroups,
+  mpbCsvPath, onlyRepeats, repeatGroups,
   officeShort, recordHref, shadeBreaks, shadeClass, sortLines,
   type MpbData, type MpbFilters, type MpbGroup, type MpbLevel, type MpbLine, type MpbSelection, type MpbSort, type MpbSummary,
   type RepeatMode, type Stage2027,
@@ -270,7 +270,7 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
 
         <RepeatsSection data={data} lines={baseLines} view={view} setView={setView} onShow={showOnMap} />
 
-        <LinesList data={data} lines={listLines} view={view} setView={setView} onShow={showOnMap} />
+        <LinesList data={data} summary={summary} lines={listLines} view={view} setView={setView} onShow={showOnMap} />
 
         <section className="nep-section hgab-mpbm-section" aria-labelledby="hgab-mpbm-placed">
           <h2 id="hgab-mpbm-placed" className="hgab-mpbm-h2">
@@ -633,8 +633,9 @@ function GroupRow({ data, g, stage, onShow, onList }: {
 // The list
 // ---------------------------------------------------------------------------
 
-function LinesList({ data, lines, view, setView, onShow }: {
+function LinesList({ data, summary, lines, view, setView, onShow }: {
   data: MpbData;
+  summary: MpbSummary;
   lines: MpbLine[];
   view: View;
   setView: (v: ViewPatch) => void;
@@ -686,7 +687,7 @@ function LinesList({ data, lines, view, setView, onShow }: {
             </select>
           </label>
           <button type="button" className="hgab-cta" onClick={download} disabled={!lines.length}>Download these (CSV)</button>
-          <a className="hgab-mpbm-linkbtn" href={dataUrl(MPB_CSV_PATH)} download={MPB_CSV_NAME}>Every line, every year (CSV)</a>
+          <a className="hgab-mpbm-linkbtn" href={dataUrl(mpbCsvPath(summary))} download={MPB_CSV_NAME}>Every line, every year (CSV)</a>
         </div>
       </div>
       <div className="hgab-mpbm-tablewrap">

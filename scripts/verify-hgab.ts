@@ -2768,6 +2768,9 @@ async function verifyMpbYears(c: DuckDBConnection): Promise<void> {
   }
   check(`the ${S.budgets.length} budgets: summary.json recomputes from lines.json, and from FY2020 the multi-purpose building lines equal the chart`, offB.length === 0 && S.budgets.length === 14, offB.join("; "));
   check("every check the builder ran passed", S.checks.length > 0 && S.checks.every((x) => x.ok), S.checks.filter((x) => !x.ok).map((x) => x.key).join(", "));
+  const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+  const outOff = (["lines.json", "districts.geojson", "lines.csv"] as const).filter((f) => S.outputs?.[f]?.sha256 !== sha(resolve(dir, f)));
+  check("summary.json records the SHA-256 of lines.json, districts.geojson and lines.csv (the CSV link's ?v=)", outOff.length === 0, outOff.join(", "));
 
   // 4. Placement: one level per line; GPS lines carry points, others a place; everything inside the Philippines.
   // Kalayaan (Palawan) lies west of 116°E, outside the GPS screen but inside the country.

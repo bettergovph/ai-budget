@@ -899,6 +899,9 @@ def main():
         'text_repairs': {name: sum(1 for l in lines if name in l['repairs']) for name, _, _ in GAA_TEXT_REPAIRS},
         'gaa_place_status': dict(sorted(Counter(l['psgc_status'] for l in lines if l['fy'] < 2027).items())),
         'checks': checks,
+        # The page links lines.csv with ?v=<sha256[:12]>: the data host caches CSV for hours (docs/hgab-mpb-years.md).
+        'outputs': {f: {'sha256': sha256(out / f), 'bytes': (out / f).stat().st_size}
+                    for f in ('lines.json', 'districts.geojson', 'lines.csv')},
     }
     write_json(out / 'summary.json', summary, indent=1)
     for f in ('lines.json', 'summary.json', 'districts.geojson', 'lines.csv'):

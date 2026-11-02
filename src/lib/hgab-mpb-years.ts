@@ -37,6 +37,8 @@ export const MPB_SUMMARY_PATH = `${BASE}/summary.json`;
 export const MPB_DISTRICTS_PATH = `${BASE}/districts.geojson`;
 export const MPB_CSV_PATH = `${BASE}/lines.csv`;
 export const MPB_CSV_NAME = 'bettergov-multi-purpose-buildings-2015-2027.csv';
+/** The full CSV's path, versioned by its checksum: the data host caches CSV for hours, so a rebuilt file needs a new URL. */
+export const mpbCsvPath = (s: Pick<MpbSummary, 'outputs'>) => `${MPB_CSV_PATH}?v=${s.outputs['lines.csv'].sha256.slice(0, 12)}`;
 
 export const MPB_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027] as const;
 export type MpbYear = (typeof MPB_YEARS)[number];
@@ -121,6 +123,8 @@ export interface MpbSummary {
   text_repairs: Record<string, number>;
   gaa_place_status: Record<string, number>;
   checks: Array<{ key: string; ok: boolean; detail: string }>;
+  /** SHA-256 and size of each file the build wrote beside this one. */
+  outputs: Record<'lines.json' | 'districts.geojson' | 'lines.csv', { sha256: string; bytes: number }>;
 }
 
 // ---------------------------------------------------------------------------
