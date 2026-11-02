@@ -26,43 +26,48 @@ import {
 } from '../lib/hgab';
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
-import { MPB_MAP_ROOT, MPB_MAP_TITLE } from '../lib/hgab-mpb-years';
+import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
 
+interface NavLink { to: string; label: string; match?: (path: string) => boolean }
+interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: string; label: string; to: string }> }
+
 /**
- * Section entries that are plain links (programs and Districts are dropdowns,
- * see PROGRAM_NAV). The first two lead the nav: Overview (the landing page,
- * where `/hgab` and `/hgab/2027` redirect) and Line by line (the whole-bill
- * explorer); the rest follow Districts, in order. The story-style Explainer
- * (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview.
+ * The section's sub-nav, left to right (Jason's order, 2026-11-02): Overview (the landing page, where `/hgab` and
+ * `/hgab/2027` redirect), Line by line (the whole-bill explorer) and Leaderboards; then the dropdowns Districts, the
+ * four programs and Multi-purpose buildings; Write a letter; and About (Sources, Methodology). The story-style
+ * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview.
  */
-const LEAD_LINKS = 2;
-const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) => boolean }> = [
+const LEAD_LINKS: readonly NavLink[] = [
   {
     to: `${HGAB_ROOT}/overview`,
     label: 'Overview',
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/overview`,
   },
   { to: `${HGAB_ROOT}/explorer`, label: 'Line by line' },
-  { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
-  { to: `${HGAB_ROOT}/sources`, label: 'Sources' },
-  { to: `${HGAB_ROOT}/methodology`, label: 'Methodology' },
 ];
+const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
 
-/**
- * Pages that sit under a program's dropdown though they are not views of its
- * hub: each is listed after the hub's views and marks the program active.
- * Multi-purpose buildings are DPWH lines, so the page opens from DPWH.
- */
-const PROGRAM_PAGES: Partial<Record<DatasetKey, ReadonlyArray<{ key: string; label: string; to: string }>>> = {
-  dpwh: [
-    { key: 'multi-purpose', label: HISTORY_TITLE, to: HISTORY_ROOT },
-    { key: 'multi-purpose-map', label: MPB_MAP_TITLE, to: MPB_MAP_ROOT },
+/** Multi-purpose buildings are DPWH lines, with a menu of their own: the budget by year, and every line on a map. */
+const MPB_MENU: NavMenu = {
+  key: 'multi-purpose',
+  label: HISTORY_TITLE,
+  items: [
+    { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
+    { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
+  ],
+};
+const ABOUT_MENU: NavMenu = {
+  key: 'about',
+  label: 'About',
+  items: [
+    { key: 'sources', label: 'Sources', to: `${HGAB_ROOT}/sources` },
+    { key: 'methodology', label: 'Methodology', to: `${HGAB_ROOT}/methodology` },
   ],
 };
 
@@ -72,9 +77,9 @@ const PROGRAM_PAGES: Partial<Record<DatasetKey, ReadonlyArray<{ key: string; lab
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active (`aria-current="page"`). A
  * record page (`/hgab/2027/dpwh/p/…`) counts as its dataset's tab. On
- * desktop the ten tabs sit on one row inside the navy band; on mobile the
- * band scrolls horizontally (site-header.css) and the drawer repeats the
- * links under an "FY2027 HGAB" eyebrow.
+ * desktop the eleven entries sit on one row inside the navy band; on mobile
+ * the band scrolls horizontally (site-header.css) and the drawer repeats the
+ * links, in the same order, under an "FY2027 HGAB" eyebrow.
  */
 export function HgabHeader({
   crumb,
@@ -88,23 +93,29 @@ export function HgabHeader({
   const { pathname, search } = useLocation();
   const path = pathname.replace(/\/+$/, '') || HGAB_ROOT;
   const view = new URLSearchParams(search).get('view') ?? 'overview';
-  const linkActive = (n: (typeof SECTION_LINKS)[number]) =>
-    n.match ? n.match(path) : path === n.to || path.startsWith(`${n.to}/`);
-  const programPage = (key: DatasetKey) => PROGRAM_PAGES[key]?.find((x) => path === x.to) ?? null;
-  const programActive = (key: DatasetKey) =>
-    path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`) || programPage(key) != null;
-  const link = (n: (typeof SECTION_LINKS)[number]) => (
+  const linkActive = (n: NavLink) => (n.match ? n.match(path) : path === n.to || path.startsWith(`${n.to}/`));
+  const link = (n: NavLink) => (
     <Link key={n.to} to={n.to} className={linkActive(n) ? 'active' : ''} aria-current={linkActive(n) ? 'page' : undefined}>
       {n.label}
     </Link>
   );
-  const lead = SECTION_LINKS.slice(0, LEAD_LINKS);
-  const rest = SECTION_LINKS.slice(LEAD_LINKS);
+  const programActive = (key: DatasetKey) => path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`);
+  // A menu's current item: the exact page first (the map sits under the multi-purpose page's path), else a page below one.
+  const menuKey = (m: NavMenu) =>
+    m.items.find((x) => path === x.to)?.key ?? m.items.find((x) => path.startsWith(`${x.to}/`))?.key ?? null;
+  const menu = (m: NavMenu) => (
+    <SectionMenu key={m.key} label={m.label} items={m.items} active={menuKey(m) != null} currentKey={menuKey(m)} />
+  );
   // Districts: an overview, the list, and each district's page (which counts as the list).
   const districtsActive = path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
   const districtsKey = !districtsActive ? null
     : path !== `${HGAB_ROOT}/districts` ? 'list'
     : districtsView(new URLSearchParams(search));
+  const drawerLink = (x: { key: string; label: string; to: string }, on: boolean) => (
+    <Link key={x.key} to={x.to} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
+      {x.label}
+    </Link>
+  );
   return (
     <SiteHeader
       headerClassName={heroBlend ? 'masthead-hero-blend' : undefined}
@@ -112,74 +123,62 @@ export function HgabHeader({
       compiledMeta={compiledMeta ?? 'House Bill 10858 · 2nd and 3rd reading'}
       subNav={
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 House bill sections">
-          {lead.map(link)}
-          {PROGRAM_NAV.map((p) => (
-            <SectionMenu
-              key={p.key}
-              label={p.label}
-              items={[
-                ...hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) })),
-                ...(PROGRAM_PAGES[p.key] ?? []),
-              ]}
-              active={programActive(p.key)}
-              currentKey={programPage(p.key)?.key ?? (programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null)}
-            />
-          ))}
+          {LEAD_LINKS.map(link)}
           <SectionMenu
             label="Districts"
             items={DISTRICT_VIEWS.map((v) => ({ key: v.key, label: v.label, to: v.to }))}
             active={districtsActive}
             currentKey={districtsKey}
           />
-          {rest.map(link)}
+          {PROGRAM_NAV.map((p) => (
+            <SectionMenu
+              key={p.key}
+              label={p.label}
+              items={hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }))}
+              active={programActive(p.key)}
+              currentKey={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
+            />
+          ))}
+          {menu(MPB_MENU)}
+          {TAIL_LINKS.map(link)}
+          {menu(ABOUT_MENU)}
         </nav>
       }
       drawerExtras={
         <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 House bill sections">
           <p className="hgab-drawer-eyebrow">The House bill for 2027</p>
-          {lead.map(link)}
-          {PROGRAM_NAV.map((p) => (
-            <div className="hgab-drawer-group" key={p.key}>
-              <Link
-                to={datasetPath(p.key)}
-                className={programActive(p.key) ? 'active' : ''}
-                aria-current={programActive(p.key) && !programPage(p.key) && view === 'overview' ? 'page' : undefined}
-              >
-                {p.label}
-              </Link>
-              <div className="hgab-drawer-sub">
-                {hubViews(p.hasReadings).filter((v) => v.key !== 'overview').map((v) => {
-                  const on = programActive(p.key) && !programPage(p.key) && view === v.key;
-                  return (
-                    <Link key={v.key} to={datasetPath(p.key, v.key)} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
-                      {v.label}
-                    </Link>
-                  );
-                })}
-                {(PROGRAM_PAGES[p.key] ?? []).map((x) => {
-                  const on = path === x.to;
-                  return (
-                    <Link key={x.key} to={x.to} className={on ? 'active' : ''} aria-current={on ? 'page' : undefined}>
-                      {x.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          {LEAD_LINKS.map(link)}
           <div className="hgab-drawer-group">
             <Link to={`${HGAB_ROOT}/districts`} className={districtsActive ? 'active' : ''} aria-current={districtsKey === 'overview' ? 'page' : undefined}>
               Districts
             </Link>
             <div className="hgab-drawer-sub">
-              {DISTRICT_VIEWS.filter((v) => v.key !== 'overview').map((v) => (
-                <Link key={v.key} to={v.to} className={districtsKey === v.key ? 'active' : ''} aria-current={districtsKey === v.key ? 'page' : undefined}>
-                  {v.label}
-                </Link>
-              ))}
+              {DISTRICT_VIEWS.filter((v) => v.key !== 'overview').map((v) => drawerLink(v, districtsKey === v.key))}
             </div>
           </div>
-          {rest.map(link)}
+          {PROGRAM_NAV.map((p) => (
+            <div className="hgab-drawer-group" key={p.key}>
+              <Link
+                to={datasetPath(p.key)}
+                className={programActive(p.key) ? 'active' : ''}
+                aria-current={programActive(p.key) && view === 'overview' ? 'page' : undefined}
+              >
+                {p.label}
+              </Link>
+              <div className="hgab-drawer-sub">
+                {hubViews(p.hasReadings).filter((v) => v.key !== 'overview').map((v) =>
+                  drawerLink({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }, programActive(p.key) && view === v.key))}
+              </div>
+            </div>
+          ))}
+          <div className="hgab-drawer-group">
+            <Link to={MPB_MENU.items[0].to} className={menuKey(MPB_MENU) ? 'active' : ''} aria-current={menuKey(MPB_MENU) === 'history' ? 'page' : undefined}>
+              {MPB_MENU.label}
+            </Link>
+            <div className="hgab-drawer-sub">{MPB_MENU.items.slice(1).map((x) => drawerLink(x, menuKey(MPB_MENU) === x.key))}</div>
+          </div>
+          {TAIL_LINKS.map(link)}
+          {ABOUT_MENU.items.map((x) => drawerLink(x, menuKey(ABOUT_MENU) === x.key))}
         </nav>
       }
     />
@@ -187,7 +186,7 @@ export function HgabHeader({
 }
 
 /**
- * One sub-nav entry (a program, or Districts): a button that opens a menu of its views.
+ * One sub-nav entry with a menu (Districts, a program, Multi-purpose buildings, About): a button that opens it.
  *
  * The sub-nav scrolls sideways on phones, which would clip an absolutely
  * positioned menu, so the panel is fixed to the viewport at the button's

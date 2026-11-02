@@ -900,7 +900,7 @@ the plain disclaimers with their link.
 ## Budget history
 
 `npm run build:hgab-history` writes `data/hgab/2027/history.json` (`HistoryData`, contract
-`src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Multi-purpose buildings" in the DPWH menu). R2 key
+`src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Budget by year" in the Multi-purpose buildings menu). R2 key
 `hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
 Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 checks; a missing file fails).
 

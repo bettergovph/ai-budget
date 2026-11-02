@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose/map` (DPWH menu): every multi-purpose building line in every budget we hold, the
+ * `/hgab/2027/multi-purpose/map` (Multi-purpose buildings menu): every multi-purpose building line in every budget we hold, the
  * FY2020 to FY2026 enacted budgets and the FY2027 NEP and House bill, on one map and in one list.
  *
  * Data: `mpb-years/` (npm run build:hgab-mpb-years; contract in src/lib/hgab-mpb-years.ts). Every figure in the
