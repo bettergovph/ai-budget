@@ -87,6 +87,7 @@ builder emit for readers:
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
 | `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
 | `npm run build:hgab-history` | `scripts/build-hgab-history.ts` | Writes `history.json` and `history.csv`: multi-purpose buildings, flood control, BIP, SIPAG and four other lines from the FY2020 GAA to the FY2027 House bill (see "Budget history"). Flags: `--out`, `--data=data`, `--pbc=<dir>` (or `PBC_2026_DIR`), `--vol-ia=<pdf>` |
+| `npm run build:hgab-mpb-years` | `scripts/hgab-mpb-years/run.sh` | Writes `mpb-years/`: every multi-purpose building line, FY2015 GAA to the FY2027 House bill, placed for the map at `/hgab/2027/multi-purpose/map` (see `docs/hgab-mpb-years.md`). Env: `UPSTREAM_GIT`, `UPSTREAM_DIR`, `SHAPES_DIR`, `HISTORY_DIR`, `OUT` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
@@ -110,6 +111,7 @@ data/hgab/2027/
   pdf/<doc_key>.pdf          the eight source documents the evidence links open
   pdf/hb10858-3r-vol-ia.pdf  House bill Volume I-A (third reading): DepEd and DOH program lines for the budget history
   history.json, history.csv  the budget history (npm run build:hgab-history)
+  mpb-years/                 every multi-purpose building line, FY2015–FY2027, for the map (npm run build:hgab-mpb-years)
 ```
 
 `data/` is a symlink to the main checkout's data dir, so the dev server
