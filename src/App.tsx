@@ -121,7 +121,7 @@ export default function App() {
           {/* Write to your representative: the district picker, and one district's letter. */}
           <Route path="/hgab/2027/letter" element={<HgabLetters />} />
           <Route path="/hgab/2027/letter/:slug" element={<HgabLetter />} />
-          {/* Multi-purpose buildings (DPWH menu): with flood control, BIP, SIPAG, school and health facilities, FY2020 to the 2027 House bill. */}
+          {/* Multi-purpose buildings (its own menu): the budget by year, with flood control, BIP, SIPAG, school and health facilities; and every line on a map. */}
           <Route path="/hgab/2027/multi-purpose" element={<HgabHistory />} />
           <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
