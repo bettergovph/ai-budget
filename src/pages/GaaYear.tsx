@@ -1,10 +1,13 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Eyebrow } from '../components/shared';
 import { SkeletonRows } from '../components/Nep2027Bits';
 import SiteFooter from '../components/SiteFooter';
-import SiteHeader from '../components/SiteHeader';
-import YearLinkStrip from '../components/YearLinkStrip';
+import { GaaBrowserHeader, GaaBrowserHeading, GaaBrowserYears } from '../components/GaaBrowserChrome';
+import GaaHierarchyRow from '../components/GaaHierarchyRow';
+import GaaHistorical from './GaaHistorical';
+import GaaRecords from './GaaRecords';
+import { GAA_YEARS } from '../lib/gaa-history';
 import { fetchEntity, fetchMidChildren, loadDeptData, YEARS } from '../lib/dept-data';
 import type { MidChildrenPage } from '../lib/dept-data';
 import { deptTitle, pageMeta } from '../lib/seo';
@@ -63,12 +66,18 @@ function drillUrl(year: number, segIds: string[]): string {
 
 export default function GaaYear() {
   const params = useParams();
+  const [search] = useSearchParams();
   const year = Number(params.year);
   const segIds = (params['*'] ?? '').split('/').filter(Boolean).map(decodeURIComponent);
-  if (!YEARS.includes(year)) {
+  if (!GAA_YEARS.includes(year)) {
     // FY2027 is the NEP microsite, not the GAA series; anything else is noise.
     return <Navigate to={year === 2027 ? '/2027/browse' : '/gaa'} replace />;
   }
+  if (year < 2020 && segIds[0] !== 'records' && search.get('view') === 'records') {
+    return <Navigate to={`/gaa/${year}/records?${search}`} replace />;
+  }
+  if (segIds[0] === 'records') return <GaaRecords year={year} />;
+  if (year < 2020) return <GaaHistorical year={year} />;
   if (segIds.length > LEVELS.length) {
     return <Navigate to={drillUrl(year, segIds.slice(0, LEVELS.length))} replace />;
   }
@@ -321,48 +330,10 @@ function GaaYearBrowser({ year, segIds }: { year: number; segIds: string[] }) {
 
   return (
     <>
-      <SiteHeader
-        crumb={<>Per-year browser</>}
-        compiledMeta={`Compiled · FY${year} · ₱${fmt.shortPhp(total, 'T')}`}
-        subNav={
-          <nav className="view-tabs section-tabs" aria-label="Fiscal years">
-            <Link to="/gaa">All years</Link>
-            {YEARS.map((y) => (
-              <Link key={y} to={`/gaa/${y}${suffix}`} className={y === year ? 'active' : ''}>
-                FY {y}
-              </Link>
-            ))}
-          </nav>
-        }
-        drawerExtras={
-          <>
-            <Link className="drawer-link" to="/gaa">
-              All years overview <span className="drawer-link-arrow">→</span>
-            </Link>
-            {YEARS.map((y) => (
-              <Link key={y} className="drawer-link" to={`/gaa/${y}${suffix}`}>
-                FY {y} browser <span className="drawer-link-arrow">→</span>
-              </Link>
-            ))}
-          </>
-        }
-      />
-
-      <main style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
-        <div className="page-headline">
-          <p className="page-eyebrow">Budget browser · one fiscal year</p>
-          <h1 className="page-title">FY {year} General Appropriations</h1>
-          <p className="page-dek">
-            Every peso appropriated for fiscal year {year} alone — drill from group to bureau, program,
-            operating unit, fund, and expense class. Each level has its own URL you can share, and
-            switching years keeps your place in the hierarchy.
-          </p>
-        </div>
-
-        <div className="year-strip-wrap" style={{ marginBottom: 24 }}>
-          <p className="eyebrow">Pick a fiscal year — the whole page follows</p>
-          <YearLinkStrip yearly={idx.national_yearly} active={year} suffix={suffix} />
-        </div>
+      <GaaBrowserHeader year={year} suffix={suffix} />
+      <main className="gaa-browser-main" style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
+        <GaaBrowserHeading year={year} />
+        <GaaBrowserYears year={year} suffix={suffix} />
 
         <div className="kpi-strip">
           <div className="kpi-cell">
@@ -469,7 +440,7 @@ function GaaYearBrowser({ year, segIds }: { year: number; segIds: string[] }) {
                 const noDrill =
                   !rowsDrillable || (!current && (rec as unknown as NationalDeptRow).has_data === false);
                 return (
-                  <YearRow
+                  <GaaHierarchyRow
                     key={rec.id}
                     rec={rec}
                     year={year}
@@ -517,62 +488,5 @@ function GaaYearBrowser({ year, segIds }: { year: number; segIds: string[] }) {
 
       <SiteFooter />
     </>
-  );
-}
-
-/** One listing row, scoped to a single fiscal year: share bar against the
-    level max, the FY amount, share of the level total, and YoY vs the prior
-    budget (— for FY 2020; "new" when the line first appears this year). */
-function YearRow({
-  rec,
-  year,
-  max,
-  total,
-  prevYear,
-  drillable,
-  onClick,
-  code,
-}: {
-  rec: BaseEntity;
-  year: number;
-  max: number;
-  total: number;
-  prevYear: number | null;
-  drillable: boolean;
-  onClick: () => void;
-  code?: string;
-}) {
-  const v = rec.years[year]?.amount || 0;
-  const prev = prevYear != null ? rec.years[prevYear]?.amount || 0 : null;
-  const d = prev ? (v - prev) / prev : null;
-  const isNew = prevYear != null && !prev && v > 0;
-  const share = total ? v / total : 0;
-
-  return (
-    <tr className={drillable ? '' : 'disabled'} onClick={drillable ? onClick : undefined}>
-      <td className="name">
-        <span>{rec.description}</span>
-        {code && <span className="desc">{code}</span>}
-      </td>
-      <td className="bar-cell">
-        <div className="bar-h accent">
-          <span style={{ width: `${max ? (v / max) * 100 : 0}%` }} />
-        </div>
-      </td>
-      <td className="num">{fmt.php(v, { unit: v >= 1e9 ? 'B' : 'M' })}</td>
-      <td className="num">
-        <span className="delta">{fmt.pct(share, share >= 0.1 ? 1 : 2)}</span>
-      </td>
-      <td className="num">
-        {isNew ? (
-          <span className="delta up">new</span>
-        ) : d == null ? (
-          <span className="delta">—</span>
-        ) : (
-          <span className={`delta ${d > 0 ? 'up' : 'down'}`}>{fmt.signedPct(d, 0)}</span>
-        )}
-      </td>
-      <td className="chev">{drillable ? '›' : ''}</td>
-    </tr>
   );
 }

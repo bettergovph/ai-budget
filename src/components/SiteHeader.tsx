@@ -72,9 +72,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
     ? null // the guide and glossary span both documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`
-    : location.pathname.startsWith('/gaa')
-    || location.pathname.startsWith('/d/')
-    || location.pathname.startsWith('/methodology')
+    : location.pathname.startsWith('/gaa') || location.pathname.startsWith('/methodology')
+    ? 'FY 2000–2026'
+    : location.pathname.startsWith('/d/')
     || location.pathname.startsWith('/explore')
     ? 'FY 2020 \u2013 2026'
     : location.pathname.startsWith('/hgab')
@@ -193,7 +193,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               to="/gaa"
               className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
-              General Appropriations 2020–2026
+              General Appropriations 2000–2026
             </Link>
             <Link
               to="/learn"
@@ -253,7 +253,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             Budget Hearings <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
-            GAA 2020–2026 <span className="drawer-link-arrow">→</span>
+            GAA 2000–2026 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/learn" onClick={() => setMenuOpen(false)}>
             Learn <span className="drawer-link-arrow">→</span>

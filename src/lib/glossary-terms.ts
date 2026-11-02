@@ -55,7 +55,7 @@ export const TERMS: Term[] = [
     aka: 'GAA',
     cat: 'documents',
     def: 'The law appropriating funds for government agencies for one budget year — the NEP after Congress has deliberated, amended, and passed it, and the President has signed it.',
-    see: { to: '/gaa', label: 'Browse the GAA, FY 2020–2026' },
+    see: { to: '/gaa', label: 'Browse the GAA, FY 2000–2026' },
   },
   {
     term: 'General Appropriations Bill',
