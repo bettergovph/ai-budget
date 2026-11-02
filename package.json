@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev45.0",
+    "maplibre-gl": "^6.16.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^9.1.0",
