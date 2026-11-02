@@ -25,10 +25,14 @@
  *   <dataset>/projects.parquet    one row per comparison record (PROJECT_COLUMNS), DuckDB-Wasm
  *   pdf/<doc_key>.pdf             the source documents the evidence links open
  */
+import type { FeatureCollection } from 'geojson';
 import { dataUrl } from './data-url';
 import { LEADERBOARD_DATA_PATH, WHOLE_BILL_DATA_PATH, type LeaderboardData, type WholeBillData } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
+import {
+  MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary,
+} from './hgab-mpb-years';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -729,6 +733,18 @@ export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
 /** Budget history, FY2020 GAA to the 2027 House bill (`npm run build:hgab-history`). */
 export function loadHgabHistory(): Promise<HistoryData> {
   return cached('history', () => getJson<HistoryData>(dataUrl(HISTORY_DATA_PATH), 'Failed to load the budget history'));
+}
+
+/** Every multi-purpose building line, FY2020 GAA to the 2027 House bill, for the map (`npm run build:hgab-mpb-years`). */
+export function loadMpbYears(): Promise<{ data: MpbData; summary: MpbSummary; districts: FeatureCollection }> {
+  return cached('mpb-years', async () => {
+    const [lines, summary, districts] = await Promise.all([
+      getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
+      getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
+      getJson<FeatureCollection>(dataUrl(MPB_DISTRICTS_PATH), 'Failed to load the legislative district outlines'),
+    ]);
+    return { data: decodeMpbLines(lines), summary, districts };
+  });
 }
 
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {

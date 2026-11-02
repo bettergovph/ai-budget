@@ -16,6 +16,10 @@
  *   npm run verify:hgab && npm run upload:hgab -- --dry-run
  *   npm run upload:hgab
  *   npm run upload:hgab -- --force --concurrency=4
+ *   npm run upload:hgab -- --only=mpb-years --skip-verify    # one folder of the tree (after a full verify)
+ *
+ * --only=<dir>[,<dir>] uploads just those folders of the tree: the data folder is shared between branches, and a
+ * plain run would publish whatever else is in it.
  */
 
 import { S3Client, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -24,8 +28,9 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { letterDownloadName } from "../src/lib/hgab-letter";
+import { MPB_CSV_NAME } from "../src/lib/hgab-mpb-years";
 
-interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string }
+interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string; only: string[] }
 function parseArgs(): Args {
   const args = process.argv.slice(2);
   const get = (k: string) => args.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3);
@@ -35,6 +40,7 @@ function parseArgs(): Args {
     skipVerify: args.includes("--skip-verify"),
     concurrency: Number(get("concurrency") || "4"),
     root: resolve(get("out") ?? "data/hgab/2027"),
+    only: (get("only") ?? "").split(",").map((x) => x.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean),
   };
 }
 
@@ -63,6 +69,8 @@ const s3 = haveCreds
 function contentTypeFor(path: string): string {
   if (path.endsWith(".parquet")) return "application/vnd.apache.parquet";
   if (path.endsWith(".json")) return "application/json";
+  // mpb-years/districts.geojson: the map's district outlines. JSON, so the edge compresses it.
+  if (path.endsWith(".geojson")) return "application/json";
   if (path.endsWith(".pdf")) return "application/pdf";
   // share/<board>.png: link previews (npm run build:hgab-share), read by social crawlers.
   if (path.endsWith(".png")) return "image/png";
@@ -83,7 +91,7 @@ const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
 const isLineDownload = (path: string) => /[\\/]explorer[\\/]downloads[\\/][^\\/]+$/.test(path);
 /** JSON, CSV, the letters and the line-by-line downloads change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
-  return path.endsWith(".json") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isLineDownload(path) ? "public, max-age=300" : "public, max-age=86400";
+  return path.endsWith(".json") || path.endsWith(".geojson") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isLineDownload(path) ? "public, max-age=300" : "public, max-age=86400";
 }
 /** A CSV or a letter is a download: the page links it cross-origin, where the `download` attribute is ignored. */
 function contentDispositionFor(path: string): string | undefined {
@@ -94,6 +102,8 @@ function contentDispositionFor(path: string): string | undefined {
   // Their names already say what they are (house-bill-2027-lines.csv, nep-2027-...).
   if (isLineDownload(path) && /\.(csv|parquet|zip)$/.test(name)) return `attachment; filename="bettergov-${name}"`;
   if (!path.endsWith(".csv")) return undefined;
+  // mpb-years/lines.csv: every multi-purpose building line, FY2015-FY2027 (the page links it by that name).
+  if (/[\\/]mpb-years[\\/]lines\.csv$/.test(path)) return `attachment; filename="${MPB_CSV_NAME}"`;
   return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }
 function fmtBytes(n: number): string {
@@ -157,13 +167,21 @@ async function main() {
     console.log("");
   }
   const manifest = JSON.parse(readFileSync(resolve(opts.root, "manifest.json"), "utf8")) as { source_commit: string; built_at: string };
-  const items = walk(opts.root).map((p) => ({ local: p, key: `${PREFIX}${relative(opts.root, p).split(sep).join("/")}` }));
+  const roots = opts.only.length ? opts.only.map((d) => resolve(opts.root, d)) : [opts.root];
+  for (const r of roots) {
+    if (!existsSync(r) || !statSync(r).isDirectory()) {
+      console.error(`--only: ${r} is not a folder of ${opts.root}`);
+      process.exit(1);
+    }
+  }
+  const items = roots.flatMap(walk).map((p) => ({ local: p, key: `${PREFIX}${relative(opts.root, p).split(sep).join("/")}` }));
   const totalBytes = items.reduce((a, i) => a + statSync(i.local).size, 0);
 
   console.log(`Endpoint: ${endpoint}`);
   console.log(`Bucket:   ${Bucket}`);
   console.log(`Prefix:   ${PREFIX}`);
   console.log(`Source:   ${opts.root} (commit ${manifest.source_commit.slice(0, 12)}, built ${manifest.built_at})`);
+  if (opts.only.length) console.log(`Only:     ${opts.only.join(", ")}`);
   console.log(`Files:    ${items.length} · ${fmtBytes(totalBytes)}`);
   console.log(`Mode:     ${opts.dryRun ? `DRY RUN${haveCreds ? "" : " (no credentials; skip checks disabled)"}` : opts.force ? "force-overwrite" : "skip identical (size + ETag/MD5)"}`);
   console.log("─".repeat(72));

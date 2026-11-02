@@ -17,6 +17,7 @@ import { SectionHead } from '../components/shared';
 import { loadHgabHistory } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { asOfText } from '../lib/hgab-leaderboard';
+import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import {
   HISTORY_COLUMNS, HISTORY_CSV_NAME, HISTORY_CSV_PATH, HISTORY_DEFINITIONS, HISTORY_SERIES, HISTORY_TITLE, HISTORY_VOL_IA_PATH,
   columnIndex, gaaHistoryHref, listHref, seriesOf,
@@ -162,6 +163,9 @@ function ListLink({ s, printed }: { s: HistorySeries; printed?: HistoryData['pri
         </span>
       )}
       {history && <span className="hgab-hy-list-more">{history}</span>}
+      {s.key === 'mpb' && (
+        <span className="hgab-hy-list-more"><Link to={MPB_MAP_ROOT}>See every line on a map, 2015 to 2027 →</Link></span>
+      )}
     </p>
   );
 }

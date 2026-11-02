@@ -116,6 +116,10 @@ import {
   DEPED_EXTRA_LINES, HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
   type HistoryData, type HistoryPartDef,
 } from "../src/lib/hgab-history";
+import {
+  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, linesCsv, mapMarks, repeatGroups,
+  titleKey, type MpbLinesFile, type MpbSummary,
+} from "../src/lib/hgab-mpb-years";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -691,6 +695,7 @@ async function main(): Promise<void> {
   verifyNotIgnorantPage();
   await verifyLetters(overview, c);
   await verifyHistory(c);
+  await verifyMpbYears(c);
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -2696,4 +2701,184 @@ async function verifyHistory(c: DuckDBConnection): Promise<void> {
   const hits = copy.flatMap((t) => readerCopyHits(t).map((h) => `${h} in "${t.slice(0, 40)}…"`));
   const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((x) => x.split(/\s+/).length > 20);
   check("history reader copy: no technical words, no sentence over 20 words", hits.length === 0 && long.length === 0, [...hits, ...long].slice(0, 3).join("; "));
+}
+
+// ---------------------------------------------------------------------------
+// Multi-purpose buildings map (mpb-years/), recomputed on the verifier's own path: the enacted-budget lines from
+// the row-level extract (the builder reads the PAP tables), the FY2027 lines from projects.parquet, the chart
+// totals from history.json, and the placement rules from the files themselves.
+// ---------------------------------------------------------------------------
+
+async function verifyMpbYears(c: DuckDBConnection): Promise<void> {
+  process.stdout.write("\nmpb-years/ (Multi-purpose buildings map)\n");
+  const dir = resolve(OUT, "mpb-years");
+  const files = ["lines.json", "summary.json", "districts.geojson", "lines.csv"].map((f) => resolve(dir, f));
+  check("lines.json, summary.json, districts.geojson and lines.csv present (npm run build:hgab-mpb-years)", files.every((f) => existsSync(f)), dir);
+  if (!files.every((f) => existsSync(f))) return;
+  const raw = readJson<MpbLinesFile>(files[0]);
+  const S = readJson<MpbSummary>(files[1]);
+  const D = decodeMpbLines(raw);
+  const H = readJson<HistoryData>(resolve(OUT, "history.json"));
+  const districts = readJson<{ districts: Array<{ id: string }> }>(resolve(OUT, "districts.json")).districts.map((d) => d.id).sort();
+
+  check("schema 1, source commit pinned, and the same build as summary.json", raw.schema === 1 && /^[0-9a-f]{40}$/.test(raw.source_commit)
+    && raw.source_commit === S.source.commit && raw.built_at === S.built_at, `${raw.source_commit} / ${raw.built_at} vs ${S.built_at}`);
+  check("the district dictionary is our 254 legislative districts", JSON.stringify(D.districts.map((d) => d.id).sort()) === JSON.stringify(districts));
+  const geo = readJson<{ features: Array<{ properties: { id: string } }> }>(files[2]);
+  check("districts.geojson: one outline per legislative district", JSON.stringify(geo.features.map((f) => f.properties.id).sort()) === JSON.stringify(districts), `${geo.features.length} outlines`);
+
+  // 1. Enacted budgets FY2020–FY2026: every line on a multi-purpose building PAP, from the row-level extract.
+  const PREFIXES = ["300226", "300220", "300103", "300104"];
+  const extract = resolve(GAA, "full_extract.csv");
+  const gaaRows = (await c.runAndReadAll(`SELECT CAST(year AS INTEGER) fy, prexc_fpap_id code, SUM(CAST(ROUND(CAST(amt AS DOUBLE) * 1000) AS BIGINT)) php
+      FROM read_csv('${q(extract)}', all_varchar = true, header = true)
+      WHERE (${PREFIXES.map((x) => `prexc_fpap_id LIKE '${x}%'`).join(" OR ")}) AND prexc_fpap_id NOT LIKE '%\\_%' ESCAPE '\\'
+      GROUP BY 1, 2 HAVING SUM(CAST(amt AS DOUBLE)) > 0`)).getRows();
+  const fromExtract = new Map(gaaRows.map((r) => [`gaa:${num(r[0])}:${String(r[1])}`, num(r[2])]));
+  const papLines = D.lines.filter((l) => l.fy >= 2020 && l.fy < 2027 && l.rule !== "title");
+  const off: string[] = [];
+  for (const l of papLines) if (fromExtract.get(l.id) !== l.gaa) off.push(`${l.id}: ${peso(l.gaa)} vs extract ${peso(fromExtract.get(l.id))}`);
+  const ours = new Set(papLines.map((l) => l.id));
+  for (const id of fromExtract.keys()) if (!ours.has(id)) off.push(`${id} missing`);
+  check(`enacted budgets: the ${papLines.length.toLocaleString("en-US")} lines on multi-purpose building PAPs are exactly the extract's, amount for amount`, off.length === 0, off.slice(0, 4).join("; "));
+  // FY2015–FY2018: every line, amount for amount, from the GAA history release's yearly files (summed per code), and
+  // in FY2018 every code with an amount on a multi-purpose building PAP.
+  const HIST = resolve(arg("gaa-history", "data/gaa-history"));
+  const histYears = [2015, 2016, 2017, 2018];
+  const histFiles = histYears.map((y) => resolve(HIST, "parquet", `gaa-${y}.parquet`));
+  if (histFiles.every((f) => existsSync(f))) {
+    const hr = (await c.runAndReadAll(`SELECT fy, fpap_code, SUM(amount) FROM read_parquet([${histFiles.map((f) => `'${q(f)}'`).join(", ")}], union_by_name = true)
+        WHERE department_id = '18' GROUP BY 1, 2`)).getRows();
+    const hist = new Map(hr.map((r) => [`gaa:${num(r[0])}:${String(r[1])}`, num(r[2])]));
+    const offH: string[] = [];
+    const histLines = D.lines.filter((l) => l.fy >= 2015 && l.fy <= 2018);
+    for (const l of histLines) if (hist.get(l.id) !== l.gaa) offH.push(`${l.id}: ${peso(l.gaa)} vs release ${peso(hist.get(l.id))}`);
+    const pap18 = new Set(D.lines.filter((l) => l.fy === 2018 && l.rule !== "title").map((l) => l.id));
+    for (const [id, php] of hist) if (id.startsWith("gaa:2018:") && php > 0 && PREFIXES.some((x) => id.slice(9).startsWith(x)) && !pap18.has(id)) offH.push(`${id} missing`);
+    check(`FY2015–FY2018: the ${histLines.length.toLocaleString("en-US")} lines equal the GAA history release, amount for amount; FY2018's multi-purpose building PAP lines are all in`,
+      offH.length === 0 && histLines.length > 0, offH.slice(0, 4).join("; "));
+  } else check("FY2015–FY2018 GAA history release present (--gaa-history)", false, HIST);
+
+  // FY2019: the two multi-purpose building PAP headings, read here from the technical GAA's text with a plain regex
+  // (not the builder's parser), against the FY2019 PAP lines.
+  const t19 = resolve(HIST, "text", "2019", "32c79a9eba5fd2a5144e522c.txt");
+  if (existsSync(t19)) {
+    const txt = readFileSync(t19, "utf8").split("\n");
+    const printed = (pap: string) => {
+      const at = txt.findIndex((l) => l.startsWith(`${pap}000000000`));
+      for (let k = at; at >= 0 && k < at + 12; k++) {
+        const m = /(\d{1,3}(?:,\d{3})+)\s*$/.exec(txt[k]);
+        if (m) return Number(m[1].replace(/,/g, ""));
+      }
+      return null;
+    };
+    const heads = ["300103", "300104"].map(printed);
+    const ours = D.lines.filter((l) => l.fy === 2019 && l.rule !== "title").reduce((a, l) => a + (l.gaa ?? 0), 0);
+    const want = heads.every((h) => h != null) ? heads.reduce((a, b) => a! + b!, 0)! : null;
+    check(`FY2019: the multi-purpose building PAP lines add up to the two headings the technical GAA prints (${peso(want)})`, want === ours, `${peso(ours)} vs ${peso(want)}`);
+  } else check("FY2019 technical GAA text present", false, t19);
+
+  const titleOnly = D.lines.filter((l) => l.rule === "title");
+  const badTitle = titleOnly.filter((l) => !/multi[\W_]*purpose/i.test(l.title) || (l.code && PREFIXES.some((x) => l.code!.startsWith(x))));
+  check(`the ${titleOnly.length.toLocaleString("en-US")} lines in by title name a multi-purpose building and sit on other lines`, badTitle.length === 0, badTitle.slice(0, 3).map((l) => l.id).join("; "));
+
+  // 2. FY2027: every DPWH row on the BIP multi-purpose building PAP, amounts as projects.parquet has them.
+  const MPB_PAP = "BIP - Multi-Purpose Buildings/ Facilities to support Social Services";
+  const parquet = resolve(OUT, "dpwh", "projects.parquet");
+  const pq = new Map((await c.runAndReadAll(`SELECT id, pap, nep_php, hgab3_php FROM read_parquet('${q(parquet)}')`)).getRows()
+    .map((r) => [String(r[0]), { pap: String(r[1]), nep: r[2] == null ? null : num(r[2]), house: r[3] == null ? null : num(r[3]) }]));
+  const y27 = D.lines.filter((l) => l.fy === 2027);
+  const off27: string[] = [];
+  for (const l of y27) {
+    const r = pq.get(l.id);
+    if (!r) { off27.push(`${l.id} not in projects.parquet`); continue; }
+    if (r.nep !== l.nep || r.house !== l.house) off27.push(`${l.id}: amounts differ`);
+    if ((r.pap === MPB_PAP) !== (l.rule !== "title")) off27.push(`${l.id}: PAP rule disagrees`);
+  }
+  const ids27 = new Set(y27.map((l) => l.id));
+  for (const [id, r] of pq) if (r.pap === MPB_PAP && !ids27.has(id)) off27.push(`${id} missing`);
+  check(`FY2027: ${y27.length.toLocaleString("en-US")} lines; every BIP multi-purpose building row is in, amounts as projects.parquet has them`, off27.length === 0, off27.slice(0, 4).join("; "));
+
+  // 3. Per budget: the summary from the lines, and the PAP lines equal the multi-purpose page's chart.
+  const mpb = H.series.find((x) => x.key === "mpb")!;
+  const colOf = (key: string) => HISTORY_COLUMNS.findIndex((x) => x.key === key);
+  const offB: string[] = [];
+  for (const b of S.budgets) {
+    const amt = (l: (typeof D.lines)[number]) => (b.stage === "gaa" ? l.gaa : b.stage === "nep" ? l.nep : l.house);
+    const sel = D.lines.filter((l) => l.fy === b.fy && amt(l) != null);
+    const php = sel.reduce((a, l) => a + amt(l)!, 0);
+    const pap = sel.filter((l) => l.rule !== "title").reduce((a, l) => a + amt(l)!, 0);
+    const levels = Object.fromEntries(Object.keys(b.levels).map((k) => [k, sel.filter((l) => l.level === k).length]));
+    if (sel.length !== b.lines || php !== b.php || pap !== b.pap_php || JSON.stringify(levels) !== JSON.stringify(b.levels)) offB.push(`${b.key}: summary differs from the lines`);
+    // The chart starts in FY2020; earlier budgets have no column on it.
+    if (colOf(b.key) >= 0 && pap !== mpb.php[colOf(b.key)]) offB.push(`${b.key}: PAP lines ${peso(pap)} vs chart ${peso(mpb.php[colOf(b.key)])}`);
+    if (colOf(b.key) < 0 && b.fy >= 2020) offB.push(`${b.key}: no chart column`);
+  }
+  check(`the ${S.budgets.length} budgets: summary.json recomputes from lines.json, and from FY2020 the multi-purpose building lines equal the chart`, offB.length === 0 && S.budgets.length === 14, offB.join("; "));
+  check("every check the builder ran passed", S.checks.length > 0 && S.checks.every((x) => x.ok), S.checks.filter((x) => !x.ok).map((x) => x.key).join(", "));
+  const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+  const outOff = (["lines.json", "districts.geojson", "lines.csv"] as const).filter((f) => S.outputs?.[f]?.sha256 !== sha(resolve(dir, f)));
+  check("summary.json records the SHA-256 of lines.json, districts.geojson and lines.csv (the CSV link's ?v=)", outOff.length === 0, outOff.join(", "));
+
+  // 4. Placement: one level per line; GPS lines carry points, others a place; everything inside the Philippines.
+  // Kalayaan (Palawan) lies west of 116°E, outside the GPS screen but inside the country.
+  const inPh = (lng: number, lat: number) => lng > 112 && lng < 127 && lat > 4 && lat < 22;
+  const offP: string[] = [];
+  for (const l of D.lines) {
+    if (l.level === "gps" ? !(l.pts && l.pts.length && l.pts.every(([a, b]) => inPh(a, b))) : l.pts != null) offP.push(`${l.id}: GPS points`);
+    if (l.level !== "gps" && l.level !== "none" && l.place < 0) offP.push(`${l.id}: no place`);
+    if (l.district >= D.districts.length) offP.push(`${l.id}: district index`);
+    if (l.basis == null && l.district >= 0) offP.push(`${l.id}: district with no basis`);
+  }
+  for (const p of D.places) if (!inPh(p.lng, p.lat)) offP.push(`place ${p.key} outside the Philippines`);
+  check("placement: GPS lines carry points, every other mapped line a place, all inside the Philippines", offP.length === 0, offP.slice(0, 4).join("; "));
+  const marks = mapMarks(D, D.lines.filter((l) => l.fy < 2027 || l.house != null), "house");
+  const marked = marks.reduce((a, m) => a + m.properties.lines, 0);
+  const mappable = D.lines.filter((l) => (l.fy < 2027 || l.house != null) && l.level !== "none").length;
+  check(`the map's marks stand for every mapped line once (${marked.toLocaleString("en-US")})`, marked === mappable, `${marked} vs ${mappable}`);
+
+  // 5. The CSV: one row per line, the amounts exact; and the page's own CSV builder agrees on the header.
+  const rows = parseCsv(readFileSync(files[3], "utf8").replace(/^\uFEFF/, "")).filter((r) => r.length > 1);
+  const head = rows[0];
+  const ix = (k: string) => head.indexOf(k);
+  const csvOff: string[] = [];
+  if (rows.length - 1 !== D.lines.length) csvOff.push(`${rows.length - 1} rows vs ${D.lines.length} lines`);
+  const byId = new Map(D.lines.map((l) => [l.id, l]));
+  for (const r of rows.slice(1)) {
+    const l = byId.get(r[ix("line_id")]);
+    const n = (v: string) => (v === "" ? null : Number(v));
+    if (!l || n(r[ix("gaa_php")]) !== l.gaa || n(r[ix("nep_php")]) !== l.nep || n(r[ix("house_bill_php")]) !== l.house) { csvOff.push(`row ${r[ix("line_id")]}`); if (csvOff.length > 3) break; }
+  }
+  const pageHead = linesCsv(D, D.lines.slice(0, 1)).split("\n")[0].split(",");
+  const shared = ["fiscal_year", "line_id", "title", "gaa_php", "nep_php", "house_bill_php", "legislative_district_id"];
+  check("lines.csv: one row per line, amounts exact; the page's CSV has the same core columns", csvOff.length === 0 && shared.every((k) => head.includes(k) && pageHead.includes(k)), csvOff.join("; "));
+
+  // 6. Repeats: the same-title key on known pairs, and groups that partition what they cover.
+  const same = (a: string, b: string) => titleKey(a) === titleKey(b);
+  const keyOk = same("Construction of Multi-Purpose Building (Phase I), Brgy. Batasan Hills, Quezon City", "Construction of Multipurpose Building, Barangay Batasan Hills, Quezon City")
+    && same("Construction of MPB, Brgy. Bail, Santo Tomas, La Union (16.272957˚, 120.419588˚)", "Construction of Multi - Purpose Bldg., Barangay Bail, Santo Tomas, La Union")
+    && same("Construction of Multi-Purpose Building, Barangay Niño", "Construction of Multi-Purpose Building, Barangay Nino")
+    && !same("Construction of Multi-Purpose Building, Barangay Bail", "Completion of Multi-Purpose Building, Barangay Bail")
+    && !same("Construction of Multi-Purpose Building (Covered Court), Brgy. X", "Construction of Multi-Purpose Building (Barangay Hall), Brgy. X");
+  const house = D.lines.filter((l) => l.fy < 2027 || l.house != null);
+  const offR: string[] = [];
+  for (const kind of ["title", "barangay"] as const) {
+    const gs = repeatGroups(D, house, "house", kind);
+    const seen = new Set<number>();
+    for (const g of gs) {
+      if (g.lines.length < 2) offR.push(`${kind} ${g.key}: one line`);
+      for (const l of g.lines) { if (seen.has(l.i)) offR.push(`${kind}: line ${l.id} twice`); seen.add(l.i); }
+      if (kind === "title" && new Set(g.lines.map((l) => l.tkey)).size !== 1) offR.push(`title ${g.key}: mixed keys`);
+      if (kind === "barangay" && g.lines.some((l) => l.place !== g.place || D.places[l.place].level !== "barangay")) offR.push(`barangay ${g.key}: lines elsewhere`);
+    }
+  }
+  check("repeats: the same-title key matches spelling, MPB/Bldg./Brgy., phases and GPS, not a different work or building; groups are disjoint, two lines or more",
+    keyOk && offR.length === 0, keyOk ? offR.slice(0, 3).join("; ") : "titleKey on a known pair");
+
+  // 7. Reader copy: plain words, sentences of at most 20 words.
+  const copy = [...Object.values(LEVEL_LABELS), ...Object.values(FLAG_TEXT), ...Object.values(PLACED_LABELS), ...Object.values(CLASS_LABELS),
+    ...Object.values(REPEAT_LABELS)];
+  const hits = copy.flatMap((t) => readerCopyHits(t).map((h) => `${h} in "${t.slice(0, 40)}…"`));
+  const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((x) => x.split(/\s+/).length > 20);
+  check("map reader copy: no technical words, no sentence over 20 words", hits.length === 0 && long.length === 0 && MPB_YEARS.length === 13, [...hits, ...long].slice(0, 3).join("; "));
 }

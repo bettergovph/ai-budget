@@ -26,6 +26,7 @@ import {
 } from '../lib/hgab';
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
+import { MPB_MAP_ROOT, MPB_MAP_TITLE } from '../lib/hgab-mpb-years';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
@@ -59,7 +60,10 @@ const SECTION_LINKS: Array<{ to: string; label: string; match?: (path: string) =
  * Multi-purpose buildings are DPWH lines, so the page opens from DPWH.
  */
 const PROGRAM_PAGES: Partial<Record<DatasetKey, ReadonlyArray<{ key: string; label: string; to: string }>>> = {
-  dpwh: [{ key: 'multi-purpose', label: HISTORY_TITLE, to: HISTORY_ROOT }],
+  dpwh: [
+    { key: 'multi-purpose', label: HISTORY_TITLE, to: HISTORY_ROOT },
+    { key: 'multi-purpose-map', label: MPB_MAP_TITLE, to: MPB_MAP_ROOT },
+  ],
 };
 
 /**

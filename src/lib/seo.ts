@@ -17,6 +17,7 @@ import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
+import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 
 export interface PageMeta {
   title: string;
@@ -308,6 +309,16 @@ export function pageMeta(pathname: string): PageMeta {
         "A formal letter from a legislative district's constituents to its representative(s): the DPWH projects House " +
         "Bill 10858 lists for the office serving the district with no match in the NEP, with changed amounts, or dropped, " +
         "and a request for the documents behind them. Download as PDF to sign or as text to edit.",
+    };
+  }
+  // Multi-purpose buildings map: every line, FY2015 GAA to the FY2027 House bill.
+  if (p === MPB_MAP_ROOT) {
+    return {
+      title: `${MPB_MAP_TITLE}, FY 2015–2027: Every DPWH Multi-Purpose Building Line on One Map · ${SITE}`,
+      description:
+        "Every DPWH multi-purpose building line in the FY 2015 to FY 2026 enacted budgets, the FY 2027 NEP and the House bill, " +
+        "on one map: GPS published in project titles, the barangay, town or province each title names, and each legislative " +
+        "district's amount by year. Search, filter and download every line.",
     };
   }
   // Multi-purpose buildings (the DPWH menu's budget-history page), before the dataset pattern.

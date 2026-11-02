@@ -29,6 +29,7 @@ const HgabLeaderboard = lazy(() => import('./pages/HgabLeaderboard'));
 const HgabLetters = lazy(() => import('./pages/HgabLetters'));
 const HgabLetter = lazy(() => import('./pages/HgabLetter'));
 const HgabHistory = lazy(() => import('./pages/HgabHistory'));
+const HgabMpbYears = lazy(() => import('./pages/HgabMpbYears'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -122,6 +123,7 @@ export default function App() {
           <Route path="/hgab/2027/letter/:slug" element={<HgabLetter />} />
           {/* Multi-purpose buildings (DPWH menu): with flood control, BIP, SIPAG, school and health facilities, FY2020 to the 2027 House bill. */}
           <Route path="/hgab/2027/multi-purpose" element={<HgabHistory />} />
+          <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
           {/* A static page published with the data and served by the Worker: load it from the server. */}
           <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />
