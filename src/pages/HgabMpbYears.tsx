@@ -22,10 +22,11 @@ import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, asOfText } from '../lib/hgab-leaderboard';
 import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_CSV_PATH, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
-  PLACED_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
+  PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
+  onlyRepeats, repeatGroups,
   officeShort, recordHref, shadeBreaks, shadeClass, sortLines,
-  type MpbData, type MpbFilters, type MpbLevel, type MpbLine, type MpbSelection, type MpbSort, type MpbSummary,
-  type Stage2027,
+  type MpbData, type MpbFilters, type MpbGroup, type MpbLevel, type MpbLine, type MpbSelection, type MpbSort, type MpbSummary,
+  type RepeatMode, type Stage2027,
 } from '../lib/hgab-mpb-years';
 import type { FeatureCollection } from 'geojson';
 import '../nep2027.css';
@@ -60,6 +61,7 @@ function readView(p: URLSearchParams, data: MpbData | null): View {
   const region = p.get('region') as RegionKey | null;
   const placed = p.get('placed') as MpbFilters['placed'] | null;
   const rule = p.get('rule') as MpbFilters['rule'] | null;
+  const repeat = p.get('repeat');
   const sort = p.get('sort') as MpbSort | null;
   return {
     years: new Set(ys.length ? ys : MPB_YEARS),
@@ -71,6 +73,7 @@ function readView(p: URLSearchParams, data: MpbData | null): View {
       rule: rule === 'pap' || rule === 'title' ? rule : '',
       district,
       place,
+      repeat: repeat === 'title' || repeat === 'barangay' ? repeat : '',
     },
     sort: sort === 'amount' || sort === 'title' ? sort : 'year',
   };
@@ -84,6 +87,7 @@ function writeView(v: View, data: MpbData): URLSearchParams {
   if (v.f.region) p.set('region', v.f.region);
   if (v.f.placed) p.set('placed', v.f.placed);
   if (v.f.rule) p.set('rule', v.f.rule);
+  if (v.f.repeat) p.set('repeat', v.f.repeat);
   if (v.f.district >= 0) p.set('district', data.districts[v.f.district].id);
   if (v.f.place >= 0) p.set('place', data.places[v.f.place].key);
   if (v.sort !== 'year') p.set('sort', v.sort);
@@ -134,8 +138,16 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
 
   const sel: MpbSelection = useMemo(() => ({ years: view.years, stage: view.stage }), [view.years, view.stage]);
   // The map shows everything the control row selects; a picked district or place narrows the list only.
-  const mapLines = useMemo(() => filterLines(data, sel, { ...view.f, district: -1, place: -1 }), [data, sel, view.f]);
-  const listLines = useMemo(() => filterLines(data, sel, view.f), [data, sel, view.f]);
+  // What the control row selects; the repeats filter then keeps only lines in a group, among those.
+  const baseLines = useMemo(() => filterLines(data, sel, { ...view.f, district: -1, place: -1 }), [data, sel, view.f]);
+  const mapLines = useMemo(
+    () => (view.f.repeat ? onlyRepeats(data, baseLines, view.stage, view.f.repeat) : baseLines),
+    [data, baseLines, view.stage, view.f.repeat],
+  );
+  const listLines = useMemo(
+    () => mapLines.filter((l) => (view.f.district < 0 || l.district === view.f.district) && (view.f.place < 0 || l.place === view.f.place)),
+    [mapLines, view.f.district, view.f.place],
+  );
   const marks = useMemo(() => mapMarks(data, mapLines, view.stage), [data, mapLines, view.stage]);
   const totals = useMemo(() => districtTotals(data, mapLines, view.stage), [data, mapLines, view.stage]);
   const breaks = useMemo(() => shadeBreaks(totals), [totals]);
@@ -218,6 +230,13 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
                 <option value="title">Named in the title, other lines</option>
               </select>
             </label>
+            <label>
+              <span>Repeats</span>
+              <select value={view.f.repeat} onChange={(e) => setView({ f: { repeat: e.target.value as RepeatMode } })}>
+                <option value="">Every line</option>
+                {(Object.keys(REPEAT_LABELS) as Array<keyof typeof REPEAT_LABELS>).map((k) => <option key={k} value={k}>{REPEAT_LABELS[k]}</option>)}
+              </select>
+            </label>
           </div>
         </div>
 
@@ -248,6 +267,8 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
             onShow={showOnMap}
           />
         </section>
+
+        <RepeatsSection data={data} lines={baseLines} view={view} setView={setView} onShow={showOnMap} />
 
         <LinesList data={data} lines={listLines} view={view} setView={setView} onShow={showOnMap} />
 
@@ -476,6 +497,139 @@ function PanelLine({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stag
 }
 
 // ---------------------------------------------------------------------------
+// Repeats: the same title at the same place, and barangays with more than one line
+// ---------------------------------------------------------------------------
+
+const GROUPS_PAGE = 20;
+/** Lines an opened group shows before "Show all". */
+const GROUP_ROWS = 30;
+
+function RepeatsSection({ data, lines, view, setView, onShow }: {
+  data: MpbData;
+  lines: MpbLine[];
+  view: View;
+  setView: (v: ViewPatch) => void;
+  onShow: (l: MpbLine) => void;
+}) {
+  const [tab, setTab] = useState<Exclude<RepeatMode, ''>>(view.f.repeat || 'title');
+  const titles = useMemo(() => repeatGroups(data, lines, view.stage, 'title'), [data, lines, view.stage]);
+  const barangays = useMemo(() => repeatGroups(data, lines, view.stage, 'barangay'), [data, lines, view.stage]);
+  const groups = tab === 'title' ? titles : barangays;
+  const [more, setMore] = useState<{ of: MpbGroup[]; n: number }>({ of: groups, n: GROUPS_PAGE });
+  const shown = more.of === groups ? more.n : GROUPS_PAGE;
+  const multiYear = (gs: MpbGroup[]) => gs.filter((g) => g.years.length > 1).length;
+  const head = tab === 'title'
+    ? `${count(titles.length)} titles appear more than once at the same place, ${count(multiYear(titles))} of them in more than one budget`
+    : `${count(barangays.length)} barangays have more than one line, ${count(multiYear(barangays))} of them in more than one budget`;
+  return (
+    <section className="nep-section hgab-mpbm-section" id="hgab-mpbm-repeats" aria-labelledby="hgab-mpbm-repeats-h">
+      <div className="hgab-mpbm-listhead">
+        <div>
+          <h2 id="hgab-mpbm-repeats-h" className="hgab-mpbm-h2">{head}</h2>
+          <p className="hgab-mpbm-dek">
+            A title repeated over the years can be phases of one building, or repairs. Read the lines before drawing a
+            conclusion.
+          </p>
+        </div>
+        <div className="hgab-ds-dims hgab-mpbm-tabs" role="tablist" aria-label="Group repeats by">
+          <button type="button" role="tab" aria-selected={tab === 'title'} aria-pressed={tab === 'title'} onClick={() => setTab('title')}>
+            Same title ({count(titles.length)})
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'barangay'} aria-pressed={tab === 'barangay'} onClick={() => setTab('barangay')}>
+            Same barangay ({count(barangays.length)})
+          </button>
+        </div>
+      </div>
+      <ol className="hgab-mpbm-groups">
+        {groups.slice(0, shown).map((g) => (
+          <GroupRow key={`${g.kind}:${g.key}`} data={data} g={g} stage={view.stage} onShow={onShow}
+            onList={g.kind === 'barangay' ? () => {
+              setView({ f: { place: g.place, district: -1 } });
+              document.getElementById('hgab-mpbm-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } : undefined} />
+        ))}
+      </ol>
+      {groups.length > shown && (
+        <p className="hgab-mpbm-more">
+          Showing {count(shown)} of {count(groups.length)}.{' '}
+          <button type="button" className="hgab-mpbm-linkbtn" onClick={() => setMore({ of: groups, n: shown + GROUPS_PAGE * 5 })}>
+            Show {count(Math.min(GROUPS_PAGE * 5, groups.length - shown))} more
+          </button>
+        </p>
+      )}
+      {!groups.length && <p className="hgab-mpbm-more">No repeats among the lines chosen.</p>}
+      <p className="hgab-mpbm-more">
+        Same title: the words of the title, setting aside spelling, “MPB”, “Bldg.”, “Brgy.”, phase numbers and GPS, at the same
+        place. Same barangay: lines whose title names that barangay. Amounts add up across years, never the NEP and the House bill.
+      </p>
+    </section>
+  );
+}
+
+function GroupRow({ data, g, stage, onShow, onList }: {
+  data: MpbData;
+  g: MpbGroup;
+  stage: Stage2027;
+  onShow: (l: MpbLine) => void;
+  onList?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  const p = g.place >= 0 ? data.places[g.place] : null;
+  const latest = g.lines[g.lines.length - 1];
+  const newestFirst = [...g.lines].reverse();
+  const rows = all ? newestFirst : newestFirst.slice(0, GROUP_ROWS);
+  const perYear = g.years.map((fy) => [fy, g.lines.filter((l) => l.fy === fy).length] as const);
+  const district = latest.district >= 0 ? data.districts[latest.district] : null;
+  return (
+    <li className="hgab-mpbm-group">
+      <button type="button" className="hgab-mpbm-group-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span className="hgab-mpbm-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span className="hgab-mpbm-group-main">
+          <strong>{g.kind === 'title' ? latest.title : p?.label}</strong>
+          <span className="hgab-mpbm-sub">
+            {g.kind === 'title' && p ? `${p.label} · ` : ''}
+            {district ? `${district.label} · ` : ''}
+            {g.years.length} {g.years.length === 1 ? 'budget' : 'budgets'} · {count(g.lines.length)} lines · {billions(g.php)}
+          </span>
+        </span>
+        <span className="hgab-mpbm-chips" aria-label="Budgets">
+          {perYear.map(([fy, n]) => (
+            <i key={fy}>{fy < 2027 ? fy : stage === 'house' ? '2027 House' : '2027 NEP'}{n > 1 ? ` ×${n}` : ''}</i>
+          ))}
+        </span>
+      </button>
+      {open && (
+        <div className="hgab-mpbm-group-body">
+          <table className="hgab-mpbm-table">
+            <tbody>
+              {rows.map((l) => {
+                const href = recordHref(l);
+                return (
+                  <tr key={l.i}>
+                    <td className="hgab-mpbm-yr">{yearLabel(l.fy, stage)}</td>
+                    <td>{href ? <Link to={href}>{l.title}</Link> : l.title}</td>
+                    <td>{officeShort(l.office) ?? '—'}</td>
+                    <td className="is-num">{fullPeso(lineAmount(l, stage))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="hgab-mpbm-group-actions">
+            {rows.length < g.lines.length && (
+              <button type="button" className="hgab-mpbm-linkbtn" onClick={() => setAll(true)}>Show all {count(g.lines.length)} lines</button>
+            )}
+            <button type="button" className="hgab-mpbm-linkbtn" onClick={() => onShow(latest)}>On the map</button>
+            {onList && <button type="button" className="hgab-mpbm-linkbtn" onClick={onList}>Show in the list</button>}
+          </p>
+        </div>
+      )}
+    </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // The list
 // ---------------------------------------------------------------------------
 
@@ -511,7 +665,7 @@ function LinesList({ data, lines, view, setView, onShow }: {
       {data.places[view.f.place].label} ×
     </button>,
   );
-  const anyFilter = view.f.q || view.f.region || view.f.placed || view.f.rule || chips.length;
+  const anyFilter = view.f.q || view.f.region || view.f.placed || view.f.rule || view.f.repeat || chips.length;
   return (
     <section className="nep-section hgab-mpbm-section" id="hgab-mpbm-list" aria-labelledby="hgab-mpbm-list-h">
       <div className="hgab-mpbm-listhead">

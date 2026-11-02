@@ -174,6 +174,8 @@ export interface MpbLine {
   housePage: number | null;
   /** Lower-case title, place and office, for the search box. */
   search: string;
+  /** The same-title key (titleKey) with the place, or the office when the title names none. */
+  tkey: string;
 }
 
 export interface MpbData {
@@ -225,6 +227,7 @@ export function decodeMpbLines(f: MpbLinesFile): MpbData {
       nepPage: at(row, 'nep_page') as number | null,
       housePage: at(row, 'house_page') as number | null,
       search: `${title} ${place >= 0 ? f.places[place][2] : ''} ${officeName ?? ''}`.toLowerCase(),
+      tkey: `${titleKey(title)}|${place >= 0 ? `p${place}` : `o${officeName ?? ''}`}`,
     };
   });
   return {
@@ -260,6 +263,72 @@ export function budgetKey(fy: number, stage: Stage2027): string {
   return fy < 2027 ? `gaa-${fy}` : `${stage}-2027`;
 }
 
+/**
+ * The same-title key: a title with case, accents, punctuation, "multi-purpose"/"MPB"/"Bldg."/"Brgy." spellings,
+ * phase numbers and printed GPS set aside, so "Construction of Multi-Purpose Building (Phase I), Brgy. Batasan Hills"
+ * and "Construction of Multipurpose Building, Barangay Batasan Hills" match. Words that change the work (construction,
+ * completion, repair) stay: those lines meet in the same barangay instead.
+ */
+export function titleKey(title: string): string {
+  let t = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  t = t.replace(/\(?\s*-?\d{1,3}\.\d{3,}\s*[°˚º]?\s*[nsew]?\s*[,;/ ]\s*-?\d{1,3}\.\d{3,}\s*[°˚º]?\s*[nsew]?\s*\)?/g, ' ');
+  t = t.replace(/\bmulti\s*-?\s*purpose\b|\bmultipurpose\b/g, 'multipurpose');
+  t = t.replace(/\bmpb\b/g, 'multipurpose building');
+  t = t.replace(/\bbldg\b/g, 'building');
+  t = t.replace(/\b(?:brgy|bgy)\b/g, 'barangay');
+  t = t.replace(/\bphase\s*(?:[ivx]+|\d+)\b/g, ' ');
+  return t.replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/** '' every line; 'title' the same title at the same place more than once; 'barangay' a barangay with more than one line. */
+export type RepeatMode = '' | 'title' | 'barangay';
+
+export interface MpbGroup {
+  kind: Exclude<RepeatMode, ''>;
+  key: string;
+  lines: MpbLine[];
+  /** Budgets (years) the group has lines in, ascending. */
+  years: number[];
+  php: number;
+  /** The place the lines share (the barangay, or the title's place), or -1. */
+  place: number;
+}
+
+const barangayOf = (data: MpbData, l: MpbLine) => (l.place >= 0 && data.places[l.place].level === 'barangay' ? l.place : -1);
+
+/**
+ * Repeats among a set of lines: the same title at the same place more than once, or more than one line in a barangay
+ * (only lines whose title names a barangay). Amounts add across years; FY2027 counts at the chosen stage only.
+ * Sorted by budgets, then lines, then pesos.
+ */
+export function repeatGroups(data: MpbData, lines: readonly MpbLine[], stage: Stage2027, kind: Exclude<RepeatMode, ''>): MpbGroup[] {
+  const by = new Map<string, MpbLine[]>();
+  for (const l of lines) {
+    const k = kind === 'title' ? l.tkey : String(barangayOf(data, l));
+    if (k === '-1') continue;
+    const g = by.get(k);
+    if (g) g.push(l); else by.set(k, [l]);
+  }
+  const out: MpbGroup[] = [];
+  for (const [key, ls] of by) {
+    if (ls.length < 2) continue;
+    ls.sort((a, b) => a.fy - b.fy || a.i - b.i);
+    out.push({
+      kind, key, lines: ls,
+      years: [...new Set(ls.map((l) => l.fy))],
+      php: ls.reduce((a, l) => a + (lineAmount(l, stage) ?? 0), 0),
+      place: kind === 'barangay' ? Number(key) : ls[ls.length - 1].place,
+    });
+  }
+  return out.sort((a, b) => b.years.length - a.years.length || b.lines.length - a.lines.length || b.php - a.php);
+}
+
+/** Only the lines in a repeat group of that kind. */
+export function onlyRepeats(data: MpbData, lines: readonly MpbLine[], stage: Stage2027, kind: Exclude<RepeatMode, ''>): MpbLine[] {
+  const keep = new Set(repeatGroups(data, lines, stage, kind).flatMap((g) => g.lines.map((l) => l.i)));
+  return lines.filter((l) => keep.has(l.i));
+}
+
 export interface MpbFilters {
   q: string;
   region: RegionKey | '';
@@ -270,8 +339,10 @@ export interface MpbFilters {
   district: number;
   /** Place index, or -1. */
   place: number;
+  /** Repeats only (applied after the other filters, over the lines they select). */
+  repeat: RepeatMode;
 }
-export const NO_FILTERS: MpbFilters = { q: '', region: '', placed: '', rule: '', district: -1, place: -1 };
+export const NO_FILTERS: MpbFilters = { q: '', region: '', placed: '', rule: '', district: -1, place: -1, repeat: '' };
 
 export const PLACED_GROUP: Record<MpbLevel, MpbFilters['placed']> = {
   gps: 'exact', barangay: 'place', municipality: 'place', city: 'place', province: 'place', deo: 'office', region: 'office', none: 'none',
@@ -397,6 +468,10 @@ export const LEVEL_LABELS: Record<MpbLevel, string> = {
 export const LEVEL_SHORT: Record<MpbLevel, string> = {
   gps: 'GPS', barangay: 'Barangay', municipality: 'Town', city: 'City', province: 'Province', deo: 'Office area', region: 'Region', none: 'Not mapped',
 };
+export const REPEAT_LABELS: Record<Exclude<RepeatMode, ''>, string> = {
+  title: 'Same title, same place, more than once',
+  barangay: 'Barangays with more than one line',
+};
 export const PLACED_LABELS: Record<Exclude<MpbFilters['placed'], ''>, string> = {
   exact: 'GPS in the title',
   place: 'Place named in the title',
@@ -450,10 +525,19 @@ export const MPB_CSV_COLUMNS = [
   'fiscal_year', 'line_id', 'title', 'gaa_php', 'nep_php', 'house_bill_php', 'fy2027_comparison', 'uacs_code', 'pap',
   'scope_rule', 'dpwh_office', 'region', 'placed_by', 'place', 'longitude', 'latitude', 'gps_points',
   'legislative_district', 'legislative_district_id', 'district_from', 'flags',
+  'same_title_lines', 'same_barangay_lines', 'same_title_key',
 ] as const;
 
 /** The lines as CSV (UTF-8, BOM added by the caller's Blob): integer pesos, empty = none, never 0. */
 export function linesCsv(data: MpbData, lines: readonly MpbLine[]): string {
+  // Group sizes among the lines being written, so a spreadsheet can sort and group the repeats.
+  const tCount = new Map<string, number>();
+  const bCount = new Map<number, number>();
+  for (const l of lines) {
+    tCount.set(l.tkey, (tCount.get(l.tkey) ?? 0) + 1);
+    const b = barangayOf(data, l);
+    if (b >= 0) bCount.set(b, (bCount.get(b) ?? 0) + 1);
+  }
   const rows = lines.map((l) => {
     const p = l.place >= 0 ? data.places[l.place] : null;
     const d = l.district >= 0 ? data.districts[l.district] : null;
@@ -464,6 +548,7 @@ export function linesCsv(data: MpbData, lines: readonly MpbLine[]): string {
       l.code, l.pap, l.rule, l.office, l.region, LEVEL_LABELS[l.level], p?.label ?? null, at?.[0] ?? null, at?.[1] ?? null,
       l.pts ? l.pts.map(([a, b]) => `${a},${b}`).join(';') : null,
       d?.label ?? null, d?.id ?? null, l.basis, lineFlags(l, data.flagBits).join(';') || null,
+      tCount.get(l.tkey) ?? 1, barangayOf(data, l) >= 0 ? bCount.get(barangayOf(data, l)) ?? 1 : null, l.tkey,
     ].map(cell).join(',');
   });
   return [MPB_CSV_COLUMNS.join(','), ...rows].join('\n') + '\n';
