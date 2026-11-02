@@ -23,6 +23,7 @@
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
+    "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",
