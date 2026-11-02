@@ -117,8 +117,8 @@ import {
   type HistoryData, type HistoryPartDef,
 } from "../src/lib/hgab-history";
 import {
-  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, decodeMpbLines, linesCsv, mapMarks,
-  type MpbLinesFile, type MpbSummary,
+  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, linesCsv, mapMarks, repeatGroups,
+  titleKey, type MpbLinesFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
 
 const argv = process.argv.slice(2);
@@ -2802,8 +2802,31 @@ async function verifyMpbYears(c: DuckDBConnection): Promise<void> {
   const shared = ["fiscal_year", "line_id", "title", "gaa_php", "nep_php", "house_bill_php", "legislative_district_id"];
   check("lines.csv: one row per line, amounts exact; the page's CSV has the same core columns", csvOff.length === 0 && shared.every((k) => head.includes(k) && pageHead.includes(k)), csvOff.join("; "));
 
-  // 6. Reader copy: plain words, sentences of at most 20 words.
-  const copy = [...Object.values(LEVEL_LABELS), ...Object.values(FLAG_TEXT), ...Object.values(PLACED_LABELS), ...Object.values(CLASS_LABELS)];
+  // 6. Repeats: the same-title key on known pairs, and groups that partition what they cover.
+  const same = (a: string, b: string) => titleKey(a) === titleKey(b);
+  const keyOk = same("Construction of Multi-Purpose Building (Phase I), Brgy. Batasan Hills, Quezon City", "Construction of Multipurpose Building, Barangay Batasan Hills, Quezon City")
+    && same("Construction of MPB, Brgy. Bail, Santo Tomas, La Union (16.272957˚, 120.419588˚)", "Construction of Multi - Purpose Bldg., Barangay Bail, Santo Tomas, La Union")
+    && same("Construction of Multi-Purpose Building, Barangay Niño", "Construction of Multi-Purpose Building, Barangay Nino")
+    && !same("Construction of Multi-Purpose Building, Barangay Bail", "Completion of Multi-Purpose Building, Barangay Bail")
+    && !same("Construction of Multi-Purpose Building (Covered Court), Brgy. X", "Construction of Multi-Purpose Building (Barangay Hall), Brgy. X");
+  const house = D.lines.filter((l) => l.fy < 2027 || l.house != null);
+  const offR: string[] = [];
+  for (const kind of ["title", "barangay"] as const) {
+    const gs = repeatGroups(D, house, "house", kind);
+    const seen = new Set<number>();
+    for (const g of gs) {
+      if (g.lines.length < 2) offR.push(`${kind} ${g.key}: one line`);
+      for (const l of g.lines) { if (seen.has(l.i)) offR.push(`${kind}: line ${l.id} twice`); seen.add(l.i); }
+      if (kind === "title" && new Set(g.lines.map((l) => l.tkey)).size !== 1) offR.push(`title ${g.key}: mixed keys`);
+      if (kind === "barangay" && g.lines.some((l) => l.place !== g.place || D.places[l.place].level !== "barangay")) offR.push(`barangay ${g.key}: lines elsewhere`);
+    }
+  }
+  check("repeats: the same-title key matches spelling, MPB/Bldg./Brgy., phases and GPS, not a different work or building; groups are disjoint, two lines or more",
+    keyOk && offR.length === 0, keyOk ? offR.slice(0, 3).join("; ") : "titleKey on a known pair");
+
+  // 7. Reader copy: plain words, sentences of at most 20 words.
+  const copy = [...Object.values(LEVEL_LABELS), ...Object.values(FLAG_TEXT), ...Object.values(PLACED_LABELS), ...Object.values(CLASS_LABELS),
+    ...Object.values(REPEAT_LABELS)];
   const hits = copy.flatMap((t) => readerCopyHits(t).map((h) => `${h} in "${t.slice(0, 40)}…"`));
   const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((x) => x.split(/\s+/).length > 20);
   check("map reader copy: no technical words, no sentence over 20 words", hits.length === 0 && long.length === 0 && MPB_YEARS.length === 13, [...hits, ...long].slice(0, 3).join("; "));
