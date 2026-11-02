@@ -339,7 +339,7 @@ function YearStrip({
     <div ref={wrapRef} className="year-strip-wrap">
       <p className="eyebrow">Pick a fiscal year</p>
       <div className="year-strip" role="tablist" aria-label="Fiscal year">
-        {YEARS.map((y) => {
+        {YEARS.toSorted((a, b) => b - a).map((y) => {
           const v = data.total(y);
           const p = peak ? (v / peak) * 100 : 0;
           const active = y === year;

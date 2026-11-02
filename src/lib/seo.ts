@@ -98,9 +98,9 @@ export function hearingMeta(row: HearingSeoRow): PageMeta {
 const SITE = "BetterGov Budget";
 
 const DEFAULT_META: PageMeta = {
-  title: `Philippine National Budget — GAA FY 2020–2026 & NEP FY 2027 · ${SITE}`,
+  title: `Philippine National Budget — GAA FY 2000–2026 & NEP FY 2027 · ${SITE}`,
   description:
-    "The Philippine national budget, visualized and browsable: the enacted GAA for FY 2020–2026 and " +
+    "The Philippine national budget, visualized and browsable: GAA source records for FY 2000–2026 with coverage notes and " +
     "the FY 2027 NEP proposal, drillable from national totals down to individual line items.",
 };
 
@@ -381,10 +381,9 @@ export function pageMeta(pathname: string): PageMeta {
 
   if (p === "/gaa") {
     return {
-      title: `Philippine GAA Budget, FY 2020–2026 — Every Group Ranked · ${SITE}`,
+      title: `Philippine GAA Explorer, FY 2000–2026 · ${SITE}`,
       description:
-        "The enacted General Appropriations Act across seven fiscal years: every national government " +
-        "group ranked, from ₱4.10T in 2020 to ₱6.79T in 2026, drillable to the line-item level.",
+        "Explore 27 fiscal years of Philippine GAA records, 2000–2026: yearly Parquet downloads, source references, partial historical coverage, and reenacted budget years.",
     };
   }
   const yearMatch = /^\/gaa\/(20\d{2})(?:\/|$)/.exec(p);
@@ -393,8 +392,7 @@ export function pageMeta(pathname: string): PageMeta {
     return {
       title: `FY ${year} Philippine National Budget — Per-Year Browser · ${SITE}`,
       description:
-        `The FY ${year} General Appropriations Act in isolation: every group's appropriation for that ` +
-        "year alone, drillable to bureau, program, operating unit, fund, and expense class.",
+        `Explore FY ${year} GAA appropriations, available source records, downloads, and year-specific coverage notes. Historical detail varies; reenacted years are identified separately.`,
     };
   }
 
@@ -414,7 +412,7 @@ export function pageMeta(pathname: string): PageMeta {
     return {
       title: `Methodology & Data Quality — Philippine GAA Data · ${SITE}`,
       description:
-        "How the GAA FY 2020–2026 dataset was compiled, and the caveats that matter: UACS recoding, " +
+        "How the GAA FY 2000–2026 dataset was compiled: partial historical coverage, reenacted years, source editions, UACS recoding, " +
         "program renames, and items that moved off-GAA.",
     };
   }

@@ -1,0 +1,241 @@
+.gaa-archive {
+  margin: 32px 0 40px;
+  border-top: 3px solid var(--ink);
+  padding-top: 24px;
+}
+.gaa-archive h2 {
+  font-family: var(--font-hero);
+  font-size: clamp(26px, 4vw, 38px);
+  margin: 8px 0 12px;
+}
+.gaa-archive > p,
+.gaa-records .page-dek {
+  max-width: 850px;
+  line-height: 1.65;
+}
+.gaa-year-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  margin: 24px 0;
+}
+.gaa-year-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 14px;
+  color: var(--ink);
+  background: var(--paper, #faf9f6);
+  text-decoration: none;
+}
+.gaa-year-card:hover,
+.gaa-year-card:focus-visible {
+  background: var(--accent-wash, #f3e9dc);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.gaa-year-card strong {
+  font-family: var(--font-hero);
+  font-size: 30px;
+}
+.gaa-year-card span {
+  font-size: 12px;
+  font-weight: 600;
+}
+.gaa-year-card small {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.gaa-year-card.reenacted {
+  background: var(--paper-alt, #eeede8);
+}
+.gaa-downloads,
+.gaa-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 16px 24px;
+  margin: 20px 0;
+  font-size: 13px;
+}
+.gaa-year-select {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+  margin: 16px 0;
+}
+.gaa-year-select select,
+.gaa-toolbar select,
+.gaa-toolbar input {
+  font: inherit;
+  background: var(--paper, #fff);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  padding: 10px;
+  max-width: 100%;
+}
+.gaa-records {
+  max-width: 1320px;
+  margin: auto;
+  padding: 32px 32px 80px;
+}
+.gaa-coverage {
+  background: var(--paper-alt, #eeede8);
+  border-left: 3px solid var(--accent);
+  padding: 18px 24px;
+  margin: 24px 0;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.gaa-coverage p {
+  margin: 6px 0;
+}
+.gaa-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+}
+.gaa-toolbar button,
+.gaa-pagination button {
+  padding: 10px 16px;
+  cursor: pointer;
+  font: inherit;
+}
+.gaa-table-wrap {
+  overflow-x: auto;
+}
+.gaa-record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.gaa-record-table th {
+  font-size: 12px;
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 2px solid var(--ink);
+}
+.gaa-record-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.gaa-record-table .gaa-amount {
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.gaa-record-table small {
+  display: block;
+  color: var(--ink-3);
+  margin-top: 5px;
+}
+.gaa-record-table details {
+  max-width: 750px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.gaa-record-table summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.gaa-record-table dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 3fr;
+  gap: 6px 12px;
+  font-size: 12px;
+}
+.gaa-record-table dd {
+  margin: 0;
+}
+.gaa-pagination {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 24px;
+}
+.gaa-records a {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .gaa-records {
+    padding: 24px 16px 60px;
+  }
+  .gaa-year-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .gaa-year-card {
+    padding: 14px 8px;
+  }
+  .gaa-year-card strong {
+    font-size: 25px;
+  }
+  .gaa-year-card span {
+    font-size: 11px;
+  }
+  .gaa-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .gaa-record-table {
+    table-layout: fixed;
+    font-size: 12px;
+  }
+  .gaa-record-table th:first-child {
+    width: 56%;
+  }
+  .gaa-record-table td,
+  .gaa-record-table th {
+    padding: 12px 6px;
+    overflow-wrap: anywhere;
+  }
+  .gaa-record-table .gaa-amount {
+    font-size: 11px;
+  }
+  .gaa-group-table th:last-child,
+  .gaa-group-table td:last-child {
+    display: none;
+  }
+  .gaa-record-table dl {
+    display: block;
+  }
+  .gaa-record-table dt {
+    font-weight: 600;
+    margin-top: 10px;
+  }
+}
+.gaa-fiscal-tabs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.gaa-fiscal-tabs a {
+  flex-shrink: 0;
+}
+.gaa-row-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.gaa-row-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.gaa-browser-main .gaa-coverage summary {
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .gaa-browser-main {
+    padding: 24px 16px 60px !important;
+  }
+}

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Eyebrow, SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
-import YearLinkStrip from '../components/YearLinkStrip';
+import GaaYears from '../components/GaaYears';
 import type { NationalIndex } from '../lib/types';
 import * as fmt from '../lib/format';
 import { dataUrl } from '../lib/data-url';
@@ -44,24 +44,10 @@ export default function National() {
     requestAnimationFrame(() => scrollToEl(document.getElementById(id)));
   }, [idx]);
 
-  if (err) {
-    return (
-      <main style={{ maxWidth: 1000, margin: '60px auto', padding: '0 32px', fontFamily: 'var(--font-mono)' }}>
-        <p style={{ color: 'var(--accent)' }}>{err}</p>
-        <p style={{ color: 'var(--ink-3)' }}>
-          You can still browse individual groups directly: <Link to="/d/01">/d/01 — Congress</Link>,
-          {' '}<Link to="/d/02">/d/02</Link>, <Link to="/d/03">/d/03</Link>, <Link to="/d/04">/d/04</Link>.
-        </p>
-      </main>
-    );
-  }
-
-  if (!idx) {
-    return (
-      <main style={{ padding: 80, textAlign: 'center', fontFamily: 'var(--font-mono)', color: 'var(--ink-3)' }}>
-        Loading national overview…
-      </main>
-    );
+  if (err || !idx) {
+    return <><SiteHeader /><main className="gaa-records"><h1 className="page-title">Philippine GAA Explorer</h1><GaaYears />
+      {err ? <p role="alert">The 2020–2026 overview is unavailable: {err}</p> : <p role="status">Loading the detailed 2020–2026 overview…</p>}
+    </main><SiteFooter source="SOURCE: DBM GAA ARCHIVE · FY 2000–2026 · COVERAGE VARIES BY YEAR" /></>;
   }
 
   const latestYear = idx.years[idx.years.length - 1];
@@ -98,11 +84,13 @@ export default function National() {
       <main ref={mainRef} className="national-main" style={{ maxWidth: 1440, margin: '0 auto', padding: '32px 32px 80px' }}>
         <div className="page-headline">
           <p className="page-eyebrow">National overview</p>
-          <h1 className="page-title">Philippines GAA Budget AI Review</h1>
+          <h1 className="page-title">Philippine GAA Explorer</h1>
           <p className="page-dek">
-            All 40 national groups, FY {idx.years[0]} – {latestYear}. Click any group to drill in.
+            Explore FY 2000–2026, with source records, yearly downloads, and coverage notes.
           </p>
         </div>
+        <GaaYears />
+        <h2>Detailed budget overview · 2020–2026</h2>
         <div className="kpi-strip">
           <div className="kpi-cell">
             <div className="kpi-label">FY {latestYear} appropriation</div>
@@ -132,17 +120,6 @@ export default function National() {
           <Eyebrow>National appropriation, FY {idx.years[0]} – {latestYear}</Eyebrow>
         </div>
         <NationalTrend yearly={idx.national_yearly} />
-
-        <div style={{ marginTop: 40 }}>
-          <SectionHead
-            eyebrow="Browse by year"
-            headline="One fiscal year at a time"
-            dek="Open a single year's budget and drill the full hierarchy — group, bureau, program, operating unit, fund, expense class — scoped to that year alone."
-          />
-          <div style={{ marginTop: 16 }}>
-            <YearLinkStrip yearly={idx.national_yearly} />
-          </div>
-        </div>
 
         <div ref={groupsRef} id="groups" className="national-groups-head" style={{ marginTop: 40, scrollMarginTop: 220 }}>
           <SectionHead
@@ -212,7 +189,7 @@ export default function National() {
         </p>
       </main>
 
-      <SiteFooter />
+      <SiteFooter source="SOURCE: DBM GAA ARCHIVE · FY 2000–2026 · COVERAGE VARIES BY YEAR" />
     </>
   );
 }

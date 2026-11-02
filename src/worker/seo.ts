@@ -141,7 +141,7 @@ const STATIC_SITEMAP_PATHS = [
   "/2027/search",
   "/2027/methodology",
   "/gaa",
-  "/gaa/2020", "/gaa/2021", "/gaa/2022", "/gaa/2023", "/gaa/2024", "/gaa/2025", "/gaa/2026",
+  ...Array.from({ length: 27 }, (_, i) => `/gaa/${2000 + i}`),
   "/explore",
   "/methodology",
   "/docs",

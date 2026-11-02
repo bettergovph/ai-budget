@@ -22,7 +22,7 @@ export default function YearLinkStrip({
   const peak = Math.max(...yearly.map((y) => y.amount), 0);
   return (
     <div className="year-strip" role="tablist" aria-label="Fiscal year">
-      {yearly.map(({ year, amount }) => (
+      {yearly.toSorted((a, b) => b.year - a.year).map(({ year, amount }) => (
         <Link
           key={year}
           role="tab"

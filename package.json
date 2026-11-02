@@ -39,7 +39,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm run build && npm run prepare:deploy-assets && wrangler deploy"
+    "deploy": "npm run build && npm run prepare:deploy-assets && wrangler deploy",
+    "build:gaa-explorer": "python3 scripts/gaa-explorer/build.py",
+    "test:gaa-explorer": "tsx --test scripts/gaa-explorer/query.test.ts",
+    "upload:gaa-explorer": "tsx scripts/gaa-explorer/upload.ts"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.33.1-dev45.0",
