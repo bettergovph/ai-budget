@@ -3,6 +3,7 @@
 (compare.py) reshaped for the browser.
 
   explorer/index.json         totals, status counts and one row per department
+  explorer/summary.json       the overview's whole-bill figures (raised and cut, top movers, new lines)
   explorer/d/<slug>.json      one department: its agencies, each with the bill's own hierarchy
                               (program > activity > region > office > school > fund) down to
                               lines by expense class, NEP-only rows placed under their activity
@@ -224,6 +225,52 @@ def build_boards(lines_dir, out_dir, index_rows, dept_docs, built_at):
         json.dump(doc, f, indent=1, ensure_ascii=False)
     st = collections.Counter(x['status'] for x in lines)
     print(f"boards.json: {len(departments)} departments, {len(agencies)} agencies, {len(lines)} budget lines {dict(st)}")
+    return doc
+
+
+def build_summary(lines_dir, out_dir, index, dept_docs, boards):
+    """explorer/summary.json: the overview's whole-bill figures, from the same rows as the explorer and
+    the leaderboards (boards.json), so the three cannot disagree."""
+    raised = cut = 0  # line by line, without unprogrammed appropriations (not in the NEP data)
+    for doc in dept_docs.values():
+        stack = [n for a in doc['agencies'] for n in a['tree']]
+        while stack:
+            n = stack.pop()
+            stack.extend(n.get('c', []))
+            for x in n.get('x', []):
+                if x['s'] != 'unprogrammed':
+                    raised += max(x['h'] - x['n'], 0)
+                    cut += max(x['n'] - x['h'], 0)
+    depts = boards['departments']
+    by_delta = sorted(depts, key=lambda d: d['delta_php'])
+    big = sorted((d for d in depts if d['nep_php'] >= 1_000_000_000 and d['delta_pct'] is not None), key=lambda d: d['delta_pct'])
+    both = sorted((l for l in boards['lines'] if l['nep_php'] and l['hgab3_php']), key=lambda l: l['delta_php'])
+    new = sorted((l for l in boards['lines'] if l['status'] == 'house_only'), key=lambda l: -l['hgab3_php'])
+    status = index['status']
+    readings = None
+    if os.path.exists(f'{lines_dir}/reading_changes.csv'):
+        rc = collections.Counter(r['status'] for r in csv.DictReader(open(f'{lines_dir}/reading_changes.csv')))
+        readings = {'lines_3rd_reading': sum(n for k, n in rc.items() if k != '2nd-only'),
+                    'changed': rc['changed'], 'relabel': rc['relabel'], 'added': rc['3rd-only'], 'removed': rc['2nd-only']}
+    doc = {
+        'schema': 1, 'built_at': index['built_at'],
+        'totals': {'house_bill_php': index['house_total'], 'unprogrammed_php': index['unprogrammed'],
+                   'house_bill_programmed_php': index['house_total'] - index['unprogrammed'], 'nep_php': index['nep_total']},
+        'moved': {'raised_php': raised, 'cut_php': cut},
+        'lines': {'total': index['lines'], 'differ': index['lines'] - status.get('same', 0) - status.get('unprogrammed', 0),
+                  'status': status},
+        'departments': {'count': len(depts), 'up': sum(d['delta_php'] > 0 for d in depts),
+                        'down': sum(d['delta_php'] < 0 for d in depts), 'same': sum(d['delta_php'] == 0 for d in depts),
+                        'top_up': by_delta[::-1][:5], 'top_down': by_delta[:5],
+                        'top_up_pct': big[::-1][:3], 'top_down_pct': big[:3], 'pct_floor_php': 1_000_000_000},
+        'lines_up': both[::-1][:5], 'lines_down': both[:5],
+        'new_lines': {'count': len(new), 'php': sum(l['hgab3_php'] for l in new), 'top': new[:5]},
+        'readings': readings,
+    }
+    with open(f'{out_dir}/summary.json', 'w') as f:
+        json.dump(doc, f, indent=1, ensure_ascii=False)
+    print(f"summary.json: raised {raised:,}, cut {cut:,}; {doc['lines']['differ']:,} of {doc['lines']['total']:,} lines differ; "
+          f"{doc['new_lines']['count']} new lines")
 
 
 def main(lines_dir, out_dir):
@@ -361,7 +408,8 @@ def main(lines_dir, out_dir):
              'lines': sum(r['lines'] for r in index_rows), 'status': dict(counts), 'departments': index_rows}
     with open(f'{out_dir}/index.json', 'w') as f:
         json.dump(index, f, indent=1, ensure_ascii=False)
-    build_boards(lines_dir, out_dir, index_rows, dept_docs, index['built_at'])
+    boards = build_boards(lines_dir, out_dir, index_rows, dept_docs, index['built_at'])
+    build_summary(lines_dir, out_dir, index, dept_docs, boards)
     big = sorted(index_rows, key=lambda r: -r['bytes'])[:3]
     print(f"{len(index_rows)} departments, {index['lines']:,} lines; House bill {total_h:,}, NEP {total_n:,}; "
           f"NEP-only rows placed under their activity {placed}, in their own group {unplaced}")

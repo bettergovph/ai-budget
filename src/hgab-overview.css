@@ -275,3 +275,70 @@ a.hgab-cc-cell:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .hgab-cc-wrap.is-exact .hgab-cc-fig { max-width: 58vw; }
   .hgab-cc-meta { overflow-wrap: anywhere; }
 }
+
+/* --- the whole bill, line by line (HgabWholeBill) ------------------------- */
+
+.hgab-wb .hgab-review { margin: 0 0 18px; }
+.hgab-wb-note,
+.hgab-wb-pct {
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  max-width: 860px;
+  margin: 14px 0 0;
+}
+.hgab-wb-pct a { color: var(--accent); }
+.hgab-wb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+  margin-top: 22px;
+}
+.hgab-wb-grid.is-one { grid-template-columns: minmax(0, 1fr); max-width: calc(50% - 14px); }
+.hgab-wb-movers { border-top: 2px solid var(--ink); padding-top: 10px; }
+.hgab-wb-movers h3 {
+  font-family: var(--font-display, var(--font-body));
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.hgab-wb-movers ol { list-style: none; margin: 0; padding: 0; counter-reset: wb; }
+.hgab-wb-movers li {
+  counter-increment: wb;
+  display: grid;
+  grid-template-columns: 1.6em minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule-soft, #e7eaef);
+}
+.hgab-wb-movers li::before {
+  content: counter(wb);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.hgab-wb-what { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.hgab-wb-what a { color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.hgab-wb-what a:hover { color: var(--accent); text-decoration: underline; }
+.hgab-wb-sub { font-size: 12px; color: var(--ink-3); }
+.hgab-wb-amt { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; white-space: nowrap; }
+.hgab-wb-amt strong { font-family: var(--font-mono); font-size: 14px; }
+.hgab-wb-amt strong.is-up { color: var(--positive); }
+.hgab-wb-amt strong.is-down { color: var(--negative); }
+.hgab-wb-from { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.hgab-wb-more {
+  display: inline-block;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  text-decoration: none;
+}
+.hgab-wb-more:hover { text-decoration: underline; }
+@media (max-width: 760px) {
+  .hgab-wb-grid { grid-template-columns: minmax(0, 1fr); }
+  .hgab-wb-grid.is-one { max-width: none; }
+}

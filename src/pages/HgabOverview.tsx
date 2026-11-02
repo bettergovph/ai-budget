@@ -2,7 +2,8 @@
  * `/hgab/2027/overview` — what House Bill 10858 changed against the NEP, for
  * the four programs where the bill prints project-level detail. The section's
  * landing page (`/hgab` and `/hgab/2027` redirect here, and for now so does
- * `/hgab/2027/intro`, the hidden story-style Explainer).
+ * `/hgab/2027/intro`, the hidden story-style Explainer). It opens with the whole bill line by line
+ * (HgabWholeBill, from explorer/summary.json), then the four programs project by project.
  *
  * Everything on this page comes from one `overview.json`. Counts and money
  * stay separate per dataset on purpose: the four programs have different
@@ -39,9 +40,17 @@ import {
 import { DISCLAIMER_NO_ALLEGATIONS } from '../lib/hgab-disclaimers';
 import { headlineResidual, residualShare, residualUnattributed, slotLabel } from '../lib/hgab-districts';
 import { DATASET_SHORT, PLAIN, datasetCaveats, datasetSummary, formatBytes, ordinal } from '../lib/hgab-ui';
+import HgabWholeBill from '../components/HgabWholeBill';
+import { EXPLORER_ROOT, loadExplorerSummary, type ExSummary } from '../lib/hgab-explorer';
 import '../nep2027.css';
 import '../hgab-districts.css';
 import '../hgab-overview.css';
+
+/** DPWH's insertion candidates, for the whole-bill section's note on projects moving inside lines. */
+function dpwhInsertions(cc: HgabCandidateChanges | null | undefined): { count: number; php: number } | null {
+  const p = cc?.programs.find((x) => x.key === 'dpwh');
+  return p ? { count: p.insertions.count, php: p.insertions.amount_php } : null;
+}
 
 export default function HgabOverview() {
   const [ov, setOv] = useState<Overview | null>(null);
@@ -49,11 +58,14 @@ export default function HgabOverview() {
   // The Districts call-out quotes the unassigned share when the district index
   // is available; the call-out itself does not depend on it.
   const [districts, setDistricts] = useState<HgabDistrictIndex | null>(null);
+  // The whole-bill section appears once its summary is in; the rest of the page does not wait for it.
+  const [whole, setWhole] = useState<ExSummary | null>(null);
 
   useEffect(() => {
     document.title = pageMeta(`${HGAB_ROOT}/overview`).title;
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
     loadHgabDistricts().then(setDistricts).catch(() => { /* call-out renders without the figure */ });
+    loadExplorerSummary().then(setWhole).catch(() => { /* the page reads the same without the section */ });
   }, []);
 
   if (err) return <HgabError message={err} />;
@@ -80,16 +92,20 @@ export default function HgabOverview() {
           <p className="hgab-ov-lede">
             The NEP, or National Expenditure Program, is the budget the President submits to Congress
             each August. The House of Representatives then passes its own version, House Bill 10858.
-            This section sets the two side by side, project by project. It shows what the House added,
-            dropped, raised or cut, each traceable to a page of the published documents.
+            This section sets the two side by side: every line of the bill, and four programs project
+            by project. It shows what the House added, dropped, raised or cut, each traceable to a page
+            of the published documents.
           </p>
           <p className="hgab-ov-scope">
-            This is not the whole bill. The bill covers every department. Only four programs list
-            named projects in both documents, so only those four can be compared line by line.
-            Totals for everything else are in <Link to="/2027/browse">the NEP browser</Link>.
+            The bill covers every department. Every line of its appropriation tables is set beside the NEP
+            on the <Link to={EXPLORER_ROOT}>Line by line</Link> pages. Only four programs list named projects
+            in both documents, so only those four are compared project by project, further down. Totals for
+            everything else are in <Link to="/2027/browse">the NEP browser</Link>.
           </p>
         </div>
         <HgabStageStrip />
+
+        {whole && <HgabWholeBill s={whole} projects={dpwhInsertions(ov.candidate_changes)} />}
 
         {ov.candidate_changes && (
           <CandidateChanges
