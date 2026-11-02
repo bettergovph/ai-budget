@@ -1,6 +1,6 @@
 # Multi-purpose buildings map, FY2015 to FY2027
 
-`/hgab/2027/multi-purpose/map` ("Multi-purpose buildings map" in the DPWH menu) shows every DPWH multi-purpose
+`/hgab/2027/multi-purpose/map` ("Map of every line" in the sub-nav's Multi-purpose buildings menu) shows every DPWH multi-purpose
 building line in every budget we hold on one map and in one list: the FY2015 to FY2026 enacted budgets (GAA), the
 FY2027 NEP and the House bill. Budgets before FY2015 do not list multi-purpose buildings by name (see "Earlier years"). It sits under the multi-purpose page (`/hgab/2027/multi-purpose`), whose chart has
 the same years as totals; the MPB card links to the map.

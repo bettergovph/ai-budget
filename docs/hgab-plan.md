@@ -276,6 +276,11 @@ and linked from the finale as "Dashboard view".
 - *Navigation.* Each program in the section sub-nav is a dropdown of its views
   (Overview, Projects, Changes, Map, Documents, and 2nd vs 3rd reading for
   DPWH); the in-page tab row and the program pills under the hero are gone.
+  Order since 2026-11-02 (Jason): Overview, Line by line, Leaderboards,
+  Districts, DPWH, Farm-to-Market Roads, Health Facilities, Irrigation,
+  Multi-purpose buildings (Budget by year, Map of every line), Write a letter,
+  About (Sources, Methodology). The row's gap is 16px so it fits at 1280px;
+  narrower desktops scroll it sideways.
 - *Maps.* `scripts/build-hgab-geo.ts` writes province outlines (PSA boundaries
   as of 31 December 2023 via philippines-json-maps, MIT; Negros Island Region
   and Sulu reassigned as the lists print them) and a `map.json` per program.

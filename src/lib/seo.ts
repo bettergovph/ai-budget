@@ -321,7 +321,7 @@ export function pageMeta(pathname: string): PageMeta {
         "district's amount by year. Search, filter and download every line.",
     };
   }
-  // Multi-purpose buildings (the DPWH menu's budget-history page), before the dataset pattern.
+  // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.
   if (p === HISTORY_ROOT) {
     return {
       title: `${HISTORY_TITLE}, FY 2020–2027: Flood Control, BIP, SIPAG, School and Health Facilities · ${SITE}`,

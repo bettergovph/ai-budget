@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose` (DPWH menu) — multi-purpose buildings, flood
+ * `/hgab/2027/multi-purpose` (Multi-purpose buildings menu) — multi-purpose buildings, flood
  * control, BIP, SIPAG and four other lines, from the FY2020 enacted budget to
  * the FY2027 House bill, one bar per budget and stage, on one shared scale.
  *
