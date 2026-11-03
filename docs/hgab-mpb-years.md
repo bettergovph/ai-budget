@@ -10,7 +10,7 @@ the same years as totals; the MPB card links to the map.
 - Contract: `src/lib/hgab-mpb-years.ts` (pure: the page, the Worker's SEO code and the verifier import it).
 - Page: `src/pages/HgabMpbYears.tsx`; map: `src/components/MpbMap.tsx` (MapLibre GL, lazy-loaded with the page);
   colours: `src/components/mpb-map-style.ts`; styles: `src/hgab-mpb-years.css`.
-- Checks: `npm run verify:hgab` has a `mpb-years/` section (15 checks), recomputed on its own path.
+- Checks: `npm run verify:hgab` has a `mpb-years/` section (18 checks), recomputed on its own path.
 - FY2019 reader: `scripts/hgab-mpb-years/gaa2019.py` (run it on the text file to print its reconciliation).
 
 ## Outputs (`data/hgab/2027/mpb-years/`, published with `upload:hgab`)
@@ -136,8 +136,22 @@ reads). The basemap and its fonts load from `basemaps.cartocdn.com`; if they fai
 still has every line. Districts are shaded in red by amount in the chosen years (Jason, 2026-11-02): the campaign
 red `#d62828` mixed light to dark as the site mixes its blue ramp, five quantile classes, fading at street zoom.
 Marks: GPS (blue dot), a place a title names (white ring sized by its lines), an office area or region (grey disc),
-clusters below zoom 10 (dark ink, with the count). What is picked is blue: the place picked from the list (ring on
-a white halo) and the district clicked on the map (outline). Against every red step, worst colour-blind ΔE (dataviz
+groups (dark ink, with the lines they hold). No mark covers another at any zoom (Jason, 2026-11-02: numbers beside
+each other, not stacked; then "I want it unstacked"). `src/lib/mpb-dodge.ts` lays out every mark for each whole zoom
+level in world pixels, so a layout holds for any view at that level and up to the next (zooming in only pulls marks
+apart); the map lays out again at each level (30–100 ms for every line in every year) and keeps each level's layout
+until the filters change. Marks are set one at a time, most lines first (from zoom 12, GPS dots first: they are
+exact). One that touches nothing stays where it belongs. From zoom 10 one that touches moves to the nearest free spot,
+pushed away from what is in its way, with a thin line back: up to twice its radius at zooms 10–11, up to 240 px from
+12. With no room that near it joins the nearest mark in a group, which takes in whatever its disc then touches. Below
+zoom 10 a mark within 24 px of another joins it and a group sits at the middle of its lines: about as many groups as
+MapLibre's clustering at 42 px gave (37 at zoom 5, 3,827 at zoom 9), but never touching (MapLibre's could). Every mark
+has its own spot from zoom 12; at 11, 734 groups remain where places are densest (136 in Metro Manila), at 10, 1,409. A group counts
+its places' lines and each GPS line once, however many of the line's points it holds (122 lines publish several
+points; their first point carries the line). Clicking a group zooms to the box around its marks. Metro Manila is why
+groups stay below 12: packed side by side, its 1,014 rings would sit up to 8 km from their places at zoom 11; at 12 the
+furthest moves 1.6 km. What is picked is blue: the mark picked, on the map or from the list (ring
+on a white halo, wherever the mark is drawn), and the district clicked on the map (outline). Against every red step, worst colour-blind ΔE (dataviz
 validator, target ≥ 8): blue 25, grey 10, ink 9.3 (with a white edge). Colours live in `src/components/mpb-map-style.ts`. One control row scopes the map and the list; a
 district or place picked on the map narrows the list only. Every control is in the URL (`years`, `stage`, `q`,
 `region`, `placed`, `rule`, `district`, `place`, `sort`).
