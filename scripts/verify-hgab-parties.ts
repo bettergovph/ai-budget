@@ -11,7 +11,8 @@ import { DatabaseSync } from "node:sqlite";
 import { DISCLAIMER_PARTIES } from "../src/lib/hgab-disclaimers";
 import type { LeaderboardData } from "../src/lib/hgab-leaderboard";
 import {
-  BASIS_LABELS, CENTRAL_NOTE, ELECTION_TERMS, PARTIES_SCHEMA, PARTY_FIGURE_NOTE, PARTY_MEANING, PARTY_NAMES, seatsCsv, type PartiesData,
+  BASIS_LABELS, CENTRAL_NOTE, ELECTION_TERMS, PARTIES_SCHEMA, PARTY_FIGURE_NOTE, PARTY_MEANING, PARTY_NAMES, SAME_OFFICES_NOTE, seatsCsv,
+  type PartiesData,
 } from "../src/lib/hgab-parties";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -148,9 +149,10 @@ export function verifyParties(check: Check, o: Opts): void {
   check("FY2027: parties + shared + unknown = the district offices' added budget; with the residual, the whole",
     sum === K.deo.added_php && f.deo.added_php === K.deo.added_php && f.residual.added_php === resid && f.all.added_php === L.totals.all.added_php
       && K.deo.added_php + resid === L.totals.all.added_php, `${sum} vs ${K.deo.added_php}`);
-  check("FY2027: the seat counts add up to 254 with the no-office seats",
+  check("FY2027: the seat counts add up to 254 with the no-office seats, both by party and by the offices that serve them",
     f.rows.reduce((x, r) => x + r.seats, 0) + P.seats.filter((s) => !s.party).length === P.seats.length
-      && f.no_office_seats === noOffice.size);
+      && f.no_office_seats === noOffice.size
+      && f.rows.reduce((x, r) => x + r.seats_counted, 0) + f.shared.seats + f.unknown.seats + f.no_office_seats === P.seats.length);
 
   // Elections, read back.
   const wonIn = db.prepare(`select count(*) as n from candidacies c join contests ct on ct.id = c.contest_id
@@ -205,34 +207,37 @@ export function verifyParties(check: Check, o: Opts): void {
         for (const id of won[0].district_ids) at.set(id, p);
       }
     }
-    const g = new Map<string, { units: number; gaa: number }>();
-    let shared = 0, sharedUnits = 0, nc = 0, ncUnits = 0;
+    const g = new Map<string, { units: number; gaa: number; districts: number }>();
+    let shared = 0, sharedUnits = 0, sharedDistricts = 0, nc = 0, ncUnits = 0, ncDistricts = 0;
     for (const e of L.entries) {
       const v = e.congress[String(C.congress) as "18" | "19" | "20"] ?? 0;
       const ps = e.people.map((p) => at.get(p.district_id) ?? null);
-      if (ps.includes(null) || (C.congress !== 20 && e.reorganised)) { nc += v; ncUnits++; continue; }
-      if (new Set(ps).size > 1) { shared += v; sharedUnits++; continue; }
-      const x = g.get(ps[0]!) ?? { units: 0, gaa: 0 };
-      x.units++; x.gaa += v; g.set(ps[0]!, x);
+      if (ps.includes(null) || (C.congress !== 20 && e.reorganised)) { nc += v; ncUnits++; ncDistricts += ps.length; continue; }
+      if (new Set(ps).size > 1) { shared += v; sharedUnits++; sharedDistricts += ps.length; continue; }
+      const x = g.get(ps[0]!) ?? { units: 0, gaa: 0, districts: 0 };
+      x.units++; x.gaa += v; x.districts += ps.length; g.set(ps[0]!, x);
     }
     const res = L.totals.gaa_residual.filter((r) => t.gaa_years.includes(r.fy));
     const deo = res.reduce((a, r) => a + r.deo_php, 0);
     const seatsBy = new Map<string, number>(C.congress === 20 ? [] : E.party_seats);
     if (C.congress === 20) for (const s of P.seats) if (s.party) seatsBy.set(s.party, (seatsBy.get(s.party) ?? 0) + 1);
-    const rowsOk = C.rows.every((r) => (g.get(r.party)?.gaa ?? 0) === r.gaa_php && (g.get(r.party)?.units ?? 0) === r.units && (seatsBy.get(r.party) ?? 0) === r.seats)
+    const rowsOk = C.rows.every((r) => (g.get(r.party)?.gaa ?? 0) === r.gaa_php && (g.get(r.party)?.units ?? 0) === r.units && (seatsBy.get(r.party) ?? 0) === r.seats
+        && (g.get(r.party)?.districts ?? 0) === r.districts)
       && [...g.keys()].every((k) => C.rows.some((r) => r.party === k)) && [...seatsBy.keys()].every((k) => C.rows.some((r) => r.party === k));
     const total = C.rows.reduce((a, r) => a + r.gaa_php, 0) + C.shared.gaa_php + C.not_comparable.gaa_php;
+    const districts = C.rows.reduce((a, r) => a + r.districts, 0) + C.shared.districts + C.not_comparable.districts + noOffice.size;
     if (!rowsOk || C.shared.gaa_php !== shared || C.shared.units !== sharedUnits || C.not_comparable.gaa_php !== nc || C.not_comparable.units !== ncUnits
+      || C.shared.districts !== sharedDistricts || C.not_comparable.districts !== ncDistricts || districts !== P.seats.length
       || C.deo_php !== deo || total !== deo || C.total_php !== res.reduce((a, r) => a + r.total_php, 0)
       || JSON.stringify(C.years) !== JSON.stringify(t.gaa_years)) congressOk = false;
   }
-  check("18th to 20th Congress: enacted budgets by party, shared and not compared recomputed; they add up to the district offices'", congressOk);
+  check("18th to 20th Congress: enacted budgets and the districts their offices serve, by party, shared and not compared, recomputed; they add up to the district offices' and to 254 districts", congressOk);
 
   // Names and copy.
   const codes = new Set([...P.seats.map((s) => s.party).filter((x): x is string => !!x), ...P.elections.flatMap((e) => e.seats.map((s) => s.party)).filter(Boolean)]);
   check("every party abbreviation in the file is listed, with our name for it or none",
     [...codes].every((c) => c in P.parties && P.parties[c] === (PARTY_NAMES[c] ?? null)) && Object.keys(P.parties).length === codes.size);
-  const copy = [PARTY_MEANING, PARTY_FIGURE_NOTE, CENTRAL_NOTE, ...P.notes, ...P.seats.map((s) => s.note ?? ""), ...Object.values(BASIS_LABELS)];
+  const copy = [PARTY_MEANING, PARTY_FIGURE_NOTE, CENTRAL_NOTE, SAME_OFFICES_NOTE, ...P.notes, ...P.seats.map((s) => s.note ?? ""), ...Object.values(BASIS_LABELS)];
   const long = copy.flatMap((t) => t.split(/(?<=\.)\s+/)).filter((x) => o.words(x) > 25);
   check("reader copy: plain sentences of at most 25 words, none of the banned pipeline words", long.length === 0 && copy.flatMap(o.readerCopyHits).length === 0
     && o.readerCopyHits(DISCLAIMER_PARTIES.body).length === 0, long.slice(0, 2).join(" | "));

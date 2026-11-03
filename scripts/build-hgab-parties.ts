@@ -295,6 +295,8 @@ const elections: Election[] = ELECTION_TERMS.map((t) => {
 });
 
 // FY2027: each office group goes to the one party all its districts' representatives ran under, or stays whole as shared.
+// A party's seats served (seats_counted) are the seats of those same groups, the base its share of the budget is set beside.
+const noOffice = seats.filter((s) => !s.unit).length;
 const slice = (): PartySlice => ({ units: 0, nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0, gaa2026_php: null });
 const addTo = (s: PartySlice, e: LeaderEntry) => {
   s.units++;
@@ -342,15 +344,18 @@ for (const s of [K.regional, K.office_change, K.no_office]) for (const k of Obje
 const partyRows = [...rows.values()].sort((a, b) => b.seats - a.seats || b.added_php - a.added_php || a.party.localeCompare(b.party));
 const fy2027: Fy2027ByParty = {
   rows: partyRows, shared, shared_units: sharedUnits, unknown,
-  no_office_seats: seats.filter((s) => !s.unit).length,
+  no_office_seats: noOffice,
   deo: strip(K.deo), all: strip(L.totals.all), residual, central: strip(K.central),
 };
 const counted = partyRows.reduce((a, r) => a + r.added_php, 0) + shared.added_php + unknown.added_php;
+const seatsServed = partyRows.reduce((a, r) => a + r.seats_counted, 0) + shared.seats + unknown.seats + noOffice;
+if (seatsServed !== seats.length) fail(`seats served by party rows, shared and unknown offices, and no office: ${seatsServed} vs ${seats.length}`);
 checks.push(`FY2027 party rows + shared + unknown = district offices' added budget: ${counted === K.deo.added_php}`);
 if (counted !== K.deo.added_php) fail(`added ${counted} vs deo ${K.deo.added_php}`);
 if (K.deo.added_php + residual.added_php !== L.totals.all.added_php) fail("deo + residual != all");
 
-// Enacted budgets by Congress, read with that Congress's seats. The 20th uses the seats above, as FY2027 does.
+// Enacted budgets by Congress, read with that Congress's seats. The 20th uses the seats above, as FY2027 does. Each
+// row also counts the districts its office groups serve, so a budget share is set beside a share of the same offices.
 const congresses: CongressByParty[] = ELECTION_TERMS.map((t) => {
   const E = elections.find((e) => e.year === t.year)!;
   let partyAt: Map<string, string | null>;
@@ -368,26 +373,29 @@ const congresses: CongressByParty[] = ELECTION_TERMS.map((t) => {
       for (const id of s.district_ids) partyAt.set(id, p);
     }
   }
-  const tally = new Map<string, { seats: number; units: number; gaa_php: number }>();
-  const tallyOf = (p: string) => tally.get(p) ?? (tally.set(p, { seats: 0, units: 0, gaa_php: 0 }), tally.get(p)!);
+  const tally = new Map<string, { seats: number; units: number; districts: number; gaa_php: number }>();
+  const tallyOf = (p: string) => tally.get(p) ?? (tally.set(p, { seats: 0, units: 0, districts: 0, gaa_php: 0 }), tally.get(p)!);
   if (t.congress === 20) { for (const s of seats) if (s.party) tallyOf(s.party).seats++; }
   else for (const [p, n] of E.party_seats) tallyOf(p).seats += n;
-  const sharedC = { units: 0, gaa_php: 0 };
-  const notComparable = { units: 0, gaa_php: 0 };
+  const sharedC = { units: 0, districts: 0, gaa_php: 0 };
+  const notComparable = { units: 0, districts: 0, gaa_php: 0 };
   for (const e of L.entries) {
     const g = e.congress[String(t.congress) as "18" | "19" | "20"] ?? 0;
     const ps = e.people.map((p) => (partyAt.has(p.district_id) ? partyAt.get(p.district_id)! : null));
-    if (ps.includes(null) || (t.congress !== 20 && e.reorganised)) { notComparable.units++; notComparable.gaa_php += g; continue; }
+    const n = e.people.length;
+    if (ps.includes(null) || (t.congress !== 20 && e.reorganised)) { notComparable.units++; notComparable.districts += n; notComparable.gaa_php += g; continue; }
     const set = new Set(ps);
-    if (set.size > 1) { sharedC.units++; sharedC.gaa_php += g; continue; }
+    if (set.size > 1) { sharedC.units++; sharedC.districts += n; sharedC.gaa_php += g; continue; }
     const r = tallyOf(ps[0]!);
-    r.units++; r.gaa_php += g;
+    r.units++; r.districts += n; r.gaa_php += g;
   }
   const res = L.totals.gaa_residual.filter((r) => t.gaa_years.includes(r.fy));
   const deo = res.reduce((a, r) => a + r.deo_php, 0);
   const total = res.reduce((a, r) => a + r.total_php, 0);
   const sum = [...tally.values()].reduce((a, r) => a + r.gaa_php, 0) + sharedC.gaa_php + notComparable.gaa_php;
   if (sum !== deo) fail(`${t.label}: offices ${sum} vs district offices ${deo}`);
+  const districts = [...tally.values()].reduce((a, r) => a + r.districts, 0) + sharedC.districts + notComparable.districts;
+  if (districts + noOffice !== D.districts.length) fail(`${t.label}: districts ${districts} + ${noOffice} with no office vs ${D.districts.length}`);
   return {
     congress: t.congress, election: t.year, label: t.label, years: [...t.gaa_years],
     rows: [...tally].map(([party, v]) => ({ party, ...v })).sort((a, b) => b.seats - a.seats || b.gaa_php - a.gaa_php || a.party.localeCompare(b.party)),

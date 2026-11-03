@@ -254,14 +254,18 @@ export interface CongressByParty {
   election: number;
   label: string;
   years: number[];
-  rows: Array<{ party: string; seats: number; units: number; gaa_php: number }>;
+  /**
+   * `seats`: won in that election. `districts`: the legislative districts (2025 lines) its office groups serve, the
+   * base the budget share is compared with, so both shares count the same offices.
+   */
+  rows: Array<{ party: string; seats: number; units: number; districts: number; gaa_php: number }>;
   /** Office groups whose districts were won by different parties. */
-  shared: { units: number; gaa_php: number };
+  shared: { units: number; districts: number; gaa_php: number };
   /**
    * Office groups not read for this Congress: a district had other towns or no seat then, the race is missing from the
    * results, or an office was created or renamed since 2020 (its earlier budget sits under another name).
    */
-  not_comparable: { units: number; gaa_php: number };
+  not_comparable: { units: number; districts: number; gaa_php: number };
   /** Every district office in these years (whole office, as listed), and what no district office carries. */
   deo_php: number;
   other_php: number;
@@ -307,6 +311,13 @@ export const PARTY_MEANING =
 export const PARTY_FIGURE_NOTE =
   'A party’s figure adds the DPWH offices that serve only its members’ districts. An office shared across parties is never divided.';
 /** Why the largest part has no party. */
+/**
+ * Said under every comparison of seats with budget: both shares count the same offices. A party's share of all seats
+ * against its share of the budget at its own offices would compare unlike things (its seats in shared offices are in
+ * one and not the other).
+ */
+export const SAME_OFFICES_NOTE =
+  'Both bars count the same DPWH offices: the seats they serve, and the projects the House added there.';
 export const CENTRAL_NOTE =
   'Lines under the DPWH Central Office name no district office, so no party can be read from them.';
 export const BASIS_LABELS: Record<PartyBasis, string> = {

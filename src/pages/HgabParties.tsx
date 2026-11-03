@@ -21,7 +21,7 @@ import { billions, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, displayName } from '../lib/hgab-leaderboard';
 import {
   BASIS_LABELS, CENTRAL_NOTE, DYNASTIES_DEVELOPERS, DYNASTIES_SITE, NO_PARTY, OPEN_HALALAN_URL, PARTIES_CSV_NAME, PARTIES_DATA_PATH,
-  PARTIES_ROOT, PARTIES_TITLE, PARTY_FIGURE_NOTE, PARTY_MEANING, addedPerSeatA, dynastyPersonUrl, partyFull, partyName, partyShort,
+  PARTIES_ROOT, PARTIES_TITLE, PARTY_FIGURE_NOTE, PARTY_MEANING, SAME_OFFICES_NOTE, addedPerSeatA, dynastyPersonUrl, partyFull, partyName, partyShort,
   resultText, seatHistory, seatsCsv, type CongressByParty, type PartiesData, type PartyRow, type PartyUnit, type Seat,
 } from '../lib/hgab-parties';
 import * as fmt from '../lib/format';
@@ -181,7 +181,8 @@ function PartyTable({ data }: { data: PartiesData }) {
     added_rows: a.added_rows + r.added_rows, held_php: a.held_php + r.held_php, held_rows: a.held_rows + r.held_rows,
     dropped_php: a.dropped_php + r.dropped_php, dropped_rows: a.dropped_rows + r.dropped_rows,
   }), { ...rest[0], party: '', seats: 0, seats_counted: 0, seats_a: 0, added_php_a: 0, units: 0, nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 }) : null;
-  const max = Math.max(...f.rows.map((r) => Math.max(r.seats / seats, r.added_php / deo)), f.shared.seats / seats, f.shared.added_php / deo);
+  // Both bars of a row count the same offices: the seats they serve (seats_counted) and the projects added there.
+  const max = Math.max(...f.rows.map((r) => Math.max(r.seats_counted / seats, r.added_php / deo)), f.shared.seats / seats, f.shared.added_php / deo);
   const parties = f.rows.filter((r) => r.party !== NO_PARTY).length;
   const independents = f.rows.find((r) => r.party === NO_PARTY)?.seats ?? 0;
   const allA = f.rows.reduce((a, r) => ({ seats: a.seats + r.seats_a, php: a.php + r.added_php_a }), { seats: 0, php: 0 });
@@ -191,15 +192,15 @@ function PartyTable({ data }: { data: PartiesData }) {
         {count(parties)} parties and {plural(independents, 'independent', 'independents')} hold the {count(seats)} district seats
       </h2>
       <p className="hgab-pty-dek">
-        A party’s added projects are those at DPWH offices serving only its members’ districts. The bars set its share of the seats
-        beside its share of the {billions(deo)}.
+        Each party’s row counts the DPWH offices that serve only its members’ districts. {SAME_OFFICES_NOTE} Shares are of
+        the {count(seats)} seats and the {billions(deo)}.
       </p>
       <div className="hgab-pty-tablewrap">
         <table className="hgab-pty-table">
           <thead>
             <tr>
               <th scope="col">Party, May 2025</th>
-              <th scope="col" className="is-num">Seats</th>
+              <th scope="col" className="is-num">Seats its offices serve</th>
               <th scope="col" className="hgab-pty-barcol">Share of seats</th>
               <th scope="col" className="is-num">Added at its offices</th>
               <th scope="col" className="hgab-pty-barcol">Share of the added</th>
@@ -210,7 +211,9 @@ function PartyTable({ data }: { data: PartiesData }) {
           <tbody>
             {[...own, ...(other ? [other] : [])].map((r) => {
               const avg = addedPerSeatA(r);
-              const sub = r.units ? `${plural(r.units, 'office', 'offices')} serving ${r.seats_counted === r.seats ? 'all' : count(r.seats_counted)} of its seats` : 'Its seats are all in shared offices';
+              const sub = r.units
+                ? `${plural(r.seats, 'seat', 'seats')} in all · ${plural(r.units, 'office', 'offices')} of its own`
+                : `${plural(r.seats, 'seat', 'seats')} in all, every one in a shared office`;
               return (
                 <tr key={r.party || 'other'}>
                   <td>
@@ -221,8 +224,10 @@ function PartyTable({ data }: { data: PartiesData }) {
                       </span>
                     )}
                   </td>
-                  <td className="is-num">{count(r.seats)}</td>
-                  <td className="hgab-pty-barcol"><ShareBar value={r.seats / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(r.seats, seats)}</span></td>
+                  <td className="is-num">{r.seats_counted ? count(r.seats_counted) : '—'}</td>
+                  <td className="hgab-pty-barcol">
+                    {r.seats_counted ? <><ShareBar value={r.seats_counted / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(r.seats_counted, seats)}</span></> : null}
+                  </td>
                   <td className="is-num" title={r.units ? fullPeso(r.added_php) : undefined}>
                     {r.units ? short(r.added_php) : '—'}
                     {r.units > 0 && <span className="hgab-pty-sub">{plural(r.added_rows, 'project', 'projects')}</span>}
@@ -239,7 +244,7 @@ function PartyTable({ data }: { data: PartiesData }) {
               );
             })}
             <tr className="is-shared">
-              <td><span className="hgab-pty-party">Offices shared across parties<span className="hgab-pty-sub">{plural(f.shared.units, 'office', 'offices')}, figures undivided</span></span></td>
+              <td><span className="hgab-pty-party">Offices shared across parties<span className="hgab-pty-sub">{plural(f.shared.units, 'office', 'offices')}, each serving districts of more than one party; figures undivided</span></span></td>
               <td className="is-num">{count(f.shared.seats)}</td>
               <td className="hgab-pty-barcol"><ShareBar value={f.shared.seats / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(f.shared.seats, seats)}</span></td>
               <td className="is-num" title={fullPeso(f.shared.added_php)}>{short(f.shared.added_php)}<span className="hgab-pty-sub">{plural(f.shared.added_rows, 'project', 'projects')}</span></td>
@@ -475,17 +480,23 @@ function Congresses({ data }: { data: PartiesData }) {
           </button>
         ))}
       </div>
-      <CongressTable c={c} />
+      <CongressTable c={c} noOffice={data.fy2027.no_office_seats} />
     </section>
   );
 }
 
-function CongressTable({ c }: { c: CongressByParty }) {
+function CongressTable({ c, noOffice }: { c: CongressByParty; noOffice: number }) {
   const seats = c.rows.reduce((a, r) => a + r.seats, 0);
   const own = c.rows.filter((r) => r.seats >= OWN_ROW_SEATS);
   const rest = c.rows.filter((r) => !own.includes(r));
-  const other = rest.reduce((a, r) => ({ seats: a.seats + r.seats, units: a.units + r.units, gaa_php: a.gaa_php + r.gaa_php }), { seats: 0, units: 0, gaa_php: 0 });
-  const max = Math.max(...own.map((r) => Math.max(r.seats / seats, r.gaa_php / c.deo_php)), c.shared.gaa_php / c.deo_php, c.not_comparable.gaa_php / c.deo_php);
+  const other = rest.reduce((a, r) => ({ seats: a.seats + r.seats, units: a.units + r.units, districts: a.districts + (r.districts ?? 0), gaa_php: a.gaa_php + r.gaa_php }),
+    { seats: 0, units: 0, districts: 0, gaa_php: 0 });
+  // Like the 2027 table, both bars count the same offices: the districts they serve, and the budget enacted for them.
+  const districts = c.rows.reduce((a, r) => a + (r.districts ?? 0), 0) + (c.shared.districts ?? 0) + (c.not_comparable.districts ?? 0) + noOffice;
+  const counted = c.rows.every((r) => r.districts != null);
+  const max = Math.max(...own.map((r) => Math.max((r.districts ?? 0) / districts, r.gaa_php / c.deo_php)), c.shared.gaa_php / c.deo_php, c.not_comparable.gaa_php / c.deo_php,
+    (c.shared.districts ?? 0) / districts, (c.not_comparable.districts ?? 0) / districts);
+  const dbar = (n: number | undefined) => (counted && n ? <><ShareBar value={n / districts} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(n, districts)}</span></> : null);
   const years = c.years.length > 1 ? `${c.years[0]} to ${c.years[c.years.length - 1]}` : String(c.years[0]);
   const bar = (php: number) => <><ShareBar value={php / c.deo_php} max={max} tone="budget" /><span className="hgab-pty-pct">{pct(php, c.deo_php)}</span></>;
   return (
@@ -500,7 +511,8 @@ function CongressTable({ c }: { c: CongressByParty }) {
             <tr>
               <th scope="col">Party, {c.election} election</th>
               <th scope="col" className="is-num">Seats won</th>
-              <th scope="col" className="hgab-pty-barcol">Share of seats</th>
+              <th scope="col" className="is-num">Districts its offices serve</th>
+              <th scope="col" className="hgab-pty-barcol">Share of districts</th>
               <th scope="col" className="is-num">Enacted at its offices, {years}</th>
               <th scope="col" className="hgab-pty-barcol">Share of district offices</th>
             </tr>
@@ -510,7 +522,8 @@ function CongressTable({ c }: { c: CongressByParty }) {
               <tr key={r.party}>
                 <td><PartyName code={r.party} sub={r.units ? plural(r.units, 'office', 'offices') : 'No office of its own read'} /></td>
                 <td className="is-num">{count(r.seats)}</td>
-                <td className="hgab-pty-barcol"><ShareBar value={r.seats / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(r.seats, seats)}</span></td>
+                <td className="is-num">{counted && r.districts ? count(r.districts) : '—'}</td>
+                <td className="hgab-pty-barcol">{dbar(r.districts)}</td>
                 <td className="is-num" title={r.units ? fullPeso(r.gaa_php) : undefined}>{r.units ? short(r.gaa_php) : '—'}</td>
                 <td className="hgab-pty-barcol">{r.units ? bar(r.gaa_php) : null}</td>
               </tr>
@@ -519,14 +532,17 @@ function CongressTable({ c }: { c: CongressByParty }) {
               <tr>
                 <td><span className="hgab-pty-party" title={rest.map((r) => partyFull(r.party)).join(', ')}>Other parties<span className="hgab-pty-sub">{plural(rest.length, 'party', 'parties')} with one seat each{other.units ? ` · ${plural(other.units, 'office', 'offices')}` : ''}</span></span></td>
                 <td className="is-num">{count(other.seats)}</td>
-                <td className="hgab-pty-barcol"><ShareBar value={other.seats / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(other.seats, seats)}</span></td>
+                <td className="is-num">{counted && other.districts ? count(other.districts) : '—'}</td>
+                <td className="hgab-pty-barcol">{dbar(other.districts)}</td>
                 <td className="is-num">{other.units ? short(other.gaa_php) : '—'}</td>
                 <td className="hgab-pty-barcol">{other.units ? bar(other.gaa_php) : null}</td>
               </tr>
             )}
             <tr className="is-shared">
               <td><span className="hgab-pty-party">Offices shared across parties<span className="hgab-pty-sub">{plural(c.shared.units, 'office', 'offices')}, figures undivided</span></span></td>
-              <td className="is-num">—</td><td />
+              <td className="is-num">—</td>
+              <td className="is-num">{counted && c.shared.districts ? count(c.shared.districts) : '—'}</td>
+              <td className="hgab-pty-barcol">{dbar(c.shared.districts)}</td>
               <td className="is-num" title={fullPeso(c.shared.gaa_php)}>{short(c.shared.gaa_php)}</td>
               <td className="hgab-pty-barcol">{bar(c.shared.gaa_php)}</td>
             </tr>
@@ -538,16 +554,28 @@ function CongressTable({ c }: { c: CongressByParty }) {
                     <span className="hgab-pty-sub">{plural(c.not_comparable.units, 'office', 'offices')}: a district had other towns or no seat then, or an office was created or renamed since 2020</span>
                   </span>
                 </td>
-                <td className="is-num">—</td><td />
+                <td className="is-num">—</td>
+                <td className="is-num">{counted && c.not_comparable.districts ? count(c.not_comparable.districts) : '—'}</td>
+                <td className="hgab-pty-barcol">{dbar(c.not_comparable.districts)}</td>
                 <td className="is-num" title={fullPeso(c.not_comparable.gaa_php)}>{short(c.not_comparable.gaa_php)}</td>
                 <td className="hgab-pty-barcol">{bar(c.not_comparable.gaa_php)}</td>
+              </tr>
+            )}
+            {counted && noOffice > 0 && (
+              <tr className="is-muted">
+                <td><span className="hgab-pty-party">No DPWH office<span className="hgab-pty-sub">Served by the BARMM regional grouping: no office figures</span></span></td>
+                <td className="is-num">—</td>
+                <td className="is-num">{count(noOffice)}</td>
+                <td className="hgab-pty-barcol"><span className="hgab-pty-pct">{pct(noOffice, districts)}</span></td>
+                <td className="is-num">—</td><td />
               </tr>
             )}
           </tbody>
           <tfoot>
             <tr>
               <th scope="row">District offices</th>
-              <td className="is-num">{count(seats)}</td><td />
+              <td className="is-num">{count(seats)}</td>
+              <td className="is-num" title={counted ? `${count(noOffice)} more with no DPWH office` : undefined}>{counted ? count(districts) : '—'}</td><td />
               <td className="is-num" title={fullPeso(c.deo_php)}>{short(c.deo_php)}</td><td />
             </tr>
           </tfoot>
@@ -555,9 +583,11 @@ function CongressTable({ c }: { c: CongressByParty }) {
       </div>
       <Caveats
         items={c.congress === 20 ? [
+          'Both bars count the same offices: the districts they serve, and the budget enacted for them.',
           'The 20th Congress uses the seats as they stand now, as above. It has passed one budget so far, for 2026.',
           'Enacted budgets list each office’s whole budget, every fund. The 2027 figures above count listed projects only.',
         ] : [
+          'Both bars count the same offices: the districts they serve, on 2025 lines, and the budget enacted for them.',
           'Seats are the election’s winners as the results publish them. Changes during the term are not shown.',
           'An office counts only where each district it serves had the same towns as in 2025, and the office kept its name since 2020.',
           'Enacted budgets list each office’s whole budget, every fund.',

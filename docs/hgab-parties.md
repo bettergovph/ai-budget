@@ -41,6 +41,10 @@ allocations based on the currently elected officials. But also get ready for pas
    builder, each with a source.
 5. **A party's figure adds the office groups serving only its members' districts.** An office group whose districts
    were won by different parties stays whole in "shared across parties", listed with every party. Never divided.
+   **Seats are compared on the same offices:** a party's share of seats is the seats its own groups serve
+   (`seats_counted`), not all its seats, so both bars count the same offices; each column adds up to 254 seats and
+   ₱64.0B with the shared and no-office rows. (Set against all its seats, Lakas–CMD would read 40.6% of seats and 33.5%
+   of the budget; on its own offices it is 30.3% and 33.5%.) The Congress rows do the same with `districts`.
 6. **Residual first:** the Central Office's added lines (with regional, office-change and no-office lines) carry no
    party and are stated before the party table.
 7. **Average per district** counts tier A only (one office, one district).
@@ -56,8 +60,10 @@ allocations based on the currently elected officials. But also get ready for pas
 - 254 seats: Lakas–CMD 103, NUP 33, NPC 32, PFP 28, NP 22, independents 11, LP 6, others 19.
 - Projects the House added (insertion candidates): ₱161.6B. Central Office and no district office ₱97.7B (60%);
   district offices ₱64.0B.
-- Of the ₱64.0B: Lakas–CMD offices ₱21.4B (33.5%, 71 offices); PFP ₱7.4B; NPC ₱5.8B; independents ₱4.1B; NP ₱4.0B;
-  NUP ₱2.5B; shared across parties ₱14.1B (22.1%, 25 offices, 74 seats). Davao City's three HTL seats: ₱0.
+- Of the ₱64.0B, office by office (share of seats served → share of the added): Lakas–CMD 77 seats 30.3% → ₱21.4B
+  33.5%; PFP 17 seats 6.7% → ₱7.4B 11.6%; NPC 25 seats 9.8% → ₱5.8B 9.0%; independents 8 seats 3.1% → ₱4.1B 6.5%;
+  NP 16 seats 6.3% → ₱4.0B 6.3%; NUP 16 seats 6.3% → ₱2.5B 3.9%; shared across parties 74 seats 29.1% → ₱14.1B 22.1%;
+  no DPWH office 5 seats. Davao City's three HTL seats: ₱0.
 - 18th Congress (FY2020–22): PDP–Laban 84 seats, ₱173.7B (22.4%) of ₱773.7B at district offices; 42 groups not
   compared. 19th (FY2023–25): PDP–Laban 65 seats ₱128.9B, NP 38 seats ₱127.7B; 30 not compared.
 
