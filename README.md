@@ -47,6 +47,7 @@ To serve data from `public/data` instead, leave `VITE_DATA_BASE_URL` unset. In t
 | `npm run build:sqlite -- --all --reset` | Rebuild the SQLite database used to prepare D1 data |
 | `npm run dump:sql` | Export the SQLite database as D1-compatible SQL |
 | `npm run upload:r2 -- --all` | Upload generated JSON and Parquet assets to R2 |
+| `npm run build:citizen-reports` | Retake the `/citizen-reports` card screenshots (headless Chromium) into `public/screenshots/`; the sites are listed in `src/lib/citizen-reports.ts` |
 | `hearings` sync | Hearing transcripts are published by the [transcriptions pipeline](../transcriptions): `sync_to_site.py` uploads `hearings/<videoId>/` files to R2 and upserts `hearings` rows into D1. Served at `/hearings` (grid) and `/hearings/:videoId` (interactive transcript + summary). |
 
 Most data scripts also accept a single department, for example:
