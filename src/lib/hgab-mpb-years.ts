@@ -533,8 +533,13 @@ export const MPB_CSV_COLUMNS = [
   'same_title_lines', 'same_barangay_lines', 'same_title_key',
 ] as const;
 
-/** The lines as CSV (UTF-8, BOM added by the caller's Blob): integer pesos, empty = none, never 0. */
-export function linesCsv(data: MpbData, lines: readonly MpbLine[]): string {
+/**
+ * The lines as CSV (UTF-8, BOM added by the caller's Blob): integer pesos, empty = none, never 0. `extra` appends
+ * columns after the standard ones (the page adds each line's matched DPWH contract).
+ */
+export function linesCsv(
+  data: MpbData, lines: readonly MpbLine[], extra?: { columns: readonly string[]; cells: (l: MpbLine) => unknown[] },
+): string {
   // Group sizes among the lines being written, so a spreadsheet can sort and group the repeats.
   const tCount = new Map<string, number>();
   const bCount = new Map<number, number>();
@@ -554,7 +559,8 @@ export function linesCsv(data: MpbData, lines: readonly MpbLine[]): string {
       l.pts ? l.pts.map(([a, b]) => `${a},${b}`).join(';') : null,
       d?.label ?? null, d?.id ?? null, l.basis, lineFlags(l, data.flagBits).join(';') || null,
       tCount.get(l.tkey) ?? 1, barangayOf(data, l) >= 0 ? bCount.get(barangayOf(data, l)) ?? 1 : null, l.tkey,
+      ...(extra ? extra.cells(l) : []),
     ].map(cell).join(',');
   });
-  return [MPB_CSV_COLUMNS.join(','), ...rows].join('\n') + '\n';
+  return [[...MPB_CSV_COLUMNS, ...(extra?.columns ?? [])].join(','), ...rows].join('\n') + '\n';
 }

@@ -9,7 +9,7 @@
  * region, how a line was placed and which budget line it is on. A district or place picked on the map narrows the
  * list only; the map keeps showing the rest around it.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, Fragment, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
@@ -20,6 +20,9 @@ import { dataUrl } from '../lib/data-url';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, asOfText } from '../lib/hgab-leaderboard';
+import {
+  LINE_CONTRACT_COLUMNS, METHOD_LABELS, STATUS_LABELS, contractorPath, lineContractCells, type LineContract,
+} from '../lib/hgab-contractors';
 import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
   PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
@@ -34,6 +37,24 @@ import '../hgab-history.css';
 import '../hgab-mpb-years.css';
 
 const MpbMap = lazy(() => import('../components/MpbMap'));
+
+/** The DPWH contract matched to each FY2020–FY2026 line, by line id (contractors/mpb-links.json); null without the file. */
+const ContractsCtx = createContext<Map<string, LineContract> | null>(null);
+
+/** "Contractor: A and B · contract 23AE0052 (completed)", for a line with a matched contract. */
+function LineContractText({ l }: { l: MpbLine }) {
+  const c = useContext(ContractsCtx)?.get(l.id);
+  if (!c) return null;
+  return (
+    <span title={METHOD_LABELS[c.method]}>
+      Contractor:{' '}
+      {c.contractors.map((x, i) => (
+        <Fragment key={x.key}>{i ? ' and ' : ''}<Link to={contractorPath(x.key)}>{x.name}</Link></Fragment>
+      ))}{' '}
+      · contract {c.contractId}{c.status ? ` (${STATUS_LABELS[c.status].toLowerCase()})` : ''}
+    </span>
+  );
+}
 
 const PAGE = 100;
 const GAA_YEARS = MPB_YEARS.filter((y) => y < 2027);
@@ -99,7 +120,9 @@ function writeView(v: View, data: MpbData): URLSearchParams {
 // ---------------------------------------------------------------------------
 
 export default function HgabMpbYears() {
-  const [loaded, setLoaded] = useState<{ data: MpbData; summary: MpbSummary; districts: FeatureCollection } | null>(null);
+  const [loaded, setLoaded] = useState<{
+    data: MpbData; summary: MpbSummary; districts: FeatureCollection; contracts: Map<string, LineContract> | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -108,10 +131,12 @@ export default function HgabMpbYears() {
   }, []);
   if (error) return <HgabError message={error} />;
   if (!loaded) return <HgabLoading what="every multi-purpose building line" />;
-  return <Loaded {...loaded} />;
+  return <ContractsCtx.Provider value={loaded.contracts}><Loaded {...loaded} /></ContractsCtx.Provider>;
 }
 
-function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSummary; districts: FeatureCollection }) {
+function Loaded({ data, summary, districts, contracts }: {
+  data: MpbData; summary: MpbSummary; districts: FeatureCollection; contracts: Map<string, LineContract> | null;
+}) {
   // The view lives in state (so quick clicks build on each other) and is mirrored into the URL for sharing.
   const [params, setParams] = useSearchParams();
   const [view, setViewState] = useState<View>(() => readView(params, data));
@@ -206,7 +231,7 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
           <div className="hgab-mpbm-filters">
             <label className="hgab-mpbm-search">
               <span className="visually-hidden">Search titles, places and offices</span>
-              <input type="search" value={qInput} onChange={(e) => setTyped({ base: view.f.q, text: e.target.value })} placeholder="Search a title, place or office" />
+              <input type="search" value={qInput} onChange={(e) => setTyped({ base: view.f.q, text: e.target.value })} placeholder={contracts ? 'Search a title, place, office or contractor' : 'Search a title, place or office'} />
             </label>
             <label>
               <span>Region</span>
@@ -286,6 +311,9 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
                 `In ${x.fy}, the budget file lists ${count(x.listed_at_zero)} more items named for multi-purpose buildings at ₱0; they are left out.`),
               'The 2019 lines are read line by line from DBM’s detailed GAA for DPWH. They add up to the total it publishes.',
               'A ring is the centre of the barangay, town, city or province a title names, not the building. GPS points are as published, and some are wrong.',
+              ...(contracts ? [
+                'From 2020, a line shows the DPWH contract we matched to it by title, office and amount. Check the contract.',
+              ] : []),
               'A line placed by its DPWH office shows the office’s area, not the building. Lines with no place in the title and no office area are listed, not mapped.',
               'The 2027 NEP and House bill are two stages of one budget: pick one, never both added together.',
               'District shading counts lines with a legislative district only. A district is where a title places a building; the documents do not say who asked for it.',
@@ -295,7 +323,7 @@ function Loaded({ data, summary, districts }: { data: MpbData; summary: MpbSumma
           <MethodDetails summary={summary} data={data} />
         </section>
 
-        <DisclaimerNotice compact offices />
+        <DisclaimerNotice compact offices contractors={Boolean(contracts)} />
       </main>
       <SiteFooter />
     </>
@@ -492,8 +520,14 @@ function PanelLine({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stag
         {l.pts && <> · <button type="button" className="hgab-mpbm-linkbtn" onClick={() => onShow(l)}>{l.pts[0][1].toFixed(5)}, {l.pts[0][0].toFixed(5)}</button></>}
       </p>
       {flags.length > 0 && <p className="hgab-mpbm-flag">{flags.map((f) => FLAG_TEXT[f]).join(' ')}</p>}
+      <LineContractMeta l={l} />
     </li>
   );
+}
+
+function LineContractMeta({ l }: { l: MpbLine }) {
+  const has = useContext(ContractsCtx)?.has(l.id);
+  return has ? <p className="hgab-mpbm-meta"><LineContractText l={l} /></p> : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -641,6 +675,7 @@ function LinesList({ data, summary, lines, view, setView, onShow }: {
   setView: (v: ViewPatch) => void;
   onShow: (l: MpbLine) => void;
 }) {
+  const contracts = useContext(ContractsCtx);
   // How many rows to show; back to one page whenever the lines change.
   const [more, setMore] = useState<{ of: MpbLine[]; n: number }>({ of: lines, n: PAGE });
   const shown = more.of === lines ? more.n : PAGE;
@@ -648,7 +683,8 @@ function LinesList({ data, summary, lines, view, setView, onShow }: {
   const total = lines.reduce((a, l) => a + (lineAmount(l, view.stage) ?? 0), 0);
   const yearsText = view.years.size === MPB_YEARS.length ? `${FIRST} to 2027` : [...view.years].sort().map((y) => yearLabel(y, view.stage)).join(', ');
   const download = () => {
-    const blob = new Blob(['﻿', linesCsv(data, sorted)], { type: 'text/csv;charset=utf-8' });
+    const extra = contracts ? { columns: LINE_CONTRACT_COLUMNS, cells: (l: MpbLine) => lineContractCells(contracts.get(l.id)) } : undefined;
+    const blob = new Blob(['﻿', linesCsv(data, sorted, extra)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'bettergov-multi-purpose-buildings-selection.csv';
@@ -719,6 +755,7 @@ function LinesList({ data, summary, lines, view, setView, onShow }: {
 }
 
 function ListRow({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stage: Stage2027; onShow: (l: MpbLine) => void }) {
+  const contracts = useContext(ContractsCtx);
   const p = l.place >= 0 ? data.places[l.place] : null;
   const d = l.district >= 0 ? data.districts[l.district] : null;
   const href = recordHref(l);
@@ -735,6 +772,7 @@ function ListRow({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stage:
             {flags.map((f) => FLAG_TEXT[f]).join(' ')}
           </span>
         )}
+        {contracts?.has(l.id) && <span className="hgab-mpbm-sub"><LineContractText l={l} /></span>}
       </td>
       <td>
         <span className={`hgab-mpbm-lvl is-${l.level}`}>{LEVEL_SHORT[l.level as MpbLevel]}</span>{' '}
