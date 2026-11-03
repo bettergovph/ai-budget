@@ -123,6 +123,7 @@ import {
 } from "../src/lib/hgab-mpb-years";
 import { verifyContractors } from "./verify-hgab-contractors";
 import { verifyMpbBoards } from "./verify-hgab-mpb-boards";
+import { verifyParties } from "./verify-hgab-parties";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -703,6 +704,7 @@ async function main(): Promise<void> {
   await verifyMpbYears(c);
   await verifyContractors(c, check, { out: OUT, gaa: GAA, contracts: CONTRACTS, words, readerCopyHits });
   verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
+  verifyParties(check, { out: OUT, words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
