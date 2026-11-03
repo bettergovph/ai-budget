@@ -22,7 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LINKED_YEARS, decodeMpbContracts, rankLineContractors, type MpbContractsFile } from "../src/lib/hgab-contractors";
 import {
-  MPB_BOARD_COLS, MPB_BOARD_SETS, displayName, type LeaderPerson, type MpbBoardRow, type MpbBoardSet, type MpbBoardsFile,
+  MPB_BOARD_COLS, MPB_BOARD_SETS, type LeaderPerson, type MpbBoardRow, type MpbBoardSet, type MpbBoardsFile,
 } from "../src/lib/hgab-leaderboard";
 import { decodeMpbLines, officeShort, type MpbLine, type MpbLinesFile } from "../src/lib/hgab-mpb-years";
 
@@ -42,6 +42,7 @@ interface Representative {
   profile_url?: string | null; juris_url?: string | null; bill_count?: number | null; leadership_roles?: string[];
 }
 interface DistrictsFile {
+  /** `region` is a label ("Region IV-A", "NCR"). */
   districts: Array<{ id: string; label: string; jurisdiction: string; district_label: string; region: string | null; representative: Representative | null }>;
   offices: Record<string, { id: string; name: string; kind: string; region: string | null; district_ids: string[]; years: Array<{ fy: number; matched_label: string | null }> }>;
 }
@@ -156,17 +157,18 @@ const officeRows: Row[] = [...off.by].map(([name, ls]) => {
   };
 }).sort(byAmount);
 
-// Legislative districts, as the map places each line; the district leads, the representative now in the seat under it.
+// Legislative districts, as the map places each line; the region under each. Each district's person is kept for a board
+// with `mpbPeople` (none for now: 2020 to 2026 spans three Congresses).
 // A person's region is the RegionKey ("XIII"), as leaderboard.json has it, not districts.json's label ("Region XIII").
+const regionLabel = new Map(D.districts.map((d) => [d.id, d.region ?? ""]));
 const people = Object.fromEntries(D.districts.map((d) => [d.id, personOf(d, data.districts[data.districtIndex.get(d.id) ?? -1]?.region ?? "")]));
 const dist = groups((l) => (l.district >= 0 ? data.districts[l.district].id : null));
 const districtRows: Row[] = [...dist.by].map(([id, ls]) => {
   const d = data.districts[data.districtIndex.get(id)!];
-  const p = people[id];
   return {
     key: id,
     label: d.label,
-    sub: p?.name ? `Rep. ${displayName(p.name)}` : "No representative found",
+    sub: regionLabel.get(id) ?? "",
     region: d.region, lines: ls.length, gaa_php: sum(ls),
     contracts: null, contract_php: null, ...span(ls),
   };

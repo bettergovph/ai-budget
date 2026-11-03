@@ -79,7 +79,7 @@ function residualText(data: LeaderboardData, board: BoardDef): string | null {
 
 /** Boards that show representatives (and so their photos and the roster credit). */
 function showsPeople(board: BoardDef): boolean {
-  return board.kind === 'ranking' || board.kind === 'members' || board.kind === 'congress' || (board.kind === 'mpb' && board.mpbSet === 'districts');
+  return board.kind === 'ranking' || board.kind === 'members' || board.kind === 'congress' || (board.kind === 'mpb' && board.mpbPeople === true);
 }
 
 function regionName(k: string | null): string {

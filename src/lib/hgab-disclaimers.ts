@@ -68,8 +68,8 @@ export const DISCLAIMER_MPB: Disclaimer = {
   body:
     'Each line is placed in a barangay or a legislative district by the place its title names, or by the one district its ' +
     'DPWH office serves. Offices are the ones the enacted budget lists. This placement is our reading and can be wrong. ' +
-    'A district’s total does not establish that its representative requested, sponsored or controlled a project; the ' +
-    'representative shown holds the seat now, and earlier Congresses passed the 2020 to 2025 budgets. A line, a total ' +
+    'A district’s total does not establish that any representative requested, sponsored or controlled a project; the ' +
+    '2020 to 2026 budgets span the 18th, 19th and 20th Congresses. A line, a total ' +
     'or a ranking alone does not establish irregularity or wrongdoing by any contractor, office or official. Amounts are ' +
     'allocations in the enacted budgets, not spending; a building funded over several years has a line in each year.',
 };

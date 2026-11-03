@@ -210,7 +210,7 @@ export interface MpbBoardRow {
   key: string;
   /** The contractor, the barangay, the DPWH office or the legislative district: a place leads, never a person. */
   label: string;
-  /** A second line: where, the contracts, or the district's representative ("Rep. …"). */
+  /** A second line: where, the contracts, or the district's region. */
   sub: string;
   /** The map, narrowed to this row's lines (2020 to 2026). */
   href: string;
@@ -226,7 +226,7 @@ export interface MpbBoardRow {
   last_year: number;
   /** Contractors: the contractor's page; districts: the district page. */
   page: string | null;
-  /** Districts: the representative now in the seat, as the other boards show people (portrait, credit, links). */
+  /** Districts: the representative now in the seat, shown only on a board with `mpbPeople` (none for now). */
   person: LeaderPerson | null;
 }
 
@@ -377,6 +377,11 @@ export interface BoardDef {
   rowDetail?: (r: WholeBillRow) => string | null;
   /** Multi-purpose building boards: which rows are ranked, by what, and the line under the value. */
   mpbSet?: MpbBoardSet;
+  /**
+   * The district board: show each district's representative now in the seat (portrait and name, as the office boards
+   * do). Off for now (Jason, 2026-11-03): 2020 to 2026 spans the 18th, 19th and 20th Congresses.
+   */
+  mpbPeople?: boolean;
   mpbMetric?: (r: MpbBoardRow) => number | null;
   mpbDetail?: (r: MpbBoardRow) => string | null;
 }
@@ -698,15 +703,16 @@ export const BOARDS: readonly BoardDef[] = [
     regionFilter: true,
   },
   {
-    id: 'mpb-legislators', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
-    kicker: 'Multi-purpose buildings · by legislator',
+    // No representatives for now (Jason, 2026-11-03): the years span three Congresses. `mpb-legislators` opens it.
+    id: 'mpb-districts', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
+    kicker: 'Multi-purpose buildings · by legislative district',
     title: 'Legislative districts with the largest multi-purpose building budget',
     subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the legislative district each title places them in.',
-    mpbSet: 'districts', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
+    mpbSet: 'districts', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES, mpbPeople: false,
     notes: [
       // The first note is printed on the card, with MPB_CARD_DISCLAIMER after it.
-      'A district is where a title places the building. The representative shown holds the seat now, in the 20th Congress.',
-      'Earlier Congresses passed the 2020 to 2025 budgets. The documents do not say who asked for any building.',
+      'A district is where a title places the building. These budgets span the 18th, 19th and 20th Congresses.',
+      'No representative is shown, since three Congresses passed these budgets. The documents do not say who asked for any building.',
       MPB_REPEAT_NOTE,
     ],
     regionFilter: true,
@@ -731,7 +737,11 @@ export const BOARDS: readonly BoardDef[] = [
  * ranked rises and cuts together by size; it was split on 2026-11-01, and its old
  * links open the cuts board, which held most of its top rows.
  */
-export const BOARD_ALIASES: Readonly<Record<string, string>> = { 'departments-pct': 'departments-cuts-pct' };
+export const BOARD_ALIASES: Readonly<Record<string, string>> = {
+  'departments-pct': 'departments-cuts-pct',
+  // The district board showed representatives on 2026-11-03 only; its address then is kept.
+  'mpb-legislators': 'mpb-districts',
+};
 
 export function boardById(id: string | undefined): BoardDef | undefined {
   const want = id != null ? BOARD_ALIASES[id] ?? id : id;
