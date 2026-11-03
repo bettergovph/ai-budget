@@ -121,6 +121,7 @@ import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, linesCsv, mapMarks, repeatGroups,
   titleKey, type MpbLinesFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
+import { DETAIL_FROM, SPREAD_FROM, dotRadius, groupRadius, layoutMarks, markRadius, toWorld } from "../src/lib/mpb-dodge";
 import { verifyContractors } from "./verify-hgab-contractors";
 import { verifyMpbBoards } from "./verify-hgab-mpb-boards";
 import { verifyParties } from "./verify-hgab-parties";
@@ -2861,6 +2862,51 @@ async function verifyMpbYears(c: DuckDBConnection): Promise<void> {
   const marked = marks.reduce((a, m) => a + m.properties.lines, 0);
   const mappable = D.lines.filter((l) => (l.fy < 2027 || l.house != null) && l.level !== "none").length;
   check(`the map's marks stand for every mapped line once (${marked.toLocaleString("en-US")})`, marked === mappable, `${marked} vs ${mappable}`);
+  // Marks side by side (src/lib/mpb-dodge.ts), checked by a separate sweep at the country's scale, where groups are
+  // only for want of room, and street zoom: no mark covers another; each mark is drawn once, on its own or in one
+  // group; a mark on its own is where the title puts it or has a line from there; a group counts its places' lines and
+  // each GPS line once, and none counts nothing.
+  const layoutOff: string[] = [];
+  const layoutAt: string[] = [];
+  for (const z of [6, 9, DETAIL_FROM, DETAIL_FROM + 1, SPREAD_FROM, 16]) {
+    const L = layoutMarks(marks, z);
+    const pts = L.points.map((p) => {
+      const k = p.properties.kind;
+      const r = k === "group" ? groupRadius(p.properties.lines) : k === "gps" ? dotRadius(z + 1) : markRadius(k, p.properties.lines);
+      return { c: toWorld(p.geometry.coordinates, z), r };
+    }).sort((a, b) => a.c[0] - b.c[0]);
+    let over = 0;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length && pts[j].c[0] - pts[i].c[0] < 64; j++) {
+        if (Math.hypot(pts[j].c[0] - pts[i].c[0], pts[j].c[1] - pts[i].c[1]) < pts[i].r + pts[j].r) over++;
+      }
+    }
+    if (over) layoutOff.push(`zoom ${z}: ${over} overlaps`);
+    const members = new Map<number, number[]>();
+    L.drawnBy.forEach((p, i) => {
+      const list = members.get(p);
+      if (list) list.push(i); else members.set(p, [i]);
+    });
+    if (L.drawnBy.some((p) => p < 0 || p >= L.points.length)) layoutOff.push(`zoom ${z}: a mark not drawn`);
+    const from = new Set(L.leaders.map((l) => `${l.properties.place}/${l.properties.line}@${l.geometry.coordinates[0].join(",")}`));
+    let wrong = 0;
+    L.points.forEach((p, k) => {
+      const ms = members.get(k) ?? [];
+      if (p.properties.kind === "group") {
+        const placeLines = ms.filter((i) => marks[i].properties.kind !== "gps").reduce((a, i) => a + marks[i].properties.lines, 0);
+        const gpsLines = new Set(ms.filter((i) => marks[i].properties.kind === "gps").map((i) => marks[i].properties.line)).size;
+        if (p.properties.lines !== placeLines + gpsLines || p.properties.marks !== ms.length || p.properties.lines === 0) wrong++;
+        return;
+      }
+      const m = marks[ms[0]];
+      const home = m.geometry.coordinates;
+      if (ms.length !== 1 || (p !== m && !from.has(`${m.properties.place}/${m.properties.line}@${home.join(",")}`))) wrong++;
+    });
+    if (wrong) layoutOff.push(`zoom ${z}: ${wrong} points wrong`);
+    const groups = L.points.filter((p) => p.properties.kind === "group").length;
+    layoutAt.push(`${z}: ${L.points.length.toLocaleString("en-US")} marks, ${groups.toLocaleString("en-US")} groups`);
+  }
+  check(`marks side by side: none covers another at zooms ${layoutAt.join("; ")}`, layoutOff.length === 0, layoutOff.slice(0, 3).join("; "));
 
   // 5. The CSV: one row per line, the amounts exact; and the page's own CSV builder agrees on the header.
   const rows = parseCsv(readFileSync(files[3], "utf8").replace(/^\uFEFF/, "")).filter((r) => r.length > 1);
