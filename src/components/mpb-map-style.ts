@@ -6,8 +6,8 @@
  * light to dark as the site mixes its blue ramp (hgab-map.css .is-s1…s4), with a deeper last step. The marks read
  * against every step (dataviz validator, worst colour-blind ΔE, target ≥ 8): GPS published in a title, a blue dot
  * (≥ 25); groups of lines, dark ink discs (9.3 on the darkest red, with a white edge); an office area or region, grey
- * discs (≥ 10); a place a title names, a white ring with an ink edge. What is picked is blue: the place picked from
- * the list (ring on a white halo) and the district clicked on the map (outline).
+ * discs (≥ 10); a place a title names, a white ring with an ink edge. What is picked is blue: the mark picked on the
+ * map or from the list (ring on a white halo) and the district clicked on the map (outline).
  */
 export const SHADE_COLORS = ['#f5ddde', '#f3bcb8', '#ed9189', '#e25f56', '#9b2b2a'] as const;
 export const PICKED = '#0b4fd9';
