@@ -20,6 +20,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
+import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
 
 export interface PageMeta {
   title: string;
@@ -175,6 +176,15 @@ export function pageMeta(pathname: string): PageMeta {
         "The complete DBM BESF Glossary of Terms rewritten in plain language: MOOE, automatic " +
         "appropriations, SARO, NCA, and 200+ other terms across documents, appropriations, taxes, " +
         "debt, and performance — searchable and filterable.",
+    };
+  }
+  if (p === CITIZEN_REPORTS_ROOT) {
+    return {
+      title: `Citizen Reports — Philippine Budget Analysis by Citizens, Journalists and Civic Groups · ${SITE}`,
+      description:
+        "Budget analyses that citizens, journalists and civic groups publish on their own sites: department budget " +
+        "reviews, the FY 2027 House bill against the NEP project by project and district by district, review leads " +
+        "for DPWH projects, and source-linked digests of the House and Senate budget hearings.",
     };
   }
   if (p === "/2027/browse") {

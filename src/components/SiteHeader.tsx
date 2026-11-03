@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
+import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
 
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
@@ -69,7 +70,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   // microsite covers the FY2027 NEP alone, and /hgab the House bill stage.
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
   const coverage = location.pathname.startsWith('/learn') || location.pathname.startsWith('/glossary')
-    ? null // the guide and glossary span both documents; a fiscal-year tag would mislead
+    || location.pathname.startsWith(CITIZEN_REPORTS_ROOT)
+    ? null // the guide, the glossary and the citizen reports span several documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`
     : location.pathname.startsWith('/gaa') || location.pathname.startsWith('/methodology')
@@ -196,6 +198,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               General Appropriations 2000–2026
             </Link>
             <Link
+              to={CITIZEN_REPORTS_ROOT}
+              className={`primary-nav-link ${isActivePath(location.pathname, CITIZEN_REPORTS_ROOT) ? 'active' : ''}`}
+            >
+              Citizen Reports
+            </Link>
+            <Link
               to="/learn"
               className={`primary-nav-link ${isActivePath(location.pathname, '/learn') || isActivePath(location.pathname, '/glossary') ? 'active' : ''}`}
             >
@@ -254,6 +262,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to={CITIZEN_REPORTS_ROOT} onClick={() => setMenuOpen(false)}>
+            Citizen Reports <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/learn" onClick={() => setMenuOpen(false)}>
             Learn <span className="drawer-link-arrow">→</span>

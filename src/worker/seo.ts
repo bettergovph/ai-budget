@@ -25,6 +25,7 @@ import { HISTORY_ROOT } from "../lib/hgab-history";
 import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 import { PARTIES_ROOT } from "../lib/hgab-parties";
+import { CITIZEN_REPORTS_ROOT } from "../lib/citizen-reports";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -150,6 +151,7 @@ const STATIC_SITEMAP_PATHS = [
   "/docs",
   "/glossary",
   "/hearings",
+  CITIZEN_REPORTS_ROOT,
   // FY2027 House bill section: the overview (its landing page), the two
   // static pages and the four dataset hubs. Record pages are too many (≈19k)
   // to list; the hubs link to them. The Explainer (/intro) is hidden for now.
