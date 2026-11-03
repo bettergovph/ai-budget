@@ -78,6 +78,18 @@ export const DISCLAIMER_MPB: Disclaimer = {
  * The page by party (`/hgab/2027/parties`): where each party comes from, what a party's figure adds up, and what it
  * does not say. With DISCLAIMER_OFFICES, whose rules (tiers, shared offices undivided, residual first) it relies on.
  */
+/** "Projects placed in each district" (`/hgab/2027/districts?view=list-legislative`) and the district pages' placed lists. */
+export const DISCLAIMER_PLACEMENTS: Disclaimer = {
+  id: 'disclaimer-placements',
+  title: 'Projects placed in each district.',
+  body:
+    'Each 2027 DPWH line is placed in a legislative district by the place its title names, or by the one district its ' +
+    'DPWH office serves, as the source workbench’s location lens reads them. A placement is a reading of the documents ' +
+    'and can be wrong; it is not a verified construction site. A district’s total does not establish that any ' +
+    'representative requested, sponsored or controlled a project, and alone it does not establish irregularity or ' +
+    'wrongdoing by any office or official. Amounts are allocations in the NEP and the House bill, not spending.',
+};
+
 export const DISCLAIMER_PARTIES: Disclaimer = {
   id: 'disclaimer-parties',
   title: 'Parties.',
