@@ -9,10 +9,10 @@ allocations based on the currently elected officials. But also get ready for pas
 
 | | |
 | --- | --- |
-| Page | `/hgab/2027/parties` (Districts menu → By party); a party line on every district page |
+| Page | `/hgab/2027/parties`; `/hgab/2027/parties/:party` and `/parties/shared` (each party's people and lines, pages/HgabParty.tsx); a party line on every district page. Out of the sub-nav for now (Jason, 2026-11-03), with the Multi-purpose buildings menu: `NAV_HIDDEN` in HgabBits.tsx |
 | Contract | `src/lib/hgab-parties.ts` (pure: page, builder, verifier, Worker SEO) |
-| Builder | `npm run build:hgab-parties` → `data/hgab/2027/parties/parties.json` (~480 KB, ~2 s) |
-| Checks | `scripts/verify-hgab-parties.ts`, run by `npm run verify:hgab` (19 checks) |
+| Builder | `npm run build:hgab-parties` → `data/hgab/2027/parties/parties.json` (~480 KB) and `parties/p/<party>.json` (20 files, 2.4 MB; Lakas–CMD 750 KB), ~4 s |
+| Checks | `scripts/verify-hgab-parties.ts`, run by `npm run verify:hgab` (22 checks) |
 | Publish | `npm run upload:hgab -- --only=parties --skip-verify` after a full verify |
 
 ## Sources
@@ -24,6 +24,7 @@ allocations based on the currently elected officials. But also get ready for pas
   `representative`, from the DEO2LEG crosswalk).
 - **Money:** `leaderboard.json`'s office groups, unchanged: FY2027 NEP vs House bill per group, and each group's
   FY2020–2026 enacted budget.
+- **Lines:** `dpwh/projects.parquet`, every DPWH line of the comparison, for the files behind each party's row.
 
 ## Rules
 
@@ -54,6 +55,25 @@ allocations based on the currently elected officials. But also get ready for pas
    `reorganised`. Everything else is "not compared". The 20th Congress uses the current seats, as FY2027 does.
 9. **Abbreviations** are as published; `PARTY_NAMES` has our names for them. ASENSO (a party in Abra and another in
    Manila) and PPP (Palawan and elsewhere) are not expanded, and are counted together under the abbreviation.
+
+## The lines behind each row (counter-check)
+
+Jason, 2026-11-03: "each of our work should be counter-checked. If I click the party, I should see the people of that
+party and their project".
+
+- `p/<party>.json` (and `p/shared.json`) holds every DPWH line at the office groups behind that row, as the NEP and
+  the House bill (third reading) list it: record id, title, office, group, trace, NEP and House amounts
+  (`PARTY_LINE_COLS`). A line belongs to the group whose district office the House bill lists it under (the office's
+  hgab3 `matched_label`), as the leaderboards assign it; office-change and no-office lines belong to none.
+- The builder stops unless each office group's lines add up to its leaderboard figures (NEP, House bill, added, held,
+  dropped, with line counts) and each party's lines to its row. 13,547 lines in 20 files, the source's own count.
+- The party page adds the lines up again in the browser (`lineTotals`) and prints them beside the row: "✓ Equal to the
+  peso", or "✗ … Please report it". Filtering an office reproduces that representative's row; every line opens its
+  record (`/hgab/2027/dpwh/p/:id`) with its pages in the documents.
+- `verify:hgab` reads the lines back from the parquet (id, title, office, trace, amounts), checks each is at an office
+  of its party's groups, appears once, and that all of them are the parquet's district-office lines; and re-adds them.
+- The party table shows each party's whole House bill budget at its offices (with the NEP) beside the part the House
+  added; the average per district was removed (Jason).
 
 ## Key figures (build of 2026-11-03)
 
