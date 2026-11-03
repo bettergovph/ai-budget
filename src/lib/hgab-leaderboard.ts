@@ -682,7 +682,7 @@ export const BOARDS: readonly BoardDef[] = [
   {
     id: 'mpb-barangays', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
     kicker: MPB_KICKER,
-    title: 'Barangays with the most multi-purpose building money',
+    title: 'Barangays with the largest multi-purpose building budget',
     subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, added up by the barangay each title names.',
     mpbSet: 'barangays', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
     notes: ['A barangay counts only when a line’s title names it.', MPB_REPEAT_NOTE],
@@ -691,7 +691,7 @@ export const BOARDS: readonly BoardDef[] = [
   {
     id: 'mpb-offices', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
     kicker: MPB_KICKER,
-    title: 'DPWH offices with the most multi-purpose building money',
+    title: 'DPWH offices with the largest multi-purpose building budget',
     subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the district engineering office (DEO) each lists.',
     mpbSet: 'offices', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
     notes: ['By the DPWH office the budget names for each line. Central Office and regional office lines are left out.', MPB_REPEAT_NOTE],
@@ -700,7 +700,7 @@ export const BOARDS: readonly BoardDef[] = [
   {
     id: 'mpb-legislators', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
     kicker: 'Multi-purpose buildings · by legislator',
-    title: 'Legislative districts with the most multi-purpose building money',
+    title: 'Legislative districts with the largest multi-purpose building budget',
     subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the legislative district each title places them in.',
     mpbSet: 'districts', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
     notes: [
