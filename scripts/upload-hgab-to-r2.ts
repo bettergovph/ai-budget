@@ -29,6 +29,7 @@ import { createReadStream, existsSync, readdirSync, readFileSync, statSync } fro
 import { relative, resolve, sep } from "node:path";
 import { letterDownloadName } from "../src/lib/hgab-letter";
 import { MPB_CSV_NAME } from "../src/lib/hgab-mpb-years";
+import { CONTRACTORS_CSV_NAME } from "../src/lib/hgab-contractors";
 
 interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string; only: string[] }
 function parseArgs(): Args {
@@ -104,6 +105,8 @@ function contentDispositionFor(path: string): string | undefined {
   if (!path.endsWith(".csv")) return undefined;
   // mpb-years/lines.csv: every multi-purpose building line, FY2015-FY2027 (the page links it by that name).
   if (/[\\/]mpb-years[\\/]lines\.csv$/.test(path)) return `attachment; filename="${MPB_CSV_NAME}"`;
+  // contractors/contractors.csv: every DPWH contractor, FY2016-FY2026 (the page links it by that name).
+  if (/[\\/]contractors[\\/]contractors\.csv$/.test(path)) return `attachment; filename="${CONTRACTORS_CSV_NAME}"`;
   return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }
 function fmtBytes(n: number): string {

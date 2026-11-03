@@ -27,8 +27,10 @@ import {
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
+import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import {
-  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, OFFICE_VIEW_DISCLAIMERS,
+  type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
@@ -61,6 +63,10 @@ const MPB_MENU: NavMenu = {
     { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
     { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
   ],
+};
+/** Pages a program's menu opens after its own views: DPWH's contractors (FY2016 to FY2026, from DPWH's contract list). */
+const PROGRAM_EXTRAS: Partial<Record<DatasetKey, NavMenu['items']>> = {
+  dpwh: [{ key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT }],
 };
 const ABOUT_MENU: NavMenu = {
   key: 'about',
@@ -100,6 +106,8 @@ export function HgabHeader({
     </Link>
   );
   const programActive = (key: DatasetKey) => path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`);
+  const extraKey = (key: DatasetKey) =>
+    PROGRAM_EXTRAS[key]?.find((x) => path === x.to || path.startsWith(`${x.to}/`))?.key ?? null;
   // A menu's current item: the exact page first (the map sits under the multi-purpose page's path), else a page below one.
   const menuKey = (m: NavMenu) =>
     m.items.find((x) => path === x.to)?.key ?? m.items.find((x) => path.startsWith(`${x.to}/`))?.key ?? null;
@@ -134,9 +142,12 @@ export function HgabHeader({
             <SectionMenu
               key={p.key}
               label={p.label}
-              items={hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }))}
-              active={programActive(p.key)}
-              currentKey={programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null}
+              items={[
+                ...hubViews(p.hasReadings).map((v) => ({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) })),
+                ...(PROGRAM_EXTRAS[p.key] ?? []),
+              ]}
+              active={programActive(p.key) || extraKey(p.key) != null}
+              currentKey={extraKey(p.key) ?? (programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null)}
             />
           ))}
           {menu(MPB_MENU)}
@@ -160,7 +171,7 @@ export function HgabHeader({
             <div className="hgab-drawer-group" key={p.key}>
               <Link
                 to={datasetPath(p.key)}
-                className={programActive(p.key) ? 'active' : ''}
+                className={programActive(p.key) || extraKey(p.key) ? 'active' : ''}
                 aria-current={programActive(p.key) && view === 'overview' ? 'page' : undefined}
               >
                 {p.label}
@@ -168,6 +179,7 @@ export function HgabHeader({
               <div className="hgab-drawer-sub">
                 {hubViews(p.hasReadings).filter((v) => v.key !== 'overview').map((v) =>
                   drawerLink({ key: v.key, label: v.label, to: datasetPath(p.key, v.key) }, programActive(p.key) && view === v.key))}
+                {(PROGRAM_EXTRAS[p.key] ?? []).map((x) => drawerLink(x, extraKey(p.key) === x.key))}
               </div>
             </div>
           ))}
@@ -581,15 +593,19 @@ function DisclaimerItem({ d }: { d: Disclaimer }) {
 export function DisclaimerNotice({
   compact = false,
   offices = false,
+  contractors = false,
   heading,
   className = '',
 }: {
   compact?: boolean;
   offices?: boolean;
+  /** Add the contractors disclaimer (pages showing DPWH contracts); 'only' carries it alone (the contractor pages). */
+  contractors?: boolean | 'only';
   heading?: string;
   className?: string;
 }) {
-  const list = offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS;
+  const list = contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
+    : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];
   return (
     <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''} ${className}`.trim()} aria-label={heading ?? 'Disclaimer'}>
       <p className={`hgab-disclaimer-eyebrow ${heading ? 'is-heading' : ''}`.trim()}>{heading ?? 'Disclaimer'}</p>

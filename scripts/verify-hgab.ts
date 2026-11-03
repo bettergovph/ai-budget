@@ -120,6 +120,7 @@ import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, linesCsv, mapMarks, repeatGroups,
   titleKey, type MpbLinesFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
+import { verifyContractors } from "./verify-hgab-contractors";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -127,6 +128,8 @@ const OUT = resolve(arg("out", "data/hgab/2027"));
 const SRC = resolve(arg("src", "/tmp/dpwh-nep-review/repo"));
 const CONTRACT = resolve(arg("contract", "src/lib/hgab.ts"));
 const GAA = resolve(arg("gaa", "data/18"));
+/** DPWH's contract list and the GAA links (npm run build:hgab-contractors). */
+const CONTRACTS = resolve(arg("contracts", "data/dpwh-contracts"));
 /** The People's Budget Coalition FY2026 sheets the budget history reads (build-hgab-history.ts --pbc). */
 const PBC = resolve(arg("pbc", process.env.PBC_2026_DIR ?? "/home/jason/projects/2026-budget/public/citizens-report"));
 const CHECK_PDF = !argv.includes("--no-pdf");
@@ -696,6 +699,7 @@ async function main(): Promise<void> {
   await verifyLetters(overview, c);
   await verifyHistory(c);
   await verifyMpbYears(c);
+  await verifyContractors(c, check, { out: OUT, gaa: GAA, contracts: CONTRACTS, words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 

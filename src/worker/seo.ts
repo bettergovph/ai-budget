@@ -23,6 +23,7 @@ import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
 import { LETTER_ROOT } from "../lib/hgab-letter";
 import { HISTORY_ROOT } from "../lib/hgab-history";
 import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
+import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -171,6 +172,8 @@ const STATIC_SITEMAP_PATHS = [
   HISTORY_ROOT,
   // Every multi-purpose building line, FY2020 to the 2027 House bill, on a map.
   MPB_MAP_ROOT,
+  // Every DPWH contractor, FY2016 to FY2026; the contractor pages are linked from it.
+  CONTRACTORS_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

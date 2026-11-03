@@ -1,0 +1,141 @@
+/* DPWH contractors (/hgab/2027/contractors and /hgab/2027/contractors/:key): .hgab-ctr-* only.
+   The same look as the multi-purpose map's list: plain tables in a ruled box, a row of controls above. */
+
+.hgab-ctr-main { padding-top: 8px; }
+.hgab-ctr-h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-hero);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-ctr-dek { margin: 0 0 12px; color: var(--ink-3); font-size: 14px; max-width: 72ch; }
+.hgab-ctr-section { margin-top: 36px; }
+.hgab-ctr-linkbtn {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent-deep);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hgab-ctr-linkbtn:hover { color: var(--ink); }
+.hgab-ctr-linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-ctr-more { margin: 8px 0; font-size: 12.5px; color: var(--ink-3); }
+
+/* --- controls ------------------------------------------------------------- */
+
+.hgab-ctr-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.hgab-ctr-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+.hgab-ctr-controls label { display: grid; gap: 2px; font-size: 11.5px; color: var(--ink-3); }
+.hgab-ctr-controls select, .hgab-ctr-controls input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  max-width: 260px;
+}
+.hgab-ctr-search { flex: 1 1 260px; }
+.hgab-ctr-search input { width: 100%; max-width: none; box-sizing: border-box; }
+.hgab-ctr-controls .hgab-cta { cursor: pointer; background: var(--paper); }
+.hgab-ctr-controls .hgab-cta:hover { background: var(--ink); }
+
+/* --- tables ----------------------------------------------------------------- */
+
+.hgab-ctr-tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.hgab-ctr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hgab-ctr-table th, .hgab-ctr-table td { padding: 7px 10px; border-bottom: 1px solid var(--rule-soft); text-align: left; vertical-align: top; }
+.hgab-ctr-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.hgab-ctr-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hgab-ctr-table td.is-zero { color: var(--ink-mute); }
+.hgab-ctr-table tbody tr:hover { background: var(--paper-2); }
+.hgab-ctr-rank { color: var(--ink-mute); font-variant-numeric: tabular-nums; width: 1%; }
+.hgab-ctr-name { font-weight: 600; color: var(--ink); }
+.hgab-ctr-name a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-ctr-name a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
+.hgab-ctr-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+.hgab-ctr-id { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }
+.hgab-ctr-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--accent-deep);
+  border: 1px solid var(--accent);
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.hgab-ctr-status { white-space: nowrap; color: var(--ink-2); }
+.hgab-ctr-yr { white-space: nowrap; }
+.hgab-ctr-line { margin: 0 0 6px; font-size: 12.5px; line-height: 1.35; color: var(--ink-2); }
+.hgab-ctr-line:last-child { margin-bottom: 0; }
+.hgab-ctr-line strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hgab-ctr-none { color: var(--ink-mute); font-size: 12px; }
+.hgab-ctr-contracts td:nth-child(2) { min-width: 260px; }
+.hgab-ctr-contracts td:nth-child(6) { min-width: 240px; width: 30%; }
+
+/* --- figures ---------------------------------------------------------------- */
+
+/* Tiles grow to fill their row, so a short last row leaves no empty cells. */
+.hgab-ctr-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--rule);
+  overflow: hidden;
+}
+.hgab-ctr-figs div { flex: 1 1 150px; margin: 0; padding: 10px 12px; background: var(--paper); }
+.hgab-ctr-figs dt { font-size: 11.5px; color: var(--ink-3); }
+.hgab-ctr-figs dd {
+  margin: 2px 0 0;
+  font-family: var(--font-hero);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hgab-ctr-figs dd span { display: block; font-family: inherit; font-size: 11.5px; font-weight: 400; color: var(--ink-3); white-space: normal; }
+
+/* --- by year: a bar per year, drawn to scale -------------------------------- */
+
+.hgab-ctr-bar { position: relative; min-width: 120px; }
+.hgab-ctr-bar i {
+  display: block;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.hgab-ctr-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 32px; }
+
+.hgab-ctr-notice { margin-top: 36px; }
