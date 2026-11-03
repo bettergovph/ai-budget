@@ -31,6 +31,11 @@ import { LEADERBOARD_DATA_PATH, WHOLE_BILL_DATA_PATH, type LeaderboardData, type
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
 import {
+  CONTRACTORS_INDEX_PATH, CONTRACTORS_MPB_PATH, CONTRACTORS_SUMMARY_PATH, contractorShardPath, decodeContractorIndex,
+  decodeMpbContracts, type ContractorIndex, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
+  type LineContract, type MpbContractsFile,
+} from './hgab-contractors';
+import {
   MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 
@@ -735,16 +740,48 @@ export function loadHgabHistory(): Promise<HistoryData> {
   return cached('history', () => getJson<HistoryData>(dataUrl(HISTORY_DATA_PATH), 'Failed to load the budget history'));
 }
 
-/** Every multi-purpose building line, FY2020 GAA to the 2027 House bill, for the map (`npm run build:hgab-mpb-years`). */
-export function loadMpbYears(): Promise<{ data: MpbData; summary: MpbSummary; districts: FeatureCollection }> {
+/**
+ * Every multi-purpose building line, FY2020 GAA to the 2027 House bill, for the map (`npm run build:hgab-mpb-years`),
+ * with the DPWH contract matched to each FY2020–FY2026 line (`npm run build:hgab-contractors`). The contracts are
+ * optional: without the file the map shows no contractors. Contractor names and contract ids join the search text.
+ */
+export function loadMpbYears(): Promise<{
+  data: MpbData; summary: MpbSummary; districts: FeatureCollection; contracts: Map<string, LineContract> | null;
+}> {
   return cached('mpb-years', async () => {
-    const [lines, summary, districts] = await Promise.all([
+    const [lines, summary, districts, contractsFile] = await Promise.all([
       getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
       getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
       getJson<FeatureCollection>(dataUrl(MPB_DISTRICTS_PATH), 'Failed to load the legislative district outlines'),
+      getJson<MpbContractsFile>(dataUrl(CONTRACTORS_MPB_PATH), 'Failed to load the contracts').catch(() => null),
     ]);
-    return { data: decodeMpbLines(lines), summary, districts };
+    const data = decodeMpbLines(lines);
+    const contracts = contractsFile ? decodeMpbContracts(contractsFile) : null;
+    if (contracts) {
+      for (const l of data.lines) {
+        const c = contracts.get(l.id);
+        if (c) l.search += ` ${c.contractId.toLowerCase()} ${c.contractors.map((x) => x.name.toLowerCase()).join(' ')}`;
+      }
+    }
+    return { data, summary, districts, contracts };
   });
+}
+
+/** Every DPWH contractor with its figures, and the build's summary (`npm run build:hgab-contractors`). */
+export function loadContractorIndex(): Promise<{ index: ContractorIndex; summary: ContractorSummary }> {
+  return cached('contractors', async () => {
+    const [index, summary] = await Promise.all([
+      getJson<ContractorIndexFile>(dataUrl(CONTRACTORS_INDEX_PATH), 'Failed to load the DPWH contractors'),
+      getJson<ContractorSummary>(dataUrl(CONTRACTORS_SUMMARY_PATH), 'Failed to load the contractors summary'),
+    ]);
+    return { index: decodeContractorIndex(index), summary };
+  });
+}
+
+/** The file holding a contractor's contracts (one of 64, by a hash of its key). */
+export function loadContractorShard(key: string): Promise<ContractorShardFile> {
+  const path = contractorShardPath(key);
+  return cached(`contractors:${path}`, () => getJson<ContractorShardFile>(dataUrl(path), 'Failed to load the contracts'));
 }
 
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {

@@ -18,6 +18,7 @@ import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
+import { CONTRACTORS_ROOT } from "./hgab-contractors";
 
 export interface PageMeta {
   title: string;
@@ -319,6 +320,25 @@ export function pageMeta(pathname: string): PageMeta {
         "Every DPWH multi-purpose building line in the FY 2015 to FY 2026 enacted budgets, the FY 2027 NEP and the House bill, " +
         "on one map: GPS published in project titles, the barangay, town or province each title names, and each legislative " +
         "district's amount by year. Search, filter and download every line.",
+    };
+  }
+  // DPWH contractors and one contractor's page: before the dataset pattern, which would read "contractors" as a
+  // program key. A contractor's name is set by the page once its data loads.
+  if (p === CONTRACTORS_ROOT) {
+    return {
+      title: `DPWH Contractors, FY 2016–2026: Every Contract and the Budget Line It Carries · ${SITE}`,
+      description:
+        "Every contractor in DPWH's contract list from FY 2016 to FY 2026: contracts, contract amounts, joint ventures, " +
+        "DPWH offices and years, with each contract matched to its line in the enacted budget from FY 2020. Search, rank " +
+        "and download every contractor.",
+    };
+  }
+  if (p.startsWith(`${CONTRACTORS_ROOT}/`)) {
+    return {
+      title: `DPWH Contractor: Contracts, FY 2016–2026 · ${SITE}`,
+      description:
+        "One contractor's DPWH contracts from FY 2016 to FY 2026, as DPWH's contract list publishes them: amounts, status, " +
+        "offices, joint-venture partners, and the enacted-budget line we matched to each contract from FY 2020.",
     };
   }
   // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.

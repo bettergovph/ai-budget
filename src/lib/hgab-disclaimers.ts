@@ -47,6 +47,17 @@ export const DISCLAIMER_NO_ALLEGATIONS: Disclaimer = {
     'published NEP or concealment.',
 };
 
+/** The contractor pages (`/hgab/2027/contractors`) and the contracts on the multi-purpose map. */
+export const DISCLAIMER_CONTRACTORS: Disclaimer = {
+  id: 'disclaimer-contractors',
+  title: 'Contractors.',
+  body:
+    'Contractor names, license numbers, contract amounts and statuses are as DPWH’s contract list publishes them. ' +
+    'Amounts are contract amounts, not payments. A contract, a total or a ranking alone does not establish ' +
+    'irregularity or wrongdoing by any contractor, office or official. DPWH does not publish which budget line a ' +
+    'contract carries: the links shown are our match by title, office and amount, and may be wrong.',
+};
+
 /** Where each applies: every House bill page carries the second; office-based views carry both. */
 export const OFFICE_VIEW_DISCLAIMERS: readonly Disclaimer[] = [DISCLAIMER_OFFICES, DISCLAIMER_NO_ALLEGATIONS];
 export const COMPARISON_DISCLAIMERS: readonly Disclaimer[] = [DISCLAIMER_NO_ALLEGATIONS];
