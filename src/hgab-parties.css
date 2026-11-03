@@ -1,0 +1,199 @@
+/* The House bill by party (/hgab/2027/parties): .hgab-pty-* only.
+   The contractor pages' look: plain tables in a ruled box, a row of controls above. Two bar tones only, gray for
+   seats and the House-added amber for budget, so a party is named by its label, never by a colour. */
+
+.hgab-pty-main { padding-top: 8px; }
+.hgab-pty-h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-hero);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-pty-dek { margin: 0 0 12px; color: var(--ink-3); font-size: 14px; max-width: 76ch; }
+.hgab-pty-dek a, .hgab-pty-more a, .hgab-pty-odd a, .hgab-pty-note a { color: var(--accent-deep); }
+.hgab-pty-section { margin-top: 36px; }
+.hgab-pty-more { margin: 8px 0; font-size: 12.5px; color: var(--ink-3); }
+.hgab-pty-linkbtn {
+  all: unset;
+  cursor: pointer;
+  color: var(--accent-deep);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.hgab-pty-linkbtn:hover { color: var(--ink); }
+.hgab-pty-linkbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-pty-notice { margin-top: 36px; }
+
+/* --- residual strip ------------------------------------------------------- */
+
+.hgab-pty-strip {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  max-width: 760px;
+  margin: 4px 0 8px;
+}
+.hgab-pty-strip span { display: block; min-width: 2px; }
+.hgab-pty-strip span:first-child { border-radius: 4px 0 0 4px; }
+.hgab-pty-strip span:last-child { border-radius: 0 4px 4px 0; }
+.hgab-pty-strip .is-central, .hgab-pty-swatch.is-central { background: color-mix(in srgb, var(--ink-3) 30%, var(--paper)); }
+.hgab-pty-strip .is-single, .hgab-pty-swatch.is-single { background: var(--hgab-house-only, #b07d3a); }
+.hgab-pty-strip .is-shared, .hgab-pty-swatch.is-shared {
+  background: repeating-linear-gradient(135deg, var(--hgab-house-only, #b07d3a) 0 3px, color-mix(in srgb, var(--hgab-house-only, #b07d3a) 45%, var(--paper)) 3px 6px);
+}
+.hgab-pty-strip .is-unknown, .hgab-pty-swatch.is-unknown { background: var(--ink-mute); }
+.hgab-pty-strip-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.hgab-pty-strip-key b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hgab-pty-strip-key li > span:last-child { color: var(--ink-3); }
+.hgab-pty-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* --- controls ------------------------------------------------------------- */
+
+.hgab-pty-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: end;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+.hgab-pty-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+.hgab-pty-controls label { display: grid; gap: 2px; font-size: 11.5px; color: var(--ink-3); }
+.hgab-pty-controls select, .hgab-pty-controls input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  max-width: 260px;
+}
+.hgab-pty-search { flex: 1 1 220px; }
+.hgab-pty-search input { width: 100%; max-width: none; box-sizing: border-box; }
+.hgab-pty-controls .hgab-cta { cursor: pointer; background: var(--paper); }
+.hgab-pty-controls .hgab-cta:hover { background: var(--ink); }
+
+.hgab-pty-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.hgab-pty-tabs button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  cursor: pointer;
+  text-align: left;
+}
+.hgab-pty-tabs button span { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+.hgab-pty-tabs button[aria-pressed='true'] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); color: var(--ink); }
+.hgab-pty-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- tables ----------------------------------------------------------------- */
+
+/* position: relative keeps the screen-reader-only text in the cells (absolutely placed) inside the scroll box. */
+.hgab-pty-tablewrap { position: relative; overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.hgab-pty-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hgab-pty-table th, .hgab-pty-table td { padding: 7px 10px; border-bottom: 1px solid var(--rule-soft); text-align: left; vertical-align: top; }
+.hgab-pty-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--paper-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.hgab-pty-table tfoot th, .hgab-pty-table tfoot td { border-top: 1px solid var(--rule); border-bottom: 0; font-weight: 600; color: var(--ink); background: var(--paper-2); }
+.hgab-pty-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hgab-pty-table tbody tr:hover { background: var(--paper-2); }
+.hgab-pty-table tr.is-shared td { background: color-mix(in srgb, var(--hgab-house-only, #b07d3a) 6%, var(--paper)); }
+.hgab-pty-table tr.is-muted td { color: var(--ink-3); }
+.hgab-pty-name { font-weight: 600; color: var(--ink); }
+.hgab-pty-name a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-pty-name a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
+.hgab-pty-party { font-weight: 600; color: var(--ink); }
+.hgab-pty-party.is-none { font-weight: 400; color: var(--ink-3); }
+.hgab-pty-code {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+.hgab-pty-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+.hgab-pty-sub a { color: var(--accent-deep); }
+.hgab-pty-note { max-width: 46ch; }
+.hgab-pty-role {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--ink-3);
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  vertical-align: 1px;
+}
+.hgab-pty-chip {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* Share bars: on a common scale per table, the figure beside each. */
+.hgab-pty-barcol { min-width: 150px; white-space: nowrap; }
+.hgab-pty-bar {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  margin-right: 8px;
+  vertical-align: 0;
+  background: var(--rule-soft);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hgab-pty-bar > span { display: block; height: 100%; border-radius: 4px; }
+.hgab-pty-bar.is-seats > span { background: color-mix(in srgb, var(--ink-3) 70%, var(--paper)); }
+.hgab-pty-bar.is-budget > span { background: var(--hgab-house-only, #b07d3a); }
+.hgab-pty-pct { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* The shared offices, folded under the party table. */
+.hgab-pty-shared { margin-top: 12px; }
+.hgab-pty-shared > summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-deep);
+  margin-bottom: 8px;
+}
+.hgab-pty-dlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.hgab-pty-dlist a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-pty-dlist a:hover { color: var(--accent-deep); }
+
+/* The seats that needed more than the results. */
+.hgab-pty-odd { margin: 0 0 8px; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; max-width: 96ch; }
+.hgab-pty-odd .hgab-pty-party { font-weight: 600; }
+
+@media (max-width: 720px) {
+  .hgab-pty-barcol { min-width: 110px; }
+  .hgab-pty-bar { width: 56px; }
+}

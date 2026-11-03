@@ -24,6 +24,7 @@ import { LETTER_ROOT } from "../lib/hgab-letter";
 import { HISTORY_ROOT } from "../lib/hgab-history";
 import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
+import { PARTIES_ROOT } from "../lib/hgab-parties";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -174,6 +175,8 @@ const STATIC_SITEMAP_PATHS = [
   MPB_MAP_ROOT,
   // Every DPWH contractor, FY2016 to FY2026; the contractor pages are linked from it.
   CONTRACTORS_ROOT,
+  // Each district's representative and party, and the DPWH budget by party.
+  PARTIES_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

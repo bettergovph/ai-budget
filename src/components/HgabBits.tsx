@@ -28,9 +28,10 @@ import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubVi
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
+import { PARTIES_ROOT } from '../lib/hgab-parties';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+  DISCLAIMER_PARTIES, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
@@ -114,9 +115,11 @@ export function HgabHeader({
   const menu = (m: NavMenu) => (
     <SectionMenu key={m.key} label={m.label} items={m.items} active={menuKey(m) != null} currentKey={menuKey(m)} />
   );
-  // Districts: an overview, the list, and each district's page (which counts as the list).
-  const districtsActive = path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
+  // Districts: an overview, the list, each district's page (which counts as the list), and the seats by party.
+  const partiesActive = path === PARTIES_ROOT;
+  const districtsActive = partiesActive || path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
   const districtsKey = !districtsActive ? null
+    : partiesActive ? 'parties'
     : path !== `${HGAB_ROOT}/districts` ? 'list'
     : districtsView(new URLSearchParams(search));
   const drawerLink = (x: { key: string; label: string; to: string }, on: boolean) => (
@@ -595,11 +598,14 @@ export function DisclaimerNotice({
   offices = false,
   contractors = false,
   mpb = false,
+  parties = false,
   heading,
   className = '',
 }: {
   compact?: boolean;
   offices?: boolean;
+  /** The page by party: the office disclaimers, then the parties one. */
+  parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
   mpb?: boolean;
   /** Add the contractors disclaimer (pages showing DPWH contracts); 'only' carries it alone (the contractor pages). */
@@ -607,7 +613,8 @@ export function DisclaimerNotice({
   heading?: string;
   className?: string;
 }) {
-  const list = mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
+  const list = parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
+    : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];
   return (

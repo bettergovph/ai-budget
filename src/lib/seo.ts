@@ -19,6 +19,7 @@ import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
+import { PARTIES_ROOT } from "./hgab-parties";
 
 export interface PageMeta {
   title: string;
@@ -320,6 +321,16 @@ export function pageMeta(pathname: string): PageMeta {
         "Every DPWH multi-purpose building line in the FY 2015 to FY 2026 enacted budgets, the FY 2027 NEP and the House bill, " +
         "on one map: GPS published in project titles, the barangay, town or province each title names, and each legislative " +
         "district's amount by year. Search, filter and download every line.",
+    };
+  }
+  // The seats by party: before the dataset pattern, which would read "parties" as a program key.
+  if (p === PARTIES_ROOT) {
+    return {
+      title: `The 2027 House Bill by Party: Each District's Representative, Party and DPWH Budget · ${SITE}`,
+      description:
+        "Each of the 254 legislative districts with its representative and the party they ran under in May 2025, from the " +
+        "election results as BetterGov Dynasties publishes them, and the DPWH projects House Bill 10858 added at the offices " +
+        "serving each party's districts. Shared offices stay whole; the 18th and 19th Congresses' enacted budgets too.",
     };
   }
   // DPWH contractors and one contractor's page: before the dataset pattern, which would read "contractors" as a

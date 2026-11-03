@@ -25,6 +25,7 @@ import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
 import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
 import { EXPLORER_ROOT, type DownloadFile, downloadFiles, downloadUrl, loadExplorerDownloads } from '../lib/hgab-explorer';
 import { CONTRACTORS_DOWNLOADS_DIR, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_ROOT } from '../lib/hgab-contractors';
+import { DYNASTIES_DEVELOPERS, DYNASTIES_SITE, OPEN_HALALAN_URL, PARTIES_DATA_PATH, PARTIES_ROOT } from '../lib/hgab-parties';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
@@ -189,6 +190,15 @@ export default function HgabSources() {
                 <li><a href={dataUrl(`${CONTRACTORS_DOWNLOADS_DIR}/README.md`)}>contractors/downloads/README.md</a><span className="hgab-dl-kind">What each file holds</span></li>
               </ul>
             </div>
+            <div className="hgab-dl-group">
+              <h3>Seats by party</h3>
+              <p className="hgab-dl-sub">
+                each district’s representative and May 2025 party, and the budget by party · <Link to={PARTIES_ROOT}>the page, with a CSV</Link>
+              </p>
+              <ul>
+                <li><a href={dataUrl(PARTIES_DATA_PATH)}>parties/parties.json</a><span className="hgab-dl-kind">JSON</span></li>
+              </ul>
+            </div>
             {DATASET_ORDER.map((k) => {
               const d = byKey.get(k);
               return (
@@ -250,6 +260,14 @@ LIMIT 25;`}</pre>
                   </td>
                 </tr>
               )}
+              <tr>
+                <th>Parties</th>
+                <td>
+                  <a href={OPEN_HALALAN_URL} target="_blank" rel="noopener noreferrer">Open Halalan ↗</a>’s election results, 2019 to 2025, as{' '}
+                  <a href={DYNASTIES_SITE} target="_blank" rel="noopener noreferrer">BetterGov Dynasties ↗</a> publishes them
+                  {' '}(<a href={DYNASTIES_DEVELOPERS} target="_blank" rel="noopener noreferrer">API ↗</a>). Each representative’s party is the one they ran under in May 2025.
+                </td>
+              </tr>
               <tr>
                 <th>Pinned commit</th>
                 <td>

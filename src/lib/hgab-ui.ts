@@ -163,6 +163,7 @@ export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasRea
 export const DISTRICT_VIEWS = [
   { key: 'overview', label: 'Overview', to: '/hgab/2027/districts' },
   { key: 'list', label: 'Districts', to: '/hgab/2027/districts?view=list' },
+  { key: 'parties', label: 'By party', to: '/hgab/2027/parties' },
 ] as const;
 
 export type DistrictView = (typeof DISTRICT_VIEWS)[number]['key'];

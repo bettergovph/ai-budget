@@ -37,7 +37,7 @@ import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import {
   CONGRESS_TERMS, HGAB_ROOT, HGAB_SOURCE_REPO, PLAIN_TERMS, districtPath, formatPct, loadHgabDistricts, loadHgabOverview,
-  pctChange, projectsParquetUrl, recordPath,
+  loadHgabParties, pctChange, projectsParquetUrl, recordPath,
   type DistrictCard, type HgabDatasetMeta, type HgabDistrictIndex, type HgabDocument, type HgabOverview, type OfficeHistory,
   type ProjectRow,
 } from '../lib/hgab';
@@ -51,6 +51,7 @@ import {
 import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-query';
 import { DEO_MEANING } from '../lib/hgab-leaderboard';
 import { letterPath, letterSlug } from '../lib/hgab-letter';
+import { PARTIES_ROOT, partyFull, partyName, partyShort, seatHistory, type PartiesData } from '../lib/hgab-parties';
 import '../hgab-districts.css';
 
 const TOP_N = 15;
@@ -64,6 +65,7 @@ export default function HgabDistrict() {
   const { id = '' } = useParams();
   const [index, setIndex] = useState<HgabDistrictIndex | null>(null);
   const [overview, setOverview] = useState<HgabOverview | null>(null);
+  const [parties, setParties] = useState<PartiesData | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,6 +76,8 @@ export default function HgabDistrict() {
     // The overview supplies the DPWH dataset meta and the document catalogue
     // that project rows cite; the page renders without it.
     loadHgabOverview().then((ov) => { if (live) setOverview(ov); }).catch(() => { /* optional */ });
+    // Each seat's party in May 2025 (npm run build:hgab-parties): a line under the representative, when it loads.
+    loadHgabParties().then((p) => { if (live) setParties(p); }).catch(() => { /* optional */ });
     return () => { live = false; };
   }, []);
 
@@ -213,6 +217,7 @@ export default function HgabDistrict() {
               <div>
                 <p className="hgab-dd-rep-eyebrow" id="hgab-dd-rep-title">Representative · 20th Congress</p>
                 <RepresentativeBlock rep={rep} large showProfile />
+                {parties && <SeatParty data={parties} districtId={card.id} />}
                 {!ambiguous && <PortraitCredit rep={rep} />}
                 {ambiguous && rep?.candidates?.map((c) => <PortraitCredit key={c.name} rep={c} />)}
                 <p className="hgab-dd-rep-source">The seat holder is from the House of Representatives’ member list for the 20th Congress.</p>
@@ -337,6 +342,23 @@ export default function HgabDistrict() {
 // ---------------------------------------------------------------------------
 // One office
 // ---------------------------------------------------------------------------
+
+/** The seat's party as its representative ran in May 2025, and the seat's party in the two elections before. */
+function SeatParty({ data, districtId }: { data: PartiesData; districtId: string }) {
+  const seat = data.seats.find((s) => s.district_id === districtId);
+  if (!seat?.party) return null;
+  const history = seatHistory(data, districtId);
+  const won = history.filter((e) => e.party && !e.changed);
+  const redrawn = history.filter((e) => e.changed).map((e) => e.year);
+  return (
+    <p className="hgab-dd-rep-source">
+      Party: <strong title={partyFull(seat.party)}>{partyName(seat.party)}</strong>, as they ran in May 2025.
+      {won.length > 0 && <> The seat’s earlier winners ran for {won.map((e) => `${partyShort(e.party!)} (${e.year})`).join(' and ')}.</>}
+      {redrawn.length > 0 && <> The district had other towns in {redrawn.join(' and ')}.</>}
+      {' '}<Link to={PARTIES_ROOT}>Every district by party →</Link>
+    </p>
+  );
+}
 
 function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
   office: OfficeHistory;
