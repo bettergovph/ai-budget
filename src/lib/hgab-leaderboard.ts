@@ -208,9 +208,9 @@ export type MpbBoardSet = 'contractors' | 'barangays' | 'offices' | 'districts';
 export interface MpbBoardRow {
   /** Contractor key, place key, office name or legislative district id. */
   key: string;
-  /** The contractor, the barangay, the DPWH office or the representative (the district when no one is found). */
+  /** The contractor, the barangay, the DPWH office or the legislative district: a place leads, never a person. */
   label: string;
-  /** A second line: where, or the contracts. */
+  /** A second line: where, the contracts, or the district's representative ("Rep. …"). */
   sub: string;
   /** The map, narrowed to this row's lines (2020 to 2026). */
   href: string;
@@ -226,6 +226,8 @@ export interface MpbBoardRow {
   last_year: number;
   /** Contractors: the contractor's page; districts: the district page. */
   page: string | null;
+  /** Districts: the representative now in the seat, as the other boards show people (portrait, credit, links). */
+  person: LeaderPerson | null;
 }
 
 export interface MpbBoardsData {
@@ -243,6 +245,8 @@ export interface MpbBoardsData {
   districts: MpbBoardRow[];
   /** SHA-256 of the inputs: mpb-years/lines.json, contractors/mpb-links.json, districts.json. */
   sources: Record<string, string>;
+  /** Every legislative district's representative, by district id (built as leaderboard.json builds its people). */
+  people: Record<string, LeaderPerson>;
 }
 
 /** The file as written: each set's rows as arrays in MPB_BOARD_COLS order; links are made by decodeMpbBoards. */
@@ -274,6 +278,7 @@ export function decodeMpbBoards(f: MpbBoardsFile): MpbBoardsData {
       contract_php: r[c.contract_php] == null ? null : Number(r[c.contract_php]),
       first_year: Number(r[c.first_year]), last_year: Number(r[c.last_year]),
       ...mpbRowLinks(set, key, f.years),
+      person: set === 'districts' ? f.people[key] ?? null : null,
     };
   });
   const { cols: _cols, sets: _sets, ...rest } = f;
@@ -696,11 +701,12 @@ export const BOARDS: readonly BoardDef[] = [
     id: 'mpb-legislators', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
     kicker: 'Multi-purpose buildings · by legislator',
     title: 'Legislative districts with the most multi-purpose building money',
-    subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the district each title places them in, with its representative.',
+    subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the legislative district each title places them in.',
     mpbSet: 'districts', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
     notes: [
-      'A district is where a title places the building. The documents do not say who asked for it.',
-      'The representative shown holds the seat now, in the 20th Congress. Earlier Congresses passed the 2020 to 2025 budgets.',
+      // The first note is printed on the card, with MPB_CARD_DISCLAIMER after it.
+      'A district is where a title places the building. The representative shown holds the seat now, in the 20th Congress.',
+      'Earlier Congresses passed the 2020 to 2025 budgets. The documents do not say who asked for any building.',
       MPB_REPEAT_NOTE,
     ],
     regionFilter: true,

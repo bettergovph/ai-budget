@@ -22,7 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LINKED_YEARS, decodeMpbContracts, rankLineContractors, type MpbContractsFile } from "../src/lib/hgab-contractors";
 import {
-  MPB_BOARD_COLS, MPB_BOARD_SETS, displayName, type MpbBoardRow, type MpbBoardSet, type MpbBoardsFile,
+  MPB_BOARD_COLS, MPB_BOARD_SETS, displayName, type LeaderPerson, type MpbBoardRow, type MpbBoardSet, type MpbBoardsFile,
 } from "../src/lib/hgab-leaderboard";
 import { decodeMpbLines, officeShort, type MpbLine, type MpbLinesFile } from "../src/lib/hgab-mpb-years";
 
@@ -36,16 +36,44 @@ const INPUTS = {
   districts: resolve(ROOT, "districts.json"),
 };
 
+interface Representative {
+  name: string | null; status: string; candidates?: Array<{ name: string | null }>;
+  portrait_url?: string | null; portrait_attribution?: string | null; portrait_license?: string | null; portrait_source_url?: string | null;
+  profile_url?: string | null; juris_url?: string | null; bill_count?: number | null; leadership_roles?: string[];
+}
 interface DistrictsFile {
-  districts: Array<{ id: string; label: string; region: string | null; representative: { name: string | null; status: string } | null }>;
+  districts: Array<{ id: string; label: string; jurisdiction: string; district_label: string; region: string | null; representative: Representative | null }>;
   offices: Record<string, { id: string; name: string; kind: string; region: string | null; district_ids: string[]; years: Array<{ fy: number; matched_label: string | null }> }>;
 }
 
 const readJson = <T,>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 const sha = (p: string) => createHash("sha256").update(readFileSync(p)).digest("hex");
 const [FROM, TO] = LINKED_YEARS;
-/** A row as written: the links are made from the key when the file is read (mpbRowLinks). */
-type Row = Omit<MpbBoardRow, "href" | "page">;
+/** A row as written: the links and the district's person are attached when the file is read (decodeMpbBoards). */
+type Row = Omit<MpbBoardRow, "href" | "page" | "person">;
+
+/** scripts/build-hgab-leaderboard.ts `repName` and `personOf`, so these people equal leaderboard.json's. */
+function repName(rep: Representative | null): string | null {
+  if (!rep) return null;
+  if (rep.status === "ambiguous") {
+    if (rep.name) return rep.name;
+    const names = (rep.candidates ?? []).map((c) => c.name).filter(Boolean);
+    return names.length ? names.join(" / ") : null;
+  }
+  return rep.name || null;
+}
+function personOf(d: DistrictsFile["districts"][number], region: string): LeaderPerson {
+  const r = d.representative;
+  const credit = r?.portrait_url ? [r.portrait_attribution, r.portrait_license].filter(Boolean).join(" · ") || null : null;
+  return {
+    district_id: d.id, district: d.label, jurisdiction: d.jurisdiction, district_label: d.district_label, region,
+    name: repName(r), status: (r ? r.status : "missing") as LeaderPerson["status"],
+    portrait_url: r?.portrait_url ?? null, portrait_credit: credit, portrait_source_url: r?.portrait_url ? r.portrait_source_url ?? null : null,
+    profile_url: r?.profile_url ?? null, juris_url: r?.juris_url ?? null, bill_count: r?.bill_count ?? null,
+    leadership_roles: [...(r?.leadership_roles ?? [])],
+    href: `/hgab/2027/districts/${encodeURIComponent(d.id)}`,
+  };
+}
 
 const data = decodeMpbLines(readJson<MpbLinesFile>(INPUTS.lines));
 const contracts = decodeMpbContracts(readJson<MpbContractsFile>(INPUTS.contracts));
@@ -128,17 +156,17 @@ const officeRows: Row[] = [...off.by].map(([name, ls]) => {
   };
 }).sort(byAmount);
 
-// Legislative districts, as the map places each line; the representative now in the seat.
-const repOf = new Map(D.districts.map((d) => [d.id, d.representative]));
+// Legislative districts, as the map places each line; the district leads, the representative now in the seat under it.
+// A person's region is the RegionKey ("XIII"), as leaderboard.json has it, not districts.json's label ("Region XIII").
+const people = Object.fromEntries(D.districts.map((d) => [d.id, personOf(d, data.districts[data.districtIndex.get(d.id) ?? -1]?.region ?? "")]));
 const dist = groups((l) => (l.district >= 0 ? data.districts[l.district].id : null));
 const districtRows: Row[] = [...dist.by].map(([id, ls]) => {
   const d = data.districts[data.districtIndex.get(id)!];
-  const rep = repOf.get(id);
-  const named = rep?.name && rep.status !== "missing";
+  const p = people[id];
   return {
     key: id,
-    label: named ? `Rep. ${displayName(rep!.name)}` : d.label,
-    sub: named ? d.label : "No representative found",
+    label: d.label,
+    sub: p?.name ? `Rep. ${displayName(p.name)}` : "No representative found",
     region: d.region, lines: ls.length, gaa_php: sum(ls),
     contracts: null, contract_php: null, ...span(ls),
   };
@@ -158,6 +186,7 @@ const out: MpbBoardsFile = {
   totals: total,
   residual,
   sources: Object.fromEntries(Object.entries(INPUTS).map(([k, p]) => [k, sha(p)])),
+  people,
   cols: [...MPB_BOARD_COLS],
   sets: Object.fromEntries(MPB_BOARD_SETS.map((set) => [set, rowsOf[set].map((r) => MPB_BOARD_COLS.map((k) => r[k]))])) as MpbBoardsFile["sets"],
 };
@@ -171,6 +200,7 @@ const checks = {
   districts_add_up: adds(districtRows, "districts"),
   contractors_cover_every_contracted_line: ranked.withContract + noContract.length === total.lines && ranked.eligible === total.lines,
   every_office_described: officeRows.every((r) => r.sub !== ""),
+  every_district_has_its_person: districtRows.every((r) => people[r.key]?.district_id === r.key),
 };
 mkdirSync(OUT, { recursive: true });
 writeFileSync(resolve(OUT, "boards.json"), JSON.stringify(out));

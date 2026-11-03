@@ -8,7 +8,11 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LINKED_YEARS, decodeContractorIndex, decodeMpbContracts, type ContractorIndexFile, type MpbContractsFile } from "../src/lib/hgab-contractors";
-import { BOARDS, MPB_BOARD_SETS, decodeMpbBoards, displayName, type MpbBoardRow, type MpbBoardSet, type MpbBoardsFile } from "../src/lib/hgab-leaderboard";
+import { DISCLAIMER_MPB, MPB_CARD_DISCLAIMER } from "../src/lib/hgab-disclaimers";
+import {
+  BOARDS, MPB_BOARD_SETS, decodeMpbBoards, displayName, type LeaderPerson, type LeaderboardData, type MpbBoardRow, type MpbBoardSet,
+  type MpbBoardsFile,
+} from "../src/lib/hgab-leaderboard";
 import { MPB_MAP_ROOT, decodeMpbLines, type MpbLinesFile } from "../src/lib/hgab-mpb-years";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -39,7 +43,7 @@ export function verifyMpbBoards(check: Check, o: Opts): void {
   // Recompute every row.
   const data = decodeMpbLines(readJson<MpbLinesFile>(inputs.lines));
   const contracts = decodeMpbContracts(readJson<MpbContractsFile>(inputs.contracts));
-  const D = readJson<{ districts: Array<{ id: string; label: string; representative: { name: string | null; status: string } | null }> }>(inputs.districts);
+  const D = readJson<{ districts: Array<{ id: string; label: string; representative: { name: string | null; status: string; candidates?: Array<{ name: string | null }> } | null }> }>(inputs.districts);
   const lines = data.lines.filter((l) => l.fy >= B.years[0] && l.fy <= B.years[1] && (l.gaa ?? 0) > 0);
   const gaaOf = (l: (typeof lines)[number]) => l.gaa ?? 0;
   check(`totals: ${lines.length.toLocaleString("en-US")} lines from 2020 to 2026 and their amount`,
@@ -85,12 +89,15 @@ export function verifyMpbBoards(check: Check, o: Opts): void {
         || (set !== "offices" && set !== "contractors" && a.region !== r.region)
         || (set === "contractors" && (a.contracts?.size !== r.contracts || Math.abs((a.contractPhp ?? 0) - (r.contract_php ?? 0)) > 1))) bad.push(r.key);
       if (set === "districts") {
+        // The district leads; the representative is the second line, with the person the portrait comes from.
         const rep = repOf.get(r.key);
-        const want = rep?.name && rep.status !== "missing" ? `Rep. ${displayName(rep.name)}` : data.districts[data.districtIndex.get(r.key)!].label;
-        if (r.label !== want) bad.push(`${r.key}: ${r.label} ≠ ${want}`);
+        const name = rep?.status === "ambiguous" && !rep.name ? (rep.candidates ?? []).map((x) => x.name).filter(Boolean).join(" / ") || null : rep?.name || null;
+        const want = name ? `Rep. ${displayName(name)}` : "No representative found";
+        const label = data.districts[data.districtIndex.get(r.key)!].label;
+        if (r.label !== label || r.sub !== want || r.person?.district_id !== r.key || (r.person?.name ?? null) !== name) bad.push(`${r.key}: ${r.label} / ${r.sub} ≠ ${label} / ${want}`);
       }
     }
-    check(`${set}: ${got.length.toLocaleString("en-US")} rows, each one's lines, amount${set === "contractors" ? ", contracts, contract amount" : ""} and years recomputed${set === "districts" ? ", the representative as districts.json has them" : ""}`,
+    check(`${set}: ${got.length.toLocaleString("en-US")} rows, each one's lines, amount${set === "contractors" ? ", contracts, contract amount" : ""} and years recomputed${set === "districts" ? "; the district leads, its representative as districts.json has them" : ""}`,
       bad.length === 0, bad.slice(0, 5).join("; "));
     check(`${set}: the lines left out (${rest.lines.toLocaleString("en-US")}) recomputed`, B.residual[set].lines === rest.lines && B.residual[set].gaa_php === rest.gaa);
     if (set !== "contractors") {
@@ -98,6 +105,13 @@ export function verifyMpbBoards(check: Check, o: Opts): void {
         got.reduce((a, r) => a + r.lines, 0) + rest.lines === lines.length && got.reduce((a, r) => a + r.gaa_php, 0) + rest.gaa === B.totals.gaa_php);
     }
   }
+
+  // People: every district's, equal to leaderboard.json's for the districts an office serves (portraits and credits).
+  const L = readJson<LeaderboardData>(resolve(o.out, "leaderboard.json"));
+  const lbPeople = new Map<string, LeaderPerson>(L.entries.flatMap((e) => e.people.map((p) => [p.district_id, p] as const)));
+  const diffPeople = [...lbPeople].filter(([id, p]) => JSON.stringify(B.people[id]) !== JSON.stringify(p)).map(([id]) => id);
+  check(`representatives: all ${D.districts.length} districts, the same people leaderboard.json has for its ${lbPeople.size} (names, portraits, credits, links)`,
+    Object.keys(B.people).length === D.districts.length && diffPeople.length === 0, diffPeople.slice(0, 5).join(", "));
 
   // Links: the map narrowed to the row, and the contractor's or district's page.
   const index = decodeContractorIndex(readJson<ContractorIndexFile>(resolve(o.out, "contractors", "index.json")));
@@ -116,8 +130,14 @@ export function verifyMpbBoards(check: Check, o: Opts): void {
     boards.length === 4 && MPB_BOARD_SETS.every((s) => boards.some((b) => b.mpbSet === s)) && long.length === 0 && hits.length === 0
       && boards.every((b) => b.regionFilter === (b.mpbSet !== "contractors")),
     [...long, ...hits].join(" | "));
-  check("the legislator board says a district is where the title places the building, and who holds the seat",
-    boards.some((b) => b.mpbSet === "districts" && b.notes[0].includes("do not say who asked") && b.notes.some((n) => /20th Congress/.test(n))));
+  const leg = boards.find((b) => b.mpbSet === "districts");
+  check("the legislator card's note says a district is where the title places the building and who holds the seat; another, that no one is said to have asked",
+    Boolean(leg && /where a title places the building/.test(leg.notes[0]) && /20th Congress/.test(leg.notes[0]) && leg.notes.some((n) => /do not say who asked/.test(n))));
+  check("the disclaimers: the card's one sentence of at most 20 words, the page's on placement, the seat, wrongdoing and spending; no banned words",
+    MPB_CARD_DISCLAIMER.split(/(?<=[.!?])\s+/).length === 1 && o.words(MPB_CARD_DISCLAIMER) <= 20
+      && /title names/.test(DISCLAIMER_MPB.body) && /does not establish that its representative requested/.test(DISCLAIMER_MPB.body)
+      && /irregularity or wrongdoing/.test(DISCLAIMER_MPB.body) && /not spending/.test(DISCLAIMER_MPB.body)
+      && [MPB_CARD_DISCLAIMER, DISCLAIMER_MPB.body].flatMap(o.readerCopyHits).length === 0);
   process.stdout.write(`  ${(readFileSync(path).length / 1e6).toFixed(1)} MB · ${MPB_BOARD_SETS.map((s) => `${s} ${B[s].length.toLocaleString("en-US")}`).join(" · ")}\n`);
   void raw;
 }

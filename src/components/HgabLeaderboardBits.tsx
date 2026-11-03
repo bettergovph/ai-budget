@@ -29,7 +29,7 @@ import {
   rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
-  rankLines, type RankedLine, rankMpb, mpbUnit, type RankedMpb,
+  rankLines, type RankedLine, rankMpb, type RankedMpb,
 } from '../lib/hgab-leaderboard';
 
 // ---------------------------------------------------------------------------
@@ -512,6 +512,7 @@ function MpbMini({ data, board, region }: { data: LeaderboardData; board: BoardD
       {rows.map((r, i) => (
         <li key={r.row.key} className={i === 0 ? 'is-first' : undefined}>
           <span className="hgab-lb-top-rank">{r.rank}</span>
+          {r.row.person && <Faces people={[r.row.person]} size={i === 0 ? 44 : 32} />}
           <span className="hgab-lb-top-who">
             <strong>{r.row.label}</strong>
             <small>{r.row.sub}</small>
@@ -987,7 +988,7 @@ export function MpbTable({ data, board, region }: { data: LeaderboardData; board
   const { rows, eligible } = rankMpb(data, board, { region });
   const shown: RankedMpb[] = open ? rows : rows.slice(0, FIRST);
   const contractors = board.mpbSet === 'contractors';
-  const what = { contractors: 'Contractor', barangays: 'Barangay', offices: 'DPWH office', districts: 'Representative and district' }[board.mpbSet ?? 'barangays'];
+  const what = { contractors: 'Contractor', barangays: 'Barangay', offices: 'DPWH office', districts: 'Legislative district' }[board.mpbSet ?? 'barangays'];
   const cols = contractors ? 8 : 6;
   return (
     <>
@@ -1012,10 +1013,25 @@ export function MpbTable({ data, board, region }: { data: LeaderboardData; board
             {shown.map((r) => (
               <tr key={r.row.key}>
                 <td className="num hgab-lb-rank">{r.rank}</td>
-                <td className="nep-td-name">
-                  <strong>{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</strong>
-                  <span className="hgab-lb-line-sub">{r.row.sub}</span>
-                </td>
+                {r.row.person ? (
+                  // The district leads, its representative's portrait and name under it, as PlaceCell draws one district.
+                  <td className="hgab-lb-place-cell">
+                    <p className="hgab-lb-place">{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</p>
+                    <ul className="hgab-lb-lines is-seats">
+                      <li>
+                        <Face person={r.row.person} size={28} />
+                        <span className="hgab-lb-who">
+                          <span className={`hgab-lb-rep ${r.row.person.name ? '' : 'is-missing'}`.trim()}>{r.row.sub}</span>
+                        </span>
+                      </li>
+                    </ul>
+                  </td>
+                ) : (
+                  <td className="nep-td-name">
+                    <strong>{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</strong>
+                    <span className="hgab-lb-line-sub">{r.row.sub}</span>
+                  </td>
+                )}
                 <ValueCell value={r.value} kind={board.value} sub={board.mpbDetail?.(r.row) ?? null} />
                 <td className="num hgab-lb-col-wide">{r.row.lines.toLocaleString()}</td>
                 {contractors && <td className="num hgab-lb-col-wide">{(r.row.contracts ?? 0).toLocaleString()}</td>}
@@ -1030,7 +1046,6 @@ export function MpbTable({ data, board, region }: { data: LeaderboardData; board
         </table>
       </div>
       <TableFoot shown={shown.length} total={eligible} open={open} onOpen={() => setOpen(true)} />
-      <p className="hgab-lb-tablefoot">{eligible.toLocaleString()} {mpbUnit(board, eligible)} in all.</p>
     </>
   );
 }

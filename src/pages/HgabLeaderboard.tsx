@@ -79,7 +79,7 @@ function residualText(data: LeaderboardData, board: BoardDef): string | null {
 
 /** Boards that show representatives (and so their photos and the roster credit). */
 function showsPeople(board: BoardDef): boolean {
-  return board.kind === 'ranking' || board.kind === 'members' || board.kind === 'congress';
+  return board.kind === 'ranking' || board.kind === 'members' || board.kind === 'congress' || (board.kind === 'mpb' && board.mpbSet === 'districts');
 }
 
 function regionName(k: string | null): string {
@@ -455,7 +455,8 @@ function BoardPage({
             <DisclaimerNotice
               compact
               offices={board.kind !== 'lines' && board.kind !== 'mpb'}
-              contractors={board.kind === 'mpb' && board.mpbSet === 'contractors' ? 'only' : false}
+              mpb={board.kind === 'mpb'}
+              contractors={board.kind === 'mpb' && board.mpbSet === 'contractors'}
               heading="Before you share"
               className="hgab-lb-share-note"
             />
@@ -469,7 +470,6 @@ function BoardPage({
               </ul>
               <p className="hgab-lb-about-credits">
                 {showsPeople(board) && <>{sentence(data.credits.portraits)} {sentence(data.credits.representatives)} </>}
-                {board.mpbSet === 'districts' && <>{sentence(data.credits.representatives)} </>}
                 Documents: {board.kind === 'lines' ? WHOLE_DOCS
                   : board.kind === 'mpb' ? <>{MPB_DOCS}{board.mpbSet === 'contractors' && <> {MPB_CONTRACT_DOCS}</>}</>
                     : sentence(data.credits.documents)}

@@ -8,12 +8,35 @@ page, a share image and a full table:
 | `mpb-contractors` | Contractors holding the DPWH contracts matched to the lines | Contract amount, each contract once | Lines with no matched contract |
 | `mpb-barangays` | Barangays a line's title names (a GPS line keeps its title's barangay) | Enacted amount | Lines whose title names no barangay |
 | `mpb-offices` | District engineering offices (DEOs), as the budget lists each line | Enacted amount | Central Office and regional office lines |
-| `mpb-legislators` | Legislative districts, as the map places each line, labelled with the representative now in the seat | Enacted amount | Lines with no district |
+| `mpb-legislators` | Legislative districts, as the map places each line; the district leads, with the portrait and name of the representative now in the seat | Enacted amount | Lines with no district |
 
 Jason (2026-11-03) asked for "top mpb contractors, top mpbs per barangay, top mpbs per deo, top mpbs per legislator". He
 chose the enacted budgets 2020 to 2026 only, the years with contracts. For the legislator board, a line counts for the
 district its title places it in, the map's rule: GPS or a named barangay, town or province, else an office that serves
 one district.
+
+## Disclaimer and portraits
+
+Jason (2026-11-03): "It's missing proper disclaimer. The legislator needs images?"
+
+- **Page.** "Before you share" carries `DISCLAIMER_MPB` (src/lib/hgab-disclaimers.ts). It says:
+  - how a line is placed (the place its title names, else the one district its office serves), and that the placement
+    is our reading and can be wrong;
+  - that a district's total does not establish that its representative requested, sponsored or controlled a project,
+    and the representative shown holds the seat now;
+  - that a line, a total or a ranking is not evidence of wrongdoing;
+  - that amounts are allocations, with a line for each year.
+
+  The contractors board adds `DISCLAIMER_CONTRACTORS`. Both are on the Methodology page's notice (`#disclaimer-mpb`,
+  `#disclaimer-contractors`).
+- **Card.** Every image prints the board's first note and `MPB_CARD_DISCLAIMER`: "A total or a ranking is not evidence
+  that anyone asked for a project or did anything wrong." The legislator card's first note: "A district is where a
+  title places the building. The representative shown holds the seat now, in the 20th Congress."
+- **Portraits.** The legislator board is drawn like the office boards (`drawRankingVertical`): the district leads, with
+  its representative's portrait and name under it, never the person first. There is no office badge and no tier: a
+  title places the line, not an office. Every district's person (`people` in boards.json) is built as
+  leaderboard.json builds its people, and the verifier checks they are equal. 252 of 254 have a portrait; the photo
+  credit is on the card and the page.
 
 ## Data
 
@@ -49,9 +72,10 @@ one district.
 `npm run verify:hgab`:
 - **Per board, in the leaderboard section:** at least three rows; the first is the pool's maximum, in order; the
   left-out sentence.
-- **`mpb-boards/` section** (`scripts/verify-hgab-mpb-boards.ts`, 17 checks):
+- **`mpb-boards/` section** (`scripts/verify-hgab-mpb-boards.ts`, 19 checks):
   - every row's lines, amount, years (and contracts and contract amount) recomputed with its own grouping;
-  - representatives as `districts.json` has them;
+  - representatives as `districts.json` has them, the same people as leaderboard.json;
+  - the disclaimers' wording;
   - the left-out lines, and that rows plus left-out lines are every line and peso;
   - the links, and the copy;
   - the file was built from the current inputs (SHA-256).
