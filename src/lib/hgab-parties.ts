@@ -21,6 +21,16 @@ export const PARTIES_TITLE = 'By party';
 export const PARTIES_DATA_PATH = `${BASE}/parties.json`;
 export const PARTIES_CSV_NAME = 'bettergov-house-bill-2027-seats-by-party.csv';
 
+/** One party's page, and the offices shared across parties (`shared`): its people and every line behind its row. */
+export const SHARED_KEY = 'shared';
+/** "lakas", "nvteno", "shared": the party abbreviation in plain letters, for its page and its file. */
+export const partySlug = (code: string) =>
+  code.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+export const partyPath = (code: string) => `${PARTIES_ROOT}/${partySlug(code)}`;
+/** Each party's DPWH project lines, one file per party (and one for the shared offices). */
+export const PARTY_LINES_DIR = `${BASE}/p`;
+export const partyLinesPath = (code: string) => `${PARTY_LINES_DIR}/${partySlug(code)}.json`;
+
 /** BetterGov Dynasties: the site, its API, and the election source it publishes. */
 export const DYNASTIES_SITE = 'https://dynasties.bettergov.ph';
 export const DYNASTIES_API = 'https://officials.bettergov.ph/api/v1';
@@ -272,11 +282,63 @@ export interface CongressByParty {
   total_php: number;
 }
 
+// ---------------------------------------------------------------------------
+// The lines behind each row (data/hgab/2027/parties/p/<slug>.json)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a line counts, as the leaderboards count it (TRACE_LABELS in lib/hgab.ts): added = in the House bill only;
+ * held = a possible NEP match, unconfirmed, left out of "added"; dropped = in the NEP only. The builder checks that
+ * each office group's lines add up to its leaderboard figures, so a change of rule there stops the build.
+ */
+export const ADDED_TRACE = 'house_only_candidate';
+export const HELD_TRACES: readonly string[] = ['fuzzy_candidate', 'ambiguous'];
+export const DROPPED_TRACE = 'nep_only_candidate';
+
+export const PARTY_LINE_COLS = ['id', 'title', 'office', 'unit', 'trace', 'nep_php', 'hgab3_php'] as const;
+/** One DPWH line of the House bill comparison: record id, title as published, its DPWH office, the office group's
+ *  index in `units`, its trace, and the NEP and House bill (third reading) amounts. */
+export type PartyLineRow = [string, string, string, number, string, number | null, number | null];
+export interface PartyLine { id: string; title: string; office: string; unit: string; trace: string; nep_php: number | null; hgab3_php: number | null }
+export interface PartyLineTotals {
+  lines: number; nep_php: number; hgab3_php: number; added_php: number; added_rows: number;
+  held_php: number; held_rows: number; dropped_php: number; dropped_rows: number;
+}
+export interface PartyLinesFile {
+  schema: typeof PARTIES_SCHEMA;
+  /** The ballot abbreviation, or SHARED_KEY for the offices shared across parties. */
+  party: string;
+  built_at: string;
+  /** The office groups the lines belong to (leaderboard.json keys), by index. */
+  units: string[];
+  cols: typeof PARTY_LINE_COLS;
+  rows: PartyLineRow[];
+  /** What the lines add up to: the party's row in parties.json, to the peso. */
+  totals: PartyLineTotals;
+}
+
+export function decodePartyLines(f: Pick<PartyLinesFile, 'units' | 'rows'>): PartyLine[] {
+  return f.rows.map(([id, title, office, unit, trace, nep_php, hgab3_php]) => ({ id, title, office, unit: f.units[unit], trace, nep_php, hgab3_php }));
+}
+
+/** Lines added up the leaderboards' way. */
+export function lineTotals(lines: readonly Pick<PartyLine, 'trace' | 'nep_php' | 'hgab3_php'>[]): PartyLineTotals {
+  const t: PartyLineTotals = { lines: 0, nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 };
+  for (const l of lines) {
+    const nep = l.nep_php ?? 0, house = l.hgab3_php ?? 0;
+    t.lines++; t.nep_php += nep; t.hgab3_php += house;
+    if (l.trace === ADDED_TRACE) { t.added_php += house; t.added_rows++; }
+    if (HELD_TRACES.includes(l.trace)) { t.held_php += house; t.held_rows++; }
+    if (l.trace === DROPPED_TRACE) { t.dropped_php += nep; t.dropped_rows++; }
+  }
+  return t;
+}
+
 export interface PartiesData {
   schema: typeof PARTIES_SCHEMA;
   built_at: string;
-  /** SHA-256 of each input: districts.json, leaderboard.json, and the elections database. */
-  inputs: Record<'districts' | 'leaderboard' | 'elections', string>;
+  /** SHA-256 of each input: districts.json, leaderboard.json, the DPWH project lines, and the elections database. */
+  inputs: Record<'districts' | 'leaderboard' | 'projects' | 'elections', string>;
   source: {
     name: string;
     citation: string;
