@@ -979,6 +979,8 @@ export interface SidebarDistrict {
   shared: boolean;
   /** No office found, so no figure. */
   none: boolean;
+  /** The figure is the House bill amount of the lines placed in the district (the placed list), not its office's. */
+  placed?: boolean;
   /** The DPWH office names serving it, for the small "1st DEO" badge (district mode, when the index is given). */
   offices?: string[];
   /** The district's province or city, which the badge drops from a matching office name. */
