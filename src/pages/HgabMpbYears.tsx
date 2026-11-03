@@ -241,7 +241,8 @@ function Loaded({ data, summary, districts, contracts }: {
         note={
           <>
             A line is one project as a budget lists it, so a building funded over several years has a line in each. Rings sit at the
-            centre of the place, not at the building. Amounts are allocations, not spending. {asOfText({ built_at: summary.built_at })}.
+            centre of the place, not at the building. Marks that would cover each other are set side by side; where there is no
+            room, they form a dark group. Amounts are allocations, not spending. {asOfText({ built_at: summary.built_at })}.
           </>
         }
       />
@@ -293,6 +294,7 @@ function Loaded({ data, summary, districts, contracts }: {
                 marks={marks}
                 shade={shade}
                 selectedDistrict={selectedDistrict}
+                pick={pick}
                 focus={focus}
                 fit={fit}
                 onPick={(p) => { setPick(p); if (!p) setFocus(null); }}
@@ -433,6 +435,7 @@ function MapKey({ breaks, lines, marks }: { breaks: number[]; lines: number; mar
         <li><i className="is-ring" /> Place named in the title (centre)</li>
         <li><i className="is-area" style={{ background: MARK_COLORS.area }} /> Office area or region only</li>
         <li><i className="is-cluster" style={{ background: MARK_COLORS.cluster }} /> Group: zoom in</li>
+        <li><i className="is-leader" /> Moved aside: line to where it belongs</li>
       </ul>
       {breaks.length > 0 && (
         <div className="hgab-mpbm-shade">
