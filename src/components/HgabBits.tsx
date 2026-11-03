@@ -116,7 +116,7 @@ export function HgabHeader({
     <SectionMenu key={m.key} label={m.label} items={m.items} active={menuKey(m) != null} currentKey={menuKey(m)} />
   );
   // Districts: an overview, the list, each district's page (which counts as the list), and the seats by party.
-  const partiesActive = path === PARTIES_ROOT;
+  const partiesActive = path === PARTIES_ROOT || path.startsWith(`${PARTIES_ROOT}/`);
   const districtsActive = partiesActive || path === `${HGAB_ROOT}/districts` || path.startsWith(`${HGAB_ROOT}/districts/`);
   const districtsKey = !districtsActive ? null
     : partiesActive ? 'parties'

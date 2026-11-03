@@ -1,30 +1,35 @@
 /**
  * `/hgab/2027/parties` (Districts menu → By party): each legislative district's representative, the party they ran
  * under in May 2025, and the DPWH budget at the offices serving those districts; then the 18th and 19th Congresses.
+ * Each party opens its own page (`/hgab/2027/parties/:party`, pages/HgabParty.tsx): its people and every line behind
+ * its row, added up again on the page.
  *
- *   1. What has no party: the House's added projects under the Central Office (residual first, as everywhere here).
- *   2. By party: seats against the projects the House added at offices serving only that party's districts. A shared
- *      office's figure is never divided: offices shared across parties are their own row, and a list under it.
- *   3. Every district: representative, party, 2025 result, earlier parties of the seat, its office's figure. CSV.
+ *   1. What has no party: the Central Office's share of the House bill's DPWH budget and of what the House added
+ *      (residual first, as everywhere here).
+ *   2. By party: the seats its own offices serve, the House bill budget at those offices, and the part the House
+ *      added, all counted on the same offices. A shared office's figure is never divided: offices shared across
+ *      parties are their own row, with their own page and a list under the table.
+ *   3. Every district: representative, party, 2025 result, earlier parties of the seat, its office's figures. CSV.
  *   4. Earlier Congresses: the enacted budgets each Congress passed, by the party of the seats its election filled.
  *   5. Where the parties come from, with every seat that needed more than the results.
  *
  * Data: `parties/parties.json` (npm run build:hgab-parties; contract in src/lib/hgab-parties.ts).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { Caveats, DeoBadges, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, SignedPhp } from '../components/HgabBits';
+import { Metric, PartyName, ShareBar, SharedName } from '../components/HgabPartyBits';
 import { districtPath, loadHgabParties } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { billions, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, displayName } from '../lib/hgab-leaderboard';
 import {
   BASIS_LABELS, CENTRAL_NOTE, DYNASTIES_DEVELOPERS, DYNASTIES_SITE, NO_PARTY, OPEN_HALALAN_URL, PARTIES_CSV_NAME, PARTIES_DATA_PATH,
-  PARTIES_ROOT, PARTIES_TITLE, PARTY_FIGURE_NOTE, PARTY_MEANING, SAME_OFFICES_NOTE, addedPerSeatA, dynastyPersonUrl, partyFull, partyName, partyShort,
+  PARTIES_ROOT, PARTIES_TITLE, PARTY_FIGURE_NOTE, PARTY_MEANING, SAME_OFFICES_NOTE, dynastyPersonUrl, partyFull, partyName, partyPath, partyShort,
   resultText, seatHistory, seatsCsv, type CongressByParty, type PartiesData, type PartyRow, type PartyUnit, type Seat,
 } from '../lib/hgab-parties';
-import * as fmt from '../lib/format';
+import { amount, downloadCsv, pct, plural, short } from '../lib/hgab-parties-view';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
 import '../hgab-parties.css';
@@ -34,21 +39,6 @@ const SEAT_PAGE = 25;
 const OWN_ROW_SEATS = 2;
 const ADDED_NOTE = '“Added” means no matching line was found in the NEP: a candidate, not a confirmed insertion.';
 
-const pct = (part: number, whole: number, digits = 1) => (whole ? `${((part / whole) * 100).toFixed(digits)}%` : '—');
-const short = (v: number | null | undefined) => (v == null ? '—' : v === 0 ? '₱0' : `₱${fmt.shortPhp(v)}`);
-/** "₱2.06 trillion", "₱64.0 billion", "₱284 million" for sentences. */
-const amount = (v: number) => (v >= 1e12 ? `₱${(v / 1e12).toFixed(2)} trillion` : billions(v));
-const plural = (n: number, one: string, many: string) => `${count(n)} ${n === 1 ? one : many}`;
-
-function download(name: string, text: string) {
-  const blob = new Blob(['﻿', text], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
 function Crumb() {
   return (
     <>
@@ -56,28 +46,6 @@ function Crumb() {
       <span className="hgab-crumb-sep" aria-hidden="true">·</span>
       <span className="hgab-crumb-here">{PARTIES_TITLE}</span>
     </>
-  );
-}
-
-/** A party's name, with the ballot abbreviation after it where the two differ. */
-function PartyName({ code, sub }: { code: string | null; sub?: ReactNode }) {
-  if (!code) return <span className="hgab-pty-party is-none">No party in the results</span>;
-  return (
-    <span className="hgab-pty-party" title={partyFull(code)}>
-      {partyName(code)}
-      {partyName(code) !== code && <span className="hgab-pty-code">{code}</span>}
-      {sub && <span className="hgab-pty-sub">{sub}</span>}
-    </span>
-  );
-}
-
-/** A share drawn as a thin bar, on a scale where `max` fills the cell. The figure beside it carries the value. */
-function ShareBar({ value, max, tone }: { value: number; max: number; tone: 'seats' | 'budget' }) {
-  const w = max > 0 ? Math.max(0, Math.min(1, value / max)) * 100 : 0;
-  return (
-    <span className={`hgab-pty-bar is-${tone}`} aria-hidden="true">
-      <span style={{ width: `${w}%` }} />
-    </span>
   );
 }
 
@@ -108,15 +76,16 @@ function PartiesPage({ data }: { data: PartiesData }) {
       <HgabHero
         compact
         crumb={<Crumb />}
-        title={<>Offices serving only {partyName(lead.party)} districts carry {billions(lead.added_php)} of projects the House added</>}
+        title={<>Offices serving only {partyName(lead.party)} districts carry {billions(lead.hgab3_php)} in the House bill, {billions(lead.added_php)} of it added</>}
         dek={
           <>
-            Representatives who ran for {partyName(lead.party)} in May 2025 hold {count(lead.seats)} of the {count(seats)} district seats.
-            {' '}Of the {billions(f.deo.added_php)} the House added at DPWH offices serving legislative districts, {pct(lead.added_php, f.deo.added_php, 0)} is
-            at offices serving only its districts. Another {pct(f.shared.added_php, f.deo.added_php, 0)} is at offices shared across parties.
+            Representatives who ran for {partyName(lead.party)} in May 2025 hold {count(lead.seats)} of the {count(seats)} district seats; its own
+            offices serve {count(lead.seats_counted)} of them. Of the {billions(f.deo.added_php)} the House added at DPWH offices serving legislative
+            districts, {pct(lead.added_php, f.deo.added_php, 0)} is at those offices. Another {pct(f.shared.added_php, f.deo.added_php, 0)} is at offices
+            shared across parties.
           </>
         }
-        note={<>{PARTY_MEANING} {ADDED_NOTE} The documents do not say who asked for any project.</>}
+        note={<>{PARTY_MEANING} {ADDED_NOTE} Open a party to see its people and every project line behind its figures. The documents do not say who asked for any project.</>}
       />
       <main className="nep-main hgab-pty-main">
         <Residual data={data} />
@@ -135,25 +104,12 @@ function PartiesPage({ data }: { data: PartiesData }) {
 // 1. What has no party
 // ---------------------------------------------------------------------------
 
-function Residual({ data }: { data: PartiesData }) {
-  const f = data.fy2027;
-  const single = f.rows.reduce((a, r) => a + r.added_php, 0);
-  const parts = [
-    { key: 'central', label: 'Central Office, or no district office', php: f.residual.added_php },
-    { key: 'single', label: 'Offices serving one party’s districts', php: single },
-    { key: 'shared', label: 'Offices shared across parties', php: f.shared.added_php },
-    ...(f.unknown.added_php ? [{ key: 'unknown', label: 'Offices with a seat whose party is not known', php: f.unknown.added_php }] : []),
-  ];
-  const total = f.all.added_php;
+/** One stacked bar: the residual, offices of one party, offices shared across parties. */
+function Strip({ label, parts, total }: { label: string; parts: Array<{ key: string; label: string; php: number }>; total: number }) {
   return (
-    <section className="hgab-pty-section" aria-labelledby="hgab-pty-res-h" style={{ marginTop: 8 }}>
-      <h2 id="hgab-pty-res-h" className="hgab-pty-h2">
-        {billions(f.residual.added_php)} of the {billions(total)} the House added sits with no district office
-      </h2>
-      <p className="hgab-pty-dek">
-        {CENTRAL_NOTE} The other {billions(f.deo.added_php)} is at the DPWH offices that serve legislative districts, read by party below.
-      </p>
-      <div className="hgab-pty-strip" role="img" aria-label={parts.map((p) => `${p.label}: ${billions(p.php)} (${pct(p.php, total, 0)})`).join('; ')}>
+    <div className="hgab-pty-stripblock">
+      <p className="hgab-pty-striplabel">{label} <b>{amount(total)}</b></p>
+      <div className="hgab-pty-strip" role="img" aria-label={`${label}: ${parts.map((p) => `${p.label} ${billions(p.php)} (${pct(p.php, total, 0)})`).join('; ')}`}>
         {parts.map((p) => <span key={p.key} className={`is-${p.key}`} style={{ flexGrow: p.php }} title={`${p.label}: ${fullPeso(p.php)}`} />)}
       </div>
       <ul className="hgab-pty-strip-key">
@@ -161,6 +117,30 @@ function Residual({ data }: { data: PartiesData }) {
           <li key={p.key}><span className={`hgab-pty-swatch is-${p.key}`} aria-hidden="true" />{p.label} <b>{billions(p.php)}</b> <span>{pct(p.php, total, 0)}</span></li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function Residual({ data }: { data: PartiesData }) {
+  const f = data.fy2027;
+  const sum = (k: 'hgab3_php' | 'added_php') => f.rows.reduce((a, r) => a + r[k], 0);
+  const parts = (k: 'hgab3_php' | 'added_php') => [
+    { key: 'central', label: 'Central Office, or no district office', php: f.residual[k] },
+    { key: 'single', label: 'Offices serving one party’s districts', php: sum(k) },
+    { key: 'shared', label: 'Offices shared across parties', php: f.shared[k] },
+    ...(f.unknown[k] ? [{ key: 'unknown', label: 'Offices with a seat whose party is not known', php: f.unknown[k] }] : []),
+  ];
+  return (
+    <section className="hgab-pty-section" aria-labelledby="hgab-pty-res-h" style={{ marginTop: 8 }}>
+      <h2 id="hgab-pty-res-h" className="hgab-pty-h2">
+        {billions(f.residual.added_php)} of the {billions(f.all.added_php)} the House added to DPWH projects sits with no district office
+      </h2>
+      <p className="hgab-pty-dek">
+        So does {billions(f.residual.hgab3_php)} of the {billions(f.all.hgab3_php)} the House bill lists for DPWH projects in all. {CENTRAL_NOTE} The
+        rest is at the DPWH offices that serve legislative districts, read by party below.
+      </p>
+      <Strip label="Every DPWH project in the House bill" parts={parts('hgab3_php')} total={f.all.hgab3_php} />
+      <Strip label="Projects the House added (no matching NEP line)" parts={parts('added_php')} total={f.all.added_php} />
     </section>
   );
 }
@@ -172,7 +152,7 @@ function Residual({ data }: { data: PartiesData }) {
 function PartyTable({ data }: { data: PartiesData }) {
   const f = data.fy2027;
   const seats = data.seats.length;
-  const deo = f.deo.added_php;
+  const deo = f.deo;
   const own = f.rows.filter((r) => r.seats >= OWN_ROW_SEATS);
   const rest = f.rows.filter((r) => r.seats < OWN_ROW_SEATS);
   const other: PartyRow | null = rest.length ? rest.reduce<PartyRow>((a, r) => ({
@@ -181,83 +161,85 @@ function PartyTable({ data }: { data: PartiesData }) {
     added_rows: a.added_rows + r.added_rows, held_php: a.held_php + r.held_php, held_rows: a.held_rows + r.held_rows,
     dropped_php: a.dropped_php + r.dropped_php, dropped_rows: a.dropped_rows + r.dropped_rows,
   }), { ...rest[0], party: '', seats: 0, seats_counted: 0, seats_a: 0, added_php_a: 0, units: 0, nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0 }) : null;
-  // Both bars of a row count the same offices: the seats they serve (seats_counted) and the projects added there.
-  const max = Math.max(...f.rows.map((r) => Math.max(r.seats_counted / seats, r.added_php / deo)), f.shared.seats / seats, f.shared.added_php / deo);
+  // Every bar of a row counts the same offices: the seats they serve, the House bill budget there, the part added.
+  const max = Math.max(
+    ...f.rows.map((r) => Math.max(r.seats_counted / seats, r.hgab3_php / deo.hgab3_php, r.added_php / deo.added_php)),
+    f.shared.seats / seats, f.shared.hgab3_php / deo.hgab3_php, f.shared.added_php / deo.added_php,
+  );
   const parties = f.rows.filter((r) => r.party !== NO_PARTY).length;
   const independents = f.rows.find((r) => r.party === NO_PARTY)?.seats ?? 0;
-  const allA = f.rows.reduce((a, r) => ({ seats: a.seats + r.seats_a, php: a.php + r.added_php_a }), { seats: 0, php: 0 });
+  const figures = (r: Pick<PartyRow, 'seats_counted' | 'units' | 'nep_php' | 'hgab3_php' | 'added_php' | 'added_rows'>) => (
+    <>
+      <td className="is-num">
+        {r.seats_counted ? <Metric value={count(r.seats_counted)} share={r.seats_counted / seats} max={max} tone="seats" /> : '—'}
+      </td>
+      <td className="is-num">
+        {r.units ? <Metric value={short(r.hgab3_php)} share={r.hgab3_php / deo.hgab3_php} max={max} tone="total" title={fullPeso(r.hgab3_php)} note={`NEP ${short(r.nep_php)}`} /> : '—'}
+      </td>
+      <td className="is-num">
+        {r.units ? <Metric value={short(r.added_php)} share={r.added_php / deo.added_php} max={max} tone="budget" title={fullPeso(r.added_php)} note={plural(r.added_rows, 'project', 'projects')} /> : '—'}
+      </td>
+      <td className="is-num">{r.units ? <SignedPhp value={r.hgab3_php - r.nep_php} /> : '—'}</td>
+    </>
+  );
   return (
     <section className="hgab-pty-section" aria-labelledby="hgab-pty-party-h">
       <h2 id="hgab-pty-party-h" className="hgab-pty-h2">
         {count(parties)} parties and {plural(independents, 'independent', 'independents')} hold the {count(seats)} district seats
       </h2>
       <p className="hgab-pty-dek">
-        Each party’s row counts the DPWH offices that serve only its members’ districts. {SAME_OFFICES_NOTE} Shares are of
-        the {count(seats)} seats and the {billions(deo)}.
+        Each party’s row counts the DPWH offices that serve only its members’ districts: the seats they serve, their whole House bill budget,
+        and the part the House added. Shares are of the {count(seats)} seats, the {billions(deo.hgab3_php)} and the {billions(deo.added_php)}. Open a
+        party to check its figures line by line.
       </p>
       <div className="hgab-pty-tablewrap">
-        <table className="hgab-pty-table">
+        <table className="hgab-pty-table is-parties">
           <thead>
             <tr>
               <th scope="col">Party, May 2025</th>
               <th scope="col" className="is-num">Seats its offices serve</th>
-              <th scope="col" className="hgab-pty-barcol">Share of seats</th>
-              <th scope="col" className="is-num">Added at its offices</th>
-              <th scope="col" className="hgab-pty-barcol">Share of the added</th>
-              <th scope="col" className="is-num" title="Districts with a DPWH office of their own only">Average, own-office districts</th>
+              <th scope="col" className="is-num">House bill budget at its offices</th>
+              <th scope="col" className="is-num">Added by the House</th>
               <th scope="col" className="is-num">Change from the NEP</th>
             </tr>
           </thead>
           <tbody>
-            {[...own, ...(other ? [other] : [])].map((r) => {
-              const avg = addedPerSeatA(r);
-              const sub = r.units
-                ? `${plural(r.seats, 'seat', 'seats')} in all · ${plural(r.units, 'office', 'offices')} of its own`
-                : `${plural(r.seats, 'seat', 'seats')} in all, every one in a shared office`;
-              return (
-                <tr key={r.party || 'other'}>
-                  <td>
-                    {r.party ? <PartyName code={r.party} sub={sub} /> : (
-                      <span className="hgab-pty-party" title={rest.map((x) => partyFull(x.party)).join(', ')}>
-                        Other parties
-                        <span className="hgab-pty-sub">{plural(rest.length, 'party', 'parties')} with one seat each · {r.units ? `${plural(r.units, 'office', 'offices')} of their own` : 'all in shared offices'}</span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="is-num">{r.seats_counted ? count(r.seats_counted) : '—'}</td>
-                  <td className="hgab-pty-barcol">
-                    {r.seats_counted ? <><ShareBar value={r.seats_counted / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(r.seats_counted, seats)}</span></> : null}
-                  </td>
-                  <td className="is-num" title={r.units ? fullPeso(r.added_php) : undefined}>
-                    {r.units ? short(r.added_php) : '—'}
-                    {r.units > 0 && <span className="hgab-pty-sub">{plural(r.added_rows, 'project', 'projects')}</span>}
-                  </td>
-                  <td className="hgab-pty-barcol">
-                    {r.units ? <><ShareBar value={r.added_php / deo} max={max} tone="budget" /><span className="hgab-pty-pct">{pct(r.added_php, deo)}</span></> : null}
-                  </td>
-                  <td className="is-num" title={avg != null ? `${fullPeso(Math.round(avg))} over ${plural(r.seats_a, 'district', 'districts')}` : undefined}>
-                    {avg != null ? short(avg) : '—'}
-                    {avg != null && <span className="hgab-pty-sub">{plural(r.seats_a, 'district', 'districts')}</span>}
-                  </td>
-                  <td className="is-num">{r.units ? <SignedPhp value={r.hgab3_php - r.nep_php} /> : '—'}</td>
-                </tr>
-              );
-            })}
+            {own.map((r) => (
+              <tr key={r.party}>
+                <td>
+                  <PartyName
+                    code={r.party}
+                    sub={r.units
+                      ? `${plural(r.seats, 'seat', 'seats')} in all · ${plural(r.units, 'office', 'offices')} of its own`
+                      : `${plural(r.seats, 'seat', 'seats')} in all, every one in a shared office`}
+                  />
+                </td>
+                {figures(r)}
+              </tr>
+            ))}
+            {other && (
+              <tr>
+                <td>
+                  <span className="hgab-pty-party">
+                    Other parties
+                    <span className="hgab-pty-sub">
+                      {plural(rest.length, 'party', 'parties')} with one seat each:{' '}
+                      {rest.map((x, i) => <span key={x.party}>{i ? ' · ' : ''}<Link to={partyPath(x.party)} title={partyFull(x.party)}>{partyShort(x.party)}</Link></span>)}
+                    </span>
+                  </span>
+                </td>
+                {figures(other)}
+              </tr>
+            )}
             <tr className="is-shared">
-              <td><span className="hgab-pty-party">Offices shared across parties<span className="hgab-pty-sub">{plural(f.shared.units, 'office', 'offices')}, each serving districts of more than one party; figures undivided</span></span></td>
-              <td className="is-num">{count(f.shared.seats)}</td>
-              <td className="hgab-pty-barcol"><ShareBar value={f.shared.seats / seats} max={max} tone="seats" /><span className="hgab-pty-pct">{pct(f.shared.seats, seats)}</span></td>
-              <td className="is-num" title={fullPeso(f.shared.added_php)}>{short(f.shared.added_php)}<span className="hgab-pty-sub">{plural(f.shared.added_rows, 'project', 'projects')}</span></td>
-              <td className="hgab-pty-barcol"><ShareBar value={f.shared.added_php / deo} max={max} tone="budget" /><span className="hgab-pty-pct">{pct(f.shared.added_php, deo)}</span></td>
-              <td className="is-num">—</td>
-              <td className="is-num"><SignedPhp value={f.shared.hgab3_php - f.shared.nep_php} /></td>
+              <td><SharedName sub={`${plural(f.shared.units, 'office', 'offices')}, each serving districts of more than one party; figures undivided`} /></td>
+              {figures({ ...f.shared, seats_counted: f.shared.seats })}
             </tr>
             {f.no_office_seats > 0 && (
               <tr className="is-muted">
                 <td><span className="hgab-pty-party">No DPWH office<span className="hgab-pty-sub">Served by the BARMM regional grouping: no office figures</span></span></td>
-                <td className="is-num">{count(f.no_office_seats)}</td>
-                <td className="hgab-pty-barcol"><span className="hgab-pty-pct">{pct(f.no_office_seats, seats)}</span></td>
-                <td className="is-num">—</td><td /><td className="is-num">—</td><td className="is-num">—</td>
+                <td className="is-num"><Metric value={count(f.no_office_seats)} share={f.no_office_seats / seats} max={max} tone="seats" /></td>
+                <td className="is-num">—</td><td className="is-num">—</td><td className="is-num">—</td>
               </tr>
             )}
           </tbody>
@@ -265,25 +247,14 @@ function PartyTable({ data }: { data: PartiesData }) {
             <tr>
               <th scope="row">District offices, all parties</th>
               <td className="is-num">{count(seats)}</td>
-              <td />
-              <td className="is-num" title={fullPeso(deo)}>{short(deo)}<span className="hgab-pty-sub">{plural(f.deo.added_rows, 'project', 'projects')}</span></td>
-              <td />
-              <td className="is-num" title={`${fullPeso(Math.round(allA.php / allA.seats))} over ${plural(allA.seats, 'district', 'districts')}`}>
-                {short(allA.php / allA.seats)}<span className="hgab-pty-sub">{plural(allA.seats, 'district', 'districts')}</span>
-              </td>
-              <td className="is-num"><SignedPhp value={f.deo.hgab3_php - f.deo.nep_php} /></td>
+              <td className="is-num" title={fullPeso(deo.hgab3_php)}>{short(deo.hgab3_php)}<span className="hgab-pty-sub">NEP {short(deo.nep_php)}</span></td>
+              <td className="is-num" title={fullPeso(deo.added_php)}>{short(deo.added_php)}<span className="hgab-pty-sub">{plural(deo.added_rows, 'project', 'projects')}</span></td>
+              <td className="is-num"><SignedPhp value={deo.hgab3_php - deo.nep_php} /></td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <Caveats
-        items={[
-          PARTY_FIGURE_NOTE,
-          'The average counts only districts with a DPWH office of their own. An office shared by several districts is never divided.',
-          ADDED_NOTE,
-          DEO_MEANING,
-        ]}
-      />
+      <Caveats items={[PARTY_FIGURE_NOTE, SAME_OFFICES_NOTE, ADDED_NOTE, DEO_MEANING]} />
       <SharedOffices data={data} />
     </section>
   );
@@ -301,6 +272,7 @@ function SharedOffices({ data }: { data: PartiesData }) {
             <tr>
               <th scope="col">DPWH office</th>
               <th scope="col">Legislative districts it serves, and their party</th>
+              <th scope="col" className="is-num">House bill budget</th>
               <th scope="col" className="is-num">Added</th>
               <th scope="col" className="is-num">Change from the NEP</th>
             </tr>
@@ -314,11 +286,14 @@ function SharedOffices({ data }: { data: PartiesData }) {
                     {u.districts.map((d) => (
                       <li key={d.district_id}>
                         <Link to={districtPath(d.district_id)}>{d.label}</Link>{' '}
-                        <span className="hgab-pty-chip" title={d.party ? partyFull(d.party) : undefined}>{d.party ? partyShort(d.party) : '—'}</span>
+                        {d.party
+                          ? <Link className="hgab-pty-chip" to={partyPath(d.party)} title={partyFull(d.party)}>{partyShort(d.party)}</Link>
+                          : <span className="hgab-pty-chip">—</span>}
                       </li>
                     ))}
                   </ul>
                 </td>
+                <td className="is-num" title={fullPeso(u.hgab3_php)}>{short(u.hgab3_php)}<span className="hgab-pty-sub">NEP {short(u.nep_php)}</span></td>
                 <td className="is-num" title={fullPeso(u.added_php)}>{short(u.added_php)}<span className="hgab-pty-sub">{plural(u.added_rows, 'project', 'projects')}</span></td>
                 <td className="is-num"><SignedPhp value={u.hgab3_php - u.nep_php} /></td>
               </tr>
@@ -326,6 +301,7 @@ function SharedOffices({ data }: { data: PartiesData }) {
           </tbody>
         </table>
       </div>
+      <p className="hgab-pty-more"><Link to={partyPath('shared')}>Every line at these offices →</Link></p>
     </details>
   );
 }
@@ -361,8 +337,8 @@ function SeatList({ data, units }: { data: PartiesData; units: Map<string, Party
         <div>
           <h2 id="hgab-pty-seats-h" className="hgab-pty-h2">Every legislative district, its representative and party</h2>
           <p className="hgab-pty-dek">
-            The representative the House lists for each seat, the party they ran under in May 2025, their result, and the seat’s party in
-            the two elections before.
+            The representative the House lists for each seat, the party they ran under in May 2025, their result, the seat’s party in
+            the two elections before, and the budget at the DPWH office serving the district.
           </p>
         </div>
         <div className="hgab-pty-controls">
@@ -377,7 +353,7 @@ function SeatList({ data, units }: { data: PartiesData; units: Map<string, Party
               {options.map(([code, n]) => <option key={code} value={code}>{code ? partyName(code) : 'No party'} ({count(n)})</option>)}
             </select>
           </label>
-          <button type="button" className="hgab-cta" onClick={() => download(PARTIES_CSV_NAME, seatsCsv(data))}>Every district (CSV)</button>
+          <button type="button" className="hgab-cta" onClick={() => downloadCsv(PARTIES_CSV_NAME, seatsCsv(data))}>Every district (CSV)</button>
         </div>
       </div>
       <div className="hgab-pty-tablewrap">
@@ -388,6 +364,7 @@ function SeatList({ data, units }: { data: PartiesData; units: Map<string, Party
               <th scope="col">Representative</th>
               <th scope="col">Party, May 2025</th>
               <th scope="col">Result, May 2025</th>
+              <th scope="col" className="is-num">House bill budget at its office</th>
               <th scope="col" className="is-num">Added at its office</th>
             </tr>
           </thead>
@@ -403,7 +380,7 @@ function SeatList({ data, units }: { data: PartiesData; units: Map<string, Party
             <button type="button" className="hgab-pty-linkbtn" onClick={() => setAll(true)}>Show all {count(list.length)}</button>
           </>
         ) : !list.length ? 'No district matches. Try another name, or all parties.' : `${plural(list.length, 'district', 'districts')}.`}
-        {' '}A shared office’s figure repeats on each district it serves: never add those up.
+        {' '}A shared office’s figures repeat on each district it serves: never add those up.
       </p>
     </section>
   );
@@ -412,6 +389,7 @@ function SeatList({ data, units }: { data: PartiesData; units: Map<string, Party
 function SeatRow({ s, unit, earlier }: { s: Seat; unit: PartyUnit | undefined; earlier: Array<{ year: number; party: string | null; changed: boolean }> }) {
   const dyn = s.person_id && s.province_slug ? dynastyPersonUrl(s.province_slug, s.person_id) : null;
   const before = earlier.filter((e) => e.party || e.changed);
+  const shared = unit && unit.district_ids.length > 1 ? `Office shared by ${unit.district_ids.length} districts` : null;
   return (
     <tr>
       <td>
@@ -448,10 +426,12 @@ function SeatRow({ s, unit, earlier }: { s: Seat; unit: PartyUnit | undefined; e
         {dyn && <span className="hgab-pty-sub"><a href={dyn} target="_blank" rel="noopener noreferrer">Election history ↗<span className="visually-hidden"> (BetterGov Dynasties, opens in a new tab)</span></a></span>}
       </td>
       <td className="is-num">
+        {unit ? <span title={fullPeso(unit.hgab3_php ?? 0)}>{short(unit.hgab3_php)}</span> : '—'}
+        <span className="hgab-pty-sub">{!unit ? 'No DPWH office' : `NEP ${short(unit.nep_php)}`}</span>
+      </td>
+      <td className="is-num">
         {unit ? <span title={fullPeso(unit.added_php)}>{short(unit.added_php)}</span> : '—'}
-        <span className="hgab-pty-sub">
-          {!unit ? 'No DPWH office' : unit.district_ids.length > 1 ? `Office shared by ${unit.district_ids.length} districts` : plural(unit.added_rows, 'project', 'projects')}
-        </span>
+        <span className="hgab-pty-sub">{!unit ? '' : shared ?? plural(unit.added_rows, 'project', 'projects')}</span>
       </td>
     </tr>
   );
@@ -520,7 +500,7 @@ function CongressTable({ c, noOffice }: { c: CongressByParty; noOffice: number }
           <tbody>
             {own.map((r) => (
               <tr key={r.party}>
-                <td><PartyName code={r.party} sub={r.units ? plural(r.units, 'office', 'offices') : 'No office of its own read'} /></td>
+                <td><PartyName code={r.party} plain sub={r.units ? plural(r.units, 'office', 'offices') : 'No office of its own read'} /></td>
                 <td className="is-num">{count(r.seats)}</td>
                 <td className="is-num">{counted && r.districts ? count(r.districts) : '—'}</td>
                 <td className="hgab-pty-barcol">{dbar(r.districts)}</td>
