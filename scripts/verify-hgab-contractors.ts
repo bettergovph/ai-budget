@@ -5,6 +5,7 @@
  * (src/lib/hgab-contractors.ts), so a Python/TypeScript disagreement fails here.
  */
 import type { DuckDBConnection } from "@duckdb/node-api";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -151,4 +152,57 @@ export async function verifyContractors(c: DuckDBConnection, check: Check, o: Op
     ids.filter((id) => !/^[A-Za-z0-9-]+$/.test(id)).slice(0, 5).join(", "));
   check("the disclaimer says links are our match, and amounts are not payments",
     /our match/i.test(DISCLAIMER_CONTRACTORS.body) && /not payments/i.test(DISCLAIMER_CONTRACTORS.body) && /does not establish/i.test(DISCLAIMER_CONTRACTORS.body));
+
+  // 8. The downloads and their manifest (build_downloads.py): what a developer picks up.
+  const dl = resolve(dir, "downloads");
+  const manifestPath = resolve(dl, "manifest.json");
+  check("downloads/manifest.json present (build_downloads.py)", existsSync(manifestPath), manifestPath);
+  if (!existsSync(manifestPath)) return;
+  interface Ref { file: string; bytes: number; sha256: string; url: string }
+  interface Entry { key: string; title: string; about: string; rows: number; csv: Ref; parquet: Ref; columns: Record<string, string> }
+  const M = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    schema: number; base_url: string; notice: string; readme: Ref; zip: Ref; accuracy_sample: Ref; files: Entry[];
+    totals: { contracts: number; contractors: number; gaa_lines: number; gaa_lines_matched: number };
+    accuracy: { sampled: number; confirmed: number }; site_data: Array<{ path: string; url: string }>;
+  };
+  const refs: Ref[] = [M.readme, M.zip, M.accuracy_sample, ...M.files.flatMap((f) => [f.csv, f.parquet])];
+  const badRef = refs.filter((r) => !existsSync(resolve(dl, r.file)) || readFileSync(resolve(dl, r.file)).length !== r.bytes
+    || sha(resolve(dl, r.file)) !== r.sha256 || r.url !== `${M.base_url}/${r.file}?v=${r.sha256.slice(0, 12)}`).map((r) => r.file);
+  check(`manifest: ${refs.length} files, each one's size, SHA-256 and versioned URL`, M.schema === 1 && badRef.length === 0
+    && M.base_url === "https://budget-assets.bettergov.ph/hgab/2027/contractors/downloads", badRef.join(", "));
+  const count = async (sql: string) => num((await c.runAndReadAll(sql)).getRows()[0][0]);
+  const badRows: string[] = [];
+  for (const f of M.files) {
+    const pq = q(resolve(dl, f.parquet.file));
+    const cols = (await c.runAndReadAll(`DESCRIBE SELECT * FROM read_parquet('${pq}')`)).getRows().map((r) => String(r[0]));
+    const csvCols = (await c.runAndReadAll(`DESCRIBE SELECT * FROM read_csv('${q(resolve(dl, f.csv.file))}', header = true, all_varchar = true)`)).getRows().map((r) => String(r[0]).replace(/^\uFEFF/, ""));
+    const rows = await count(`SELECT count(*) FROM read_parquet('${pq}')`);
+    const csvRows = await count(`SELECT count(*) FROM read_csv('${q(resolve(dl, f.csv.file))}', header = true, all_varchar = true)`);
+    if (rows !== f.rows || csvRows !== f.rows || JSON.stringify(cols) !== JSON.stringify(Object.keys(f.columns)) || JSON.stringify(csvCols) !== JSON.stringify(cols)
+      || Object.values(f.columns).some((d) => !d.trim())) badRows.push(`${f.key}: ${rows}/${csvRows} rows vs ${f.rows}`);
+  }
+  check("each table: Parquet and CSV hold the manifest's rows, and its columns, each described", badRows.length === 0, badRows.join("; "));
+  const byKey = new Map(M.files.map((f) => [f.key, f]));
+  const pqOf = (k: string) => q(resolve(dl, byKey.get(k)?.parquet.file ?? "missing"));
+  const [dlN, dlPhp] = (await c.runAndReadAll(`SELECT count(*), sum(contract_php) FROM read_parquet('${pqOf("dpwh-contracts-2016-2026")}')`)).getRows()[0].map(num);
+  const badUrls = await count(`SELECT count(*) FROM (
+      SELECT contract_id, dpwh_url FROM read_parquet('${pqOf("dpwh-contracts-2016-2026")}')
+      UNION ALL SELECT contract_id, dpwh_url FROM read_parquet('${pqOf("gaa-2020-2026-dpwh-line-contracts")}'))
+    WHERE dpwh_url <> 'https://transparency.dpwh.gov.ph/?project=' || contract_id`);
+  check("the tables are the published data: every contract, the links, every line, every contractor; each DPWH link is the contract's",
+    dlN === S.source.contracts && Math.abs(dlPhp - (await count(`SELECT sum(budget) FROM read_parquet('${q(parquet)}')`))) < 1
+      && byKey.get("gaa-2020-2026-dpwh-line-contracts")?.rows === lk && byKey.get("gaa-2020-2026-dpwh-lines")?.rows === lines
+      && byKey.get("dpwh-contractors-2016-2026")?.rows === ix.list.length && badUrls === 0
+      && M.totals.contracts === S.source.contracts && M.totals.contractors === ix.list.length && M.totals.gaa_lines === lines,
+    `${dlN} contracts, ${badUrls} links wrong`);
+  const qaFile = JSON.parse(readFileSync(resolve(o.contracts, "gaa-2020-2026", "qa.json"), "utf8")) as { strata: Record<string, { fetched: number; confirmed: number }> };
+  check("the accuracy figures are the sample check's", M.accuracy.sampled === Object.values(qaFile.strata).reduce((a, v) => a + v.fetched, 0)
+    && M.accuracy.confirmed === Object.values(qaFile.strata).reduce((a, v) => a + v.confirmed, 0));
+  const inZip = JSON.parse(execFileSync("python3", ["-I", "-c", "import json,sys,zipfile;print(json.dumps(zipfile.ZipFile(sys.argv[1]).namelist()))", resolve(dl, M.zip.file)], { encoding: "utf8" })) as string[];
+  const wantZip = [M.readme.file, M.accuracy_sample.file, ...M.files.map((f) => f.parquet.file)].map((f) => `dpwh-contractors-gaa-2020-2026/${f}`).sort();
+  check("the zip holds the README, the accuracy sample and every Parquet file", JSON.stringify([...inZip].sort()) === JSON.stringify(wantZip), inZip.join(", "));
+  const missingSite = M.site_data.filter((d) => !d.path.includes("NN") && !existsSync(resolve(o.out, "..", "..", d.path))).map((d) => d.path);
+  check("the site files the manifest lists exist; its notice uses no banned words",
+    missingSite.length === 0 && o.readerCopyHits(M.notice).length === 0 && /not payments/.test(M.notice) && /our match/.test(M.notice),
+    missingSite.join(", "));
 }

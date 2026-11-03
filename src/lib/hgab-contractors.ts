@@ -15,6 +15,24 @@ export const CONTRACTORS_SUMMARY_PATH = `${BASE}/summary.json`;
 export const CONTRACTORS_MPB_PATH = `${BASE}/mpb-links.json`;
 export const CONTRACTORS_CSV_PATH = `${BASE}/contractors.csv`;
 export const CONTRACTORS_CSV_NAME = 'bettergov-dpwh-contractors-2016-2026.csv';
+/** The data as downloads, for developers (scripts/dpwh-contracts/build_downloads.py). */
+export const CONTRACTORS_DOWNLOADS_DIR = `${BASE}/downloads`;
+export const CONTRACTORS_MANIFEST_PATH = `${BASE}/downloads/manifest.json`;
+
+export interface ContractorDownloadFile { file: string; bytes: number; sha256: string; url: string }
+export interface ContractorDownloadEntry {
+  key: string; title: string; about: string; rows: number;
+  csv: ContractorDownloadFile; parquet: ContractorDownloadFile; columns: Record<string, string>;
+}
+/** downloads/manifest.json: every file with its rows, size, SHA-256, URL and columns (the line-by-line manifest's shape, and more). */
+export interface ContractorDownloads {
+  schema: 1; built_at: string; title: string; base_url: string; pipeline_commit: string; notice: string;
+  readme: ContractorDownloadFile; zip: ContractorDownloadFile; accuracy_sample: ContractorDownloadFile;
+  files: ContractorDownloadEntry[];
+}
+/** A download's path under the data root, versioned by its SHA-256 (the data host caches files under fixed names). */
+export const contractorDownloadPath = (f: Pick<ContractorDownloadFile, 'file' | 'sha256'>) =>
+  `${CONTRACTORS_DOWNLOADS_DIR}/${f.file}?v=${f.sha256.slice(0, 12)}`;
 /** Each contractor's contracts sit in one of this many files, by a hash of its key (build_site.py `shard_of`). */
 export const CONTRACTOR_SHARDS = 64;
 /** The enacted budgets whose lines are matched to contracts. */

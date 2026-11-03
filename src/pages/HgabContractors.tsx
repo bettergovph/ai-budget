@@ -17,14 +17,14 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import SiteFooter from '../components/SiteFooter';
 import DpwhContractLink from '../components/DpwhContractLink';
 import { Caveats, DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
-import { datasetPath, loadContractorIndex, loadContractorShard } from '../lib/hgab';
+import { datasetPath, loadContractorDownloads, loadContractorIndex, loadContractorShard } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { billions, count, fullPeso } from '../lib/hgab-history-view';
 import {
   AMOUNT_NOTE, CONTRACTORS_CSV_NAME, CONTRACTORS_ROOT, CONTRACTORS_TITLE, DPWH_LINK_NOTE, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS,
   REVOKED_NOTE, SORT_LABELS, STATUS_LABELS, amountIn, contractorPath, contractorsCsvPath, contractsCsv, contractsIn,
-  decodeContracts, filterContractors, officeTotals, partnerTotals, sortContractors,
-  type Contractor, type ContractorIndex, type ContractorSort, type ContractorSummary, type ContractRow,
+  contractorDownloadPath, decodeContracts, filterContractors, officeTotals, partnerTotals, sortContractors,
+  type Contractor, type ContractorDownloads, type ContractorIndex, type ContractorSort, type ContractorSummary, type ContractRow,
 } from '../lib/hgab-contractors';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
@@ -215,10 +215,63 @@ function IndexPage({ index, summary }: { index: ContractorIndex; summary: Contra
           />
         </section>
 
+        <Downloads />
+
         <DisclaimerNotice compact contractors="only" className="hgab-ctr-notice" />
       </main>
       <SiteFooter />
     </>
+  );
+}
+
+/** "9.0 MB", "245 KB". */
+const fileSize = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`);
+
+/** The data as files (downloads/manifest.json): each table in CSV and Parquet, the zip, the README and the manifest. */
+function Downloads() {
+  const [m, setM] = useState<ContractorDownloads | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    loadContractorDownloads().then((x) => { if (live) setM(x); }).catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, []);
+  if (failed) return null;
+  const href = (f: { file: string; sha256: string }) => dataUrl(contractorDownloadPath(f));
+  return (
+    <section className="hgab-ctr-section" id="downloads" aria-labelledby="hgab-ctr-dl-h">
+      <h2 id="hgab-ctr-dl-h" className="hgab-ctr-h2">Download the data</h2>
+      <p className="hgab-ctr-dek">
+        Every table as CSV and Parquet. The manifest lists each file with its rows, size, checksum and columns, for developers.
+      </p>
+      {!m ? <p className="hgab-ctr-more" role="status">Loading the list of files…</p> : (
+        <>
+          <div className="hgab-ctr-tablewrap">
+            <table className="hgab-ctr-table">
+              <thead>
+                <tr><th scope="col">Table</th><th scope="col" className="is-num">Rows</th><th scope="col">CSV</th><th scope="col">Parquet</th></tr>
+              </thead>
+              <tbody>
+                {m.files.map((f) => (
+                  <tr key={f.key}>
+                    <td><span className="hgab-ctr-name">{f.title}</span><span className="hgab-ctr-sub">{f.about}</span></td>
+                    <td className="is-num">{count(f.rows)}</td>
+                    <td><a href={href(f.csv)} download>{f.csv.file.endsWith('.gz') ? 'CSV, gzipped' : 'CSV'}</a><span className="hgab-ctr-sub">{fileSize(f.csv.bytes)}</span></td>
+                    <td><a href={href(f.parquet)} download>Parquet</a><span className="hgab-ctr-sub">{fileSize(f.parquet.bytes)}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="hgab-ctr-more">
+            <a href={href(m.zip)} download>Every Parquet file and the README (zip, {fileSize(m.zip.bytes)})</a>
+            {' · '}<a href={href(m.readme)} target="_blank" rel="noopener noreferrer">README</a>
+            {' · '}<a href={dataUrl(`hgab/2027/contractors/downloads/manifest.json`)} target="_blank" rel="noopener noreferrer">manifest.json</a>
+            {' · '}<a href={href(m.accuracy_sample)} target="_blank" rel="noopener noreferrer">Accuracy sample</a>
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 

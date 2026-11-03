@@ -24,6 +24,7 @@ import {
 import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
 import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
 import { EXPLORER_ROOT, type DownloadFile, downloadFiles, downloadUrl, loadExplorerDownloads } from '../lib/hgab-explorer';
+import { CONTRACTORS_DOWNLOADS_DIR, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
@@ -176,6 +177,16 @@ export default function HgabSources() {
                 {LINE_FILES.map((f) => (
                   <li key={f.file}><a href={downloadUrl(lineFiles?.get(f.file) ?? f.file)}>{f.file}</a><span className="hgab-dl-kind">{f.kind}</span></li>
                 ))}
+              </ul>
+            </div>
+            <div className="hgab-dl-group">
+              <h3>DPWH contractors, 2016 to 2026</h3>
+              <p className="hgab-dl-sub">
+                DPWH’s contract list, and the GAA lines its contracts carry · <Link to={`${CONTRACTORS_ROOT}#downloads`}>all files, with what each holds</Link>
+              </p>
+              <ul>
+                <li><a href={dataUrl(CONTRACTORS_MANIFEST_PATH)}>contractors/downloads/manifest.json</a><span className="hgab-dl-kind">For developers</span></li>
+                <li><a href={dataUrl(`${CONTRACTORS_DOWNLOADS_DIR}/README.md`)}>contractors/downloads/README.md</a><span className="hgab-dl-kind">What each file holds</span></li>
               </ul>
             </div>
             {DATASET_ORDER.map((k) => {
