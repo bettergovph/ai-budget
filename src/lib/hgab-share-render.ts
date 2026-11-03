@@ -29,8 +29,9 @@ import {
   officeName,
   rankByCongress,
   rankEntries,
-  rankLines,
-  lineUnit,
+  listRows,
+  listUnit,
+  mpbUnit,
   boardBuiltAt,
   rankMembers,
   asOfText,
@@ -44,7 +45,7 @@ import {
   type LeaderSlice,
   type LeaderPerson,
   type LeaderboardData,
-  type RankedLine,
+  type ListRow,
   type ShareFormat,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
@@ -839,7 +840,7 @@ function heroText(board: BoardDef, region: string | null, count: string | null):
 function shortCount(count: string): string {
   return count
     .replace(/ shown for each Congress$/, ' per Congress')
-    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions|departments and funds|department or fund|agencies|agency|budget lines|budget line)$/, '');
+    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions|departments and funds|department or fund|agencies|agency|budget lines|budget line|contractors|contractor|barangays|barangay|legislative districts|legislative district)$/, '');
 }
 
 interface CountRow {
@@ -995,7 +996,11 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
 }
 
 function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
-  const src = board.section === 'history'
+  const src = board.section === 'mpb'
+    ? board.mpbSet === 'contractors'
+      ? 'Source: GAA 2020 to 2026, multi-purpose building lines; DPWH contract list'
+      : 'Source: GAA 2020 to 2026, multi-purpose building lines'
+    : board.section === 'history'
     ? 'Source: GAA 2020 to 2026, DPWH offices'
     : board.section === 'members'
       ? 'Source: bills.juris.ph, 20th Congress bill authors'
@@ -1579,7 +1584,7 @@ function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: n
 function countLine(board: BoardDef, shown: number, eligible: number): string | null {
   if (!eligible) return null;
   const unit = board.kind === 'members' ? ['representative', 'representatives']
-    : board.kind === 'lines' ? [lineUnit(board, 1), lineUnit(board, 2)]
+    : board.kind === 'lines' || board.kind === 'mpb' ? [listUnit(board, 1), listUnit(board, 2)]
       : ['DPWH office', 'DPWH offices'];
   const u = eligible === 1 ? unit[0] : unit[1];
   return shown < eligible ? `Top ${shown} of ${eligible.toLocaleString('en-US')} ${u}` : `${eligible.toLocaleString('en-US')} ${u}`;
@@ -1872,7 +1877,8 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
 }
 
 function emptyMessage(board: BoardDef, region: string | null): string {
-  if (board.kind === 'lines') return board.rowSet && !region ? `No ${lineUnit(board, 1)} fits this board` : 'Nothing fits this board';
+  if (board.kind === 'lines') return board.rowSet && !region ? `No ${listUnit(board, 1)} fits this board` : 'Nothing fits this board';
+  if (board.kind === 'mpb') return `No ${mpbUnit(board, 1)}${region ? ` in ${regionName(region) ?? 'this region'}` : ''} fits this board`;
   const who = board.kind === 'members' ? 'representative' : 'DPWH office';
   return `No ${who} in ${regionName(region) ?? 'this region'} fits this board`;
 }
@@ -2506,7 +2512,7 @@ const LINE_SIZES: Record<ShareFormat, LineSizes> = {
  * "NEP → House bill" under it. Names are cut with an ellipsis, never wrapped,
  * so every row is the same height.
  */
-function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: number, sz: LineSizes): Body {
+function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: number, sz: LineSizes): Body {
   const n = rows.length;
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return {
@@ -2519,10 +2525,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
       setFont(ctx, 700, sz.value, F.display);
       let valW = Math.max(...rows.map((r) => tabWidth(ctx, formatValue(r.value, board.value))));
       setFont(ctx, 500, sz.detail, F.body);
-      for (const r of rows) {
-        const d = board.rowDetail?.(r.row);
-        if (d) valW = Math.max(valW, tw(ctx, d));
-      }
+      for (const r of rows) if (r.detail) valW = Math.max(valW, tw(ctx, r.detail));
       valW = Math.min(Math.ceil(valW) + sz.value * 0.8, w * 0.42);
       const tx = x + rankW;
       const tmax = w - rankW - valW;
@@ -2538,9 +2541,9 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
         ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
         drawTab(ctx, String(r.rank), tx - sz.rank * 0.55, base, 'right');
         setFont(ctx, 600, sz.name, F.body);
-        text(ctx, ellipsize(ctx, r.row.label, tmax - sz.name * 0.4), tx, base, C.ink);
+        text(ctx, ellipsize(ctx, r.label, tmax - sz.name * 0.4), tx, base, C.ink);
         setFont(ctx, 500, sz.sub, F.body);
-        text(ctx, ellipsize(ctx, r.row.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
+        text(ctx, ellipsize(ctx, r.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
         const bh = Math.max(4, Math.round(sz.sub * 0.28));
         const len = Math.max(bh, (Math.abs(r.value) / maxAbs) * (tmax - sz.name * 0.6));
         ctx.fillStyle = th.solid;
@@ -2549,7 +2552,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
         setFont(ctx, 700, sz.value, F.display, -sz.value * 0.01);
         ctx.fillStyle = th.text;
         drawTab(ctx, formatValue(r.value, board.value), x + w - sz.value * 0.3, base, 'right');
-        const d = board.rowDetail?.(r.row);
+        const d = r.detail;
         if (d) {
           setFont(ctx, 500, sz.detail, F.body);
           text(ctx, d, x + w - sz.value * 0.3, base + sz.sub * 1.3, C.mute, 'right');
@@ -2559,17 +2562,18 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
   };
 }
 
-/** Departments, agencies and budget lines: as many rows as fit, at least three. */
+/** Departments, agencies, budget lines and the multi-purpose building boards: as many rows as fit, at least three. */
 function drawLinesVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareCardInput): void {
   const { data, board } = input;
-  const { rows: all, eligible } = rankLines(data, board, { limit: SHARE_FORMATS[format].rows });
+  const region = board.kind === 'mpb' ? input.region ?? null : null;
+  const { rows: all, eligible } = listRows(data, board, { region, limit: SHARE_FORMATS[format].rows });
   if (!all.length) {
-    layoutVertical(ctx, s, input, heroText(board, null, null), () => ({ extra: null, body: emptyBody(ctx, s, board, null) }), NO_PEOPLE);
+    layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
   const sz = LINE_SIZES[format];
   const attempt = (k: number, dry: boolean) =>
-    layoutVertical(ctx, s, input, heroText(board, null, countLine(board, k, eligible)),
+    layoutVertical(ctx, s, input, heroText(board, region, countLine(board, k, eligible)),
       () => ({ extra: null, body: linesBody(ctx, board, all.slice(0, k), s.pad, s.W - s.pad * 2, sz) }), NO_PEOPLE, dry);
   for (let k = all.length; k >= 1; k--) {
     if (attempt(k, true)) {
@@ -2836,12 +2840,12 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   if (format === 'landscape') {
     if (board.kind === 'congress') drawCongressLandscape(ctx, inp);
     else if (board.kind === 'ranking' || board.kind === 'members') drawRankingVertical(ctx, LAND, format, inp);
-    else if (board.kind === 'lines') drawLinesVertical(ctx, LAND, format, inp);
+    else if (board.kind === 'lines' || board.kind === 'mpb') drawLinesVertical(ctx, LAND, format, inp);
     else drawLandscape(ctx, inp);
   } else {
     const s = SPECS[format];
     if (board.kind === 'shift') drawShiftVertical(ctx, s, format, inp);
-    else if (board.kind === 'lines') drawLinesVertical(ctx, s, format, inp);
+    else if (board.kind === 'lines' || board.kind === 'mpb') drawLinesVertical(ctx, s, format, inp);
     else if (board.kind === 'regions') drawRegionsVertical(ctx, s, format, inp);
     else if (board.kind === 'congress') drawCongressVertical(ctx, s, format, inp);
     else drawRankingVertical(ctx, s, format, inp);
@@ -2912,12 +2916,13 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     }
   } else if (board.kind === 'regions') {
     top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}`);
-  } else if (board.kind === 'lines') {
-    const { rows, eligible } = rankLines(data, board, { limit: 3 });
+  } else if (board.kind === 'lines' || board.kind === 'mpb') {
+    const lr = board.kind === 'mpb' ? r : null;
+    const { rows, eligible } = listRows(data, board, { region: lr, limit: 3 });
     top = rows.length
       ? [`${countLine(board, eligible, eligible)}; the top three`,
-        ...rows.map((r) => `${r.rank}. ${r.row.label} (${r.row.sub}): ${formatValue(r.value, board.value)}${board.rowDetail ? `, ${board.rowDetail(r.row)}` : ''}`)]
-      : [emptyMessage(board, null)];
+        ...rows.map((x) => `${x.rank}. ${x.label} (${x.sub}): ${formatValue(x.value, board.value)}${x.detail ? `, ${x.detail}` : ''}`)]
+      : [emptyMessage(board, lr)];
   } else if (board.kind === 'shift') {
     const part = (label: string, nep: number, house: number) => `${label}: NEP ${formatValue(nep, 'php')}, House bill ${formatValue(house, 'php')}, change ${formatValue(house - nep, 'signed_php')}`;
     top = shiftKinds(data).flatMap((kk) => {

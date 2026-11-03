@@ -29,7 +29,8 @@ import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { UnderReviewBanner } from '../components/HgabExplorerBits';
 import {
-  BoardLinks, BoardPager, BoardTile, CardBoundary, CongressTables, LinesTable, MembersTable, RankingTable, RegionsTable, ShiftTable,
+  BoardLinks, BoardPager, BoardTile, CardBoundary, CongressTables, LinesTable, MembersTable, MpbTable, RankingTable, RegionsTable,
+  ShiftTable,
 } from '../components/HgabLeaderboardBits';
 import type { ShareCardApi } from '../components/HgabShareCard';
 import { copyText, downloadBlob, shareImage } from '../lib/hgab-share';
@@ -37,7 +38,7 @@ import { pageMeta } from '../lib/seo';
 import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadHgabLeaderboard, type RegionKey } from '../lib/hgab';
 import {
   BOARDS, BOARD_SECTIONS, DEO_MEANING, LEADERBOARD_ROOT, SHARE_FORMATS, SHARE_FORMAT_ORDER, boardById, isShareFormat,
-  asOfText, boardBuiltAt, leaderboardPath, lineUnit, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
+  asOfText, boardBuiltAt, leaderboardPath, lineUnit, mpbUnit, rankEntries, rankLines, rankMembers, rankMpb, rankRegions, residualLine,
   type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
 import '../nep2027.css';
@@ -52,6 +53,8 @@ const SOURCE_LINE =
 const NEP_MEANS = 'The NEP is the budget the President submits to Congress each August.';
 const NEP_GLOSS = `${NEP_MEANS} The House bill is House Bill 10858, third reading.`;
 const WHOLE_DOCS = 'the NEP 2027 data from the budget department, and House Bill 10858 Volumes I-A and I-B (third reading).';
+const MPB_DOCS = 'the enacted budgets (GAA) for 2020 to 2026, DPWH lines, as the multi-purpose buildings map reads them.';
+const MPB_CONTRACT_DOCS = 'DPWH’s contract list on its transparency portal, matched to the lines by title, office and amount.';
 const SEAT_NOW = 'The representative shown holds the legislative district’s seat now, in the 20th Congress.';
 const SEAT_NOTE = `${SEAT_NOW} The 2020 to 2025 budgets were passed by the 18th and 19th Congresses.`;
 
@@ -449,7 +452,13 @@ function BoardPage({
             </p>
 
             {/* Right beside the actions: what a shared image must not be read as saying. */}
-            <DisclaimerNotice compact offices={board.kind !== 'lines'} heading="Before you share" className="hgab-lb-share-note" />
+            <DisclaimerNotice
+              compact
+              offices={board.kind !== 'lines' && board.kind !== 'mpb'}
+              contractors={board.kind === 'mpb' && board.mpbSet === 'contractors' ? 'only' : false}
+              heading="Before you share"
+              className="hgab-lb-share-note"
+            />
 
             <section className="hgab-lb-about" aria-labelledby="hgab-lb-about-h">
               <h2 id="hgab-lb-about-h">About this board</h2>
@@ -460,7 +469,10 @@ function BoardPage({
               </ul>
               <p className="hgab-lb-about-credits">
                 {showsPeople(board) && <>{sentence(data.credits.portraits)} {sentence(data.credits.representatives)} </>}
-                Documents: {board.kind === 'lines' ? WHOLE_DOCS : sentence(data.credits.documents)}
+                {board.mpbSet === 'districts' && <>{sentence(data.credits.representatives)} </>}
+                Documents: {board.kind === 'lines' ? WHOLE_DOCS
+                  : board.kind === 'mpb' ? <>{MPB_DOCS}{board.mpbSet === 'contractors' && <> {MPB_CONTRACT_DOCS}</>}</>
+                    : sentence(data.credits.documents)}
                 {built && <> Built {built.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}.</>}{' '}
                 <Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link>
               </p>
@@ -522,6 +534,13 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
       table = <LinesTable data={data} board={board} />;
       break;
     }
+    case 'mpb': {
+      const n = rankMpb(data, board, { region }).eligible;
+      heading = 'The full ranking';
+      line = `${n.toLocaleString()} ${mpbUnit(board, n)}${where}. “Map” opens their lines on the multi-purpose buildings map.`;
+      table = <MpbTable data={data} board={board} region={region} />;
+      break;
+    }
   }
   return (
     <section className="hgab-lb-ranking" aria-labelledby="hgab-lb-table-h">
@@ -531,7 +550,7 @@ function BoardTable({ data, board, region }: { data: LeaderboardData; board: Boa
       </header>
       {table}
       <p className="hgab-lb-credit">
-        {board.kind !== 'lines' && <>{DEO_MEANING} </>}{showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
+        {board.kind !== 'lines' && (board.kind !== 'mpb' || board.mpbSet === 'offices') && <>{DEO_MEANING} </>}{showsPeople(board) && <>{sentence(data.credits.portraits)} </>}Hover an amount for the exact pesos.{' '}
         <Link to={`${HGAB_ROOT}/methodology`}>How the figures are built</Link>
       </p>
     </section>
