@@ -19,13 +19,16 @@ and every contractor's figures from DPWH's contract list.
 | `/hgab/2027/contractors/:key` | One contractor: figures, amount by year, its DPWH offices, joint-venture partners, then every contract with the budget line matched to it (search, year, "with a matched line", CSV) |
 | `/hgab/2027/multi-purpose/map` | Each FY2020–FY2026 line with a matched contract shows "Contractor: … · contract 23AE0052 (completed)", linked to the contractor's page, in the side panel and the list; contractor names and contract IDs join the search; "Download these" adds `contract_id, contractors, contract_php, contract_status, contract_match`. **Top contractors** (`src/components/MpbContractors.tsx`, `rankLineContractors`) ranks the contractors of the lines the controls and a picked district or place select, by lines, budget amount or contract amount, with contracts, years and the office that awarded most of them; CSV. "Show their lines" narrows the map and the list to one contractor (`?contractor=<key>`, a chip in the list). Without `mpb-links.json` the map works as before |
 
+- Every contract ID on the contractor pages and the map links to DPWH's own record, in a new tab:
+  `https://transparency.dpwh.gov.ph/?project=<contract id>` (`dpwhContractUrl`, `src/components/DpwhContractLink.tsx`).
+  The CSVs carry the same URL (`dpwh_url`, `contract_dpwh_url`), so anyone can check our figures against DPWH's.
 - Contract: `src/lib/hgab-contractors.ts` (pure: the pages, the map, the Worker's SEO code and the verifier import it).
 - Page: `src/pages/HgabContractors.tsx`, styles `src/hgab-contractors.css`.
 - Loaders: `loadContractorIndex`, `loadContractorShard`, and `loadMpbYears` in `src/lib/hgab.ts`.
 - Nav: `PROGRAM_EXTRAS` in `src/components/HgabBits.tsx`.
 - Disclaimer: `DISCLAIMER_CONTRACTORS` in `src/lib/hgab-disclaimers.ts`. The contractor pages carry it alone; the map adds
   it to its own.
-- Checks: `npm run verify:hgab` has a `contractors/` section (`scripts/verify-hgab-contractors.ts`, 26 checks). It
+- Checks: `npm run verify:hgab` has a `contractors/` section (`scripts/verify-hgab-contractors.ts`, 27 checks). It
   recounts DPWH's list, every contractor's figures against its contracts, the `[REVOKED]` tags, each linked line's
   amount against the GAA extract, the map's lines and awarding offices, the top-contractors count, the CSV and the copy. The shard hash is the page's own, so a
   Python/TypeScript difference fails.

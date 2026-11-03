@@ -9,8 +9,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  AMOUNT_NOTE, CONTRACTOR_SHARDS, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS, REVOKED_NOTE, decodeContractorIndex,
-  decodeContracts, decodeMpbContracts, rankLineContractors, shardOf, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
+  AMOUNT_NOTE, CONTRACTOR_SHARDS, DPWH_LINK_NOTE, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS, REVOKED_NOTE, decodeContractorIndex,
+  decodeContracts, decodeMpbContracts, dpwhContractUrl, rankLineContractors, shardOf, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
   type MpbContractsFile,
 } from "../src/lib/hgab-contractors";
 import { DISCLAIMER_CONTRACTORS } from "../src/lib/hgab-disclaimers";
@@ -139,11 +139,16 @@ export async function verifyContractors(c: DuckDBConnection, check: Check, o: Op
   // 7. The CSV and the copy.
   const csv = readFileSync(files[3], "utf8").replace(/^\uFEFF/, "").trimEnd().split("\n");
   check("contractors.csv: a header and one row per contractor", csv.length === ix.list.length + 1 && csv[0].startsWith("contractor,license_id,"), `${csv.length - 1} rows`);
-  const copy = [AMOUNT_NOTE, JV_NOTE, MATCH_NOTE, REVOKED_NOTE, ...Object.values(METHOD_LABELS)];
+  const copy = [AMOUNT_NOTE, DPWH_LINK_NOTE, JV_NOTE, MATCH_NOTE, REVOKED_NOTE, ...Object.values(METHOD_LABELS)];
   const long = copy.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((s) => o.words(s) > 20);
   check("contractor notes: sentences of at most 20 words", long.length === 0, long.join(" | "));
   const hits = [...copy, DISCLAIMER_CONTRACTORS.body].flatMap(o.readerCopyHits);
   check("contractor notes and disclaimer use no banned words", hits.length === 0, hits.join(", "));
+  // Contract IDs open DPWH's own record (Jason's example: https://transparency.dpwh.gov.ph/?project=24CN0169).
+  const ids = [...seen.keys()];
+  check("contract IDs link to DPWH's transparency portal, one page per contract",
+    dpwhContractUrl("24CN0169") === "https://transparency.dpwh.gov.ph/?project=24CN0169" && ids.every((id) => /^[A-Za-z0-9-]+$/.test(id)),
+    ids.filter((id) => !/^[A-Za-z0-9-]+$/.test(id)).slice(0, 5).join(", "));
   check("the disclaimer says links are our match, and amounts are not payments",
     /our match/i.test(DISCLAIMER_CONTRACTORS.body) && /not payments/i.test(DISCLAIMER_CONTRACTORS.body) && /does not establish/i.test(DISCLAIMER_CONTRACTORS.body));
 }

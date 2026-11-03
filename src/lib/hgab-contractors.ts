@@ -22,6 +22,12 @@ export const LINKED_YEARS = [2020, 2026] as const;
 
 export const contractorPath = (key: string) => `${CONTRACTORS_ROOT}/${encodeURIComponent(key)}`;
 
+/** DPWH's own page for a contract on its transparency portal, the source of our list (Jason, 2026-11-03). */
+export const DPWH_PORTAL = 'https://transparency.dpwh.gov.ph';
+export const dpwhContractUrl = (contractId: string) => `${DPWH_PORTAL}/?project=${encodeURIComponent(contractId)}`;
+/** Said where contract IDs are listed. */
+export const DPWH_LINK_NOTE = 'Each contract ID opens DPWH’s own record of it on DPWH’s transparency portal.';
+
 /** 32-bit FNV-1a over UTF-8: the same hash as build_site.py `fnv1a`. */
 export function fnv1a(s: string): number {
   let h = 0x811c9dc5;
@@ -438,10 +444,12 @@ export function lineContractorsCsv(rows: readonly LineContractorRow[]): string {
 }
 
 /** Extra CSV columns for a line with a contract (the map's "Download these"). */
-export const LINE_CONTRACT_COLUMNS = ['contract_id', 'contractors', 'contract_php', 'contract_status', 'contract_match'] as const;
+export const LINE_CONTRACT_COLUMNS = [
+  'contract_id', 'contract_dpwh_url', 'contractors', 'contract_php', 'contract_status', 'contract_match',
+] as const;
 export function lineContractCells(c: LineContract | undefined): Array<string | number | null> {
-  if (!c) return [null, null, null, null, null];
-  return [c.contractId, c.contractors.map((x) => x.name).join('; '), c.php, c.status, c.method];
+  if (!c) return LINE_CONTRACT_COLUMNS.map(() => null);
+  return [c.contractId, dpwhContractUrl(c.contractId), c.contractors.map((x) => x.name).join('; '), c.php, c.status, c.method];
 }
 
 // ---------------------------------------------------------------------------
@@ -455,14 +463,14 @@ const cell = (v: unknown): string => {
 };
 
 export const CONTRACTS_CSV_COLUMNS = [
-  'contract_id', 'year', 'description', 'dpwh_office', 'contract_php', 'status', 'progress_percent', 'start_date',
+  'contract_id', 'dpwh_url', 'year', 'description', 'dpwh_office', 'contract_php', 'status', 'progress_percent', 'start_date',
   'completion_date', 'joint_venture_partners', 'gaa_line_id', 'gaa_line_title', 'gaa_line_php', 'gaa_match',
 ] as const;
 
 /** One row per contract and budget line (a contract with no line has one row with the line columns empty). */
 export function contractsCsv(rows: readonly ContractRow[], ix: Pick<ContractorIndex, 'byKey'>): string {
   const out = rows.flatMap((r) => {
-    const base = [r.id, r.year, r.description, r.office, r.php, r.status, r.progress, r.start, r.completion,
+    const base = [r.id, dpwhContractUrl(r.id), r.year, r.description, r.office, r.php, r.status, r.progress, r.start, r.completion,
       r.partners.map((k) => ix.byKey.get(k)?.name ?? k).join('; ')];
     const lines = r.lines.length ? r.lines : [null];
     return lines.map((l) => [...base, l?.id, l?.title, l?.gaaPhp, l?.method].map(cell).join(','));

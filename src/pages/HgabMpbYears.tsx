@@ -25,6 +25,7 @@ import {
   type LineContract,
 } from '../lib/hgab-contractors';
 import MpbContractors from '../components/MpbContractors';
+import DpwhContractLink from '../components/DpwhContractLink';
 import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
   PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
@@ -53,7 +54,7 @@ function LineContractText({ l }: { l: MpbLine }) {
       {c.contractors.map((x, i) => (
         <Fragment key={x.key}>{i ? ' and ' : ''}<Link to={contractorPath(x.key)}>{x.name}</Link></Fragment>
       ))}{' '}
-      · contract {c.contractId}{c.status ? ` (${STATUS_LABELS[c.status].toLowerCase()})` : ''}
+      · contract <DpwhContractLink id={c.contractId} />{c.status ? ` (${STATUS_LABELS[c.status].toLowerCase()})` : ''}
     </span>
   );
 }
@@ -344,6 +345,7 @@ function Loaded({ data, summary, districts, contracts }: {
               'A ring is the centre of the barangay, town, city or province a title names, not the building. GPS points are as published, and some are wrong.',
               ...(contracts ? [
                 'From 2020, a line shows the DPWH contract we matched to it by title, office and amount. Check the contract.',
+                'A contract ID opens DPWH’s own record of it on DPWH’s transparency portal.',
               ] : []),
               'A line placed by its DPWH office shows the office’s area, not the building. Lines with no place in the title and no office area are listed, not mapped.',
               'The 2027 NEP and House bill are two stages of one budget: pick one, never both added together.',

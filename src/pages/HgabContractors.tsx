@@ -15,12 +15,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
+import DpwhContractLink from '../components/DpwhContractLink';
 import { Caveats, DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { datasetPath, loadContractorIndex, loadContractorShard } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { billions, count, fullPeso } from '../lib/hgab-history-view';
 import {
-  AMOUNT_NOTE, CONTRACTORS_CSV_NAME, CONTRACTORS_ROOT, CONTRACTORS_TITLE, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS,
+  AMOUNT_NOTE, CONTRACTORS_CSV_NAME, CONTRACTORS_ROOT, CONTRACTORS_TITLE, DPWH_LINK_NOTE, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS,
   REVOKED_NOTE, SORT_LABELS, STATUS_LABELS, amountIn, contractorPath, contractorsCsvPath, contractsCsv, contractsIn,
   decodeContracts, filterContractors, officeTotals, partnerTotals, sortContractors,
   type Contractor, type ContractorIndex, type ContractorSort, type ContractorSummary, type ContractRow,
@@ -483,7 +484,7 @@ function Contracts({ c, rows, index }: { c: Contractor; rows: ContractRow[]; ind
       <div className="hgab-ctr-head">
         <div>
           <h2 id="hgab-ctr-contracts-h" className="hgab-ctr-h2">{count(list.length)} contracts, {amountText(total)}</h2>
-          <p className="hgab-ctr-dek">Newest first. {MATCH_NOTE}</p>
+          <p className="hgab-ctr-dek">Newest first. {DPWH_LINK_NOTE} {MATCH_NOTE}</p>
         </div>
         <div className="hgab-ctr-controls">
           <label className="hgab-ctr-search">
@@ -546,7 +547,7 @@ function ContractTr({ r, index }: { r: ContractRow; index: ContractorIndex }) {
     <tr>
       <td>{r.year ?? '—'}</td>
       <td>
-        <span className="hgab-ctr-id">{r.id}</span>
+        <DpwhContractLink id={r.id} className="hgab-ctr-id" />
         <span className="hgab-ctr-sub" style={{ color: 'var(--ink-2)' }}>{r.description}</span>
         {partners.length > 0 && (
           <span className="hgab-ctr-sub">
