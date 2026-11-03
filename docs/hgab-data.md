@@ -971,8 +971,27 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 
 
 ## Project placements (the source's location lens)
 
-"Projects placed in this district" on every district page lists the DPWH lines the source
-workbench places in that legislative district. The placement is upstream's: the DPWH location
+Two pages read `locations.json`. **Projects placed in each district**
+(`/hgab/2027/districts?view=list-legislative`, `src/pages/HgabDistrictsPlaced.tsx`, figures in
+`src/lib/hgab-placed.ts`; Jason, 2026-11-03: place every project as the multi-purpose map does,
+and list it by district, "a similar view but their own individual district") has one card per
+legislative district with its own placed lines: NEP → House bill, the six kinds of change, how
+they were placed and which offices list them. The office list (`?view=list`) gives each district
+its office's whole figure, shared and not split (Caloocan 1st, 2nd and 3rd each show the Metro
+Manila 3rd DEO's ₱3.09B); here they show ₱1.78B, ₱0.27B and ₱0.67B. Of the House bill's
+₱587.1B of DPWH lines, ₱466.7B (79.5%) is placed in one district; the rest is listed by reason
+at the foot (shared office ₱25.6B, region only ₱90.1B, held for review ₱4.65B). The office list
+puts 70.2% of the same money on no card, mostly the Central Office's ₱408.2B; ₱300.0B of that is
+placed in one district by the place its title names. "Projects placed in this district" on every
+district page lists the lines one by one.
+
+GPS, checked against the lens (2026-11-03, our multi-purpose reader: upstream `analyze_text`, then
+`WIDER_GPS`): 2,358 of the 17,613 titles publish GPS; the lens places 2,344 of them by the title's
+place, and the GPS point falls in the same district for 2,260, another district for 34, and in no
+single district for 47. GPS would place 17 lines (₱0.31B) the lens leaves out, so the lens is used
+as published, as the multi-purpose map does for FY2027.
+
+The placement is upstream's: the DPWH location
 district lens (`analysis/web/buildLocationLens.py`, method in
 `analysis/docs/location_district_lens_method.md`, added upstream 2026-10-28). Each line is
 placed exactly once, in upstream's order:
