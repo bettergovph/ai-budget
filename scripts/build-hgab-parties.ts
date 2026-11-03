@@ -9,14 +9,20 @@
  * Inputs, all read-only:
  *   districts.json    the 254 districts and the representative the House directory lists for each (the site's own)
  *   leaderboard.json  the DPWH office groups with their FY2027 and FY2020–2026 figures, unchanged
+ *   dpwh/projects.parquet  every DPWH line of the House bill comparison, for the lines behind each party's row
  *   dynasty.sqlite    Open Halalan's 2001–2025 results as BetterGov Dynasties builds them (equal to its live API)
  *
  * What is ours: the join from a legislative district to its race (province or city, and district number), and from
  * the representative to their candidacy (surname, then first name). Every seat whose party is not simply "won the
  * seat in May 2025" carries a note, and the few that rest on facts outside the results carry a source.
  *
+ * Outputs: parties.json (seats, office groups, elections, totals) and p/<party>.json, one per party plus p/shared.json:
+ * every line at the office groups behind that row, which add up to it to the peso (checked here, per office group
+ * against leaderboard.json and per party against parties.json).
+ *
  *   --data=data/hgab/2027   --out=<data>/parties   --elections=~/projects/dynasty/data/dynasty.sqlite
  */
+import { DuckDBInstance } from "@duckdb/node-api";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -25,8 +31,9 @@ import { DatabaseSync } from "node:sqlite";
 import { displayName, type LeaderEntry, type LeaderboardData, type LeaderSlice } from "../src/lib/hgab-leaderboard";
 import {
   DYNASTIES_API, DYNASTIES_DEVELOPERS, DYNASTIES_SITE, ELECTION_TERMS, OPEN_HALALAN_URL, PARTIES_SCHEMA, PARTY_NAMES, partyName,
-  type CongressByParty, type Election, type ElectionSeat, type Fy2027ByParty, type PartiesData, type PartyBasis, type PartyRow,
-  type PartySlice, type Seat, type SharedUnit,
+  PARTY_LINE_COLS, SHARED_KEY, lineTotals, partySlug,
+  type CongressByParty, type Election, type ElectionSeat, type Fy2027ByParty, type PartiesData, type PartyBasis, type PartyLine,
+  type PartyLineRow, type PartyLinesFile, type PartyRow, type PartySlice, type Seat, type SharedUnit,
 } from "../src/lib/hgab-parties";
 
 const argv = process.argv.slice(2);
@@ -36,6 +43,7 @@ const OUT = resolve(arg("out", `${ROOT}/parties`));
 const INPUTS = {
   districts: resolve(ROOT, "districts.json"),
   leaderboard: resolve(ROOT, "leaderboard.json"),
+  projects: resolve(ROOT, "dpwh/projects.parquet"),
   elections: resolve(arg("elections", resolve(homedir(), "projects/dynasty/data/dynasty.sqlite"))),
 };
 const HOUSE = "MEMBER, HOUSE OF REPRESENTATIVES";
@@ -45,6 +53,8 @@ interface DistrictsFile {
   representatives_source: { url: string; congress: number; fetched_at: string; notice: string };
   crosswalk: { build_date: string };
   districts: Array<{ id: string; label: string; jurisdiction: string; district_label: string; region: string | null; representative: Rep | null }>;
+  offices: Record<string, { id: string; name: string; years: Array<{ fy: number; stage: string; matched_label: string | null }>; fy2027?: { office_change?: { row_ids: string[] } } | null }>;
+  no_office: { row_ids: string[] };
 }
 
 const readJson = <T,>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
@@ -295,6 +305,8 @@ const elections: Election[] = ELECTION_TERMS.map((t) => {
 });
 
 // FY2027: each office group goes to the one party all its districts' representatives ran under, or stays whole as shared.
+// A party's seats served (seats_counted) are the seats of those same groups, the base its share of the budget is set beside.
+const noOffice = seats.filter((s) => !s.unit).length;
 const slice = (): PartySlice => ({ units: 0, nep_php: 0, hgab3_php: 0, added_php: 0, added_rows: 0, held_php: 0, held_rows: 0, dropped_php: 0, dropped_rows: 0, gaa2026_php: null });
 const addTo = (s: PartySlice, e: LeaderEntry) => {
   s.units++;
@@ -342,15 +354,18 @@ for (const s of [K.regional, K.office_change, K.no_office]) for (const k of Obje
 const partyRows = [...rows.values()].sort((a, b) => b.seats - a.seats || b.added_php - a.added_php || a.party.localeCompare(b.party));
 const fy2027: Fy2027ByParty = {
   rows: partyRows, shared, shared_units: sharedUnits, unknown,
-  no_office_seats: seats.filter((s) => !s.unit).length,
+  no_office_seats: noOffice,
   deo: strip(K.deo), all: strip(L.totals.all), residual, central: strip(K.central),
 };
 const counted = partyRows.reduce((a, r) => a + r.added_php, 0) + shared.added_php + unknown.added_php;
+const seatsServed = partyRows.reduce((a, r) => a + r.seats_counted, 0) + shared.seats + unknown.seats + noOffice;
+if (seatsServed !== seats.length) fail(`seats served by party rows, shared and unknown offices, and no office: ${seatsServed} vs ${seats.length}`);
 checks.push(`FY2027 party rows + shared + unknown = district offices' added budget: ${counted === K.deo.added_php}`);
 if (counted !== K.deo.added_php) fail(`added ${counted} vs deo ${K.deo.added_php}`);
 if (K.deo.added_php + residual.added_php !== L.totals.all.added_php) fail("deo + residual != all");
 
-// Enacted budgets by Congress, read with that Congress's seats. The 20th uses the seats above, as FY2027 does.
+// Enacted budgets by Congress, read with that Congress's seats. The 20th uses the seats above, as FY2027 does. Each
+// row also counts the districts its office groups serve, so a budget share is set beside a share of the same offices.
 const congresses: CongressByParty[] = ELECTION_TERMS.map((t) => {
   const E = elections.find((e) => e.year === t.year)!;
   let partyAt: Map<string, string | null>;
@@ -368,26 +383,29 @@ const congresses: CongressByParty[] = ELECTION_TERMS.map((t) => {
       for (const id of s.district_ids) partyAt.set(id, p);
     }
   }
-  const tally = new Map<string, { seats: number; units: number; gaa_php: number }>();
-  const tallyOf = (p: string) => tally.get(p) ?? (tally.set(p, { seats: 0, units: 0, gaa_php: 0 }), tally.get(p)!);
+  const tally = new Map<string, { seats: number; units: number; districts: number; gaa_php: number }>();
+  const tallyOf = (p: string) => tally.get(p) ?? (tally.set(p, { seats: 0, units: 0, districts: 0, gaa_php: 0 }), tally.get(p)!);
   if (t.congress === 20) { for (const s of seats) if (s.party) tallyOf(s.party).seats++; }
   else for (const [p, n] of E.party_seats) tallyOf(p).seats += n;
-  const sharedC = { units: 0, gaa_php: 0 };
-  const notComparable = { units: 0, gaa_php: 0 };
+  const sharedC = { units: 0, districts: 0, gaa_php: 0 };
+  const notComparable = { units: 0, districts: 0, gaa_php: 0 };
   for (const e of L.entries) {
     const g = e.congress[String(t.congress) as "18" | "19" | "20"] ?? 0;
     const ps = e.people.map((p) => (partyAt.has(p.district_id) ? partyAt.get(p.district_id)! : null));
-    if (ps.includes(null) || (t.congress !== 20 && e.reorganised)) { notComparable.units++; notComparable.gaa_php += g; continue; }
+    const n = e.people.length;
+    if (ps.includes(null) || (t.congress !== 20 && e.reorganised)) { notComparable.units++; notComparable.districts += n; notComparable.gaa_php += g; continue; }
     const set = new Set(ps);
-    if (set.size > 1) { sharedC.units++; sharedC.gaa_php += g; continue; }
+    if (set.size > 1) { sharedC.units++; sharedC.districts += n; sharedC.gaa_php += g; continue; }
     const r = tallyOf(ps[0]!);
-    r.units++; r.gaa_php += g;
+    r.units++; r.districts += n; r.gaa_php += g;
   }
   const res = L.totals.gaa_residual.filter((r) => t.gaa_years.includes(r.fy));
   const deo = res.reduce((a, r) => a + r.deo_php, 0);
   const total = res.reduce((a, r) => a + r.total_php, 0);
   const sum = [...tally.values()].reduce((a, r) => a + r.gaa_php, 0) + sharedC.gaa_php + notComparable.gaa_php;
   if (sum !== deo) fail(`${t.label}: offices ${sum} vs district offices ${deo}`);
+  const districts = [...tally.values()].reduce((a, r) => a + r.districts, 0) + sharedC.districts + notComparable.districts;
+  if (districts + noOffice !== D.districts.length) fail(`${t.label}: districts ${districts} + ${noOffice} with no office vs ${D.districts.length}`);
   return {
     congress: t.congress, election: t.year, label: t.label, years: [...t.gaa_years],
     rows: [...tally].map(([party, v]) => ({ party, ...v })).sort((a, b) => b.seats - a.seats || b.gaa_php - a.gaa_php || a.party.localeCompare(b.party)),
@@ -404,7 +422,7 @@ const parties = Object.fromEntries([...codes].sort().map((c) => [c, PARTY_NAMES[
 const out: PartiesData = {
   schema: PARTIES_SCHEMA,
   built_at: new Date().toISOString(),
-  inputs: { districts: sha(INPUTS.districts), leaderboard: sha(INPUTS.leaderboard), elections: sha(INPUTS.elections) },
+  inputs: { districts: sha(INPUTS.districts), leaderboard: sha(INPUTS.leaderboard), projects: sha(INPUTS.projects), elections: sha(INPUTS.elections) },
   source: {
     name: "Open Halalan: The Philippine National and Local Election Dataset",
     citation: "Leung, Robert R. Open Halalan: The Philippine National and Local Election Dataset.",
@@ -435,8 +453,74 @@ const out: PartiesData = {
   ],
 };
 if (vintage !== 2025) fail(`the elections database ends in ${vintage}, not 2025`);
-mkdirSync(OUT, { recursive: true });
+
+// The lines behind each row. A line belongs to the office group whose district office the House bill lists it under
+// (the office's hgab3 label), as the leaderboards assign it; office-change and no-office lines belong to none, and
+// Central and regional office lines to no group. Each group's lines must add up to its leaderboard figures.
+const duck = await DuckDBInstance.create(":memory:");
+const conn = await duck.connect();
+const parquetRows = (await conn.runAndReadAll(
+  `SELECT id, title, office, trace, nep_php, hgab3_php FROM read_parquet('${INPUTS.projects.replace(/'/g, "''")}') ORDER BY id`,
+)).getRows();
+conn.closeSync(); duck.closeSync();
+const groupOfLabel = new Map<string, { unit: string; office: string }>();
+for (const e of L.entries) for (const o of e.offices) {
+  const label = D.offices[o.id]?.years.find((y) => y.stage === "hgab3" && y.fy === 2027)?.matched_label;
+  if (!label) continue;
+  if (groupOfLabel.has(label)) fail(`two offices read as the House bill label ${label}`);
+  groupOfLabel.set(label, { unit: e.key, office: o.name });
+}
+const heldOutIds = new Set(Object.values(D.offices).flatMap((o) => o.fy2027?.office_change?.row_ids ?? []));
+const noOfficeIds = new Set(D.no_office.row_ids);
+const linesOf = new Map<string, PartyLine[]>();
+for (const r of parquetRows) {
+  const id = String(r[0]);
+  if (heldOutIds.has(id) || noOfficeIds.has(id)) continue;
+  const hit = groupOfLabel.get(r[2] == null ? "" : String(r[2]));
+  if (!hit) continue;
+  const amount = (v: unknown) => (v == null ? null : Number(v));
+  const line: PartyLine = { id, title: String(r[1] ?? "").replace(/\s+/g, " ").trim(), office: hit.office, unit: hit.unit, trace: String(r[3]), nep_php: amount(r[4]), hgab3_php: amount(r[5]) };
+  linesOf.set(hit.unit, [...(linesOf.get(hit.unit) ?? []), line]);
+}
+for (const e of L.entries) {
+  const t = lineTotals(linesOf.get(e.key) ?? []);
+  const want = [e.nep_php ?? 0, e.hgab3_php ?? 0, e.added_php, e.added_rows, e.held_php, e.held_rows, e.dropped_php, e.dropped_rows];
+  const got = [t.nep_php, t.hgab3_php, t.added_php, t.added_rows, t.held_php, t.held_rows, t.dropped_php, t.dropped_rows];
+  if (got.some((v, i) => v !== want[i])) fail(`${e.key}: its lines add up to ${got.join("/")}, leaderboard.json says ${want.join("/")}`);
+}
+checks.push("every office group's lines add up to its leaderboard figures");
+
+// One file per party (its own office groups) and one for the shared ones, each adding up to its row.
+const partyOfUnit = new Map<string, string>();
+for (const e of L.entries) {
+  const set = new Set(e.people.map((p) => partyOf.get(p.district_id) ?? null));
+  partyOfUnit.set(e.key, set.size === 1 && !set.has(null) ? [...set][0]! : SHARED_KEY);
+}
+const lineFiles = new Map<string, PartyLinesFile>();
+for (const key of [...partyRows.map((r) => r.party), SHARED_KEY]) {
+  const keys = L.entries.filter((e) => partyOfUnit.get(e.key) === key).map((e) => e.key);
+  const index = new Map(keys.map((k, i) => [k, i]));
+  const lines = keys.flatMap((k) => linesOf.get(k) ?? []).sort((a, b) => (b.hgab3_php ?? 0) - (a.hgab3_php ?? 0) || (b.nep_php ?? 0) - (a.nep_php ?? 0) || a.id.localeCompare(b.id));
+  const totals = lineTotals(lines);
+  const row = key === SHARED_KEY ? shared : rows.get(key)!;
+  const want = [row.nep_php, row.hgab3_php, row.added_php, row.added_rows, row.held_php, row.held_rows, row.dropped_php, row.dropped_rows];
+  const got = [totals.nep_php, totals.hgab3_php, totals.added_php, totals.added_rows, totals.held_php, totals.held_rows, totals.dropped_php, totals.dropped_rows];
+  if (got.some((v, i) => v !== want[i])) fail(`${key}: its lines add up to ${got.join("/")}, its row says ${want.join("/")}`);
+  lineFiles.set(key, {
+    schema: PARTIES_SCHEMA, party: key, built_at: out.built_at, units: keys, cols: PARTY_LINE_COLS,
+    rows: lines.map((l): PartyLineRow => [l.id, l.title, l.office, index.get(l.unit)!, l.trace, l.nep_php, l.hgab3_php]),
+    totals,
+  });
+}
+const filed = [...lineFiles.values()].reduce((a, f) => a + f.rows.length, 0);
+const grouped = [...linesOf.values()].reduce((a, ls) => a + ls.length, 0);
+if (filed !== grouped) fail(`${filed} lines in the party files, ${grouped} at office groups`);
+if (new Set([...lineFiles.keys()].map(partySlug)).size !== lineFiles.size) fail("two parties share a file name");
+checks.push(`every party's lines add up to its row; ${filed.toLocaleString("en-US")} lines in ${lineFiles.size} files`);
+
+mkdirSync(resolve(OUT, "p"), { recursive: true });
 writeFileSync(resolve(OUT, "parties.json"), JSON.stringify(out));
+for (const [key, f] of lineFiles) writeFileSync(resolve(OUT, "p", `${partySlug(key)}.json`), JSON.stringify(f));
 
 // Report
 const n = (b: PartyBasis) => seats.filter((s) => s.basis === b);

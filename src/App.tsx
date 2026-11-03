@@ -32,6 +32,7 @@ const HgabHistory = lazy(() => import('./pages/HgabHistory'));
 const HgabMpbYears = lazy(() => import('./pages/HgabMpbYears'));
 const HgabContractors = lazy(() => import('./pages/HgabContractors'));
 const HgabParties = lazy(() => import('./pages/HgabParties'));
+const HgabParty = lazy(() => import('./pages/HgabParty'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -119,6 +120,7 @@ export default function App() {
           <Route path="/hgab/2027/districts/:id" element={<HgabDistrict />} />
           {/* Each district's representative and party (May 2025), and the DPWH budget by party; under the Districts menu. */}
           <Route path="/hgab/2027/parties" element={<HgabParties />} />
+          <Route path="/hgab/2027/parties/:party" element={<HgabParty />} />
           {/* Leaderboards: the gallery, and one board with its share image. */}
           <Route path="/hgab/2027/leaderboard" element={<HgabLeaderboard />} />
           <Route path="/hgab/2027/leaderboard/:board" element={<HgabLeaderboard />} />

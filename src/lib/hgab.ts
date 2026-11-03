@@ -33,7 +33,7 @@ import {
 } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
-import { PARTIES_DATA_PATH, type PartiesData } from './hgab-parties';
+import { PARTIES_DATA_PATH, partyLinesPath, type PartiesData, type PartyLinesFile } from './hgab-parties';
 import {
   CONTRACTORS_INDEX_PATH, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_MPB_PATH, CONTRACTORS_SUMMARY_PATH, contractorShardPath,
   decodeContractorIndex, decodeMpbContracts, type ContractorDownloads, type ContractorIndex, type ContractorIndexFile,
@@ -786,6 +786,12 @@ export function loadContractorIndex(): Promise<{ index: ContractorIndex; summary
 /** Each district's party and the budget by party (`npm run build:hgab-parties`; contract in lib/hgab-parties.ts). */
 export function loadHgabParties(): Promise<PartiesData> {
   return cached('parties', () => getJson<PartiesData>(dataUrl(PARTIES_DATA_PATH), 'Failed to load the seats by party'));
+}
+
+/** One party's lines (or the shared offices'): every DPWH line behind its row (`parties/p/<party>.json`). */
+export function loadPartyLines(code: string): Promise<PartyLinesFile> {
+  const path = partyLinesPath(code);
+  return cached(`parties:${path}`, () => getJson<PartyLinesFile>(dataUrl(path), 'Failed to load the party’s project lines'));
 }
 
 /** The contractor data as downloads: downloads/manifest.json (scripts/dpwh-contracts/build_downloads.py). */

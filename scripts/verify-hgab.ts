@@ -704,7 +704,7 @@ async function main(): Promise<void> {
   await verifyMpbYears(c);
   await verifyContractors(c, check, { out: OUT, gaa: GAA, contracts: CONTRACTS, words, readerCopyHits });
   verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
-  verifyParties(check, { out: OUT, words, readerCopyHits });
+  await verifyParties(c, check, { out: OUT, words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 

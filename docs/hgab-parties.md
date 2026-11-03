@@ -9,10 +9,10 @@ allocations based on the currently elected officials. But also get ready for pas
 
 | | |
 | --- | --- |
-| Page | `/hgab/2027/parties` (Districts menu → By party); a party line on every district page |
+| Page | `/hgab/2027/parties`; `/hgab/2027/parties/:party` and `/parties/shared` (each party's people and lines, pages/HgabParty.tsx); a party line on every district page. Out of the sub-nav for now (Jason, 2026-11-03), with the Multi-purpose buildings menu: `NAV_HIDDEN` in HgabBits.tsx |
 | Contract | `src/lib/hgab-parties.ts` (pure: page, builder, verifier, Worker SEO) |
-| Builder | `npm run build:hgab-parties` → `data/hgab/2027/parties/parties.json` (~480 KB, ~2 s) |
-| Checks | `scripts/verify-hgab-parties.ts`, run by `npm run verify:hgab` (19 checks) |
+| Builder | `npm run build:hgab-parties` → `data/hgab/2027/parties/parties.json` (~480 KB) and `parties/p/<party>.json` (20 files, 2.4 MB; Lakas–CMD 750 KB), ~4 s |
+| Checks | `scripts/verify-hgab-parties.ts`, run by `npm run verify:hgab` (22 checks) |
 | Publish | `npm run upload:hgab -- --only=parties --skip-verify` after a full verify |
 
 ## Sources
@@ -24,6 +24,7 @@ allocations based on the currently elected officials. But also get ready for pas
   `representative`, from the DEO2LEG crosswalk).
 - **Money:** `leaderboard.json`'s office groups, unchanged: FY2027 NEP vs House bill per group, and each group's
   FY2020–2026 enacted budget.
+- **Lines:** `dpwh/projects.parquet`, every DPWH line of the comparison, for the files behind each party's row.
 
 ## Rules
 
@@ -41,6 +42,10 @@ allocations based on the currently elected officials. But also get ready for pas
    builder, each with a source.
 5. **A party's figure adds the office groups serving only its members' districts.** An office group whose districts
    were won by different parties stays whole in "shared across parties", listed with every party. Never divided.
+   **Seats are compared on the same offices:** a party's share of seats is the seats its own groups serve
+   (`seats_counted`), not all its seats, so both bars count the same offices; each column adds up to 254 seats and
+   ₱64.0B with the shared and no-office rows. (Set against all its seats, Lakas–CMD would read 40.6% of seats and 33.5%
+   of the budget; on its own offices it is 30.3% and 33.5%.) The Congress rows do the same with `districts`.
 6. **Residual first:** the Central Office's added lines (with regional, office-change and no-office lines) carry no
    party and are stated before the party table.
 7. **Average per district** counts tier A only (one office, one district).
@@ -51,13 +56,34 @@ allocations based on the currently elected officials. But also get ready for pas
 9. **Abbreviations** are as published; `PARTY_NAMES` has our names for them. ASENSO (a party in Abra and another in
    Manila) and PPP (Palawan and elsewhere) are not expanded, and are counted together under the abbreviation.
 
+## The lines behind each row (counter-check)
+
+Jason, 2026-11-03: "each of our work should be counter-checked. If I click the party, I should see the people of that
+party and their project".
+
+- `p/<party>.json` (and `p/shared.json`) holds every DPWH line at the office groups behind that row, as the NEP and
+  the House bill (third reading) list it: record id, title, office, group, trace, NEP and House amounts
+  (`PARTY_LINE_COLS`). A line belongs to the group whose district office the House bill lists it under (the office's
+  hgab3 `matched_label`), as the leaderboards assign it; office-change and no-office lines belong to none.
+- The builder stops unless each office group's lines add up to its leaderboard figures (NEP, House bill, added, held,
+  dropped, with line counts) and each party's lines to its row. 13,547 lines in 20 files, the source's own count.
+- The party page adds the lines up again in the browser (`lineTotals`) and prints them beside the row: "✓ Equal to the
+  peso", or "✗ … Please report it". Filtering an office reproduces that representative's row; every line opens its
+  record (`/hgab/2027/dpwh/p/:id`) with its pages in the documents.
+- `verify:hgab` reads the lines back from the parquet (id, title, office, trace, amounts), checks each is at an office
+  of its party's groups, appears once, and that all of them are the parquet's district-office lines; and re-adds them.
+- The party table shows each party's whole House bill budget at its offices (with the NEP) beside the part the House
+  added; the average per district was removed (Jason).
+
 ## Key figures (build of 2026-11-03)
 
 - 254 seats: Lakas–CMD 103, NUP 33, NPC 32, PFP 28, NP 22, independents 11, LP 6, others 19.
 - Projects the House added (insertion candidates): ₱161.6B. Central Office and no district office ₱97.7B (60%);
   district offices ₱64.0B.
-- Of the ₱64.0B: Lakas–CMD offices ₱21.4B (33.5%, 71 offices); PFP ₱7.4B; NPC ₱5.8B; independents ₱4.1B; NP ₱4.0B;
-  NUP ₱2.5B; shared across parties ₱14.1B (22.1%, 25 offices, 74 seats). Davao City's three HTL seats: ₱0.
+- Of the ₱64.0B, office by office (share of seats served → share of the added): Lakas–CMD 77 seats 30.3% → ₱21.4B
+  33.5%; PFP 17 seats 6.7% → ₱7.4B 11.6%; NPC 25 seats 9.8% → ₱5.8B 9.0%; independents 8 seats 3.1% → ₱4.1B 6.5%;
+  NP 16 seats 6.3% → ₱4.0B 6.3%; NUP 16 seats 6.3% → ₱2.5B 3.9%; shared across parties 74 seats 29.1% → ₱14.1B 22.1%;
+  no DPWH office 5 seats. Davao City's three HTL seats: ₱0.
 - 18th Congress (FY2020–22): PDP–Laban 84 seats, ₱173.7B (22.4%) of ₱773.7B at district offices; 42 groups not
   compared. 19th (FY2023–25): PDP–Laban 65 seats ₱128.9B, NP 38 seats ₱127.7B; 30 not compared.
 

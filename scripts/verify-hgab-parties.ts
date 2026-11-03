@@ -1,17 +1,20 @@
 /**
  * `parties/` (the House bill by party, npm run build:hgab-parties), for verify-hgab.ts. Recomputed here on its own code
  * path: every seat's candidacy is read back from the elections database, every party total from leaderboard.json's
- * office groups, every Congress from the election rows. Nothing is taken from the builder but the file it wrote.
+ * office groups, every Congress from the election rows, and every line in the party files (p/<party>.json) from the
+ * DPWH projects parquet. Nothing is taken from the builder but the files it wrote.
  */
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { DuckDBConnection } from "@duckdb/node-api";
 import { DISCLAIMER_PARTIES } from "../src/lib/hgab-disclaimers";
 import type { LeaderboardData } from "../src/lib/hgab-leaderboard";
 import {
-  BASIS_LABELS, CENTRAL_NOTE, ELECTION_TERMS, PARTIES_SCHEMA, PARTY_FIGURE_NOTE, PARTY_MEANING, PARTY_NAMES, seatsCsv, type PartiesData,
+  BASIS_LABELS, CENTRAL_NOTE, ELECTION_TERMS, PARTIES_SCHEMA, PARTY_FIGURE_NOTE, PARTY_LINE_COLS, PARTY_MEANING, PARTY_NAMES, SAME_OFFICES_NOTE,
+  SHARED_KEY, partySlug, seatsCsv, type PartiesData, type PartyLinesFile,
 } from "../src/lib/hgab-parties";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -23,23 +26,28 @@ const HOUSE = "MEMBER, HOUSE OF REPRESENTATIVES";
 const ORDINAL: Record<string, string> = { lone: "LONE", "1st": "FIRST", "2nd": "SECOND", "3rd": "THIRD", "4th": "FOURTH", "5th": "FIFTH", "6th": "SIXTH", "7th": "SEVENTH", "8th": "EIGHTH" };
 const fold = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/\p{M}/gu, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
 
-export function verifyParties(check: Check, o: Opts): void {
+export async function verifyParties(c: DuckDBConnection, check: Check, o: Opts): Promise<void> {
   process.stdout.write("\nparties/ (the House bill by party)\n");
   const path = resolve(o.out, "parties", "parties.json");
   const inputs = {
     districts: resolve(o.out, "districts.json"),
     leaderboard: resolve(o.out, "leaderboard.json"),
+    projects: resolve(o.out, "dpwh", "projects.parquet"),
     elections: resolve(o.elections ?? resolve(homedir(), "projects/dynasty/data/dynasty.sqlite")),
   };
   const present = [path, ...Object.values(inputs)].every((p) => existsSync(p));
   check("parties.json present with its inputs (npm run build:hgab-parties)", present, path);
   if (!present) return;
   const P = readJson<PartiesData>(path);
-  check("schema 1, built from the current districts.json, leaderboard.json and elections database",
+  check("schema 1, built from the current districts.json, leaderboard.json, DPWH project lines and elections database",
     P.schema === PARTIES_SCHEMA && (Object.keys(inputs) as Array<keyof typeof inputs>).every((k) => P.inputs[k] === sha(inputs[k])),
     (Object.keys(inputs) as Array<keyof typeof inputs>).filter((k) => P.inputs[k] !== sha(inputs[k])).map((k) => `${k} changed since the build`).join(", "));
 
-  const D = readJson<{ districts: Array<{ id: string; label: string; jurisdiction: string; representative: { name: string | null; status: string; leadership_roles?: string[]; candidates?: Array<{ name: string | null }> } | null }> }>(inputs.districts);
+  const D = readJson<{
+    districts: Array<{ id: string; label: string; jurisdiction: string; representative: { name: string | null; status: string; leadership_roles?: string[]; candidates?: Array<{ name: string | null }> } | null }>;
+    offices: Record<string, { name: string; years: Array<{ fy: number; stage: string; matched_label: string | null }>; fy2027?: { office_change?: { row_ids: string[] } } | null }>;
+    no_office: { row_ids: string[] };
+  }>(inputs.districts);
   const L = readJson<LeaderboardData>(inputs.leaderboard);
   const db = new DatabaseSync(inputs.elections, { readOnly: true });
 
@@ -148,9 +156,10 @@ export function verifyParties(check: Check, o: Opts): void {
   check("FY2027: parties + shared + unknown = the district offices' added budget; with the residual, the whole",
     sum === K.deo.added_php && f.deo.added_php === K.deo.added_php && f.residual.added_php === resid && f.all.added_php === L.totals.all.added_php
       && K.deo.added_php + resid === L.totals.all.added_php, `${sum} vs ${K.deo.added_php}`);
-  check("FY2027: the seat counts add up to 254 with the no-office seats",
+  check("FY2027: the seat counts add up to 254 with the no-office seats, both by party and by the offices that serve them",
     f.rows.reduce((x, r) => x + r.seats, 0) + P.seats.filter((s) => !s.party).length === P.seats.length
-      && f.no_office_seats === noOffice.size);
+      && f.no_office_seats === noOffice.size
+      && f.rows.reduce((x, r) => x + r.seats_counted, 0) + f.shared.seats + f.unknown.seats + f.no_office_seats === P.seats.length);
 
   // Elections, read back.
   const wonIn = db.prepare(`select count(*) as n from candidacies c join contests ct on ct.id = c.contest_id
@@ -205,34 +214,37 @@ export function verifyParties(check: Check, o: Opts): void {
         for (const id of won[0].district_ids) at.set(id, p);
       }
     }
-    const g = new Map<string, { units: number; gaa: number }>();
-    let shared = 0, sharedUnits = 0, nc = 0, ncUnits = 0;
+    const g = new Map<string, { units: number; gaa: number; districts: number }>();
+    let shared = 0, sharedUnits = 0, sharedDistricts = 0, nc = 0, ncUnits = 0, ncDistricts = 0;
     for (const e of L.entries) {
       const v = e.congress[String(C.congress) as "18" | "19" | "20"] ?? 0;
       const ps = e.people.map((p) => at.get(p.district_id) ?? null);
-      if (ps.includes(null) || (C.congress !== 20 && e.reorganised)) { nc += v; ncUnits++; continue; }
-      if (new Set(ps).size > 1) { shared += v; sharedUnits++; continue; }
-      const x = g.get(ps[0]!) ?? { units: 0, gaa: 0 };
-      x.units++; x.gaa += v; g.set(ps[0]!, x);
+      if (ps.includes(null) || (C.congress !== 20 && e.reorganised)) { nc += v; ncUnits++; ncDistricts += ps.length; continue; }
+      if (new Set(ps).size > 1) { shared += v; sharedUnits++; sharedDistricts += ps.length; continue; }
+      const x = g.get(ps[0]!) ?? { units: 0, gaa: 0, districts: 0 };
+      x.units++; x.gaa += v; x.districts += ps.length; g.set(ps[0]!, x);
     }
     const res = L.totals.gaa_residual.filter((r) => t.gaa_years.includes(r.fy));
     const deo = res.reduce((a, r) => a + r.deo_php, 0);
     const seatsBy = new Map<string, number>(C.congress === 20 ? [] : E.party_seats);
     if (C.congress === 20) for (const s of P.seats) if (s.party) seatsBy.set(s.party, (seatsBy.get(s.party) ?? 0) + 1);
-    const rowsOk = C.rows.every((r) => (g.get(r.party)?.gaa ?? 0) === r.gaa_php && (g.get(r.party)?.units ?? 0) === r.units && (seatsBy.get(r.party) ?? 0) === r.seats)
+    const rowsOk = C.rows.every((r) => (g.get(r.party)?.gaa ?? 0) === r.gaa_php && (g.get(r.party)?.units ?? 0) === r.units && (seatsBy.get(r.party) ?? 0) === r.seats
+        && (g.get(r.party)?.districts ?? 0) === r.districts)
       && [...g.keys()].every((k) => C.rows.some((r) => r.party === k)) && [...seatsBy.keys()].every((k) => C.rows.some((r) => r.party === k));
     const total = C.rows.reduce((a, r) => a + r.gaa_php, 0) + C.shared.gaa_php + C.not_comparable.gaa_php;
+    const districts = C.rows.reduce((a, r) => a + r.districts, 0) + C.shared.districts + C.not_comparable.districts + noOffice.size;
     if (!rowsOk || C.shared.gaa_php !== shared || C.shared.units !== sharedUnits || C.not_comparable.gaa_php !== nc || C.not_comparable.units !== ncUnits
+      || C.shared.districts !== sharedDistricts || C.not_comparable.districts !== ncDistricts || districts !== P.seats.length
       || C.deo_php !== deo || total !== deo || C.total_php !== res.reduce((a, r) => a + r.total_php, 0)
       || JSON.stringify(C.years) !== JSON.stringify(t.gaa_years)) congressOk = false;
   }
-  check("18th to 20th Congress: enacted budgets by party, shared and not compared recomputed; they add up to the district offices'", congressOk);
+  check("18th to 20th Congress: enacted budgets and the districts their offices serve, by party, shared and not compared, recomputed; they add up to the district offices' and to 254 districts", congressOk);
 
   // Names and copy.
   const codes = new Set([...P.seats.map((s) => s.party).filter((x): x is string => !!x), ...P.elections.flatMap((e) => e.seats.map((s) => s.party)).filter(Boolean)]);
   check("every party abbreviation in the file is listed, with our name for it or none",
     [...codes].every((c) => c in P.parties && P.parties[c] === (PARTY_NAMES[c] ?? null)) && Object.keys(P.parties).length === codes.size);
-  const copy = [PARTY_MEANING, PARTY_FIGURE_NOTE, CENTRAL_NOTE, ...P.notes, ...P.seats.map((s) => s.note ?? ""), ...Object.values(BASIS_LABELS)];
+  const copy = [PARTY_MEANING, PARTY_FIGURE_NOTE, CENTRAL_NOTE, SAME_OFFICES_NOTE, ...P.notes, ...P.seats.map((s) => s.note ?? ""), ...Object.values(BASIS_LABELS)];
   const long = copy.flatMap((t) => t.split(/(?<=\.)\s+/)).filter((x) => o.words(x) > 25);
   check("reader copy: plain sentences of at most 25 words, none of the banned pipeline words", long.length === 0 && copy.flatMap(o.readerCopyHits).length === 0
     && o.readerCopyHits(DISCLAIMER_PARTIES.body).length === 0, long.slice(0, 2).join(" | "));
@@ -243,4 +255,58 @@ export function verifyParties(check: Check, o: Opts): void {
   check("the district CSV has every seat once, with its party", csv.length === P.seats.length + 1
     && P.seats.every((s, i) => csv[i + 1].startsWith(`${s.district_id},`)));
   db.close();
+
+  // The lines behind each row (p/<party>.json), read back from the projects parquet.
+  const want = [...f.rows.map((r) => r.party), SHARED_KEY];
+  const files = new Map<string, PartyLinesFile>();
+  const missing = want.filter((k) => !existsSync(resolve(o.out, "parties", "p", `${partySlug(k)}.json`)));
+  check(`one line file per party with a seat, and one for the shared offices (${want.length})`, missing.length === 0, missing.join(", "));
+  if (missing.length) return;
+  for (const k of want) files.set(k, readJson<PartyLinesFile>(resolve(o.out, "parties", "p", `${partySlug(k)}.json`)));
+  const q = (x: string) => x.replace(/'/g, "''");
+  const pq = new Map((await c.runAndReadAll(`SELECT id, title, office, trace, nep_php, hgab3_php FROM read_parquet('${q(inputs.projects)}')`)).getRows()
+    .map((r) => [String(r[0]), { title: String(r[1] ?? "").replace(/\s+/g, " ").trim(), office: r[2] == null ? "" : String(r[2]), trace: String(r[3]),
+      nep: r[4] == null ? null : Number(r[4]), house: r[5] == null ? null : Number(r[5]) }]));
+  // Office group of each district office's House bill label, and the lines no group carries, from districts.json.
+  const entryOfLabel = new Map<string, (typeof L.entries)[number]>();
+  for (const e of L.entries) for (const off of e.offices) {
+    const label = D.offices[off.id]?.years.find((y) => y.fy === 2027 && y.stage === "hgab3")?.matched_label;
+    if (label) entryOfLabel.set(label, e);
+  }
+  const outside = new Set([...Object.values(D.offices).flatMap((x) => x.fy2027?.office_change?.row_ids ?? []), ...D.no_office.row_ids]);
+  const expected = [...pq].filter(([id, r]) => !outside.has(id) && entryOfLabel.has(r.office)).map(([id]) => id);
+  const partyOfEntry = (e: (typeof L.entries)[number]) => {
+    const ps = new Set(e.people.map((pp) => party.get(pp.district_id) ?? "?"));
+    return ps.size === 1 && !ps.has("?") ? [...ps][0] : SHARED_KEY;
+  };
+  const seen = new Set<string>();
+  const lineOff: string[] = [];
+  const sumOff: string[] = [];
+  for (const [k, file] of files) {
+    if (file.schema !== PARTIES_SCHEMA || file.party !== k || JSON.stringify(file.cols) !== JSON.stringify(PARTY_LINE_COLS)) lineOff.push(`${k}: header`);
+    const own = new Set(L.entries.filter((e) => partyOfEntry(e) === k).map((e) => e.key));
+    if (file.units.length !== own.size || file.units.some((u) => !own.has(u))) lineOff.push(`${k}: office groups`);
+    const t = { lines: 0, nep: 0, house: 0, added: 0, addedN: 0, held: 0, heldN: 0, dropped: 0, droppedN: 0 };
+    for (const [id, title, officeName, ui, trace, nep, house] of file.rows) {
+      const r = pq.get(id);
+      const e = entryOfLabel.get(r?.office ?? "");
+      if (!r || seen.has(id) || outside.has(id) || !e || e.key !== file.units[ui] || r.trace !== trace || r.nep !== nep || r.house !== house || r.title !== title
+        || !e.offices.some((x) => x.name === officeName)) lineOff.push(`${k}: ${id}`);
+      seen.add(id);
+      t.lines++; t.nep += nep ?? 0; t.house += house ?? 0;
+      if (trace === "house_only_candidate") { t.added += house ?? 0; t.addedN++; }
+      if (trace === "fuzzy_candidate" || trace === "ambiguous") { t.held += house ?? 0; t.heldN++; }
+      if (trace === "nep_only_candidate") { t.dropped += nep ?? 0; t.droppedN++; }
+    }
+    const row = k === SHARED_KEY ? f.shared : f.rows.find((x) => x.party === k)!;
+    const ft = file.totals;
+    if (t.nep !== row.nep_php || t.house !== row.hgab3_php || t.added !== row.added_php || t.addedN !== row.added_rows || t.held !== row.held_php
+      || t.heldN !== row.held_rows || t.dropped !== row.dropped_php || t.droppedN !== row.dropped_rows
+      || ft.lines !== t.lines || ft.nep_php !== t.nep || ft.hgab3_php !== t.house || ft.added_php !== t.added || ft.dropped_php !== t.dropped) {
+      sumOff.push(`${k}: lines ${t.house}/${t.added} vs row ${row.hgab3_php}/${row.added_php}`);
+    }
+  }
+  check(`every line in the party files is a parquet line at a district office of that party's office groups, once (${seen.size.toLocaleString("en-US")})`,
+    lineOff.length === 0 && seen.size === expected.length && expected.every((id) => seen.has(id)), lineOff.slice(0, 4).join("; ") || `${seen.size} vs ${expected.length}`);
+  check("each party's lines add up to its row and to its file's totals: NEP, House bill, added, unconfirmed, NEP only", sumOff.length === 0, sumOff.slice(0, 3).join("; "));
 }

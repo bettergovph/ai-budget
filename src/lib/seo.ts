@@ -333,6 +333,15 @@ export function pageMeta(pathname: string): PageMeta {
         "serving each party's districts. Shared offices stay whole; the 18th and 19th Congresses' enacted budgets too.",
     };
   }
+  // One party's page (or the shared offices'): its people and every line behind its row. The page sets its name.
+  if (p.startsWith(`${PARTIES_ROOT}/`)) {
+    return {
+      title: `A Party's Representatives and DPWH Projects in the 2027 House Bill · ${SITE}`,
+      description:
+        "One party's representatives in the 254 legislative districts, as they ran in May 2025, and every DPWH project line at the " +
+        "offices serving only their districts in House Bill 10858 and the NEP, added up again on the page and linked to the documents.",
+    };
+  }
   // DPWH contractors and one contractor's page: before the dataset pattern, which would read "contractors" as a
   // program key. A contractor's name is set by the page once its data loads.
   if (p === CONTRACTORS_ROOT) {

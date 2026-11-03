@@ -197,3 +197,56 @@
   .hgab-pty-barcol { min-width: 110px; }
   .hgab-pty-bar { width: 56px; }
 }
+
+/* --- figures with their share under them (party tables) -------------------- */
+
+.hgab-pty-metric { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.hgab-pty-mv { font-variant-numeric: tabular-nums; }
+.hgab-pty-ms { display: inline-flex; align-items: center; white-space: nowrap; }
+.hgab-pty-ms .hgab-pty-bar { width: 84px; }
+.hgab-pty-metric .hgab-pty-sub { margin-top: 0; }
+.hgab-pty-bar.is-total > span { background: color-mix(in srgb, var(--hgab-house-only, #b07d3a) 45%, var(--ink-3)); }
+.hgab-pty-table.is-parties td { padding-top: 9px; padding-bottom: 9px; }
+.hgab-pty-plink { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-pty-plink:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
+a.hgab-pty-chip { text-decoration: none; }
+a.hgab-pty-chip:hover { color: var(--accent-deep); border-color: var(--accent); }
+
+/* --- the residual strips ---------------------------------------------------- */
+
+.hgab-pty-stripblock { margin-top: 12px; }
+.hgab-pty-striplabel { margin: 0 0 2px; font-size: 12.5px; color: var(--ink-2); }
+.hgab-pty-striplabel b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* --- a party's page ----------------------------------------------------------- */
+
+.hgab-pty-h3 { margin: 20px 0 6px; font-family: var(--font-hero); font-size: 16px; font-weight: 700; color: var(--ink); }
+.hgab-pty-check th[scope='row'] { font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.hgab-pty-verdict { margin: 8px 0 0; font-size: 13px; font-weight: 600; }
+.hgab-pty-verdict.is-ok { color: var(--positive, #3a6b3a); }
+.hgab-pty-verdict.is-off { color: var(--negative, #b8341f); }
+.hgab-pty-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.hgab-pty-chips button {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper);
+  cursor: pointer;
+}
+.hgab-pty-chips button span { color: var(--ink-3); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.hgab-pty-chips button[aria-pressed='true'] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.hgab-pty-chips button[aria-pressed='true'] span { color: color-mix(in srgb, var(--paper) 75%, var(--ink)); }
+.hgab-pty-chips button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgab-pty-sums { margin: 0 0 8px; font-size: 13px; color: var(--ink-3); }
+.hgab-pty-sums b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.hgab-pty-line { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-pty-line:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
+.hgab-pty-status { display: inline-block; font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.hgab-pty-status.is-added { color: var(--hgab-house-only, #b07d3a); }
+.hgab-pty-status.is-dropped { color: var(--hgab-nep-only); }
+.hgab-pty-status.is-increased { color: var(--hgab-increased); }
+.hgab-pty-status.is-decreased { color: var(--hgab-decreased); }
+.hgab-pty-status.is-held, .hgab-pty-status.is-scope { color: var(--ink-3); }
