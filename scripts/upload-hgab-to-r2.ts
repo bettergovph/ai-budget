@@ -84,12 +84,14 @@ function contentTypeFor(path: string): string {
   // explorer/downloads/README.md (npm run build:hgab-lines): the data dictionary, opened in the browser.
   if (path.endsWith(".md")) return "text/plain; charset=utf-8";
   if (path.endsWith(".zip")) return "application/zip";
+  // contractors/downloads/dpwh-contracts-2016-2026.csv.gz: the contract list's CSV, gzipped (served as a file, not encoded).
+  if (path.endsWith(".gz")) return "application/gzip";
   return "application/octet-stream";
 }
 /** A file directly in letters/: every one is rebuilt with the data. */
 const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
-/** explorer/downloads/: the line-by-line dataset, fixed names rebuilt with the data. */
-const isLineDownload = (path: string) => /[\\/]explorer[\\/]downloads[\\/][^\\/]+$/.test(path);
+/** explorer/downloads/ and contractors/downloads/: the line-by-line and contractor datasets, fixed names rebuilt with the data. */
+const isLineDownload = (path: string) => /[\\/](explorer|contractors)[\\/]downloads[\\/][^\\/]+$/.test(path);
 /** JSON, CSV, the letters and the line-by-line downloads change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
   return path.endsWith(".json") || path.endsWith(".geojson") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isLineDownload(path) ? "public, max-age=300" : "public, max-age=86400";
@@ -101,7 +103,7 @@ function contentDispositionFor(path: string): string | undefined {
     return `attachment; filename="${letterDownloadName(name.replace(/\.(pdf|txt)$/, ""), name.endsWith(".pdf") ? "pdf" : "txt")}"`;
   }
   // Their names already say what they are (house-bill-2027-lines.csv, nep-2027-...).
-  if (isLineDownload(path) && /\.(csv|parquet|zip)$/.test(name)) return `attachment; filename="bettergov-${name}"`;
+  if (isLineDownload(path) && /\.(csv|csv\.gz|parquet|zip)$/.test(name)) return `attachment; filename="bettergov-${name}"`;
   if (!path.endsWith(".csv")) return undefined;
   // mpb-years/lines.csv: every multi-purpose building line, FY2015-FY2027 (the page links it by that name).
   if (/[\\/]mpb-years[\\/]lines\.csv$/.test(path)) return `attachment; filename="${MPB_CSV_NAME}"`;

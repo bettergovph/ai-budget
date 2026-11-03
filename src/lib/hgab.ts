@@ -34,8 +34,9 @@ import {
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
 import {
-  CONTRACTORS_INDEX_PATH, CONTRACTORS_MPB_PATH, CONTRACTORS_SUMMARY_PATH, contractorShardPath, decodeContractorIndex,
-  decodeMpbContracts, type ContractorIndex, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
+  CONTRACTORS_INDEX_PATH, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_MPB_PATH, CONTRACTORS_SUMMARY_PATH, contractorShardPath,
+  decodeContractorIndex, decodeMpbContracts, type ContractorDownloads, type ContractorIndex, type ContractorIndexFile,
+  type ContractorShardFile, type ContractorSummary,
   type LineContract, type MpbContractsFile,
 } from './hgab-contractors';
 import {
@@ -779,6 +780,11 @@ export function loadContractorIndex(): Promise<{ index: ContractorIndex; summary
     ]);
     return { index: decodeContractorIndex(index), summary };
   });
+}
+
+/** The contractor data as downloads: downloads/manifest.json (scripts/dpwh-contracts/build_downloads.py). */
+export function loadContractorDownloads(): Promise<ContractorDownloads> {
+  return cached('contractors:downloads', () => getJson<ContractorDownloads>(dataUrl(CONTRACTORS_MANIFEST_PATH), 'Failed to load the list of downloads'));
 }
 
 /** The file holding a contractor's contracts (one of 64, by a hash of its key). */

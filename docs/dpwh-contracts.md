@@ -45,6 +45,42 @@ Counting rules:
   never added across contractors.
 - **Missing contractor:** 16,570 contracts name no contractor yet (nearly all "For Procurement") and are left out.
 
+## Downloads, for developers (`data/hgab/2027/contractors/downloads/`)
+
+Jason (2026-11-03): "upload me the manifest.json for our published data so we can make it easy for fellow developers to
+hand over". Built by `build_downloads.py`, the last step of `run.sh`. Published with the contractors folder
+(`upload:hgab --only=contractors`); linked from `/hgab/2027/contractors#downloads` and the Sources page.
+
+- **Start here:** https://budget-assets.bettergov.ph/hgab/2027/contractors/downloads/manifest.json.
+- **`manifest.json`** follows the line-by-line manifest (`files[]`: key, title, about, rows, csv, parquet, columns) and
+  adds:
+  - each file's `url`, with `?v=` from its SHA-256;
+  - `sources`: DPWH's list, the API and its download times, and the GAA extract;
+  - `method`: the match rules;
+  - `totals`, with the match table by year;
+  - `accuracy`: the sample check;
+  - `pipeline`: repo, commit, and the build and verify commands;
+  - `site_data`: the JSON files the pages read.
+- **`README.md`**: the same in prose.
+
+| File | Rows | What |
+| --- | ---: | --- |
+| `dpwh-contracts-2016-2026.parquet` / `.csv.gz` | 267,292 | DPWH's contract list, every list field, with `dpwh_url` (DPWH's page) and `gaa_year` |
+| `dpwh-contractors-2016-2026.parquet` / `.csv` | 6,728 | Every contractor with its figures (as `contractors.csv`) |
+| `gaa-2020-2026-dpwh-line-contracts.parquet` / `.csv` | 109,602 | Each GAA line and its matched contract, with how it was matched (links.parquet + `dpwh_url`) |
+| `gaa-2020-2026-dpwh-lines.parquet` / `.csv` | 164,289 | Every DPWH capital-outlay line, FY2020–FY2026, matched or not |
+| `match-accuracy-sample.json` | | The sample check (qa.json) |
+| `dpwh-contractors-gaa-2020-2026.zip` | | The README, the accuracy sample and every Parquet file (26 MB) |
+
+- CSVs are UTF-8 with a BOM; the contract list's CSV is gzipped (about 15 MB; plain it would be about 100 MB).
+- The uploader serves them as attachments named `bettergov-<file>`, cached 5 minutes like the line-by-line downloads.
+- `npm run verify:hgab` checks, in its `contractors/` section:
+  - every file's size, SHA-256 and URL;
+  - each table's rows and columns, in both formats, against the manifest;
+  - that the tables are the published data;
+  - every `dpwh_url`;
+  - the zip's contents and the accuracy figures.
+
 ## Site files (`data/hgab/2027/contractors/`)
 
 | File | What |
