@@ -21,8 +21,10 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, asOfText } from '../lib/hgab-leaderboard';
 import {
-  LINE_CONTRACT_COLUMNS, METHOD_LABELS, STATUS_LABELS, contractorPath, lineContractCells, type LineContract,
+  LINE_CONTRACT_COLUMNS, METHOD_LABELS, STATUS_LABELS, contractorPath, lineBuiltBy, lineContractCells, lineContractorName,
+  type LineContract,
 } from '../lib/hgab-contractors';
+import MpbContractors from '../components/MpbContractors';
 import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
   PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
@@ -71,6 +73,8 @@ interface View {
   stage: Stage2027;
   f: MpbFilters;
   sort: MpbSort;
+  /** A contractor's key (`?contractor=`): only the lines whose matched contract names it, on the map and in the list. */
+  who: string;
 }
 type ViewPatch = Omit<Partial<View>, 'f'> & { f?: Partial<MpbFilters> };
 
@@ -97,6 +101,7 @@ function readView(p: URLSearchParams, data: MpbData | null): View {
       repeat: repeat === 'title' || repeat === 'barangay' ? repeat : '',
     },
     sort: sort === 'amount' || sort === 'title' ? sort : 'year',
+    who: p.get('contractor') ?? '',
   };
 }
 
@@ -112,6 +117,7 @@ function writeView(v: View, data: MpbData): URLSearchParams {
   if (v.f.district >= 0) p.set('district', data.districts[v.f.district].id);
   if (v.f.place >= 0) p.set('place', data.places[v.f.place].key);
   if (v.sort !== 'year') p.set('sort', v.sort);
+  if (v.who) p.set('contractor', v.who);
   return p;
 }
 
@@ -164,7 +170,13 @@ function Loaded({ data, summary, districts, contracts }: {
   const sel: MpbSelection = useMemo(() => ({ years: view.years, stage: view.stage }), [view.years, view.stage]);
   // The map shows everything the control row selects; a picked district or place narrows the list only.
   // What the control row selects; the repeats filter then keeps only lines in a group, among those.
-  const baseLines = useMemo(() => filterLines(data, sel, { ...view.f, district: -1, place: -1 }), [data, sel, view.f]);
+  // A picked contractor then keeps only its lines (the ranking of contractors is made before it, see rankLines).
+  const selLines = useMemo(() => filterLines(data, sel, { ...view.f, district: -1, place: -1 }), [data, sel, view.f]);
+  const who = contracts ? view.who : '';
+  const baseLines = useMemo(
+    () => (who && contracts ? selLines.filter((l) => lineBuiltBy(contracts, l.id, who)) : selLines),
+    [selLines, contracts, who],
+  );
   const mapLines = useMemo(
     () => (view.f.repeat ? onlyRepeats(data, baseLines, view.stage, view.f.repeat) : baseLines),
     [data, baseLines, view.stage, view.f.repeat],
@@ -173,15 +185,22 @@ function Loaded({ data, summary, districts, contracts }: {
     () => mapLines.filter((l) => (view.f.district < 0 || l.district === view.f.district) && (view.f.place < 0 || l.place === view.f.place)),
     [mapLines, view.f.district, view.f.place],
   );
+  // Top contractors: what the controls and a picked district or place select, before a contractor is picked.
+  const rankLines = useMemo(() => {
+    if (!who) return listLines;
+    const r = view.f.repeat ? onlyRepeats(data, selLines, view.stage, view.f.repeat) : selLines;
+    return r.filter((l) => (view.f.district < 0 || l.district === view.f.district) && (view.f.place < 0 || l.place === view.f.place));
+  }, [who, listLines, data, selLines, view.stage, view.f.repeat, view.f.district, view.f.place]);
+  const whoName = useMemo(() => lineContractorName(contracts, who), [contracts, who]);
   const marks = useMemo(() => mapMarks(data, mapLines, view.stage), [data, mapLines, view.stage]);
   const totals = useMemo(() => districtTotals(data, mapLines, view.stage), [data, mapLines, view.stage]);
   const breaks = useMemo(() => shadeBreaks(totals), [totals]);
   const shade = useMemo(() => new Map(data.districts.map((d) => [d.id, shadeClass(totals[d.i], breaks)])), [data, totals, breaks]);
 
-  // A region or a search moves the map to what it found; picking years does not.
-  const fitKey = `${view.f.region}|${view.f.q}`;
+  // A region, a search or a contractor moves the map to what it found; picking years does not.
+  const fitKey = `${view.f.region}|${view.f.q}|${who}`;
   const fit: MapFit | null = useMemo(() => {
-    if (!view.f.region && !view.f.q) return null;
+    if (!view.f.region && !view.f.q && !who) return null;
     let x0 = 180, y0 = 90, x1 = -180, y1 = -90;
     for (const m of marks) {
       const [x, y] = m.geometry.coordinates;
@@ -293,9 +312,21 @@ function Loaded({ data, summary, districts, contracts }: {
           />
         </section>
 
+        {contracts && (
+          <MpbContractors
+            lines={rankLines}
+            contracts={contracts}
+            who={who}
+            onPick={(key) => {
+              setView({ who: key });
+              document.getElementById('hgab-mpbm-map')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
+        )}
+
         <RepeatsSection data={data} lines={baseLines} view={view} setView={setView} onShow={showOnMap} />
 
-        <LinesList data={data} summary={summary} lines={listLines} view={view} setView={setView} onShow={showOnMap} />
+        <LinesList data={data} summary={summary} lines={listLines} view={view} setView={setView} onShow={showOnMap} whoName={who ? whoName ?? who : null} />
 
         <section className="nep-section hgab-mpbm-section" aria-labelledby="hgab-mpbm-placed">
           <h2 id="hgab-mpbm-placed" className="hgab-mpbm-h2">
@@ -667,13 +698,15 @@ function GroupRow({ data, g, stage, onShow, onList }: {
 // The list
 // ---------------------------------------------------------------------------
 
-function LinesList({ data, summary, lines, view, setView, onShow }: {
+function LinesList({ data, summary, lines, view, setView, onShow, whoName }: {
   data: MpbData;
   summary: MpbSummary;
   lines: MpbLine[];
   view: View;
   setView: (v: ViewPatch) => void;
   onShow: (l: MpbLine) => void;
+  /** The picked contractor's name, or null. */
+  whoName: string | null;
 }) {
   const contracts = useContext(ContractsCtx);
   // How many rows to show; back to one page whenever the lines change.
@@ -702,6 +735,11 @@ function LinesList({ data, summary, lines, view, setView, onShow }: {
       {data.places[view.f.place].label} ×
     </button>,
   );
+  if (whoName) chips.push(
+    <button key="c" type="button" className="hgab-mpbm-chip" onClick={() => setView({ who: '' })}>
+      {whoName} (contractor) ×
+    </button>,
+  );
   const anyFilter = view.f.q || view.f.region || view.f.placed || view.f.rule || view.f.repeat || chips.length;
   return (
     <section className="nep-section hgab-mpbm-section" id="hgab-mpbm-list" aria-labelledby="hgab-mpbm-list-h">
@@ -710,7 +748,7 @@ function LinesList({ data, summary, lines, view, setView, onShow }: {
           <h2 id="hgab-mpbm-list-h" className="hgab-mpbm-h2">{count(lines.length)} lines, {billions(total)}, {yearsText}</h2>
           <p className="hgab-mpbm-dek">
             {chips.length ? chips : 'Every line the controls above select.'}
-            {anyFilter ? <> <button type="button" className="hgab-mpbm-linkbtn" onClick={() => setView({ f: NO_FILTERS })}>Clear filters</button></> : null}
+            {anyFilter ? <> <button type="button" className="hgab-mpbm-linkbtn" onClick={() => setView({ f: NO_FILTERS, who: '' })}>Clear filters</button></> : null}
           </p>
         </div>
         <div className="hgab-mpbm-listactions">

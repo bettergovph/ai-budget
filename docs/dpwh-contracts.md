@@ -17,7 +17,7 @@ and every contractor's figures from DPWH's contract list.
 | --- | --- |
 | `/hgab/2027/contractors` (DPWH menu → Contractors) | Every contractor: contracts, amount, joint ventures, years, main DPWH office, budget lines matched. Search by name or license number; one year or all; sort by amount, contracts, lines matched or name; the whole table as CSV |
 | `/hgab/2027/contractors/:key` | One contractor: figures, amount by year, its DPWH offices, joint-venture partners, then every contract with the budget line matched to it (search, year, "with a matched line", CSV) |
-| `/hgab/2027/multi-purpose/map` | Each FY2020–FY2026 line with a matched contract shows "Contractor: … · contract 23AE0052 (completed)", linked to the contractor's page, in the side panel and the list; contractor names and contract IDs join the search; "Download these" adds `contract_id, contractors, contract_php, contract_status, contract_match`. Without `mpb-links.json` the map works as before |
+| `/hgab/2027/multi-purpose/map` | Each FY2020–FY2026 line with a matched contract shows "Contractor: … · contract 23AE0052 (completed)", linked to the contractor's page, in the side panel and the list; contractor names and contract IDs join the search; "Download these" adds `contract_id, contractors, contract_php, contract_status, contract_match`. **Top contractors** (`src/components/MpbContractors.tsx`, `rankLineContractors`) ranks the contractors of the lines the controls and a picked district or place select, by lines, budget amount or contract amount, with contracts, years and the office that awarded most of them; CSV. "Show their lines" narrows the map and the list to one contractor (`?contractor=<key>`, a chip in the list). Without `mpb-links.json` the map works as before |
 
 - Contract: `src/lib/hgab-contractors.ts` (pure: the pages, the map, the Worker's SEO code and the verifier import it).
 - Page: `src/pages/HgabContractors.tsx`, styles `src/hgab-contractors.css`.
@@ -25,9 +25,9 @@ and every contractor's figures from DPWH's contract list.
 - Nav: `PROGRAM_EXTRAS` in `src/components/HgabBits.tsx`.
 - Disclaimer: `DISCLAIMER_CONTRACTORS` in `src/lib/hgab-disclaimers.ts`. The contractor pages carry it alone; the map adds
   it to its own.
-- Checks: `npm run verify:hgab` has a `contractors/` section (`scripts/verify-hgab-contractors.ts`, 24 checks). It
+- Checks: `npm run verify:hgab` has a `contractors/` section (`scripts/verify-hgab-contractors.ts`, 26 checks). It
   recounts DPWH's list, every contractor's figures against its contracts, the `[REVOKED]` tags, each linked line's
-  amount against the GAA extract, the map's lines, the CSV and the copy. The shard hash is the page's own, so a
+  amount against the GAA extract, the map's lines and awarding offices, the top-contractors count, the CSV and the copy. The shard hash is the page's own, so a
   Python/TypeScript difference fails.
 - Publish: after a full verify, `npx tsx scripts/upload-hgab-to-r2.ts --only=contractors --skip-verify` (68 files). The
   CSV link versions itself (`?v=` from its SHA-256); JSON is cached 5 minutes.
@@ -48,7 +48,7 @@ Counting rules:
 | --- | --- |
 | `index.json` | Every contractor (6,728), `cols` + `rows`; offices and regions as dictionaries. 1.7 MB, 0.6 MB gzipped |
 | `c/NN.json` | Each contractor's contracts, newest first, with partners and matched budget lines; 64 files by FNV-1a of the key (`shardOf`). 66 MB in all, about 0.2–0.4 MB gzipped each |
-| `mpb-links.json` | The matched contract of each multi-purpose building line on the map (39,436 of the 49,376 FY2020–FY2026 lines). 2.6 MB, 0.6 MB gzipped |
+| `mpb-links.json` | The matched contract of each multi-purpose building line on the map (39,436 of the 49,376 FY2020–FY2026 lines): contract, contractors, amount, status, how matched, and the office that awarded it (`offices` dictionary). 2.7 MB, 0.6 MB gzipped |
 | `contractors.csv` | The index as a spreadsheet, one row per contractor, with amounts by year and the page URL |
 | `summary.json` | The list's download, totals, the GAA match table by year, the builder's checks, SHA-256 of every output |
 

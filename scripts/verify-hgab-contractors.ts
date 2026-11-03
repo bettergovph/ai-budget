@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   AMOUNT_NOTE, CONTRACTOR_SHARDS, JV_NOTE, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS, REVOKED_NOTE, decodeContractorIndex,
-  decodeContracts, decodeMpbContracts, shardOf, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
+  decodeContracts, decodeMpbContracts, rankLineContractors, shardOf, type ContractorIndexFile, type ContractorShardFile, type ContractorSummary,
   type MpbContractsFile,
 } from "../src/lib/hgab-contractors";
 import { DISCLAIMER_CONTRACTORS } from "../src/lib/hgab-disclaimers";
@@ -56,6 +56,7 @@ export async function verifyContractors(c: DuckDBConnection, check: Check, o: Op
   // 3. Each contractor sits in the file its key hashes to, and its index figures equal its contracts.
   const misplaced: string[] = [];
   const seen = new Map<string, number>();
+  const officeOf = new Map<string, string>();
   let mismatch = 0;
   let linkPairs = 0;
   for (const f of shards) for (const key of Object.keys(f.contractors)) if (shardOf(key) !== f.shard) misplaced.push(key);
@@ -72,6 +73,7 @@ export async function verifyContractors(c: DuckDBConnection, check: Check, o: Op
       || rows.filter((r) => r.lines.length).length !== x.linkedContracts || x.yearsN.reduce((a, n) => a + n, 0) > x.contracts) mismatch++;
     for (const r of rows) {
       seen.set(r.id, r.php);
+      officeOf.set(r.id, r.office);
       if (r.partners.some((p) => !ix.byKey.has(p))) mismatch++;
       linkPairs += r.lines.length * (r.partners.length ? 0 : 1);
     }
@@ -124,6 +126,15 @@ export async function verifyContractors(c: DuckDBConnection, check: Check, o: Op
     offMap.slice(0, 3).join(", "));
   const notShown = [...map.values()].filter((v) => !seen.has(v.contractId) || v.contractors.some((x) => !ix.byKey.has(x.key))).length;
   check("each map contract and its contractors exist in the contractor files", notShown === 0, `${notShown} missing`);
+  const wrongOffice = [...map.values()].filter((v) => v.office !== (officeOf.get(v.contractId) || null)).length;
+  check("each map contract carries the office that awarded it, as the contract list has it", wrongOffice === 0, `${wrongOffice} differ`);
+  // The map's "Top contractors" over every line: each contracted line counted once per contractor on its contract.
+  const top = rankLineContractors(mpb.lines, map);
+  const perLine = [...map.values()].reduce((a, v) => a + v.contractors.length, 0);
+  check(`top contractors over every map line: ${top.rows.length.toLocaleString("en-US")} contractors, each contracted line once per contractor`,
+    top.eligible === S.totals.map_lines_fy2020_2026 && top.withContract === map.size
+      && top.rows.reduce((a, r) => a + r.lines, 0) === perLine && top.rows.every((r) => r.contracts <= r.lines && r.jvLines <= r.lines),
+    `eligible ${top.eligible}, with a contract ${top.withContract}, lines ${top.rows.reduce((a, r) => a + r.lines, 0)} vs ${perLine}`);
 
   // 7. The CSV and the copy.
   const csv = readFileSync(files[3], "utf8").replace(/^\uFEFF/, "").trimEnd().split("\n");
