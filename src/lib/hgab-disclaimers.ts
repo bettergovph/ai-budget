@@ -74,6 +74,21 @@ export const DISCLAIMER_MPB: Disclaimer = {
     'allocations in the enacted budgets, not spending; a building funded over several years has a line in each year.',
 };
 
+/**
+ * The page by party (`/hgab/2027/parties`): where each party comes from, what a party's figure adds up, and what it
+ * does not say. With DISCLAIMER_OFFICES, whose rules (tiers, shared offices undivided, residual first) it relies on.
+ */
+export const DISCLAIMER_PARTIES: Disclaimer = {
+  id: 'disclaimer-parties',
+  title: 'Parties.',
+  body:
+    'A representative’s party is the one they ran under for the seat in the May 2025 election, as the published results ' +
+    'list it; members may have changed party since. A party’s figure adds the DPWH offices that serve only its members’ ' +
+    'districts. Offices shared across parties stay whole, and lines under the Central Office carry no party. A party’s ' +
+    'figure does not establish that a party or a member requested, sponsored or controlled any project, and alone it does ' +
+    'not establish irregularity or wrongdoing by any party, office or official.',
+};
+
 /** Printed on every multi-purpose building share image, after the board's first note: one sentence of at most 20 words. */
 export const MPB_CARD_DISCLAIMER = 'A total or a ranking is not evidence that anyone asked for a project or did anything wrong.';
 
