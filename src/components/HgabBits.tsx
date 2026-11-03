@@ -43,7 +43,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
  * The section's sub-nav, left to right (Jason's order, 2026-11-02): Overview (the landing page, where `/hgab` and
  * `/hgab/2027` redirect), Line by line (the whole-bill explorer) and Leaderboards; then the dropdowns Districts, the
  * four programs and Multi-purpose buildings; Write a letter; and About (Sources, Methodology). The story-style
- * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview.
+ * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
+ * entries out for now, keeping their pages at their addresses.
  */
 const LEAD_LINKS: readonly NavLink[] = [
   {
@@ -55,6 +56,12 @@ const LEAD_LINKS: readonly NavLink[] = [
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
 ];
 const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
+/**
+ * Entries kept out of the sub-nav and the drawer for now (Jason, 2026-11-03: "hide the By party link for now from the
+ * navbar. Including the Multi-purpose buildings"): Districts → By party, and the Multi-purpose buildings menu. Their
+ * pages and the links inside pages stay; take a key out to bring its entry back.
+ */
+const NAV_HIDDEN: ReadonlySet<string> = new Set(['parties', 'multi-purpose']);
 
 /** Multi-purpose buildings are DPWH lines, with a menu of their own: the budget by year, and every line on a map. */
 const MPB_MENU: NavMenu = {
@@ -137,7 +144,7 @@ export function HgabHeader({
           {LEAD_LINKS.map(link)}
           <SectionMenu
             label="Districts"
-            items={DISTRICT_VIEWS.map((v) => ({ key: v.key, label: v.label, to: v.to }))}
+            items={DISTRICT_VIEWS.filter((v) => !NAV_HIDDEN.has(v.key)).map((v) => ({ key: v.key, label: v.label, to: v.to }))}
             active={districtsActive}
             currentKey={districtsKey}
           />
@@ -153,7 +160,7 @@ export function HgabHeader({
               currentKey={extraKey(p.key) ?? (programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null)}
             />
           ))}
-          {menu(MPB_MENU)}
+          {!NAV_HIDDEN.has(MPB_MENU.key) && menu(MPB_MENU)}
           {TAIL_LINKS.map(link)}
           {menu(ABOUT_MENU)}
         </nav>
@@ -167,7 +174,7 @@ export function HgabHeader({
               Districts
             </Link>
             <div className="hgab-drawer-sub">
-              {DISTRICT_VIEWS.filter((v) => v.key !== 'overview').map((v) => drawerLink(v, districtsKey === v.key))}
+              {DISTRICT_VIEWS.filter((v) => v.key !== 'overview' && !NAV_HIDDEN.has(v.key)).map((v) => drawerLink(v, districtsKey === v.key))}
             </div>
           </div>
           {PROGRAM_NAV.map((p) => (
@@ -186,12 +193,14 @@ export function HgabHeader({
               </div>
             </div>
           ))}
-          <div className="hgab-drawer-group">
-            <Link to={MPB_MENU.items[0].to} className={menuKey(MPB_MENU) ? 'active' : ''} aria-current={menuKey(MPB_MENU) === 'history' ? 'page' : undefined}>
-              {MPB_MENU.label}
-            </Link>
-            <div className="hgab-drawer-sub">{MPB_MENU.items.slice(1).map((x) => drawerLink(x, menuKey(MPB_MENU) === x.key))}</div>
-          </div>
+          {!NAV_HIDDEN.has(MPB_MENU.key) && (
+            <div className="hgab-drawer-group">
+              <Link to={MPB_MENU.items[0].to} className={menuKey(MPB_MENU) ? 'active' : ''} aria-current={menuKey(MPB_MENU) === 'history' ? 'page' : undefined}>
+                {MPB_MENU.label}
+              </Link>
+              <div className="hgab-drawer-sub">{MPB_MENU.items.slice(1).map((x) => drawerLink(x, menuKey(MPB_MENU) === x.key))}</div>
+            </div>
+          )}
           {TAIL_LINKS.map(link)}
           {ABOUT_MENU.items.map((x) => drawerLink(x, menuKey(ABOUT_MENU) === x.key))}
         </nav>
