@@ -1,6 +1,7 @@
 /**
  * `/hgab/2027/districts` — public works money by district engineering office,
- * in two views on one route (`districtsView` in `lib/hgab-ui.ts`):
+ * and by where each project is placed, in three views on one route
+ * (`districtsView` in `lib/hgab-ui.ts`):
  *
  *   Overview (default): the full navy hero, the KPI strip, the money no
  *   district card shows (per year), a table of regions (each office summed
@@ -22,7 +23,13 @@
  *   districts sit together. `office=` filters the list to one group, in
  *   either mode.
  *
- * The page groups money by office, not by district. DPWH lists the
+ *   Projects placed in each district (`?view=list-legislative`,
+ *   HgabDistrictsPlaced.tsx): one card per legislative district with the 2027
+ *   DPWH projects the source's location lens places in it (locations.json):
+ *   each project counts once, in the district its title names, and what names
+ *   none is counted apart.
+ *
+ * The office views group money by office, not by district. DPWH lists the
  * implementing office on every project row; the DEO2LEG crosswalk says which
  * districts each office serves. Nothing here infers which district a project
  * is in, no shared office's money is divided, and the residual that no card
@@ -41,6 +48,8 @@ import { KpiStrip } from '../components/Nep2027Bits';
 import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, SignedPhp } from '../components/HgabBits';
 import { ChartKeyRow, DistrictCardView, Fy27Headline, ResidualPanel } from '../components/HgabDistrictBits';
 import DistrictSidebar from '../components/HgabDistrictSidebar';
+import DistrictsPlaced from './HgabDistrictsPlaced';
+import { placedListHref } from '../lib/hgab-placed';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import {
@@ -90,12 +99,13 @@ export default function HgabDistricts() {
   }, []);
   useEffect(() => {
     const t = pageMeta(districtPath()).title;
-    document.title = view === 'list' ? `All districts · ${t}` : t;
+    document.title = view === 'list' ? `All districts · ${t}` : view === 'list-legislative' ? `Projects placed in each district · ${t}` : t;
   }, [view]);
 
   if (legacyListHash) return <Navigate replace to={`${districtListHref()}${hash}`} />;
   if (err) return <HgabError message={err} />;
   if (!index) return <HgabLoading what="the 2027 district index" heroBlend={view === 'overview'} />;
+  if (view === 'list-legislative') return <DistrictsPlaced index={index} />;
   return view === 'list' ? <DistrictsList index={index} /> : <DistrictsOverview index={index} />;
 }
 
@@ -193,7 +203,8 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
             <p>
               Each card shows the representative, the DPWH office that serves the district and its budget from
               2020 to the 2027 House bill. A sidebar lists every region and district. Offices ranked by amount are on
-              the <Link to={`${HGAB_ROOT}/leaderboard`}>leaderboards</Link>.
+              the <Link to={`${HGAB_ROOT}/leaderboard`}>leaderboards</Link>. To see each district’s own projects
+              instead, by the place their titles name, open <Link to={placedListHref()}>projects placed in each district</Link>.
             </p>
           </div>
           <Link className="hgab-cta hgab-cta-primary" to={districtListHref()}>{browse}</Link>
@@ -611,7 +622,8 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
           <p className="hgab-dx-offcard">
             <strong>{fmt.pct(share, 1)}</strong> of DPWH money in the {slotLabel(head)} is on no district card.
             It is listed under {residualWhere(head)}.{' '}
-            <Link to={districtPath()}>See how much, every year →</Link>
+            <Link to={districtPath()}>See how much, every year →</Link>{' '}
+            <Link to={placedListHref()}>Or see each project placed in its district →</Link>
           </p>
         )}
 

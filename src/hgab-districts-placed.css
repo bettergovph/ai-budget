@@ -1,0 +1,66 @@
+/* Projects placed in each district (`/hgab/2027/districts?view=list-legislative`, HgabDistrictsPlaced.tsx). The card,
+   the layout and the 2027 panel are the office list's (hgab-districts.css); this adds the "placed here" badge, the
+   count above the figures, how the projects were placed and which offices list them, and the table of what is placed
+   in no single district. */
+
+.hgab-tier.is-placed { --hgab-tier: var(--accent); }
+
+.hgab-dp-count {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-dp-none { margin: 10px 0 4px; }
+
+.hgab-dp-how {
+  margin: 10px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 12px;
+}
+.hgab-dp-how-head {
+  margin: 6px 0 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.hgab-dp-how-head:first-child { margin-top: 0; }
+.hgab-dp-how-head small { margin-left: 4px; letter-spacing: 0; text-transform: none; }
+.hgab-dp-how ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
+/* label | amount | count: the label wraps, the figures line up */
+.hgab-dp-how li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 3.2em;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--ink-2);
+}
+.hgab-dp-how li strong { color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+.hgab-dp-how li small {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hgab-dp-off { margin-top: 28px; scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 16px); }
+.hgab-dp-off > p { max-width: 70ch; color: var(--ink-2); }
+.hgab-dp-offtable th[scope='row'] strong { display: block; }
+.hgab-dp-offtable th[scope='row'] small {
+  display: block;
+  max-width: 62ch;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+.hgab-dp-offtable tr.is-placed th,
+.hgab-dp-offtable tr.is-placed td { border-top: 2px solid var(--rule); }
+.hgab-dp-offtable tfoot th,
+.hgab-dp-offtable tfoot td { font-weight: 700; }
