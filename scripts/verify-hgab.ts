@@ -115,7 +115,7 @@ import {
   CHANGES_LIST_CSV_COLUMNS, CHANGES_LIST_LEGEND, CHANGES_LIST_SCHEMA, CHANGES_LIST_SITE, CHANGE_PROGRAM_LABELS, NO_DISTRICT_REASON,
   districtsServedText, type ChangesListData,
 } from "../src/lib/hgab-changes-list";
-import { DISCLAIMERS_PATH } from "../src/lib/hgab-disclaimers";
+import { DISCLAIMERS_PATH, DISCLAIMER_PLACEMENTS } from "../src/lib/hgab-disclaimers";
 import { COPY_FURNISHED, LETTER_CREDIT, LETTER_SCHEMA, LETTER_SITE, composeLetter, letterSlug, letterText, type LetterData, type LetterIndex } from "../src/lib/hgab-letter";
 import {
   DEPED_EXTRA_LINES, HISTORY_COLUMNS, HISTORY_CSV_COLUMNS, HISTORY_DEFINITIONS, HISTORY_SCHEMA, HISTORY_SERIES, PBC_COLUMNS, PBC_FILES,
@@ -132,6 +132,7 @@ import { verifyParties } from "./verify-hgab-parties";
 import {
   DISTRICT_BASES, LOCATION_BASES, LOCATION_REVIEWS, LOCATIONS_SCHEMA, type LocatedCell, type LocationsData,
 } from "../src/lib/hgab-locations";
+import { PLACED_KIND_ROWS, kindPhp, placedNet, placedTotals, sortPlaced } from "../src/lib/hgab-placed";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -3048,5 +3049,30 @@ async function verifyLocations(overview: Overview, c: DuckDBConnection): Promise
   check("no representative's name anywhere in locations.json", named.length === 0, firstFew(named));
   check("notes are plain sentences of at most 20 words; upstream's not-claimed statement kept",
     L.notes.every((n) => words(n) <= 20) && /does not establish|nothing here establishes/i.test(L.lens.not_claimed));
+
+  // "Projects placed in each district" (`?view=list-legislative`, src/lib/hgab-placed.ts): the banner's cells add up
+  // to every line; each card's kinds add up to its total, and what the card shows per kind adds up to its net change;
+  // the sort keeps districts with nothing placed last; the disclaimer says what a placement is not.
+  const T = placedTotals(L);
+  const cellSum = (cs: LocatedCell[]) => cs.reduce((a, c) => ({ rows: a.rows + c.rows, nep_php: a.nep_php + c.nep_php, house_php: a.house_php + c.house_php }), { rows: 0, nep_php: 0, house_php: 0 });
+  check(`placed list: placed in one district + shared office + region + unassigned + held out = every line (${T.total.rows.toLocaleString()})`,
+    same(cellSum([T.placed, T.shared, T.region, T.unassigned, T.held]), T.total) && T.total.rows === P.size);
+  const badK = L.districts.filter((d) => {
+    const kinds = PLACED_KIND_ROWS.map((r) => d.kinds[r.kind]);
+    const shown = PLACED_KIND_ROWS.reduce((a, r) => a + (r.sign === '−' ? -1 : r.sign === '' ? 0 : 1) * Math.abs(kindPhp(r.kind, d.kinds[r.kind])) * (r.sign === '±' ? Math.sign(kindPhp(r.kind, d.kinds[r.kind])) : 1), 0);
+    return !same(cellSum(kinds), d.all) || shown !== placedNet(d) || d.kinds.unchanged.house_php !== d.kinds.unchanged.nep_php;
+  }).map((d) => d.district);
+  check("placed list: each card's six kinds add up to its total, and the signed amounts to its net change", badK.length === 0, firstFew(badK));
+  const placedMap = new Map(L.districts.map((d) => [d.district, d] as const));
+  const sorted = sortPlaced(D.districts, placedMap, "house");
+  const firstEmpty = sorted.findIndex((c) => !placedMap.has(c.id));
+  check(`placed list: ${(D.districts.length - placedMap.size).toLocaleString()} districts with nothing placed sort last; the rest by House bill amount`,
+    (firstEmpty < 0 || sorted.slice(firstEmpty).every((c) => !placedMap.has(c.id)))
+      && sorted.slice(0, firstEmpty < 0 ? sorted.length : firstEmpty).every((c, i, a) => i === 0 || placedMap.get(a[i - 1].id)!.all.house_php >= placedMap.get(c.id)!.all.house_php));
+  const pb = DISCLAIMER_PLACEMENTS.body;
+  check("placed list: the disclaimer says how lines are placed, that a placement can be wrong and is no site, and names no one",
+    /title names/.test(pb) && /can be wrong/.test(pb) && /not a verified construction site/.test(pb)
+      && /does not establish that any representative requested/.test(pb) && /irregularity or/.test(pb) && /not spending/.test(pb)
+      && readerCopyHits(pb).length === 0);
 }
 
