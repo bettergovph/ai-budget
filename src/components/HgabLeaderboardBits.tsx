@@ -65,7 +65,7 @@ const VALUE_HEADING: Record<string, string> = {
   'mpb-contractors': 'Contract amount',
   'mpb-barangays': 'Enacted, 2020 to 2026',
   'mpb-offices': 'Enacted, 2020 to 2026',
-  'mpb-legislators': 'Enacted, 2020 to 2026',
+  'mpb-districts': 'Enacted, 2020 to 2026',
 };
 
 const DETAIL_HEADING: Record<string, string> = {
@@ -512,7 +512,7 @@ function MpbMini({ data, board, region }: { data: LeaderboardData; board: BoardD
       {rows.map((r, i) => (
         <li key={r.row.key} className={i === 0 ? 'is-first' : undefined}>
           <span className="hgab-lb-top-rank">{r.rank}</span>
-          {r.row.person && <Faces people={[r.row.person]} size={i === 0 ? 44 : 32} />}
+          {board.mpbPeople && r.row.person && <Faces people={[r.row.person]} size={i === 0 ? 44 : 32} />}
           <span className="hgab-lb-top-who">
             <strong>{r.row.label}</strong>
             <small>{r.row.sub}</small>
@@ -1013,7 +1013,7 @@ export function MpbTable({ data, board, region }: { data: LeaderboardData; board
             {shown.map((r) => (
               <tr key={r.row.key}>
                 <td className="num hgab-lb-rank">{r.rank}</td>
-                {r.row.person ? (
+                {board.mpbPeople && r.row.person ? (
                   // The district leads, its representative's portrait and name under it, as PlaceCell draws one district.
                   <td className="hgab-lb-place-cell">
                     <p className="hgab-lb-place">{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</p>

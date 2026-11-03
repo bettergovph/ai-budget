@@ -365,9 +365,9 @@ function needsBadge(it: Item): boolean {
   return !it.personFirst && !isGroup(it) && it.offices.length > 0;
 }
 
-/** The multi-purpose legislator board draws as the office boards do: a portrait beside each district. */
+/** A multi-purpose district board with `mpbPeople` draws as the office boards do: a portrait beside each district. */
 function mpbPeople(board: BoardDef): boolean {
-  return board.kind === 'mpb' && board.mpbSet === 'districts';
+  return board.kind === 'mpb' && board.mpbSet === 'districts' && board.mpbPeople === true;
 }
 
 /** Badge text size for a headline of `nameSize`: small, about 60% of it. */

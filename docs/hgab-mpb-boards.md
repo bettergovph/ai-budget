@@ -8,31 +8,43 @@ page, a share image and a full table:
 | `mpb-contractors` | Contractors holding the DPWH contracts matched to the lines | Contract amount, each contract once | Lines with no matched contract |
 | `mpb-barangays` | Barangays a line's title names (a GPS line keeps its title's barangay) | Enacted amount | Lines whose title names no barangay |
 | `mpb-offices` | District engineering offices (DEOs), as the budget lists each line | Enacted amount | Central Office and regional office lines |
-| `mpb-legislators` | Legislative districts, as the map places each line; the district leads, with the portrait and name of the representative now in the seat | Enacted amount | Lines with no district |
+| `mpb-districts` (was `mpb-legislators`, still opens it) | Legislative districts, as the map places each line, with the region under each; no representative for now | Enacted amount | Lines with no district |
 
 Jason (2026-11-03) asked for "top mpb contractors, top mpbs per barangay, top mpbs per deo, top mpbs per legislator". He
 chose the enacted budgets 2020 to 2026 only, the years with contracts. For the legislator board, a line counts for the
 district its title places it in, the map's rule: GPS or a named barangay, town or province, else an office that serves
 one district.
 
+## No representatives, for now
+
+Jason (2026-11-03): "for our legislative rankings for MPBs, let's remove the legislators for now as it crosses over to
+18th, 19th, 20th congress".
+- The board is `mpb-districts`. `BOARD_ALIASES` sends `mpb-legislators` to it.
+- Its kicker reads "by legislative district". Each row is the district with its region; there is no name or portrait.
+- The card note says the budgets span the 18th, 19th and 20th Congresses, and the page says why no representative is
+  shown.
+- `share/mpb-legislators.png` on R2 is overwritten with the district image, so the old image address shows no one.
+- The portrait drawing stays behind `mpbPeople` on the board (false). boards.json keeps each district's `people`
+  record, unshown, so turning it back on is one line. The verifier checks no row names a representative.
+
 ## Disclaimer and portraits
 
-Jason (2026-11-03): "It's missing proper disclaimer. The legislator needs images?"
+Jason (2026-11-03): "It's missing proper disclaimer. The legislator needs images?" Portraits were then turned off (above).
 
 - **Page.** "Before you share" carries `DISCLAIMER_MPB` (src/lib/hgab-disclaimers.ts). It says:
   - how a line is placed (the place its title names, else the one district its office serves), and that the placement
     is our reading and can be wrong;
-  - that a district's total does not establish that its representative requested, sponsored or controlled a project,
-    and the representative shown holds the seat now;
+  - that a district's total does not establish that any representative requested, sponsored or controlled a project,
+    and that the 2020 to 2026 budgets span the 18th, 19th and 20th Congresses;
   - that a line, a total or a ranking is not evidence of wrongdoing;
   - that amounts are allocations, with a line for each year.
 
   The contractors board adds `DISCLAIMER_CONTRACTORS`. Both are on the Methodology page's notice (`#disclaimer-mpb`,
   `#disclaimer-contractors`).
 - **Card.** Every image prints the board's first note and `MPB_CARD_DISCLAIMER`: "A total or a ranking is not evidence
-  that anyone asked for a project or did anything wrong." The legislator card's first note: "A district is where a
-  title places the building. The representative shown holds the seat now, in the 20th Congress."
-- **Portraits.** The legislator board is drawn like the office boards (`drawRankingVertical`): the district leads, with
+  that anyone asked for a project or did anything wrong." The district card's first note: "A district is where a title
+  places the building. These budgets span the 18th, 19th and 20th Congresses."
+- **Portraits (off for now, `mpbPeople: false`).** With them on, the district board is drawn like the office boards (`drawRankingVertical`): the district leads, with
   its representative's portrait and name under it, never the person first. There is no office badge and no tier: a
   title places the line, not an office. Every district's person (`people` in boards.json) is built as
   leaderboard.json builds its people, and the verifier checks they are equal. 252 of 254 have a portrait; the photo
