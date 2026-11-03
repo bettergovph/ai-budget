@@ -8,7 +8,8 @@ GAA line is ours (match.py), and the pages say so. A joint-venture contract coun
 OUT_DIR (data/hgab/2027/contractors, published with upload:hgab --only=contractors):
   index.json       every contractor with its figures (cols + rows, offices and regions as dictionaries)
   c/NN.json        each contractor's contracts, in 64 files by a hash of its key (src/lib/hgab-contractors.ts)
-  mpb-links.json   the contract and contractors of each multi-purpose building line on the map, FY2020–FY2026
+  mpb-links.json   the contract, contractors and awarding office of each multi-purpose building line on the map,
+                   FY2020–FY2026
   contractors.csv  the index as a spreadsheet
   summary.json     sources, totals, the builder's checks and each output's SHA-256
 """
@@ -180,22 +181,24 @@ for s in range(SHARDS):
                'partners', 'lines'], line_cols=['line_id', 'title', 'gaa_php', 'method'], methods=METHODS,
          contractors=shards.get(s, {})))
 
-# the map's lines: one contract each (one_to_one or one line of a bundle)
+# the map's lines: one contract each (one_to_one or one line of a bundle), with the office that awarded it
 mpb_who, mpb_who_ix, mpb_rows = [], {}, []
+mpb_offices, mpb_office_ix = [], {}
 name_of = {r[0]: r[1] for r in rows}
 by_line = defaultdict(list)
 for cid, lid, fy, title, gphp, method in L:
     if lid in mpb_ids:
         by_line[lid].append((cid, method))
-budget_of = {r[0]: (cents(r[3]), r[4]) for r in C}
+budget_of = {r[0]: (cents(r[3]), r[4], r[6]) for r in C}
 for lid in sorted(by_line):
     for cid, method in by_line[lid]:
         ks = contract_parties.get(cid, [])
         mpb_rows.append([lid, cid, [ix(mpb_who, mpb_who_ix, k) for k in ks], budget_of[cid][0],
-                         STATUSES.index(budget_of[cid][1]) if budget_of[cid][1] in STATUSES else -1, METHODS.index(method)])
-dump(OUT / 'mpb-links.json', dict(schema=1, built_at=built_at, statuses=STATUSES, methods=METHODS,
-     contractors=[[k, name_of[k]] for k in mpb_who], cols=['line_id', 'contract_id', 'contractors', 'php', 'status', 'method'],
-     rows=mpb_rows))
+                         STATUSES.index(budget_of[cid][1]) if budget_of[cid][1] in STATUSES else -1, METHODS.index(method),
+                         ix(mpb_offices, mpb_office_ix, budget_of[cid][2])])
+dump(OUT / 'mpb-links.json', dict(schema=1, built_at=built_at, statuses=STATUSES, methods=METHODS, offices=mpb_offices,
+     contractors=[[k, name_of[k]] for k in mpb_who],
+     cols=['line_id', 'contract_id', 'contractors', 'php', 'status', 'method', 'office'], rows=mpb_rows))
 
 # CSV
 buf = io.StringIO()

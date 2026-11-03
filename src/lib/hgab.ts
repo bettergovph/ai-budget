@@ -27,7 +27,10 @@
  */
 import type { FeatureCollection } from 'geojson';
 import { dataUrl } from './data-url';
-import { LEADERBOARD_DATA_PATH, WHOLE_BILL_DATA_PATH, type LeaderboardData, type WholeBillData } from './hgab-leaderboard';
+import {
+  LEADERBOARD_DATA_PATH, MPB_BOARDS_PATH, WHOLE_BILL_DATA_PATH, decodeMpbBoards, type LeaderboardData, type MpbBoardsFile,
+  type WholeBillData,
+} from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
 import {
@@ -786,12 +789,14 @@ export function loadContractorShard(key: string): Promise<ContractorShardFile> {
 
 export function loadHgabLeaderboard(): Promise<LeaderboardData> {
   return cached('leaderboard', async () => {
-    const [data, whole] = await Promise.all([
+    const [data, whole, mpb] = await Promise.all([
       getJson<LeaderboardData>(dataUrl(LEADERBOARD_DATA_PATH), 'Failed to load the FY2027 House bill leaderboards'),
       // The whole-bill boards' rows come from the line-by-line explorer; without them those boards say so.
       getJson<WholeBillData>(dataUrl(WHOLE_BILL_DATA_PATH), 'Failed to load the whole-bill boards').catch(() => undefined),
+      // The multi-purpose building boards' rows (npm run build:hgab-mpb-boards); without them those boards say so.
+      getJson<MpbBoardsFile>(dataUrl(MPB_BOARDS_PATH), 'Failed to load the multi-purpose building boards').catch(() => undefined),
     ]);
-    return whole ? { ...data, whole_bill: whole } : data;
+    return { ...data, ...(whole ? { whole_bill: whole } : {}), ...(mpb ? { mpb: decodeMpbBoards(mpb) } : {}) };
   });
 }
 

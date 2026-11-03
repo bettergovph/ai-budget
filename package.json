@@ -25,6 +25,7 @@
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:hgab-contractors": "bash scripts/dpwh-contracts/run.sh",
+    "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",

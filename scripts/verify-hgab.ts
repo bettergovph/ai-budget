@@ -99,7 +99,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
-  BOARDS, BOARD_ALIASES, LEADERBOARD_SCHEMA, displayName, formatValue, rankByCongress, rankEntries, rankLines, rankMembers, rankRegions, residualLine,
+  BOARDS, BOARD_ALIASES, LEADERBOARD_SCHEMA, decodeMpbBoards, displayName, formatValue, rankByCongress, rankEntries, rankLines, rankMembers,
+  rankMpb, rankRegions, residualLine,
   type LeaderEntry, type LeaderSlice, type LeaderboardData, type WholeBillData,
 } from "../src/lib/hgab-leaderboard";
 import { COMPARISON_DISCLAIMERS, disclaimerText } from "../src/lib/hgab-disclaimers";
@@ -121,6 +122,7 @@ import {
   titleKey, type MpbLinesFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
 import { verifyContractors } from "./verify-hgab-contractors";
+import { verifyMpbBoards } from "./verify-hgab-mpb-boards";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -700,6 +702,7 @@ async function main(): Promise<void> {
   await verifyHistory(c);
   await verifyMpbYears(c);
   await verifyContractors(c, check, { out: OUT, gaa: GAA, contracts: CONTRACTS, words, readerCopyHits });
+  verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 
@@ -1074,7 +1077,7 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
   const badRegions = L.regions.filter((r) => !(sameKeys(r, F.region) && K.regionOrder.includes(r.region) && isInt(r.units) && isInt(r.districts) && isInt(r.delta_php) && intOrNull(r.gaa2026_php)
     && F.slice.every((k) => isInt(r[k as keyof Slice]) && r[k as keyof Slice] >= 0)));
   check(`every field the contract names, and only those, with the right types (${F.entry.length} per entry, ${F.person.length} per person, ${F.slice.length} per slice, ${F.region.length} per region)`,
-    sameKeys(L, F.data.filter((k) => k !== "whole_bill")) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional", "office_change", "no_office"]) && sliceOk(L.totals.all)
+    sameKeys(L, F.data.filter((k) => k !== "whole_bill" && k !== "mpb")) && sameKeys(L.totals, F.totals) && sameKeys(L.totals.by_office_kind, ["deo", "central", "regional", "office_change", "no_office"]) && sliceOk(L.totals.all)
       && [L.totals.by_office_kind.deo, L.totals.by_office_kind.central, L.totals.by_office_kind.regional].every(sliceOk)
       && [L.totals.by_office_kind.office_change, L.totals.by_office_kind.no_office].every(({ rows, ...rest }) => isInt(rows) && sliceOk(rest))
       && Array.isArray(L.totals.gaa_residual) && L.totals.gaa_residual.every((y) => sameKeys(y, ["fy", "total_php", "deo_php", "central_office_php", "regional_offices_php", "unmatched_php"]) && Object.values(y).every(isInt))
@@ -1322,7 +1325,20 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
 
   // Boards: each returns at least three rows and leads with the true extreme of its eligible pool.
   const best = (vals: number[], order: "asc" | "desc") => (order === "asc" ? Math.min(...vals) : Math.max(...vals));
+  // The multi-purpose building boards read mpb-boards/boards.json, as the page's loader attaches it.
+  const mpbPath = resolve(OUT, "mpb-boards", "boards.json");
+  const LM: LeaderboardData = existsSync(mpbPath) ? { ...L, mpb: decodeMpbBoards(readJson(mpbPath)) } : L;
   const boardResult = (b: (typeof LB.BOARDS)[number]): { ok: boolean; detail: string } => {
+    if (b.kind === "mpb") {
+      const r = rankMpb(LM, b);
+      const pool = ((b.mpbSet && LM.mpb?.[b.mpbSet]) || []).map((x) => b.mpbMetric!(x)).filter((v): v is number => v != null && Number.isFinite(v) && v > 0);
+      const n = r.rows.length;
+      return {
+        ok: n >= EXPECTED_LEADERBOARD.min_rows && r.eligible === pool.length && r.rows[0].value === Math.max(...pool)
+          && r.rows.every((x, i) => i === 0 || x.value <= r.rows[i - 1].value),
+        detail: `${n} rows; first ${r.rows[0] ? `${r.rows[0].row.label} ${LB.formatValue(r.rows[0].value, b.value)}` : "none"}`,
+      };
+    }
     if (b.kind === "lines") {
       const r = LB.rankLines(L, b);
       const set = (b.rowSet && L.whole_bill?.[b.rowSet]) || [];
@@ -1390,9 +1406,12 @@ async function verifyLeaderboard(overview: Overview, c: DuckDBConnection, lens: 
       && L.totals.gaa_residual.every((y) => y.deo_php + y.central_office_php + y.regional_offices_php + y.unmatched_php === y.total_php)
       && JSON.stringify(L.totals.gaa_residual.map((y) => y.fy)) === JSON.stringify([2020, 2021, 2022, 2023, 2024, 2025, 2026]));
   // The whole-bill boards rank departments, agencies and lines, not offices: no district residual applies.
-  const lines = LB.BOARDS.map((b) => [b.id, residualLine(L, b), b.kind] as const);
-  const badLines = lines.filter(([id, t, kind]) => (id === "shift" || id === "bills" || kind === "lines") ? t !== null : (typeof t !== "string" || !/^Not in any district: /.test(t) || /NaN|undefined|Infinity|—/.test(t)));
-  check(`residualLine() gives a sentence for every office board, none for shift, bills and the whole-bill boards (${lines.filter(([, t]) => t).length} boards)`, badLines.length === 0, badLines.map(([id, t]) => `${id}: ${t}`).join("; "));
+  const lines = LB.BOARDS.map((b) => [b.id, residualLine(LM, b), b.kind] as const);
+  // The multi-purpose building boards say what no row carries: no contract, no barangay, no district office, no district.
+  const MPB_RESIDUAL = /^(No contract found|No barangay in the title|Not under a district office|Not in any district): ₱/;
+  const badLines = lines.filter(([id, t, kind]) => (id === "shift" || id === "bills" || kind === "lines") ? t !== null
+    : (typeof t !== "string" || !(kind === "mpb" ? MPB_RESIDUAL : /^Not in any district: /).test(t) || /NaN|undefined|Infinity|—/.test(t)));
+  check(`residualLine() gives a sentence for every office and multi-purpose building board, none for shift, bills and the whole-bill boards (${lines.filter(([, t]) => t).length} boards)`, badLines.length === 0, badLines.map(([id, t]) => `${id}: ${t}`).join("; "));
 
   // Reader-facing strings: credits and notes.
   const portraits = L.entries.flatMap((e) => e.people).filter((p) => p.portrait_url);

@@ -58,6 +58,25 @@ export const DISCLAIMER_CONTRACTORS: Disclaimer = {
     'contract carries: the links shown are our match by title, office and amount, and may be wrong.',
 };
 
+/**
+ * The multi-purpose building boards (`/hgab/2027/leaderboard`, section "2020 to 2026: multi-purpose buildings"):
+ * how a line comes to sit in a barangay, an office or a legislative district, and what a ranking does not say.
+ */
+export const DISCLAIMER_MPB: Disclaimer = {
+  id: 'disclaimer-mpb',
+  title: 'Multi-purpose building rankings.',
+  body:
+    'Each line is placed in a barangay or a legislative district by the place its title names, or by the one district its ' +
+    'DPWH office serves. Offices are the ones the enacted budget lists. This placement is our reading and can be wrong. ' +
+    'A district’s total does not establish that its representative requested, sponsored or controlled a project; the ' +
+    'representative shown holds the seat now, and earlier Congresses passed the 2020 to 2025 budgets. A line, a total ' +
+    'or a ranking alone does not establish irregularity or wrongdoing by any contractor, office or official. Amounts are ' +
+    'allocations in the enacted budgets, not spending; a building funded over several years has a line in each year.',
+};
+
+/** Printed on every multi-purpose building share image, after the board's first note: one sentence of at most 20 words. */
+export const MPB_CARD_DISCLAIMER = 'A total or a ranking is not evidence that anyone asked for a project or did anything wrong.';
+
 /** Where each applies: every House bill page carries the second; office-based views carry both. */
 export const OFFICE_VIEW_DISCLAIMERS: readonly Disclaimer[] = [DISCLAIMER_OFFICES, DISCLAIMER_NO_ALLEGATIONS];
 export const COMPARISON_DISCLAIMERS: readonly Disclaimer[] = [DISCLAIMER_NO_ALLEGATIONS];

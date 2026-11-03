@@ -25,7 +25,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "playwright-core";
-import { BOARDS, SHARE_FORMATS, isShareFormat, type ShareFormat } from "../src/lib/hgab-leaderboard.ts";
+import { BOARDS, SHARE_FORMATS, decodeMpbBoards, isShareFormat, type ShareFormat } from "../src/lib/hgab-leaderboard.ts";
 
 interface Args {
   base: string;
@@ -92,6 +92,10 @@ async function main() {
   const wholeBill = resolve(opts.data, "..", "explorer", "boards.json");
   if (existsSync(wholeBill)) data.whole_bill = JSON.parse(readFileSync(wholeBill, "utf8"));
   else console.warn(`${wholeBill} not found — the whole-bill boards will draw empty (npm run build:hgab-lines).`);
+  // The multi-purpose building boards read theirs from mpb-boards/boards.json (npm run build:hgab-mpb-boards).
+  const mpbBoards = resolve(opts.data, "..", "mpb-boards", "boards.json");
+  if (existsSync(mpbBoards)) data.mpb = decodeMpbBoards(JSON.parse(readFileSync(mpbBoards, "utf8")));
+  else console.warn(`${mpbBoards} not found — the multi-purpose building boards will draw empty (npm run build:hgab-mpb-boards).`);
   mkdirSync(opts.out, { recursive: true });
 
   const jobs: Job[] = [];

@@ -22,6 +22,12 @@ export const LINKED_YEARS = [2020, 2026] as const;
 
 export const contractorPath = (key: string) => `${CONTRACTORS_ROOT}/${encodeURIComponent(key)}`;
 
+/** DPWH's own page for a contract on its transparency portal, the source of our list (Jason, 2026-11-03). */
+export const DPWH_PORTAL = 'https://transparency.dpwh.gov.ph';
+export const dpwhContractUrl = (contractId: string) => `${DPWH_PORTAL}/?project=${encodeURIComponent(contractId)}`;
+/** Said where contract IDs are listed. */
+export const DPWH_LINK_NOTE = 'Each contract ID opens DPWH’s own record of it on DPWH’s transparency portal.';
+
 /** 32-bit FNV-1a over UTF-8: the same hash as build_site.py `fnv1a`. */
 export function fnv1a(s: string): number {
   let h = 0x811c9dc5;
@@ -88,6 +94,8 @@ export interface MpbContractsFile {
   built_at: string;
   statuses: ContractStatus[];
   methods: MatchMethod[];
+  /** The offices that awarded the contracts (the `office` column); absent in files built before it. */
+  offices?: string[];
   contractors: Array<[string, string]>;
   cols: string[];
   rows: unknown[][];
@@ -310,6 +318,8 @@ export interface LineContract {
   php: number;
   status: ContractStatus | null;
   method: MatchMethod;
+  /** The DPWH office that awarded the contract, or null. */
+  office: string | null;
 }
 
 export function decodeMpbContracts(f: MpbContractsFile): Map<string, LineContract> {
@@ -324,16 +334,122 @@ export function decodeMpbContracts(f: MpbContractsFile): Map<string, LineContrac
       php: Number(r[c.php]),
       status: status >= 0 ? f.statuses[status] : null,
       method: f.methods[Number(r[c.method])],
+      office: c.office != null && f.offices ? f.offices[Number(r[c.office])] || null : null,
     });
   }
   return out;
 }
 
+/** The contractors of a set of map lines, ranked (the map's "Top contractors"). */
+export interface LineContractorRow {
+  key: string;
+  name: string;
+  /** Lines whose contract names this contractor (a joint venture's line counts for each partner). */
+  lines: number;
+  /** Of those, lines on a joint-venture contract. */
+  jvLines: number;
+  contracts: number;
+  /** The lines' budget amount. */
+  gaaPhp: number;
+  /** The contracts' amount, each contract once (a cluster carries several lines). */
+  contractPhp: number;
+  firstYear: number;
+  lastYear: number;
+  /** The DPWH offices that awarded the contracts (the line's own office when the file has none), and the busiest. */
+  offices: number;
+  topOffice: string | null;
+}
+
+export type LineContractorSort = 'lines' | 'budget' | 'contract';
+export const LINE_CONTRACTOR_SORTS: Record<LineContractorSort, string> = {
+  lines: 'Most lines',
+  budget: 'Largest budget amount',
+  contract: 'Largest contract amount',
+};
+
+/**
+ * Rank the contractors of `lines` (those in the matched years with a contract). `eligible` counts the lines in the
+ * matched years; `withContract` those with a contract.
+ */
+export function rankLineContractors(
+  lines: ReadonlyArray<{ id: string; fy: number; gaa: number | null; office: string | null }>,
+  contracts: ReadonlyMap<string, LineContract>,
+  sort: LineContractorSort = 'lines',
+): { rows: LineContractorRow[]; eligible: number; withContract: number } {
+  const acc = new Map<string, LineContractorRow & { ids: Set<string>; byOffice: Map<string, number> }>();
+  let eligible = 0;
+  let withContract = 0;
+  for (const l of lines) {
+    if (l.fy < LINKED_YEARS[0] || l.fy > LINKED_YEARS[1]) continue;
+    eligible++;
+    const c = contracts.get(l.id);
+    if (!c) continue;
+    withContract++;
+    for (const x of c.contractors) {
+      let r = acc.get(x.key);
+      if (!r) {
+        r = { key: x.key, name: x.name, lines: 0, jvLines: 0, contracts: 0, gaaPhp: 0, contractPhp: 0, firstYear: l.fy,
+          lastYear: l.fy, offices: 0, topOffice: null, ids: new Set(), byOffice: new Map() };
+        acc.set(x.key, r);
+      }
+      r.lines++;
+      if (c.contractors.length > 1) r.jvLines++;
+      r.gaaPhp += l.gaa ?? 0;
+      if (!r.ids.has(c.contractId)) { r.ids.add(c.contractId); r.contractPhp += c.php; }
+      r.firstYear = Math.min(r.firstYear, l.fy);
+      r.lastYear = Math.max(r.lastYear, l.fy);
+      const office = c.office ?? l.office;
+      if (office) r.byOffice.set(office, (r.byOffice.get(office) ?? 0) + 1);
+    }
+  }
+  const by: Record<LineContractorSort, (a: LineContractorRow, b: LineContractorRow) => number> = {
+    lines: (a, b) => b.lines - a.lines || b.gaaPhp - a.gaaPhp,
+    budget: (a, b) => b.gaaPhp - a.gaaPhp || b.lines - a.lines,
+    contract: (a, b) => b.contractPhp - a.contractPhp || b.lines - a.lines,
+  };
+  const rows = [...acc.values()].map(({ ids, byOffice, ...r }) => ({
+    ...r,
+    contracts: ids.size,
+    offices: byOffice.size,
+    topOffice: [...byOffice].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null,
+  }));
+  rows.sort((a, b) => by[sort](a, b) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+  return { rows, eligible, withContract };
+}
+
+/** A contractor's name from the map's contracts, or null. */
+export function lineContractorName(contracts: ReadonlyMap<string, LineContract> | null, key: string): string | null {
+  if (!contracts || !key) return null;
+  for (const c of contracts.values()) for (const x of c.contractors) if (x.key === key) return x.name;
+  return null;
+}
+
+/** Does this line's contract name the contractor? */
+export function lineBuiltBy(contracts: ReadonlyMap<string, LineContract>, lineId: string, key: string): boolean {
+  return contracts.get(lineId)?.contractors.some((x) => x.key === key) ?? false;
+}
+
+export const LINE_CONTRACTORS_CSV_COLUMNS = [
+  'rank', 'contractor', 'license_id', 'lines', 'joint_venture_lines', 'contracts', 'budget_php', 'contract_php',
+  'first_year', 'last_year', 'dpwh_offices', 'main_dpwh_office', 'page',
+] as const;
+
+export function lineContractorsCsv(rows: readonly LineContractorRow[]): string {
+  const out = rows.map((r, i) => [
+    i + 1, r.name, r.key.startsWith('n-') ? null : r.key, r.lines, r.jvLines, r.contracts, r.gaaPhp,
+    Math.round(r.contractPhp * 100) / 100, r.firstYear, r.lastYear, r.offices, r.topOffice,
+    `https://budget.bettergov.ph${contractorPath(r.key)}`,
+  ].map(cell).join(','));
+  return [LINE_CONTRACTORS_CSV_COLUMNS.join(','), ...out].join('\n') + '\n';
+}
+
 /** Extra CSV columns for a line with a contract (the map's "Download these"). */
-export const LINE_CONTRACT_COLUMNS = ['contract_id', 'contractors', 'contract_php', 'contract_status', 'contract_match'] as const;
+export const LINE_CONTRACT_COLUMNS = [
+  'contract_id', 'contract_dpwh_url', 'contractors', 'contract_php', 'contract_status', 'contract_match',
+] as const;
 export function lineContractCells(c: LineContract | undefined): Array<string | number | null> {
-  if (!c) return [null, null, null, null, null];
-  return [c.contractId, c.contractors.map((x) => x.name).join('; '), c.php, c.status, c.method];
+  if (!c) return LINE_CONTRACT_COLUMNS.map(() => null);
+  return [c.contractId, dpwhContractUrl(c.contractId), c.contractors.map((x) => x.name).join('; '), c.php, c.status, c.method];
 }
 
 // ---------------------------------------------------------------------------
@@ -347,14 +463,14 @@ const cell = (v: unknown): string => {
 };
 
 export const CONTRACTS_CSV_COLUMNS = [
-  'contract_id', 'year', 'description', 'dpwh_office', 'contract_php', 'status', 'progress_percent', 'start_date',
+  'contract_id', 'dpwh_url', 'year', 'description', 'dpwh_office', 'contract_php', 'status', 'progress_percent', 'start_date',
   'completion_date', 'joint_venture_partners', 'gaa_line_id', 'gaa_line_title', 'gaa_line_php', 'gaa_match',
 ] as const;
 
 /** One row per contract and budget line (a contract with no line has one row with the line columns empty). */
 export function contractsCsv(rows: readonly ContractRow[], ix: Pick<ContractorIndex, 'byKey'>): string {
   const out = rows.flatMap((r) => {
-    const base = [r.id, r.year, r.description, r.office, r.php, r.status, r.progress, r.start, r.completion,
+    const base = [r.id, dpwhContractUrl(r.id), r.year, r.description, r.office, r.php, r.status, r.progress, r.start, r.completion,
       r.partners.map((k) => ix.byKey.get(k)?.name ?? k).join('; ')];
     const lines = r.lines.length ? r.lines : [null];
     return lines.map((l) => [...base, l?.id, l?.title, l?.gaaPhp, l?.method].map(cell).join(','));

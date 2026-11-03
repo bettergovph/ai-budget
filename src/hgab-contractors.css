@@ -74,6 +74,9 @@
 .hgab-ctr-name a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
 .hgab-ctr-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
 .hgab-ctr-id { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }
+/* A contract ID links to DPWH's own record of it (DpwhContractLink). */
+a.hgab-ctr-id { color: var(--accent-deep); text-decoration: underline; text-underline-offset: 2px; }
+a.hgab-ctr-id:hover { color: var(--ink); }
 .hgab-ctr-tag {
   display: inline-block;
   margin-left: 6px;

@@ -379,3 +379,10 @@
   .hgab-mpbm-group-body td:nth-child(3) { display: none; }
   .hgab-mpbm-group-body .hgab-mpbm-yr { white-space: normal; width: 64px; }
 }
+
+/* --- top contractors ------------------------------------------------------ */
+
+.hgab-mpbm-rank { color: var(--ink-mute); width: 1%; }
+.hgab-mpbm-contractors td:last-child { white-space: nowrap; }
+.hgab-mpbm-contractors tr.is-picked { background: var(--accent-soft); }
+.hgab-mpbm-contractors tr.is-picked:hover { background: var(--accent-soft); }

@@ -29,8 +29,10 @@ import {
   officeName,
   rankByCongress,
   rankEntries,
-  rankLines,
-  lineUnit,
+  listRows,
+  listUnit,
+  mpbUnit,
+  rankMpb,
   boardBuiltAt,
   rankMembers,
   asOfText,
@@ -44,11 +46,11 @@ import {
   type LeaderSlice,
   type LeaderPerson,
   type LeaderboardData,
-  type RankedLine,
+  type ListRow,
   type ShareFormat,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
-import { CARD_DISCLAIMER } from './hgab-disclaimers';
+import { CARD_DISCLAIMER, MPB_CARD_DISCLAIMER } from './hgab-disclaimers';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -359,7 +361,13 @@ function badgeTexts(it: Item): string[] {
 
 /** True for rows that must carry a DEO badge: one district, on a ranking or by-Congress card. */
 function needsBadge(it: Item): boolean {
-  return !it.personFirst && !isGroup(it);
+  // A multi-purpose legislator row places by title, not by office: it has no badge to show.
+  return !it.personFirst && !isGroup(it) && it.offices.length > 0;
+}
+
+/** The multi-purpose legislator board draws as the office boards do: a portrait beside each district. */
+function mpbPeople(board: BoardDef): boolean {
+  return board.kind === 'mpb' && board.mpbSet === 'districts';
 }
 
 /** Badge text size for a headline of `nameSize`: small, about 60% of it. */
@@ -523,6 +531,17 @@ function regionPill(region: string): string {
 }
 
 function rankingItems(data: LeaderboardData, board: BoardDef, region: string | null, limit: number): { items: Item[]; eligible: number } {
+  if (board.kind === 'mpb') {
+    // The legislator board: the district leads, its representative's portrait and name beside it; no office, no tier.
+    const { rows, eligible } = rankMpb(data, board, { region, limit });
+    return {
+      eligible,
+      items: rows.map((r) => ({
+        rank: r.rank, key: r.row.key, people: r.row.person ? [r.row.person] : [], tier: 'A' as const, office: null, offices: [],
+        value: r.value, detail: board.mpbDetail?.(r.row) ?? null,
+      })),
+    };
+  }
   if (board.kind === 'members') {
     const { rows, eligible } = rankMembers(data, { region, limit });
     return {
@@ -839,7 +858,7 @@ function heroText(board: BoardDef, region: string | null, count: string | null):
 function shortCount(count: string): string {
   return count
     .replace(/ shown for each Congress$/, ' per Congress')
-    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions|departments and funds|department or fund|agencies|agency|budget lines|budget line)$/, '');
+    .replace(/ (DPWH offices|DPWH office|district offices|district office|representatives|representative|regions|departments and funds|department or fund|agencies|agency|budget lines|budget line|contractors|contractor|barangays|barangay|legislative districts|legislative district)$/, '');
 }
 
 interface CountRow {
@@ -995,7 +1014,11 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
 }
 
 function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
-  const src = board.section === 'history'
+  const src = board.section === 'mpb'
+    ? board.mpbSet === 'contractors'
+      ? 'Source: GAA 2020 to 2026, multi-purpose building lines; DPWH contract list'
+      : 'Source: GAA 2020 to 2026, multi-purpose building lines'
+    : board.section === 'history'
     ? 'Source: GAA 2020 to 2026, DPWH offices'
     : board.section === 'members'
       ? 'Source: bills.juris.ph, 20th Congress bill authors'
@@ -1004,6 +1027,7 @@ function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
         : 'Source: NEP 2027 and House Bill 10858, DPWH project lists';
   const out = [withPhotos ? `${src} · Photos: House of Representatives, public domain` : src];
   if (withPhotos && (board.section === 'history' || board.kind === 'congress')) out.push('The representative shown holds the seat in the 20th Congress.');
+  // The multi-purpose legislator board says so in its first note, printed above.
   // The lines are run together in the footer: end each but the last with a full stop.
   return out.map((l, i) => (i < out.length - 1 && !/[.!?]$/.test(l) ? `${l}.` : l));
 }
@@ -1236,10 +1260,12 @@ interface FooterText { notes: string; deo: string | null; residual: string | nul
 function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople): FooterText {
   // Cards with people beside amounts print CARD_DISCLAIMER; the board's own people
   // or shared-office note then gives way to its first other note.
-  const boardNote = people.amounts
-    ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
-    : board.notes[0] ?? null;
-  const notes = [boardNote, people.amounts ? CARD_DISCLAIMER : null].filter(Boolean).join(' ');
+  const boardNote = board.kind === 'mpb' ? board.notes[0] ?? null
+    : people.amounts
+      ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
+      : board.notes[0] ?? null;
+  const disclaimer = board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people.amounts ? CARD_DISCLAIMER : null;
+  const notes = [boardNote, disclaimer].filter(Boolean).join(' ');
   return { notes, deo: deoText(people.deo ?? null), residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
 }
 
@@ -1579,7 +1605,7 @@ function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: n
 function countLine(board: BoardDef, shown: number, eligible: number): string | null {
   if (!eligible) return null;
   const unit = board.kind === 'members' ? ['representative', 'representatives']
-    : board.kind === 'lines' ? [lineUnit(board, 1), lineUnit(board, 2)]
+    : board.kind === 'lines' || board.kind === 'mpb' ? [listUnit(board, 1), listUnit(board, 2)]
       : ['DPWH office', 'DPWH offices'];
   const u = eligible === 1 ? unit[0] : unit[1];
   return shown < eligible ? `Top ${shown} of ${eligible.toLocaleString('en-US')} ${u}` : `${eligible.toLocaleString('en-US')} ${u}`;
@@ -1872,7 +1898,8 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
 }
 
 function emptyMessage(board: BoardDef, region: string | null): string {
-  if (board.kind === 'lines') return board.rowSet && !region ? `No ${lineUnit(board, 1)} fits this board` : 'Nothing fits this board';
+  if (board.kind === 'lines') return board.rowSet && !region ? `No ${listUnit(board, 1)} fits this board` : 'Nothing fits this board';
+  if (board.kind === 'mpb') return `No ${mpbUnit(board, 1)}${region ? ` in ${regionName(region) ?? 'this region'}` : ''} fits this board`;
   const who = board.kind === 'members' ? 'representative' : 'DPWH office';
   return `No ${who} in ${regionName(region) ?? 'this region'} fits this board`;
 }
@@ -1915,7 +1942,7 @@ function drawRankingVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
   }
   const tierMarks = board.kind === 'ranking';
   const attempt = (k: number, useBlock: boolean, deo: DeoNote, dry: boolean) => {
-    const people: CardPeople = { photos: true, amounts: board.kind === 'ranking', deo };
+    const people: CardPeople = { photos: true, amounts: board.kind === 'ranking' || board.kind === 'mpb', deo };
     const items = all.slice(0, k);
     const maxAbs = Math.max(...items.map((i) => Math.abs(i.value)));
     const t = heroText(board, region, countLine(board, k, eligible));
@@ -2506,7 +2533,7 @@ const LINE_SIZES: Record<ShareFormat, LineSizes> = {
  * "NEP → House bill" under it. Names are cut with an ellipsis, never wrapped,
  * so every row is the same height.
  */
-function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: number, sz: LineSizes): Body {
+function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: number, sz: LineSizes): Body {
   const n = rows.length;
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
   return {
@@ -2519,10 +2546,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
       setFont(ctx, 700, sz.value, F.display);
       let valW = Math.max(...rows.map((r) => tabWidth(ctx, formatValue(r.value, board.value))));
       setFont(ctx, 500, sz.detail, F.body);
-      for (const r of rows) {
-        const d = board.rowDetail?.(r.row);
-        if (d) valW = Math.max(valW, tw(ctx, d));
-      }
+      for (const r of rows) if (r.detail) valW = Math.max(valW, tw(ctx, r.detail));
       valW = Math.min(Math.ceil(valW) + sz.value * 0.8, w * 0.42);
       const tx = x + rankW;
       const tmax = w - rankW - valW;
@@ -2538,9 +2562,9 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
         ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
         drawTab(ctx, String(r.rank), tx - sz.rank * 0.55, base, 'right');
         setFont(ctx, 600, sz.name, F.body);
-        text(ctx, ellipsize(ctx, r.row.label, tmax - sz.name * 0.4), tx, base, C.ink);
+        text(ctx, ellipsize(ctx, r.label, tmax - sz.name * 0.4), tx, base, C.ink);
         setFont(ctx, 500, sz.sub, F.body);
-        text(ctx, ellipsize(ctx, r.row.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
+        text(ctx, ellipsize(ctx, r.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
         const bh = Math.max(4, Math.round(sz.sub * 0.28));
         const len = Math.max(bh, (Math.abs(r.value) / maxAbs) * (tmax - sz.name * 0.6));
         ctx.fillStyle = th.solid;
@@ -2549,7 +2573,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
         setFont(ctx, 700, sz.value, F.display, -sz.value * 0.01);
         ctx.fillStyle = th.text;
         drawTab(ctx, formatValue(r.value, board.value), x + w - sz.value * 0.3, base, 'right');
-        const d = board.rowDetail?.(r.row);
+        const d = r.detail;
         if (d) {
           setFont(ctx, 500, sz.detail, F.body);
           text(ctx, d, x + w - sz.value * 0.3, base + sz.sub * 1.3, C.mute, 'right');
@@ -2559,17 +2583,18 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: RankedLine[], x: number, w: 
   };
 }
 
-/** Departments, agencies and budget lines: as many rows as fit, at least three. */
+/** Departments, agencies, budget lines and the multi-purpose building boards: as many rows as fit, at least three. */
 function drawLinesVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareCardInput): void {
   const { data, board } = input;
-  const { rows: all, eligible } = rankLines(data, board, { limit: SHARE_FORMATS[format].rows });
+  const region = board.kind === 'mpb' ? input.region ?? null : null;
+  const { rows: all, eligible } = listRows(data, board, { region, limit: SHARE_FORMATS[format].rows });
   if (!all.length) {
-    layoutVertical(ctx, s, input, heroText(board, null, null), () => ({ extra: null, body: emptyBody(ctx, s, board, null) }), NO_PEOPLE);
+    layoutVertical(ctx, s, input, heroText(board, region, null), () => ({ extra: null, body: emptyBody(ctx, s, board, region) }), NO_PEOPLE);
     return;
   }
   const sz = LINE_SIZES[format];
   const attempt = (k: number, dry: boolean) =>
-    layoutVertical(ctx, s, input, heroText(board, null, countLine(board, k, eligible)),
+    layoutVertical(ctx, s, input, heroText(board, region, countLine(board, k, eligible)),
       () => ({ extra: null, body: linesBody(ctx, board, all.slice(0, k), s.pad, s.W - s.pad * 2, sz) }), NO_PEOPLE, dry);
   for (let k = all.length; k >= 1; k--) {
     if (attempt(k, true)) {
@@ -2835,13 +2860,14 @@ export function drawShareCard(ctx: CanvasRenderingContext2D, input: ShareCardInp
   ctx.imageSmoothingQuality = 'high';
   if (format === 'landscape') {
     if (board.kind === 'congress') drawCongressLandscape(ctx, inp);
-    else if (board.kind === 'ranking' || board.kind === 'members') drawRankingVertical(ctx, LAND, format, inp);
-    else if (board.kind === 'lines') drawLinesVertical(ctx, LAND, format, inp);
+    else if (board.kind === 'ranking' || board.kind === 'members' || mpbPeople(board)) drawRankingVertical(ctx, LAND, format, inp);
+    else if (board.kind === 'lines' || board.kind === 'mpb') drawLinesVertical(ctx, LAND, format, inp);
     else drawLandscape(ctx, inp);
   } else {
     const s = SPECS[format];
     if (board.kind === 'shift') drawShiftVertical(ctx, s, format, inp);
-    else if (board.kind === 'lines') drawLinesVertical(ctx, s, format, inp);
+    else if (mpbPeople(board)) drawRankingVertical(ctx, s, format, inp);
+    else if (board.kind === 'lines' || board.kind === 'mpb') drawLinesVertical(ctx, s, format, inp);
     else if (board.kind === 'regions') drawRegionsVertical(ctx, s, format, inp);
     else if (board.kind === 'congress') drawCongressVertical(ctx, s, format, inp);
     else drawRankingVertical(ctx, s, format, inp);
@@ -2858,7 +2884,7 @@ export function shareCardImageUrls(data: LeaderboardData, board: BoardDef, forma
   urls.add(SHARE_LOGO_WHITE);
   if (format === 'landscape') urls.add(SHARE_LOGO_PRIMARY);
   const add = (people: LeaderPerson[]) => { for (const p of people.slice(0, 3)) if (p.portrait_url) urls.add(p.portrait_url); };
-  if (board.kind === 'ranking' || board.kind === 'members') {
+  if (board.kind === 'ranking' || board.kind === 'members' || mpbPeople(board)) {
     for (const it of rankingItems(data, board, r, SHARE_FORMATS[format].rows).items) add(it.people);
   } else if (board.kind === 'congress') {
     for (const c of rankByCongress(data, { region: r, limit: format === 'landscape' ? 1 : 5 })) for (const row of c.rows) add(row.entry.people);
@@ -2895,11 +2921,11 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
   const tiers = board.kind === 'ranking' || board.kind === 'congress';
   let top: string[] = [];
   let people = false;
-  if (board.kind === 'ranking' || board.kind === 'members') {
+  if (board.kind === 'ranking' || board.kind === 'members' || mpbPeople(board)) {
     const { items, eligible } = rankingItems(data, board, r, 3);
     if (!items.length) top = [`${emptyMessage(board, r)}`];
     else {
-      people = board.kind === 'ranking';
+      people = board.kind === 'ranking' || board.kind === 'mpb';
       top = items.map((it) => `${it.rank}. ${altItem(it, tiers)}: ${formatValue(it.value, board.value)}${it.detail ? ` ${it.detail}` : ''}`);
       // The card may fit fewer rows than the format holds; the alt text gives the field and the top three.
       top.unshift(`${countLine(board, eligible, eligible) ?? ''}; the top three`);
@@ -2912,12 +2938,13 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     }
   } else if (board.kind === 'regions') {
     top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}`);
-  } else if (board.kind === 'lines') {
-    const { rows, eligible } = rankLines(data, board, { limit: 3 });
+  } else if (board.kind === 'lines' || board.kind === 'mpb') {
+    const lr = board.kind === 'mpb' ? r : null;
+    const { rows, eligible } = listRows(data, board, { region: lr, limit: 3 });
     top = rows.length
       ? [`${countLine(board, eligible, eligible)}; the top three`,
-        ...rows.map((r) => `${r.rank}. ${r.row.label} (${r.row.sub}): ${formatValue(r.value, board.value)}${board.rowDetail ? `, ${board.rowDetail(r.row)}` : ''}`)]
-      : [emptyMessage(board, null)];
+        ...rows.map((x) => `${x.rank}. ${x.label} (${x.sub}): ${formatValue(x.value, board.value)}${x.detail ? `, ${x.detail}` : ''}`)]
+      : [emptyMessage(board, lr)];
   } else if (board.kind === 'shift') {
     const part = (label: string, nep: number, house: number) => `${label}: NEP ${formatValue(nep, 'php')}, House bill ${formatValue(house, 'php')}, change ${formatValue(house - nep, 'signed_php')}`;
     top = shiftKinds(data).flatMap((kk) => {
@@ -2929,7 +2956,7 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     });
   }
   const residual = residualText(data, board);
-  const tail = [residual, people ? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
+  const tail = [residual, board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people ? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
   return `${head} ${[...top.filter(Boolean), ...tail].join('. ')}.`.replace(/\.\./g, '.').replace(/\.\s*\./g, '.');
 }
 

@@ -30,6 +30,8 @@
  */
 
 import { CARD_DISCLAIMER } from './hgab-disclaimers';
+import { contractorPath } from './hgab-contractors';
+import { MPB_MAP_ROOT } from './hgab-mpb-years';
 
 export const LEADERBOARD_SCHEMA = 1 as const;
 export const LEADERBOARD_ROOT = '/hgab/2027/leaderboard';
@@ -190,6 +192,98 @@ export interface LeaderboardData {
   notes: string[];
   /** The whole-bill boards' rows, attached by the loader from WHOLE_BILL_DATA_PATH (absent in leaderboard.json). */
   whole_bill?: WholeBillData;
+  /** The multi-purpose building boards' rows, attached by the loader from MPB_BOARDS_PATH (absent in leaderboard.json). */
+  mpb?: MpbBoardsData;
+}
+
+// ---------------------------------------------------------------------------
+// Multi-purpose buildings, 2020 to 2026 (data/hgab/2027/mpb-boards/boards.json)
+// ---------------------------------------------------------------------------
+
+/** npm run build:hgab-mpb-boards, from the multi-purpose map's lines and contracts. */
+export const MPB_BOARDS_PATH = 'hgab/2027/mpb-boards/boards.json';
+
+export type MpbBoardSet = 'contractors' | 'barangays' | 'offices' | 'districts';
+
+export interface MpbBoardRow {
+  /** Contractor key, place key, office name or legislative district id. */
+  key: string;
+  /** The contractor, the barangay, the DPWH office or the legislative district: a place leads, never a person. */
+  label: string;
+  /** A second line: where, the contracts, or the district's representative ("Rep. …"). */
+  sub: string;
+  /** The map, narrowed to this row's lines (2020 to 2026). */
+  href: string;
+  /** RegionKey; null for contractors, who work across regions. */
+  region: string | null;
+  lines: number;
+  /** The lines' enacted-budget amount. */
+  gaa_php: number;
+  /** Contractors only: contracts, each once, and their amount. */
+  contracts: number | null;
+  contract_php: number | null;
+  first_year: number;
+  last_year: number;
+  /** Contractors: the contractor's page; districts: the district page. */
+  page: string | null;
+  /** Districts: the representative now in the seat, as the other boards show people (portrait, credit, links). */
+  person: LeaderPerson | null;
+}
+
+export interface MpbBoardsData {
+  schema: 1;
+  built_at: string;
+  /** The enacted budgets ranked. */
+  years: [number, number];
+  /** Every multi-purpose building line in those budgets. */
+  totals: { lines: number; gaa_php: number };
+  /** Per board, the lines no row carries: no matched contract, no barangay in the title, not under a district office, no district. */
+  residual: Record<MpbBoardSet, { lines: number; gaa_php: number }>;
+  contractors: MpbBoardRow[];
+  barangays: MpbBoardRow[];
+  offices: MpbBoardRow[];
+  districts: MpbBoardRow[];
+  /** SHA-256 of the inputs: mpb-years/lines.json, contractors/mpb-links.json, districts.json. */
+  sources: Record<string, string>;
+  /** Every legislative district's representative, by district id (built as leaderboard.json builds its people). */
+  people: Record<string, LeaderPerson>;
+}
+
+/** The file as written: each set's rows as arrays in MPB_BOARD_COLS order; links are made by decodeMpbBoards. */
+export type MpbBoardsFile = Omit<MpbBoardsData, MpbBoardSet> & { cols: string[]; sets: Record<MpbBoardSet, unknown[][]> };
+export const MPB_BOARD_COLS = [
+  'key', 'label', 'sub', 'region', 'lines', 'gaa_php', 'contracts', 'contract_php', 'first_year', 'last_year',
+] as const;
+export const MPB_BOARD_SETS: readonly MpbBoardSet[] = ['contractors', 'barangays', 'offices', 'districts'];
+
+/** The map, narrowed to a row's lines in the boards' years; and the contractor's or district's own page. */
+export function mpbRowLinks(set: MpbBoardSet, key: string, years: readonly [number, number]): { href: string; page: string | null } {
+  const ys = Array.from({ length: years[1] - years[0] + 1 }, (_, i) => years[0] + i).join(',');
+  const param = { contractors: 'contractor', barangays: 'place', offices: 'q', districts: 'district' }[set];
+  return {
+    href: `${MPB_MAP_ROOT}?years=${ys}&${param}=${encodeURIComponent(key)}`,
+    page: set === 'contractors' ? contractorPath(key) : set === 'districts' ? `/hgab/2027/districts/${encodeURIComponent(key)}` : null,
+  };
+}
+
+export function decodeMpbBoards(f: MpbBoardsFile): MpbBoardsData {
+  const c = Object.fromEntries(f.cols.map((n, k) => [n, k])) as Record<string, number>;
+  for (const n of MPB_BOARD_COLS) if (c[n] == null) throw new Error(`mpb-boards/boards.json has no column ${n}`);
+  const decode = (set: MpbBoardSet) => f.sets[set].map((r): MpbBoardRow => {
+    const key = String(r[c.key]);
+    return {
+      key, label: String(r[c.label]), sub: String(r[c.sub] ?? ''), region: (r[c.region] as string | null) ?? null,
+      lines: Number(r[c.lines]), gaa_php: Number(r[c.gaa_php]),
+      contracts: r[c.contracts] == null ? null : Number(r[c.contracts]),
+      contract_php: r[c.contract_php] == null ? null : Number(r[c.contract_php]),
+      first_year: Number(r[c.first_year]), last_year: Number(r[c.last_year]),
+      ...mpbRowLinks(set, key, f.years),
+      person: set === 'districts' ? f.people[key] ?? null : null,
+    };
+  });
+  const { cols: _cols, sets: _sets, ...rest } = f;
+  void _cols; void _sets;
+  return { ...rest, contractors: decode('contractors'), barangays: decode('barangays'), offices: decode('offices'), districts: decode('districts') };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,8 +333,8 @@ export interface WholeBillData {
 // Boards
 // ---------------------------------------------------------------------------
 
-export type BoardKind = 'ranking' | 'members' | 'congress' | 'shift' | 'regions' | 'lines';
-export type BoardSection = 'fy2027' | 'wholebill' | 'history' | 'members' | 'picture';
+export type BoardKind = 'ranking' | 'members' | 'congress' | 'shift' | 'regions' | 'lines' | 'mpb';
+export type BoardSection = 'fy2027' | 'wholebill' | 'history' | 'mpb' | 'members' | 'picture';
 export type ValueKind = 'php' | 'signed_php' | 'count' | 'pct' | 'share';
 
 export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; blurb: string }> = [
@@ -248,6 +342,7 @@ export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; b
   { key: 'fy2027', label: '2027: the House bill against the NEP', blurb: 'DPWH projects by DPWH office (DEO), as listed in each document.' },
   { key: 'wholebill', label: '2027: the whole House bill, by department', blurb: 'Departments, agencies and budget lines across the House bill, against the NEP. Not tied to any district.' },
   { key: 'history', label: '2020 to 2026: enacted budgets', blurb: 'What each DPWH office (DEO) received in the enacted budgets.' },
+  { key: 'mpb', label: '2020 to 2026: multi-purpose buildings', blurb: 'Multi-purpose building lines in the enacted budgets, by contractor, barangay, DPWH office and legislative district.' },
   { key: 'members', label: 'The members', blurb: 'The representatives themselves, from their legislative records.' },
 ];
 
@@ -280,6 +375,10 @@ export interface BoardDef {
   rowMetric?: (r: WholeBillRow) => number | null;
   rowKeep?: (r: WholeBillRow) => boolean;
   rowDetail?: (r: WholeBillRow) => string | null;
+  /** Multi-purpose building boards: which rows are ranked, by what, and the line under the value. */
+  mpbSet?: MpbBoardSet;
+  mpbMetric?: (r: MpbBoardRow) => number | null;
+  mpbDetail?: (r: MpbBoardRow) => string | null;
 }
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
@@ -303,6 +402,10 @@ function nepToHouse(r: WholeBillRow): string {
 }
 
 const REORG_NOTE = 'Offices created, renamed or carved out since 2020 are left out: part of their earlier budget sits with another office.';
+
+const MPB_KICKER = 'Multi-purpose buildings · 2020–2026';
+const MPB_REPEAT_NOTE = 'A building funded over several years has a line in each year. Amounts are allocations, not spending.';
+const MPB_LINES = (r: MpbBoardRow) => `${plural(r.lines, 'line', 'lines')}, ${r.first_year === r.last_year ? r.first_year : `${r.first_year}–${r.last_year}`}`;
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -562,6 +665,53 @@ export const BOARDS: readonly BoardDef[] = [
     regionFilter: true,
   },
 
+  // Multi-purpose buildings, 2020 to 2026
+  {
+    id: 'mpb-contractors', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
+    kicker: MPB_KICKER,
+    title: 'Contractors with the most multi-purpose building contracts',
+    subtitle: 'DPWH contract amounts for the multi-purpose building lines of the 2020 to 2026 enacted budgets, by contractor.',
+    mpbSet: 'contractors', mpbMetric: (r) => r.contract_php,
+    mpbDetail: (r) => `${plural(r.lines, 'line', 'lines')}, ${plural(r.contracts ?? 0, 'contract', 'contracts')}`,
+    notes: [
+      'We matched each contract to its budget line by title, office and amount. DPWH does not publish the link.',
+      'Amounts are contract amounts in DPWH’s list, not payments. A joint-venture contract counts in full for each partner.',
+    ],
+    regionFilter: false,
+  },
+  {
+    id: 'mpb-barangays', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
+    kicker: MPB_KICKER,
+    title: 'Barangays with the largest multi-purpose building budget',
+    subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, added up by the barangay each title names.',
+    mpbSet: 'barangays', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
+    notes: ['A barangay counts only when a line’s title names it.', MPB_REPEAT_NOTE],
+    regionFilter: true,
+  },
+  {
+    id: 'mpb-offices', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
+    kicker: MPB_KICKER,
+    title: 'DPWH offices with the largest multi-purpose building budget',
+    subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the district engineering office (DEO) each lists.',
+    mpbSet: 'offices', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
+    notes: ['By the DPWH office the budget names for each line. Central Office and regional office lines are left out.', MPB_REPEAT_NOTE],
+    regionFilter: true,
+  },
+  {
+    id: 'mpb-legislators', section: 'mpb', kind: 'mpb', value: 'php', order: 'desc',
+    kicker: 'Multi-purpose buildings · by legislator',
+    title: 'Legislative districts with the largest multi-purpose building budget',
+    subtitle: 'Multi-purpose building lines in the 2020 to 2026 enacted budgets, by the legislative district each title places them in.',
+    mpbSet: 'districts', mpbMetric: (r) => r.gaa_php, mpbDetail: MPB_LINES,
+    notes: [
+      // The first note is printed on the card, with MPB_CARD_DISCLAIMER after it.
+      'A district is where a title places the building. The representative shown holds the seat now, in the 20th Congress.',
+      'Earlier Congresses passed the 2020 to 2025 budgets. The documents do not say who asked for any building.',
+      MPB_REPEAT_NOTE,
+    ],
+    regionFilter: true,
+  },
+
   // The members
   {
     id: 'bills', section: 'members', kind: 'members', value: 'count', order: 'desc',
@@ -765,6 +915,65 @@ export function rankLines(data: LeaderboardData, board: BoardDef, opts: { limit?
   return { rows: opts.limit != null ? rows.slice(0, opts.limit) : rows, eligible: pool.length };
 }
 
+export interface RankedMpb {
+  rank: number;
+  row: MpbBoardRow;
+  value: number;
+}
+
+/** What a multi-purpose building board counts: "contractors", "barangays", "DPWH offices", "legislative districts". */
+export function mpbUnit(board: Pick<BoardDef, 'mpbSet'>, n: number): string {
+  const u: Record<MpbBoardSet, [string, string]> = {
+    contractors: ['contractor', 'contractors'],
+    barangays: ['barangay', 'barangays'],
+    offices: ['DPWH office', 'DPWH offices'],
+    districts: ['legislative district', 'legislative districts'],
+  };
+  const [one, many] = u[board.mpbSet ?? 'barangays'];
+  return n === 1 ? one : many;
+}
+
+/** A multi-purpose building board's rows, largest first, ties by label; `region` narrows boards with `regionFilter`. */
+export function rankMpb(data: LeaderboardData, board: BoardDef, opts: { region?: string | null; limit?: number } = {}): { rows: RankedMpb[]; eligible: number } {
+  const set = board.mpbSet ? data.mpb?.[board.mpbSet] : undefined;
+  if (!set || !board.mpbMetric) return { rows: [], eligible: 0 };
+  const m = board.mpbMetric;
+  const region = board.regionFilter ? opts.region ?? null : null;
+  const dir = board.order === 'asc' ? 1 : -1;
+  const pool = set
+    .filter((r) => !region || r.region === region)
+    .map((r) => ({ r, v: m(r) }))
+    .filter((x): x is { r: MpbBoardRow; v: number } => x.v != null && Number.isFinite(x.v) && x.v > 0)
+    .sort((a, b) => (a.v - b.v) * dir || a.r.label.localeCompare(b.r.label) || a.r.key.localeCompare(b.r.key));
+  const ranks = competitionRanks(pool, (x) => x.v);
+  const rows = pool.map((x, i) => ({ rank: ranks[i], row: x.r, value: x.v }));
+  return { rows: opts.limit != null ? rows.slice(0, opts.limit) : rows, eligible: pool.length };
+}
+
+/** A row of a list board (whole-bill and multi-purpose building boards) as the image draws it. */
+export interface ListRow {
+  rank: number;
+  label: string;
+  sub: string;
+  value: number;
+  detail: string | null;
+}
+
+/** The rows a list board draws, best first. */
+export function listRows(data: LeaderboardData, board: BoardDef, opts: { region?: string | null; limit?: number } = {}): { rows: ListRow[]; eligible: number } {
+  if (board.kind === 'mpb') {
+    const r = rankMpb(data, board, opts);
+    return { rows: r.rows.map((x) => ({ rank: x.rank, label: x.row.label, sub: x.row.sub, value: x.value, detail: board.mpbDetail?.(x.row) ?? null })), eligible: r.eligible };
+  }
+  const r = rankLines(data, board, { limit: opts.limit });
+  return { rows: r.rows.map((x) => ({ rank: x.rank, label: x.row.label, sub: x.row.sub, value: x.value, detail: board.rowDetail?.(x.row) ?? null })), eligible: r.eligible };
+}
+
+/** What a list board counts. */
+export function listUnit(board: BoardDef, n: number): string {
+  return board.kind === 'mpb' ? mpbUnit(board, n) : lineUnit(board, n);
+}
+
 // ---------------------------------------------------------------------------
 // Value text (shared by the cards, the tables and the pre-rendered images)
 // ---------------------------------------------------------------------------
@@ -896,6 +1105,17 @@ function sliceSum(d: LeaderboardData, f: (s: LeaderSlice) => number, kinds: Resi
  * the whole budget.
  */
 export function residualLine(d: LeaderboardData, board: BoardDef): string | null {
+  if (board.kind === 'mpb') {
+    const r = board.mpbSet && d.mpb ? d.mpb.residual[board.mpbSet] : null;
+    if (!r) return null;
+    const what = `${formatValue(r.gaa_php, 'php')} in ${plural(r.lines, 'line', 'lines')}`;
+    switch (board.mpbSet) {
+      case 'contractors': return `No contract found: ${what}, budget amount.`;
+      case 'barangays': return `No barangay in the title: ${what}.`;
+      case 'offices': return `Not under a district office: ${what}, mostly Central Office.`;
+      default: return `Not in any district: ${what} whose title names no place in one district.`;
+    }
+  }
   const allKinds: ResidualKind[] = ['central', 'regional', 'no_office', 'office_change'];
   const unpaired: ResidualKind[] = ['central', 'regional', 'no_office'];
   const outside = 'Central Office, regional offices, lines with no office and lines that changed office';
@@ -970,7 +1190,8 @@ export function asOfText(data: Pick<LeaderboardData, 'built_at'>): string {
 }
 
 /** The build the board's figures come from: the whole-bill boards have their own. */
-export function boardBuiltAt(data: Pick<LeaderboardData, 'built_at' | 'whole_bill'>, board: Pick<BoardDef, 'kind'>): string {
+export function boardBuiltAt(data: Pick<LeaderboardData, 'built_at' | 'whole_bill' | 'mpb'>, board: Pick<BoardDef, 'kind'>): string {
+  if (board.kind === 'mpb' && data.mpb) return data.mpb.built_at;
   return board.kind === 'lines' && data.whole_bill ? data.whole_bill.built_at : data.built_at;
 }
 

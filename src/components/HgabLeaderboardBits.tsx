@@ -29,7 +29,7 @@ import {
   rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
-  rankLines, type RankedLine,
+  rankLines, type RankedLine, rankMpb, type RankedMpb,
 } from '../lib/hgab-leaderboard';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +62,10 @@ const VALUE_HEADING: Record<string, string> = {
   'lines-increase': 'Change from the NEP',
   'lines-cuts': 'Change from the NEP',
   'lines-added': 'In the House bill',
+  'mpb-contractors': 'Contract amount',
+  'mpb-barangays': 'Enacted, 2020 to 2026',
+  'mpb-offices': 'Enacted, 2020 to 2026',
+  'mpb-legislators': 'Enacted, 2020 to 2026',
 };
 
 const DETAIL_HEADING: Record<string, string> = {
@@ -320,6 +324,8 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
     body = <RegionsMini data={data} board={board} />;
   } else if (board.kind === 'lines') {
     body = <LinesMini data={data} board={board} />;
+  } else if (board.kind === 'mpb') {
+    body = <MpbMini data={data} board={board} region={scoped} />;
   } else if (board.kind === 'congress') {
     const terms = rankByCongress(data, { region: scoped, limit: 1 });
     body = (
@@ -489,6 +495,32 @@ function LinesMini({ data, board }: { data: LeaderboardData; board: BoardDef }) 
           <span className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()} title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}>
             {formatValue(r.value, board.value)}
           </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** The top three contractors, barangays, offices or legislative districts for multi-purpose buildings, with a bar each. */
+function MpbMini({ data, board, region }: { data: LeaderboardData; board: BoardDef; region: string | null }) {
+  const rows = rankMpb(data, board, { region, limit: 3 }).rows;
+  if (!data.mpb) return <p className="hgab-lb-top-none">This board’s figures are not published yet.</p>;
+  if (!rows.length) return <p className="hgab-lb-top-none">Nothing is on this board{region ? ' in this region' : ''}.</p>;
+  const max = Math.max(...rows.map((r) => r.value), 0) || 1;
+  return (
+    <ol className="hgab-lb-top is-lines">
+      {rows.map((r, i) => (
+        <li key={r.row.key} className={i === 0 ? 'is-first' : undefined}>
+          <span className="hgab-lb-top-rank">{r.rank}</span>
+          {r.row.person && <Faces people={[r.row.person]} size={i === 0 ? 44 : 32} />}
+          <span className="hgab-lb-top-who">
+            <strong>{r.row.label}</strong>
+            <small>{r.row.sub}</small>
+            <span className="hgab-lb-top-bar" aria-hidden="true">
+              <span style={{ width: `${Math.max(4, (r.value / max) * 100)}%` }} />
+            </span>
+          </span>
+          <span className="hgab-lb-top-val" title={formatPesoFull(r.value)}>{formatValue(r.value, board.value)}</span>
         </li>
       ))}
     </ol>
@@ -936,6 +968,77 @@ export function LinesTable({ data, board }: { data: LeaderboardData; board: Boar
                 <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.hgab3_php)}>{formatValue(r.row.hgab3_php, 'php')}</td>
                 <td className="hgab-lb-go">
                   <Link to={r.row.href} aria-label={`Lines of ${r.row.label}`}>Lines →</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TableFoot shown={shown.length} total={eligible} open={open} onOpen={() => setOpen(true)} />
+    </>
+  );
+}
+
+/**
+ * A multi-purpose building board: every contractor, barangay, office or legislative district with a figure, its
+ * lines and years, and links to its lines on the map (and the contractor's or district's own page).
+ */
+export function MpbTable({ data, board, region }: { data: LeaderboardData; board: BoardDef; region: string | null }) {
+  const [open, setOpen] = useState(false);
+  const { rows, eligible } = rankMpb(data, board, { region });
+  const shown: RankedMpb[] = open ? rows : rows.slice(0, FIRST);
+  const contractors = board.mpbSet === 'contractors';
+  const what = { contractors: 'Contractor', barangays: 'Barangay', offices: 'DPWH office', districts: 'Legislative district' }[board.mpbSet ?? 'barangays'];
+  const cols = contractors ? 8 : 6;
+  return (
+    <>
+      <div className="nep-table-wrap">
+        <table className="nep-table hgab-lb-table">
+          <caption className="visually-hidden">{board.title}: {eligible.toLocaleString()} ranked</caption>
+          <thead>
+            <tr>
+              <th className="num hgab-lb-rank">Rank</th>
+              <th className="is-wrap">{what}</th>
+              <th className="num">{valueHeading(board)}</th>
+              <th className="num hgab-lb-col-wide">Lines</th>
+              {contractors && <th className="num hgab-lb-col-wide">Contracts</th>}
+              {contractors && <th className="num hgab-lb-col-wide">Budget amount</th>}
+              <th className="hgab-lb-col-wide">Years</th>
+              <th><span className="visually-hidden">Links</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data.mpb && <EmptyRow cols={cols}>This board’s figures are not published yet.</EmptyRow>}
+            {data.mpb && shown.length === 0 && <EmptyRow cols={cols}>Nothing is on this board{region ? ' in this region' : ''}.</EmptyRow>}
+            {shown.map((r) => (
+              <tr key={r.row.key}>
+                <td className="num hgab-lb-rank">{r.rank}</td>
+                {r.row.person ? (
+                  // The district leads, its representative's portrait and name under it, as PlaceCell draws one district.
+                  <td className="hgab-lb-place-cell">
+                    <p className="hgab-lb-place">{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</p>
+                    <ul className="hgab-lb-lines is-seats">
+                      <li>
+                        <Face person={r.row.person} size={28} />
+                        <span className="hgab-lb-who">
+                          <span className={`hgab-lb-rep ${r.row.person.name ? '' : 'is-missing'}`.trim()}>{r.row.sub}</span>
+                        </span>
+                      </li>
+                    </ul>
+                  </td>
+                ) : (
+                  <td className="nep-td-name">
+                    <strong>{r.row.page ? <Link to={r.row.page}>{r.row.label}</Link> : r.row.label}</strong>
+                    <span className="hgab-lb-line-sub">{r.row.sub}</span>
+                  </td>
+                )}
+                <ValueCell value={r.value} kind={board.value} sub={board.mpbDetail?.(r.row) ?? null} />
+                <td className="num hgab-lb-col-wide">{r.row.lines.toLocaleString()}</td>
+                {contractors && <td className="num hgab-lb-col-wide">{(r.row.contracts ?? 0).toLocaleString()}</td>}
+                {contractors && <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.gaa_php)}>{formatValue(r.row.gaa_php, 'php')}</td>}
+                <td className="hgab-lb-col-wide">{r.row.first_year === r.row.last_year ? r.row.first_year : `${r.row.first_year}–${r.row.last_year}`}</td>
+                <td className="hgab-lb-go">
+                  <Link to={r.row.href} aria-label={`The lines of ${r.row.label} on the map`}>Map →</Link>
                 </td>
               </tr>
             ))}

@@ -29,8 +29,8 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import {
-  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, OFFICE_VIEW_DISCLAIMERS,
-  type Disclaimer,
+  COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
+  OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
@@ -594,18 +594,22 @@ export function DisclaimerNotice({
   compact = false,
   offices = false,
   contractors = false,
+  mpb = false,
   heading,
   className = '',
 }: {
   compact?: boolean;
   offices?: boolean;
+  /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
+  mpb?: boolean;
   /** Add the contractors disclaimer (pages showing DPWH contracts); 'only' carries it alone (the contractor pages). */
   contractors?: boolean | 'only';
   heading?: string;
   className?: string;
 }) {
-  const list = contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
-    : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];
+  const list = mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
+    : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
+      : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];
   return (
     <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''} ${className}`.trim()} aria-label={heading ?? 'Disclaimer'}>
       <p className={`hgab-disclaimer-eyebrow ${heading ? 'is-heading' : ''}`.trim()}>{heading ?? 'Disclaimer'}</p>
