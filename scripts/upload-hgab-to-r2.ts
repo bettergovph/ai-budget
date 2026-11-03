@@ -17,9 +17,10 @@
  *   npm run upload:hgab
  *   npm run upload:hgab -- --force --concurrency=4
  *   npm run upload:hgab -- --only=mpb-years --skip-verify    # one folder of the tree (after a full verify)
+ *   npm run upload:hgab -- --only=locations.json --skip-verify    # one file
  *
- * --only=<dir>[,<dir>] uploads just those folders of the tree: the data folder is shared between branches, and a
- * plain run would publish whatever else is in it.
+ * --only=<path>[,<path>] uploads just those folders or files of the tree: the data folder is shared between
+ * branches, and a plain run would publish whatever else is in it.
  */
 
 import { S3Client, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -174,12 +175,13 @@ async function main() {
   const manifest = JSON.parse(readFileSync(resolve(opts.root, "manifest.json"), "utf8")) as { source_commit: string; built_at: string };
   const roots = opts.only.length ? opts.only.map((d) => resolve(opts.root, d)) : [opts.root];
   for (const r of roots) {
-    if (!existsSync(r) || !statSync(r).isDirectory()) {
-      console.error(`--only: ${r} is not a folder of ${opts.root}`);
+    if (!existsSync(r) || relative(opts.root, r).startsWith("..")) {
+      console.error(`--only: ${r} is not in ${opts.root}`);
       process.exit(1);
     }
   }
-  const items = roots.flatMap(walk).map((p) => ({ local: p, key: `${PREFIX}${relative(opts.root, p).split(sep).join("/")}` }));
+  const items = roots.flatMap((r) => (statSync(r).isDirectory() ? walk(r) : [r]))
+    .map((p) => ({ local: p, key: `${PREFIX}${relative(opts.root, p).split(sep).join("/")}` }));
   const totalBytes = items.reduce((a, i) => a + statSync(i.local).size, 0);
 
   console.log(`Endpoint: ${endpoint}`);

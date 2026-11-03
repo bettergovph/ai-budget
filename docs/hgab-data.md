@@ -991,6 +991,10 @@ place, and the GPS point falls in the same district for 2,260, another district 
 single district for 47. GPS would place 17 lines (₱0.31B) the lens leaves out, so the lens is used
 as published, as the multi-purpose map does for FY2027.
 
+Publish after a full verify: `npx tsx scripts/upload-hgab-to-r2.ts --only=locations.json --skip-verify`
+(R2 `hgab/2027/locations.json`; `--only` takes files as well as folders, so nothing else in the shared
+data folder goes up).
+
 The placement is upstream's: the DPWH location
 district lens (`analysis/web/buildLocationLens.py`, method in
 `analysis/docs/location_district_lens_method.md`, added upstream 2026-10-28). Each line is
