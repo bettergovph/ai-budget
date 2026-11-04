@@ -16,6 +16,8 @@ function esc(s: string): string {
 }
 
 const SITE = "https://budget.bettergov.ph";
+/** The public data host: the House bill files that have no endpoint in front of them live here. */
+const DATA = "https://budget-assets.bettergov.ph";
 
 /** One House bill disclaimer, word for word, as a quoted paragraph. */
 function disclaimerHtml(d: Disclaimer): string {
@@ -162,6 +164,7 @@ export function docsHtml(origin: string): string {
   <a href="#hgab-regions">Regions</a>
   <a href="#hgab-documents">Documents &amp; checks</a>
   <a href="#hgab-districts">Districts</a>
+  <a href="#hgab-files">Data files</a>
   <h4>Machine access</h4>
   <a href="#openapi">OpenAPI spec</a>
   <a href="#mcp">MCP server</a>
@@ -210,11 +213,13 @@ descriptive <code>User-Agent</code>.</p>
       transpired — the question at issue, who said what and when, the agency's answer, figures as spoken,
       commitments, and where it landed — plus a section-by-section timeline and the transcript. Every item
       is timestamped and deep-linked to the video.</td></tr>
-  <tr><td><code>hgab/2027</code></td><td>FY2027, four programs, plus DPWH by district</td>
+  <tr><td><code>hgab/2027</code></td><td>FY2027, four programs, plus DPWH by district; the whole bill as files</td>
       <td>The House of Representatives' version of the FY2027 budget (<b>House Bill 10858</b>) set against
       the NEP, line by line, for the four programs where the bill lists projects:
       DPWH infrastructure, farm-to-market roads, health facilities and irrigation. Also DPWH money by
-      district engineering office, with the congressional districts each office serves.</td></tr>
+      district engineering office, with the congressional districts each office serves. The rest of the
+      House bill section (every line of the bill, DPWH contractors, seats by party, multi-purpose
+      buildings) is published as <a href="#hgab-files">data files</a>, not endpoints.</td></tr>
 </table>
 
 <p><b>Units.</b> Every amount anywhere in this API is an <b>exact Philippine peso</b> figure.
@@ -715,6 +720,44 @@ curl ${O}/api/v1/hgab/2027/districts/leg%3Aabra%3Alone</code></pre>
                     "central_office_php": 410825229000, "not_on_any_district_php": 410978229000, … }, … ]
   }
 }</code></pre>
+
+<h3 id="hgab-files">Data files (not endpoints)</h3>
+<p>The endpoints above cover the four programs and the districts. The rest of the House bill section on
+the site is published as plain files on the data host, <code>${DATA}</code>, with no API in front of them:
+JSON summaries, CSV and Parquet tables, each set listed in a <code>manifest.json</code> that gives every
+file's rows, size, SHA-256 and columns, plus a <code>notice</code> to keep with anything you republish.
+The <a href="#hgab-rules">rules</a> and <a href="#hgab-disclaimers">disclaimers</a> above apply to these
+files as they do to the endpoints. Parquet files can be queried in place: DuckDB reads them over HTTP
+with range requests.</p>
+<table>
+  <tr><th>What</th><th>Start here</th><th>Page</th></tr>
+  <tr><td>The whole House bill, line by line, against the NEP: every department, every appropriation line
+      (third reading)</td>
+      <td><code>hgab/2027/explorer/downloads/manifest.json</code> — a zip of every CSV, two Parquet tables
+      (the lines; the lines against the NEP) and a README of the columns</td>
+      <td><a href="${SITE}/hgab/2027/explorer#downloads">/hgab/2027/explorer</a></td></tr>
+  <tr><td>DPWH contractors, 2016–2026: DPWH's contract list, and the GAA lines (FY2020–2026) its contracts carry</td>
+      <td><code>hgab/2027/contractors/downloads/manifest.json</code> — contracts, contractors, GAA lines and
+      line-to-contract links, each as CSV and Parquet, plus a README</td>
+      <td><a href="${SITE}/hgab/2027/contractors#downloads">/hgab/2027/contractors</a></td></tr>
+  <tr><td>Seats by party: each district's representative and May 2025 party, and the DPWH budget by party</td>
+      <td><code>hgab/2027/parties/parties.json</code></td>
+      <td><a href="${SITE}/hgab/2027/parties">/hgab/2027/parties</a></td></tr>
+  <tr><td>Multi-purpose buildings, FY2015 GAA to the FY2027 House bill, with coordinates</td>
+      <td><code>hgab/2027/mpb-years/lines.csv</code>, <code>hgab/2027/mpb-years/summary.json</code></td>
+      <td><a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a></td></tr>
+  <tr><td>The four programs' own tables (what the endpoints above read)</td>
+      <td><code>hgab/2027/overview.json</code>, <code>hgab/2027/{key}/summary.json</code>,
+      <code>hgab/2027/{key}/projects.parquet</code></td>
+      <td><a href="${SITE}/hgab/2027/sources#hgab-src-dl">/hgab/2027/sources</a></td></tr>
+</table>
+<pre><code># every file in the line-by-line set, with its size
+curl -s ${DATA}/hgab/2027/explorer/downloads/manifest.json | jq '.files[] | [.csv.file, .csv.bytes]'
+
+# query a program's project table in place (DuckDB)
+SELECT title, region, trace, nep_php, hgab3_php, delta_php
+FROM read_parquet('${DATA}/hgab/2027/dpwh/projects.parquet')
+WHERE trace = 'candidate_increase' ORDER BY delta_php DESC LIMIT 25;</code></pre>
 
 <h2 id="openapi">OpenAPI specification</h2>
 <p>A machine-readable OpenAPI 3.1 description of every endpoint, parameter, and schema:</p>
