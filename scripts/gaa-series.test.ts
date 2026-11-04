@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGaaSeries, normalizeGroupName } from '../src/lib/gaa-series';
+import { archiveHref, buildGaaSeries, normalizeGroupName } from '../src/lib/gaa-series';
 import type { GaaManifest, GaaCoverage } from '../src/lib/gaa-history';
 
 const depts = [
@@ -94,4 +94,18 @@ test('groups no department claims are listed, never dropped', () => {
   assert.deepEqual(s.unmatched['2000'], [{ name: 'PRIORITY DEVELOPMENT ASSISTANCE FUND', amount: 20 }]);
   assert.deepEqual(s.unmatched['2026'], [{ name: 'New General Appropriations', amount: 150 }]);
   assert.equal(s.unmatched['2001'], undefined);
+});
+
+test('every figure links to where it can be browsed', () => {
+  const s = buildGaaSeries(manifest(), depts);
+  assert.equal(archiveHref(s, '07', 2026), '/gaa/2026/07');
+  assert.equal(archiveHref(s, '07', 2001), null, 'reenacted');
+  assert.equal(archiveHref(s, '01', 2010), null, 'no group that year');
+  assert.equal(archiveHref(s, '04', 2010), '/gaa/2010?scope=automatic_appropriations');
+  const u = new URL('http://x' + archiveHref(s, '07', 2000));
+  assert.equal(u.pathname, '/gaa/2000');
+  assert.equal(u.searchParams.get('scope'), 'current_new_appropriations');
+  assert.deepEqual(JSON.parse(u.searchParams.get('branch')!), [{ level: 0, code: null, name: 'DEPARTMENT OF EDUCATION, CULTURE AND SPORTS' }]);
+  assert.equal(new URL('http://x' + archiveHref(s, '07', 2003)).searchParams.get('scope'), 'current_new_appropriations_first_preference');
+  assert.deepEqual(s.departments['07'].names['2003'], ['Department of Education']);
 });

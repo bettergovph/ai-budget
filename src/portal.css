@@ -952,6 +952,24 @@ html, body {
   color: inherit;
 }
 .year-strip .year-cell:last-child { border-right: none; }
+.year-strip-archive-eyebrow { margin: 14px 0 8px; }
+.year-strip.year-strip-archive {
+  display: flex;
+  flex-wrap: wrap;
+  border-top-width: 1px;
+}
+.year-strip.year-strip-archive .year-cell {
+  flex: 1 1 10%;
+  min-width: 96px;
+  padding: 10px 10px 8px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.year-strip.year-strip-archive .year-cell .year-cell-num { font-size: 18px; }
+.year-strip.year-strip-archive .year-cell .year-cell-meta { margin-top: 5px; font-size: 10px; }
+.year-strip.year-strip-archive .year-cell.is-empty { color: var(--ink-mute); cursor: default; }
+.year-strip.year-strip-archive .year-cell.is-empty .year-cell-meta { color: var(--ink-mute); }
+.year-strip.year-strip-archive a.year-cell:hover .year-cell-num { text-decoration: underline; }
 .year-cell-num {
   font-family: var(--font-hero);
   font-weight: 700;

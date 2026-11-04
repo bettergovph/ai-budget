@@ -40,6 +40,8 @@ export interface NationalPoint {
   unprogrammed_php: number | null;
   /** new + automatic, when both are recorded. */
   total_php: number | null;
+  /** The manifest scope the new appropriations came from (the Explorer's `scope` query parameter). */
+  scope: string | null;
   note: string | null;
 }
 
@@ -48,8 +50,8 @@ export interface DeptSeries {
   description: string;
   /** Year → new appropriations in pesos; null when the year records none for this group. */
   years: Record<string, number | null>;
-  /** Year → the manifest group name(s) the figure came from. */
-  names: Record<string, string>;
+  /** Year → the manifest group name(s) the figure came from, in the year's own spelling. */
+  names: Record<string, string[]>;
 }
 
 export interface GaaSeries {
@@ -132,7 +134,7 @@ export function buildGaaSeries(manifest: GaaManifest, depts: IndexDept[], genera
       for (const d of Object.values(departments)) d.years[y] = null;
       national.push({
         year, status: cov.status, reenacts: cov.source_year ?? null,
-        new_php: null, automatic_php: null, unprogrammed_php: null, total_php: null,
+        new_php: null, automatic_php: null, unprogrammed_php: null, total_php: null, scope: null,
         note: cov.source_year ? `Reenacted FY${cov.source_year} budget: no new GAA was enacted.` : 'No new GAA was enacted.',
       });
       continue;
@@ -152,13 +154,13 @@ export function buildGaaSeries(manifest: GaaManifest, depts: IndexDept[], genera
       claimed.add(i);
       const d = departments[id];
       d.years[y] = (d.years[y] ?? 0) + g.amount;
-      d.names[y] = d.names[y] ? `${d.names[y]} + ${g.name}` : String(g.name);
+      d.names[y] = [...(d.names[y] ?? []), String(g.name)];
     });
     // Automatic appropriations are their own scope before FY2020.
     const auto = departments[AUTOMATIC_DEPT_ID];
     if (auto && !isExtract) {
       auto.years[y] = autoScope ? autoScope.amount : null;
-      if (autoScope) auto.names[y] = 'automatic_appropriations scope';
+      if (autoScope) auto.names[y] = autoScope.groups.map((g) => String(g.name));
     }
     for (const d of Object.values(departments)) if (!(y in d.years)) d.years[y] = null;
     unmatched[y] = ns.groups.filter((_, i) => !claimed.has(i)).map((g) => ({ name: g.name, amount: g.amount }));
@@ -177,7 +179,7 @@ export function buildGaaSeries(manifest: GaaManifest, depts: IndexDept[], genera
       year, status: cov.status, reenacts: null,
       new_php: newAmount, automatic_php: automaticAmount,
       unprogrammed_php: unprog ? unprog.amount : null,
-      total_php: total, note: notes.length ? notes.join(' ') : null,
+      total_php: total, scope: ns.id, note: notes.length ? notes.join(' ') : null,
     });
   }
 
@@ -196,4 +198,26 @@ export function buildGaaSeries(manifest: GaaManifest, depts: IndexDept[], genera
 /** The amount a chart plots for a national row: the total, or new appropriations alone when no total can be formed. */
 export function nationalPlotAmount(p: NationalPoint): number | null {
   return p.total_php ?? p.new_php;
+}
+
+export const FIRST_DETAIL_YEAR = 2020;
+
+/**
+ * Where a department's figure for one year can be browsed. FY2020 on: the
+ * per-year browser at /gaa/:year/:group. Earlier: the GAA archive's year page,
+ * opened on this group's branch in the scope the figure came from (Automatic
+ * Appropriations is a scope of its own there, not a group). Null when the
+ * year records nothing for the group (reenacted years, groups absent that year).
+ */
+export function archiveHref(series: GaaSeries, deptId: string, year: number): string | null {
+  const d = series.departments[deptId];
+  if (!d || d.years[year] == null) return null;
+  if (year >= FIRST_DETAIL_YEAR) return `/gaa/${year}/${deptId}`;
+  const row = series.national.find((p) => p.year === year);
+  if (deptId === AUTOMATIC_DEPT_ID) return `/gaa/${year}?${new URLSearchParams({ scope: 'automatic_appropriations' })}`;
+  const raw = d.names[year] as string[] | string | undefined;
+  const name = Array.isArray(raw) ? raw[0] : raw;
+  if (!row?.scope || !name) return `/gaa/${year}`;
+  const branch = JSON.stringify([{ level: 0, code: null, name }]);
+  return `/gaa/${year}?${new URLSearchParams({ scope: row.scope, branch })}`;
 }

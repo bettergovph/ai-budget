@@ -22,7 +22,7 @@ import { deptTitle } from '../lib/seo';
 import type { ColumnDef, ObjectFilter, RawCell } from '../lib/csv';
 import type { DeptData, FPAP, ObjectItem, BaseEntity, MoverEntry } from '../lib/types';
 import { useGaaSeries } from '../lib/gaa-series-load';
-import type { GaaSeries } from '../lib/gaa-series';
+import { archiveHref, FIRST_DETAIL_YEAR, type GaaSeries } from '../lib/gaa-series';
 import GaaSeriesChart from '../components/GaaSeriesChart';
 
 const FALLBACK_YEAR = 2026;
@@ -360,6 +360,10 @@ function YearStrip({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const peak = Math.max(...YEARS.map((y) => data.total(y)));
+  const { series } = useGaaSeries();
+  const hist = series?.departments[data.department.id];
+  const archiveYears = series ? series.years.filter((y) => y < FIRST_DETAIL_YEAR).toSorted((a, b) => b - a) : [];
+  const archivePeak = hist ? Math.max(0, ...archiveYears.map((y) => hist.years[y] ?? 0)) : 0;
 
   function pickYear(y: number) {
     setYear(y);
@@ -397,6 +401,36 @@ function YearStrip({
           );
         })}
       </div>
+      {series && hist && (
+        <>
+          <p className="eyebrow year-strip-archive-eyebrow">
+            Earlier years · FY {archiveYears[archiveYears.length - 1]} – {archiveYears[0]} open in the GAA archive, in that year’s own records
+          </p>
+          <div className="year-strip year-strip-archive" aria-label="Earlier fiscal years, in the GAA archive">
+            {archiveYears.map((y) => {
+              const v = hist.years[y];
+              const href = archiveHref(series, data.department.id, y);
+              const status = series.statuses[y];
+              const meta = v == null
+                ? status === 'reenacted_no_new_gaa' ? 'Reenacted' : 'No record'
+                : `${fmt.shortPhp(v, 'B')} GAA`;
+              const bar = v != null && archivePeak ? (v / archivePeak) * 100 : 0;
+              const body = (
+                <>
+                  <div className="year-cell-num">FY {y}</div>
+                  <div className="year-cell-meta">{meta}</div>
+                  <div className="year-cell-bar"><span style={{ width: `${bar}%` }} /></div>
+                </>
+              );
+              return href ? (
+                <Link key={y} className="year-cell" to={href} title={`FY ${y} in the GAA archive`}>{body}</Link>
+              ) : (
+                <span key={y} className="year-cell is-empty" aria-disabled="true">{body}</span>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2534,7 +2568,7 @@ export default function Portal() {
       >
         <div className="page-headline">
           <p className="page-eyebrow">
-            Department {deptId} · {view === 'cycle' ? 'FY 2018 – 2026 · Current New Appropriations' : 'FY 2020 – 2026'}
+            Department {deptId} · {view === 'cycle' ? 'FY 2018 – 2026 · Current New Appropriations' : 'FY 2000 – 2026 · line items from FY 2020'}
           </p>
           <h1 className="page-title">{data.department.description}</h1>
         </div>
