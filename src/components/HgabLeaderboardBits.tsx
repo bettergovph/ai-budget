@@ -271,8 +271,8 @@ function entryTileRow(rank: number, e: LeaderEntry, value: number): TileRow {
     label: entryTitle(e),
     sub: seatHolders(e, 2),
     deo: shared ? undefined : { offices: e.offices.map((o) => o.name), jurisdiction: e.people[0]?.jurisdiction ?? '' },
-    // One district: the short tier ("Tier A", the full words on hover) so its office badge fits on the same line.
-    sub2: shared ? `Tier B · legislative districts: ${districtList(e.people)}` : tierText(e, true),
+    // One district: the short tier ("Lone", the full words on hover) so its office badge fits on the same line.
+    sub2: shared ? `Shared · legislative districts: ${districtList(e.people)}` : tierText(e, true),
     title: shared ? `${tierText(e)}: ${e.people.map((p) => p.district).join('; ')}` : tierText(e),
     value,
   };
@@ -561,14 +561,14 @@ function ValueCell({
   );
 }
 
-/** The attribution tier of an office group: "Tier A · only this district", "Tier B · shared by 3 districts, not split". */
+/** The attribution tier of an office group: "Lone · only this district", "Shared by 3 districts, not split". */
 function TierTag({ entry, className = '' }: { entry: LeaderEntry; className?: string }) {
   return (
     <span
       className={`hgab-lb-tier is-${entry.tier} ${className}`.trim()}
       title={entry.tier === 'A'
-        ? 'Tier A: the DPWH office serves only this legislative district, so its figure is the district’s.'
-        : 'Tier B: one DPWH office serves these legislative districts. Its amount is shown whole, not split between them.'}
+        ? 'Lone: the DPWH office serves only this legislative district, so its figure is the district’s.'
+        : 'Shared: one DPWH office serves these legislative districts. Its amount is shown whole, not split between them.'}
     >
       {tierText(entry)}
     </span>

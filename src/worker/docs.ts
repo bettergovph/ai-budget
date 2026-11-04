@@ -520,7 +520,7 @@ candidate</i> or a <i>deletion candidate</i>, never a confirmed insertion or del
 include unconfirmed matches (so the six groups add up to <code>net_php</code>); each group's
 <code>unconfirmed_rows</code> / <code>unconfirmed_php</code> says how much of it is unconfirmed. The 10
 largest per group leave unconfirmed matches out.
-(5)&nbsp;District figures carry their tier. A shared (Tier B) office's money is never split between the
+(5)&nbsp;District figures carry their tier. A shared (tier B) office's money is never split between the
 districts it serves, and the money no district card shows (the residual) comes with every district list.
 (6)&nbsp;Every response's <code>meta</code> carries the disclaimer <code>notice</code>, and every response
 carries <code>disclaimers</code> (<a href="#hgab-disclaimers">below</a>). Rows with a page on the
@@ -671,8 +671,8 @@ curl "${O}/api/v1/hgab/2027/reconciliation?dataset=dpwh&amp;status=explained"</c
 <div class="ep" id="hgab-districts"><span class="method">GET</span><code>/api/v1/hgab/2027/districts</code>
   &nbsp;·&nbsp; <code>/districts/{id}</code></div>
 <p>DPWH money by the district engineering office the documents list, with the congressional districts each
-office serves. No project is assigned to a district. A <b>Tier A</b> office serves one district, so its figure
-can be read as that district's. A <b>Tier B</b> office serves several, so its figure is shared and is
+office serves. No project is assigned to a district. A <b>lone</b> office (tier <code>A</code>) serves one district, so its figure
+can be read as that district's. A <b>shared</b> office (tier <code>B</code>) serves several, so its figure is shared and is
 <b>not split</b>: when a card's <code>attribution</code> is <code>B</code> or <code>mixed</code>, its headline
 carries <code>shared_office_total: true</code> and the co-served district ids, and should be read as a
 range. Headline amounts are the 2026 enacted budget and the 2027 NEP (whole office) and the 2027 House
@@ -711,7 +711,7 @@ curl ${O}/api/v1/hgab/2027/districts/leg%3Aabra%3Alone</code></pre>
     "total": 24,
     "districts": [
       { "id": "leg:nueva-ecija:1st", "label": "Nueva Ecija, 1st District", "region_key": "III",
-        "attribution": { "code": "B", "label": "Tier B · shared office total, not split", "meaning": "…" },
+        "attribution": { "code": "B", "label": "Shared · the office total, not split", "meaning": "…" },
         "headline": { "fy2026_gaa_php": …, "fy2027_hgab3_php": 3856983000,
                       "shared_office_total": true, "co_served_district_ids": ["leg:nueva-ecija:2nd"] },
         "fy2027_vs_proposal": { "nep_php": …, "hgab3_php": …, "delta_php": 1146570000 },

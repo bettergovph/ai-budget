@@ -341,7 +341,7 @@ const HGAB_PATHS = {
       summary: "DPWH money by congressional district",
       description:
         "District cards with the serving offices and their tier, and the residual (money on no district card) for all " +
-        "nine year slots. A shared (Tier B) office's money is never divided: when attribution is B or mixed the " +
+        "nine year slots. A shared (tier B) office's money is never divided: when attribution is B or mixed the " +
         "headline carries `shared_office_total: true` and the co-served district ids. These are office " +
         "associations: no project is assigned to a district, and nothing attributes a project or amount to a " +
         "representative. Carries both `disclaimers`.",
@@ -378,7 +378,7 @@ const HGAB_PATHS = {
       description:
         "The card, the representative, every serving office's full history with the source's uncertainty " +
         "annotations (`fy2027.annotations`), and the residual (money on no district card) for all nine year slots. " +
-        "Office associations: a Tier B office's figures are the whole office's and are not split. Carries both `disclaimers`.",
+        "Office associations: a shared (tier B) office's figures are the whole office's and are not split. Carries both `disclaimers`.",
       parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, description: "District id, e.g. `leg:abra:lone` (percent-encode `:` if your client requires it)." }],
       responses: {
         "200": hgabOk({
@@ -421,7 +421,7 @@ const HGAB_SCHEMAS = {
     type: "object",
     description:
       "DPWH project lists filtered with `office`: the office the rows are printed under, its tier and every district " +
-      "the DEO mapping associates it with. No row is assigned to any one district; a Tier B office's sums are never split.",
+      "the DEO mapping associates it with. No row is assigned to any one district; a shared (tier B) office's sums are never split.",
     properties: {
       printed_office: { type: "string" },
       offices: {

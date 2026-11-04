@@ -105,7 +105,7 @@ never add them (filtered sums come per version, marked not_additive_across_versi
 marks an unconfirmed (fuzzy or ambiguous) match; bridge figures include those, so the six groups add
 up to net_php, and each group's unconfirmed_rows / unconfirmed_php says how much of it is unconfirmed.
 Districts: DPWH money by district engineering office, with the congressional districts each office
-serves. A Tier A office serves one district; a Tier B office is shared and its money is never
+serves. A lone office (tier A) serves one district; a shared office (tier B) serves several and its money is never
 split, so a shared district headline is a range, not that district's own; money under the Central
 Office and regional offices is on no district card (the residual). District results are office
 associations: when you report one, keep its tier, never split a shared total, report the residual
@@ -610,7 +610,7 @@ const TOOLS: Tool[] = [
       "changes. Returns total (all matched rows) and per-version sums over every matched row, which are never to " +
       "be added across versions. At most 50 rows per call: when total is larger, page with offset (next_offset). " +
       "Filtered to one DPWH office, the result is an office view: office_lens names the office's tier and every " +
-      "district it is associated with (no row is assigned to any one of them; a Tier B office's sums are never " +
+      "district it is associated with (no row is assigned to any one of them; a shared (tier B) office's sums are never " +
       "split), and disclaimers carries both paragraphs.",
     inputSchema: {
       type: "object",
@@ -682,14 +682,14 @@ const TOOLS: Tool[] = [
     description:
       "Congressional district cards (254): the representative (name, seat, portrait with its attribution and licence, " +
       "bills link), the DPWH district engineering offices that serve the district with their tier, and headline " +
-      "amounts (FY2026 enacted, FY2027 NEP, FY2027 House bill). Tier A = the office serves only this district; " +
-      "Tier B = shared, and its money is never split, so a shared headline (shared_office_total: true) is a range, " +
+      "amounts (FY2026 enacted, FY2027 NEP, FY2027 House bill). Lone (tier A) = the office serves only this district; " +
+      "shared (tier B) = it serves several, and its money is never split, so a shared headline (shared_office_total: true) is a range, " +
       "not the district's own. fy2027_vs_proposal is the like-for-like 2027 change, with unconfirmed_rows / " +
       "unconfirmed_php (unconfirmed matches inside it). Always returns the residual: DPWH money on no district card " +
       "(Central Office, regional offices), per year. " +
       "These results are office associations, not district budgets: every figure belongs to a DPWH engineering " +
       "office, and the district is one that office serves; no project is assigned to a district. When you report " +
-      "a figure, keep its tier; never split a shared (Tier B) total among the districts it serves, report it " +
+      "a figure, keep its tier; never split a shared (tier B) total among the districts it serves, report it " +
       "undivided with the co-served districts; report the residual beside district figures; keep unconfirmed " +
       "matches apart. Nothing here attributes any project or amount to a representative, or says one requested, " +
       "sponsored or controlled it. Keep the disclaimers the result carries.",
@@ -731,7 +731,7 @@ const TOOLS: Tool[] = [
       "Congress, the FY2027 six-group comparison with the source's uncertainty annotations (unconfirmed matches, " +
       "different-stretch rows, reading markers, and lines held out because their office changed), notes, links to " +
       "the office's DPWH project rows, and the residual (DPWH money on no district card), per year. A shared " +
-      "(Tier B) office's figures are the whole office's and are not split. null = not found that year, never zero. " +
+      "(tier B) office's figures are the whole office's and are not split. null = not found that year, never zero. " +
       "These results are office associations: the district is one the office serves, and no project is assigned " +
       "to it. When you report a figure, keep its tier; never split a shared total among the co-served districts; " +
       "report the residual beside it; keep the annotations apart rather than folding them in. Nothing here " +

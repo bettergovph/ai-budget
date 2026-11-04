@@ -504,12 +504,12 @@ function DeoRestrictions() {
       <h4>Four conditions on every office-based view, and how this site meets them</h4>
       <ol className="hgab-deo-conditions">
         <li>
-          <strong>Every total carries its attribution tier.</strong> Tier A means the office serves one district.
-          Tier B means it serves several, so the figure is shared. District cards, district pages, leaderboard
-          tiles and every leaderboard row show the tier.
+          <strong>Every total says whose it is.</strong> Lone means the office serves one district. Shared means
+          it serves several, so the figure is shared. District cards, district pages, leaderboard tiles and every
+          leaderboard row show which. (The data and API call these tiers A and B.)
         </li>
         <li>
-          <strong>Shared money is never divided.</strong> A Tier B total is shown whole. Every district it serves is
+          <strong>Shared money is never divided.</strong> A shared office’s total is shown whole. Every district it serves is
           listed beside it. Leaderboards name a shared office by the office, not by one representative.
         </li>
         <li>

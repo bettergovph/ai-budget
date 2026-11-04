@@ -1070,7 +1070,7 @@ interface Run {
   text?: string; badge?: number; weight?: number; color: string;
   /** Start a new line here. */
   br?: boolean;
-  /** Never break inside this run's text ("Tier A", an office name): it moves to the next line whole. */
+  /** Never break inside this run's text ("Lone", an office name): it moves to the next line whole. */
   keep?: boolean;
 }
 interface Tok { kind: 'word' | 'space' | 'badge' | 'br'; text: string; weight: number; color: string; w: number }
@@ -1193,7 +1193,7 @@ function sharedRefsOf(items: Item[]): Map<string, SharedRef> {
 
 /**
  * "Shared offices serve these legislative districts: ① DPWH Metro Manila 1st
- * DEO (Tier B · 7 districts): City of Mandaluyong Lone · …". Never cut.
+ * DEO (shared by 7 districts): City of Mandaluyong Lone · …". Never cut.
  */
 function sharedBlock(ctx: Ctx, refs: Map<string, SharedRef>, w: number, size: number): { h: number; fits: boolean; draw: (x: number, y: number) => void } {
   const runsWith = (head: string): Run[] => {
@@ -1201,7 +1201,7 @@ function sharedBlock(ctx: Ctx, refs: Map<string, SharedRef>, w: number, size: nu
     for (const r of refs.values()) {
       runs.push(
         { text: ' ', color: C.ink3 }, { badge: r.n, color: C.tierB },
-        { text: ` ${r.office}`, weight: 600, color: C.ink2 }, { text: ` (Tier B · ${r.people.length} districts):`, weight: 600, color: C.tierB },
+        { text: ` ${r.office}`, weight: 600, color: C.ink2 }, { text: ` (shared by ${r.people.length} districts):`, weight: 600, color: C.tierB },
         { text: ` ${districtsSummary(r.people)}`, weight: 400, color: C.ink3 },
       );
     }
@@ -1382,7 +1382,7 @@ interface RowGeom {
   valueSize: number;
   detailSize: number;
   rankSize: number;
-  /** Ranking boards mark every row "Tier A" / "Tier B". */
+  /** Ranking boards mark every row "Lone" / "Shared". */
   tierMarks: boolean;
   /** When set, shared rows show their number in the "Shared offices serve" block instead of the district list. */
   refs?: Map<string, SharedRef> | null;
@@ -1443,10 +1443,10 @@ function headlineForm(ctx: Ctx, it: Item, size: number, max: number, prefix = ''
 /** Set during a draw when a row's legislative district, or a shared office named nowhere else, had to be cut. */
 let placeCut = false;
 
-/** "Tier B · Shared by 3 districts · not split", shortened only as far as `max` needs (the tier never goes). */
+/** "Shared by 3 districts · not split", shortened only as far as `max` needs ("Shared" never goes). */
 function fitTierShared(ctx: Ctx, n: number, max: number, tierMarks: boolean): string {
   const forms = tierMarks
-    ? [`Tier B · ${sharedLabel(n)}`, `Tier B · Shared by ${n} districts`, `Tier B · ${n} districts`, 'Tier B']
+    ? [sharedLabel(n), `Shared by ${n} districts`, `Shared · ${n} districts`, 'Shared']
     : [sharedLabel(n), `Shared by ${n} districts`, `Shared by ${n}`];
   for (const f of forms) if (tw(ctx, f) <= max) return f;
   return forms[forms.length - 1];
@@ -1480,7 +1480,7 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
   } else if (isGroup(it)) {
     // Office headline; then the seat holders; then the tier, with every district served or the block number.
     setFont(ctx, 400, g.subSize, F.body);
-    const lab = g.tierMarks ? `Tier B · ${sharedLabel(it.people.length)}` : sharedLabel(it.people.length);
+    const lab = sharedLabel(it.people.length);
     // The districts served move to the next line whole where they fit one.
     const tailWith = (serves: string): Run[] => {
       setFont(ctx, 400, g.subSize, F.body);
@@ -1494,8 +1494,8 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
       runs = [{ text: `${seatHolders({ people: it.people }, lines(1) < lines(2) ? 1 : 2)} · `, weight: 400, color: holderColor }];
     } else runs = [{ text: fitHolders(ctx, it, tmax), weight: 400, color: holderColor }, { br: true, color: holderColor }];
     if (ref) {
-      const head: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, { text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }];
-      const forms = [` · ${sharedLabel(it.people.length)}`, ` · Shared by ${it.people.length} districts`, ` · ${it.people.length} districts`];
+      const head: Run[] = [{ text: 'Shared', weight: 600, color: C.tierB }, { text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }];
+      const forms = [` by ${it.people.length} districts · not split`, ` by ${it.people.length} districts`, ` · ${it.people.length} districts`];
       const width = (rs: Run[]) => runLineWidth(wrapRuns(ctx, rs, g.subSize, () => Infinity).lines[0] ?? []);
       let done = false;
       if (g.flow) {
@@ -1522,10 +1522,10 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
       runs = [...lead, ...tailWith(serves)];
     }
   } else if (it.people[0]) {
-    // District headline (with its DEO badge); then "Rep. … · Tier A".
+    // District headline (with its DEO badge); then "Rep. … · Lone".
     setFont(ctx, 400, g.subSize, F.body);
     runs = [{ text: seatHolders({ people: it.people }), weight: 400, color: holderColor }];
-    if (g.tierMarks) runs.push({ text: ' · ', weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2, keep: true });
+    if (g.tierMarks) runs.push({ text: ' · ', weight: 400, color: C.ink3 }, { text: 'Lone', weight: 600, color: C.ink2, keep: true });
   }
   const sub = wrapRuns(ctx, runs, g.subSize, widthOf);
   return { sub, extra: Math.max(0, sub.lines.length - 1) };
@@ -1650,13 +1650,13 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
   setFont(ctx, 600, chipSize, F.body);
   const chip = group ? fitTierShared(ctx, it.people.length, tmax - chipSize * 1.2, tierMarks) : null;
   const soft = 'rgba(255,255,255,0.86)';
-  // Under the place: the seat holders (and "Tier A"); a shared office then gets its tier chip and every district it serves.
+  // Under the place: the seat holders (and "Lone"); a shared office then gets its "Shared" chip and every district it serves.
   setFont(ctx, 400, sp.sub, F.body);
   const holdersRuns: Run[] = it.personFirst
     ? [{ text: it.people[0]?.district ?? '', weight: 400, color: soft }]
     : group
       ? [{ text: fitHolders(ctx, it, tmax), weight: 400, color: soft }]
-      : [{ text: seatHolders({ people: it.people }), weight: 400, color: soft }, ...(tierMarks ? [{ text: ' · ', weight: 400, color: soft }, { text: 'Tier A', weight: 600, color: '#ffffff', keep: true }] : [])];
+      : [{ text: seatHolders({ people: it.people }), weight: 400, color: soft }, ...(tierMarks ? [{ text: ' · ', weight: 400, color: soft }, { text: 'Lone', weight: 600, color: '#ffffff', keep: true }] : [])];
   const holders = wrapRuns(ctx, holdersRuns, sp.sub, () => tmax);
   // "serves Isabela 4th, 6th legislative districts" where that costs no extra line.
   const servesRuns = (f: string): Run[] => [{ text: f, weight: 400, color: soft }];
@@ -2006,11 +2006,11 @@ function sharedRefs(cols: CongressCols): Map<string, SharedRef> {
   return sharedRefsOf(cols.flatMap((c) => c.rows.map((r) => entryItem(r.rank, r.entry, r.value))));
 }
 
-/** The tier line of a by-Congress cell: "Tier A", or "Tier B", the shared office's number and "Shared by N" where it fits. */
+/** The tier line of a by-Congress cell: "Lone", or "Shared", the shared office's number and "by N" where it fits. */
 function cellTierRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
-  if (!isGroup(it)) return [{ text: 'Tier A', weight: 600, color: C.ink2 }];
-  const base: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
-  for (const extra of [` · Shared by ${it.people.length}`, ` · ${it.people.length} districts`]) {
+  if (!isGroup(it)) return [{ text: 'Lone', weight: 600, color: C.ink2 }];
+  const base: Run[] = [{ text: 'Shared', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
+  for (const extra of [` by ${it.people.length}`, ` · ${it.people.length} districts`]) {
     const runs = [...base, { text: extra, weight: 600, color: C.tierB }];
     if (runLineWidth(wrapRuns(ctx, runs, size, () => Infinity).lines[0] ?? []) <= max) return runs;
   }
@@ -2173,20 +2173,20 @@ function congressBands(ctx: Ctx, s: Spec, board: BoardDef, cols: CongressCols, i
 }
 
 /**
- * The line beside the face in a by-Congress row: "Rep. … · Tier A" (the name
- * is shortened, never the tier), or "Tier B", the shared office's number and
- * the seat holders as far as they fit ("Tier B ① · Reps. A +6").
+ * The line beside the face in a by-Congress row: "Rep. … · Lone" (the name
+ * is shortened, never the tier), or "Shared", the shared office's number and
+ * the seat holders as far as they fit ("Shared ① · Reps. A +6").
  */
 function cellSubRuns(ctx: Ctx, it: Item, ref: SharedRef | undefined, size: number, max: number): Run[] {
   const sep = ' · ';
   if (!isGroup(it)) {
     setFont(ctx, 600, size, F.body);
-    const tailW = tw(ctx, 'Tier A');
+    const tailW = tw(ctx, 'Lone');
     setFont(ctx, 400, size, F.body);
     const room = max - tailW - tw(ctx, sep) - 2;
-    return [{ text: fitHolders(ctx, it, room), weight: 400, color: C.ink3 }, { text: sep, weight: 400, color: C.ink3 }, { text: 'Tier A', weight: 600, color: C.ink2 }];
+    return [{ text: fitHolders(ctx, it, room), weight: 400, color: C.ink3 }, { text: sep, weight: 400, color: C.ink3 }, { text: 'Lone', weight: 600, color: C.ink2 }];
   }
-  const base: Run[] = [{ text: 'Tier B', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
+  const base: Run[] = [{ text: 'Shared', weight: 600, color: C.tierB }, ...(ref ? [{ text: ' ', color: C.tierB }, { badge: ref.n, color: C.tierB }] : [])];
   const baseW = runLineWidth(wrapRuns(ctx, base, size, () => Infinity).lines[0] ?? []);
   setFont(ctx, 400, size, F.body);
   const room = max - baseW - tw(ctx, sep) - 2;
@@ -2894,7 +2894,7 @@ export function shareCardImageUrls(data: LeaderboardData, board: BoardDef, forma
 
 /**
  * "Davao de Oro, 2nd District (Rep. Leonel “Jhong” Ceniza), served by DPWH
- * Davao de Oro 1st DEO, Tier A" (the badge's office in full) or, for a shared
+ * Davao de Oro 1st DEO, Lone" (the badge's office in full) or, for a shared
  * office, the office, its tier and every legislative district it serves.
  */
 function altItem(it: Item, tiers: boolean): string {

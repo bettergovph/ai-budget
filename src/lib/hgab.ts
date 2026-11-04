@@ -90,7 +90,7 @@ export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
   deo: { term: 'District engineering office', meaning: 'The DPWH field office that carries out projects in an area. One office can serve more than one legislative district, and its number need not match the district’s.' },
   fap: { term: 'Foreign-assisted project', meaning: 'A project paid for partly with a loan or grant from abroad.' },
   candidate: { term: 'Candidate', meaning: 'A match or a gap found by comparing project names, places and amounts. It is a lead for checking, not a confirmed change.' },
-  tier: { term: 'Tier A and Tier B', meaning: 'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.' },
+  tier: { term: 'Lone and shared offices', meaning: 'Lone: the office serves one district, so its figure can be read as that district’s. Shared: the office serves several districts, so the figure is shared and is not split between them.' },
   residual: { term: 'Not assigned to a district', meaning: 'Money listed under the DPWH Central Office or a regional office. It does not appear on any district card.' },
   stages: { term: 'Two versions, not two budgets', meaning: 'The NEP and the House bill are two versions of the same budget. Compare them; never add them together.' },
 };
