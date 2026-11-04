@@ -289,6 +289,14 @@ crosswalk authorises ("The one authorized project-level use: the DEO lens",
 shared office's total is never divided, and the Central Office / regional /
 unmatched residual is published for every year and stage.
 
+The data keeps one card per district; the page's list (`?view=list`) draws a
+shared (Tier B) office as one card instead (`listUnits` in
+`src/lib/hgab-districts.ts`, `SharedOfficeCardView`): the office as the
+headline, every legislative district it serves with its representative, and
+the office's figures once. 254 districts make 195 cards (31 shared offices
+cover 90 districts). Each district row keeps its `#d-…` address, its page and
+its "own projects" link.
+
 | Command | Script | Does |
 | --- | --- | --- |
 | `npm run build:hgab-districts` | `scripts/build-hgab-districts.ts` | Writes `districts.json`, `districts-manifest.json` (inputs with sha256, coverage, aliases) and caches `juris-authors.json`. Flags: `--src=<clone>`, `--out=data/hgab/2027`, `--gaa=data/18`, `--nep=data/2027/18`, `--contract=src/lib/hgab.ts`, `--offline` (reuse the cached juris response) |
