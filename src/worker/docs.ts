@@ -16,6 +16,8 @@ function esc(s: string): string {
 }
 
 const SITE = "https://budget.bettergov.ph";
+/** The public data host: the House bill files that have no endpoint in front of them live here. */
+const DATA = "https://budget-assets.bettergov.ph";
 
 /** One House bill disclaimer, word for word, as a quoted paragraph. */
 function disclaimerHtml(d: Disclaimer): string {
@@ -127,6 +129,7 @@ export function docsHtml(origin: string): string {
   <h4>Getting started</h4>
   <a href="#overview">Overview</a>
   <a href="#datasets">Datasets &amp; units</a>
+  <a href="#changelog">What's new</a>
   <a href="#conventions">Conventions</a>
   <a href="#pagination">Pagination</a>
   <a href="#errors">Errors</a>
@@ -162,6 +165,7 @@ export function docsHtml(origin: string): string {
   <a href="#hgab-regions">Regions</a>
   <a href="#hgab-documents">Documents &amp; checks</a>
   <a href="#hgab-districts">Districts</a>
+  <a href="#hgab-files">Data files</a>
   <h4>Machine access</h4>
   <a href="#openapi">OpenAPI spec</a>
   <a href="#mcp">MCP server</a>
@@ -210,11 +214,13 @@ descriptive <code>User-Agent</code>.</p>
       transpired — the question at issue, who said what and when, the agency's answer, figures as spoken,
       commitments, and where it landed — plus a section-by-section timeline and the transcript. Every item
       is timestamped and deep-linked to the video.</td></tr>
-  <tr><td><code>hgab/2027</code></td><td>FY2027, four programs, plus DPWH by district</td>
+  <tr><td><code>hgab/2027</code></td><td>FY2027, four programs, plus DPWH by district; the whole bill as files</td>
       <td>The House of Representatives' version of the FY2027 budget (<b>House Bill 10858</b>) set against
       the NEP, line by line, for the four programs where the bill lists projects:
       DPWH infrastructure, farm-to-market roads, health facilities and irrigation. Also DPWH money by
-      district engineering office, with the congressional districts each office serves.</td></tr>
+      district engineering office, with the congressional districts each office serves. The rest of the
+      House bill section (every line of the bill, DPWH contractors, seats by party, multi-purpose
+      buildings) is published as <a href="#hgab-files">data files</a>, not endpoints.</td></tr>
 </table>
 
 <p><b>Units.</b> Every amount anywhere in this API is an <b>exact Philippine peso</b> figure.
@@ -716,6 +722,44 @@ curl ${O}/api/v1/hgab/2027/districts/leg%3Aabra%3Alone</code></pre>
   }
 }</code></pre>
 
+<h3 id="hgab-files">Data files (not endpoints)</h3>
+<p>The endpoints above cover the four programs and the districts. The rest of the House bill section on
+the site is published as plain files on the data host, <code>${DATA}</code>, with no API in front of them:
+JSON summaries, CSV and Parquet tables, each set listed in a <code>manifest.json</code> that gives every
+file's rows, size, SHA-256 and columns, plus a <code>notice</code> to keep with anything you republish.
+The <a href="#hgab-rules">rules</a> and <a href="#hgab-disclaimers">disclaimers</a> above apply to these
+files as they do to the endpoints. Parquet files can be queried in place: DuckDB reads them over HTTP
+with range requests.</p>
+<table>
+  <tr><th>What</th><th>Start here</th><th>Page</th></tr>
+  <tr><td>The whole House bill, line by line, against the NEP: every department, every appropriation line
+      (third reading)</td>
+      <td><code>hgab/2027/explorer/downloads/manifest.json</code> — a zip of every CSV, two Parquet tables
+      (the lines; the lines against the NEP) and a README of the columns</td>
+      <td><a href="${SITE}/hgab/2027/explorer#downloads">/hgab/2027/explorer</a></td></tr>
+  <tr><td>DPWH contractors, 2016–2026: DPWH's contract list, and the GAA lines (FY2020–2026) its contracts carry</td>
+      <td><code>hgab/2027/contractors/downloads/manifest.json</code> — contracts, contractors, GAA lines and
+      line-to-contract links, each as CSV and Parquet, plus a README</td>
+      <td><a href="${SITE}/hgab/2027/contractors#downloads">/hgab/2027/contractors</a></td></tr>
+  <tr><td>Seats by party: each district's representative and May 2025 party, and the DPWH budget by party</td>
+      <td><code>hgab/2027/parties/parties.json</code></td>
+      <td><a href="${SITE}/hgab/2027/parties">/hgab/2027/parties</a></td></tr>
+  <tr><td>Multi-purpose buildings, FY2015 GAA to the FY2027 House bill, with coordinates</td>
+      <td><code>hgab/2027/mpb-years/lines.csv</code>, <code>hgab/2027/mpb-years/summary.json</code></td>
+      <td><a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a></td></tr>
+  <tr><td>The four programs' own tables (what the endpoints above read)</td>
+      <td><code>hgab/2027/overview.json</code>, <code>hgab/2027/{key}/summary.json</code>,
+      <code>hgab/2027/{key}/projects.parquet</code></td>
+      <td><a href="${SITE}/hgab/2027/sources#hgab-src-dl">/hgab/2027/sources</a></td></tr>
+</table>
+<pre><code># every file in the line-by-line set, with its size
+curl -s ${DATA}/hgab/2027/explorer/downloads/manifest.json | jq '.files[] | [.csv.file, .csv.bytes]'
+
+# query a program's project table in place (DuckDB)
+SELECT title, region, trace, nep_php, hgab3_php, delta_php
+FROM read_parquet('${DATA}/hgab/2027/dpwh/projects.parquet')
+WHERE trace = 'candidate_increase' ORDER BY delta_php DESC LIMIT 25;</code></pre>
+
 <h2 id="openapi">OpenAPI specification</h2>
 <p>A machine-readable OpenAPI 3.1 description of every endpoint, parameter, and schema:</p>
 <pre><code>${O}/api/v1/openapi.json</code></pre>
@@ -888,6 +932,104 @@ curl -X POST ${O}/mcp -H "Content-Type: application/json" \\
 <p>Tool results arrive as JSON text inside <code>result.content[0].text</code>, in the same envelopes
 the <a href="#overview">REST API</a> returns. Invalid inputs come back as a result with
 <code>isError: true</code> and a message explaining what to fix.</p>
+
+<h2 id="changelog">What's new</h2>
+<p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
+noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
+
+<h3>4 November 2026</h3>
+<ul>
+  <li><b>API docs.</b> The House bill <a href="#hgab-files">data files</a> that have no endpoint (the whole
+      bill line by line, DPWH contractors, seats by party, multi-purpose buildings) are listed here with
+      their manifests, and this changelog starts.</li>
+</ul>
+
+<h3>3 November 2026</h3>
+<ul>
+  <li><b>DPWH contractors.</b> <a href="${SITE}/hgab/2027/contractors">/hgab/2027/contractors</a>: every
+      contractor's DPWH contracts from 2016 to 2026, and which FY2020–2026 GAA lines each contract carries.
+      A page per contractor, and the data as CSV and Parquet with a <code>manifest.json</code>.</li>
+  <li><b>The House bill by party.</b> <a href="${SITE}/hgab/2027/parties">/hgab/2027/parties</a>: each
+      district's representative and May 2025 party, the DPWH budget by party across three Congresses, a
+      same-office comparison, and a page per party with every line.</li>
+  <li><b>Multi-purpose buildings.</b> Top contractors, DPWH contract links and four leaderboards on the
+      <a href="${SITE}/hgab/2027/multi-purpose">multi-purpose buildings page</a>; map marks never cover one
+      another at any zoom.</li>
+  <li><b>Citizen Reports.</b> <a href="${SITE}/citizen-reports">/citizen-reports</a>: budget analyses
+      published on other sites, in one place.</li>
+</ul>
+
+<h3>2 November 2026</h3>
+<ul>
+  <li><b>Multi-purpose buildings map.</b> <a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a>:
+      every multi-purpose building line from the FY2015 GAA to the FY2027 House bill, with repeats across
+      years, as files (<code>hgab/2027/mpb-years/</code>).</li>
+  <li><b>GAA Explorer, 2000–2026.</b> <a href="${SITE}/gaa">/gaa</a> now reaches back to FY2000 with the
+      same explorer, summary cards and source-record browser for every year.</li>
+  <li><b>Whole bill on the overview.</b> The House bill overview carries the whole bill against the NEP, not
+      only the four programs; the House bill sub-navigation is reordered.</li>
+</ul>
+
+<h3>1 November 2026</h3>
+<ul>
+  <li><b>The whole House bill, line by line.</b> <a href="${SITE}/hgab/2027/explorer">/hgab/2027/explorer</a>:
+      every appropriation line of House Bill 10858 (third reading) against the NEP, by department and
+      agency, with the NEP and House bill page on every row. Downloadable as a zip of CSVs and two Parquet
+      tables, listed in a <code>manifest.json</code> with links versioned by checksum. These pages carry an
+      "Under citizen review" banner until the review is complete.</li>
+  <li><b>Leaderboards for the whole bill.</b> Departments, agencies and budget lines, with increases and
+      cuts as separate boards, on <a href="${SITE}/hgab/2027/leaderboard">/hgab/2027/leaderboard</a>.</li>
+  <li><b>Letters.</b> A letter to a representative can copy the Speaker, the Majority Leader and the
+      Committee on Appropriations.</li>
+</ul>
+
+<h3>28–29 October 2026</h3>
+<ul>
+  <li><b>Multi-purpose buildings.</b> <a href="${SITE}/hgab/2027/multi-purpose">/hgab/2027/multi-purpose</a>:
+      DPWH multi-purpose buildings from the FY2020 GAA to the FY2027 House bill, set beside flood control,
+      DepEd school facilities and DOH health facilities, with a poster.</li>
+  <li><b>Write to your representative.</b> <a href="${SITE}/hgab/2027/letter">/hgab/2027/letter</a>: a
+      letter for every district, filled from the district's own figures.</li>
+  <li>Fix: blank NEP department pages (for example <code>/2027/d/07</code>).</li>
+</ul>
+
+<h3>26–27 October 2026</h3>
+<ul>
+  <li><b>We are not ignorant.</b> <a href="${SITE}/hgab/2027/we-are-not-ignorant">/hgab/2027/we-are-not-ignorant</a>:
+      every inserted and adjusted DPWH project in one list, with a campaign poster and link preview.</li>
+  <li><b>Districts by DPWH office.</b> Browse districts by the district engineering office that serves them;
+      district cards show the net change, a Shared label and the office tier.</li>
+  <li><b>Download CSV</b> on every program page; maps zoom and pan freely; a budget-process timeline on the
+      House bill overview; share images carry an "As of" date.</li>
+  <li><b>Disclaimers</b> on every House bill page, in every API response and in the MCP server
+      (<a href="#hgab-disclaimers">above</a>); DPWH program totals cite Volume I-C, and the Senate's copies
+      are the documents' source.</li>
+</ul>
+
+<h3>25 October 2026</h3>
+<ul>
+  <li><b>House bill FY2027.</b> <a href="${SITE}/hgab/2027">/hgab/2027</a> launches: House Bill 10858 set
+      against the NEP, project by project, for DPWH infrastructure, farm-to-market roads, health facilities
+      and irrigation, with DPWH by congressional district, leaderboards with share images, maps and an
+      intro deck.</li>
+  <li><b>API and MCP.</b> Ten <a href="#hgab-overview">House bill endpoints</a> under
+      <code>/api/v1/hgab/2027</code> and six <code>*_hgab_2027_*</code> <a href="#mcp">MCP tools</a>,
+      reading D1 tables built from the same files the pages read.</li>
+</ul>
+
+<h3>4–9 September 2026</h3>
+<ul>
+  <li><b>Budget hearings.</b> <a href="${SITE}/hearings">/hearings</a>: the House Committee on
+      Appropriations hearings with an interactive transcript and a per-topic deliberation record (who
+      said what, when, with a deep link to the video). In the API as <a href="#hearings-list">seven
+      endpoints</a> and in the MCP server as six <code>*hearing*</code> tools.</li>
+</ul>
+
+<h3>24 August 2026</h3>
+<ul>
+  <li><b>Learn and the glossary.</b> <a href="${SITE}/learn">/learn</a> explains the budget cycle with
+      visual flows; <a href="${SITE}/glossary">/glossary</a> is the full BESF glossary.</li>
+</ul>
 
 <h2>Data sources &amp; attribution</h2>
 <p>Source data is derived from Department of Budget and Management publications, packaged as the

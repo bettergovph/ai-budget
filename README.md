@@ -97,8 +97,12 @@ The main routes are:
   `/2027/explore`, `/2027/methodology`)
 - `/hgab` — FY2027 House General Appropriations Bill section; redirects to `/hgab/2027`
   (overview), with `/hgab/2027/:dataset?view=…` for one program's hub (`dpwh`, `fmr`,
-  `hfep`, `nia`), `/hgab/2027/:dataset/p/:id` for one comparison record, and
-  `/hgab/2027/sources` and `/hgab/2027/methodology`
+  `hfep`, `nia`), `/hgab/2027/:dataset/p/:id` for one comparison record,
+  `/hgab/2027/districts` (DPWH by district engineering office), `/hgab/2027/explorer`
+  (the whole bill line by line, with downloads), `/hgab/2027/leaderboard`,
+  `/hgab/2027/parties`, `/hgab/2027/contractors`, `/hgab/2027/multi-purpose` (and `/map`),
+  `/hgab/2027/letter` (letters to representatives), `/hgab/2027/sources` (every data file)
+  and `/hgab/2027/methodology`
 - `/api/dept/:deptId/*` — internal Worker endpoints backed by D1 (used by the SPA)
 - `/api/v1/*` — public REST API (see below)
 - `/docs` — public API documentation
@@ -106,21 +110,36 @@ The main routes are:
 
 ## Public API and MCP server
 
-A versioned, CORS-open, read-only public API serves all three datasets (GAA FY2020–2026,
-NEP FY2027, budget cycle) with every amount rescaled to exact pesos:
+A versioned, CORS-open, read-only public API serves all five datasets (GAA FY2020–2026,
+NEP FY2027, budget cycle, the House budget hearings, and the FY2027 House bill) with every
+amount in exact pesos:
 
 - `GET /api/v1` — endpoint index
 - `GET /api/v1/gaa/...` — national totals, departments, agencies, expense classes,
-  programs, object-level line items, cross-department program search
+  programs, object-level line items, cross-department program search, per-year snapshots
 - `GET /api/v1/nep/2027/...` — national overview, departments, and rollups by
   agency/program/expense class/fund/region/object/operating unit/division
 - `GET /api/v1/budget-cycle/...` — NEP → GAA → execution facts for covered departments
+- `GET /api/v1/hearings/...` — the House budget hearings: list, search what was said,
+  per-topic deliberation records, timeline and transcript per hearing
+  (see [docs/budget-hearings.md](docs/budget-hearings.md))
+- `GET /api/v1/hgab/2027/...` — the FY2027 House bill against the NEP for the four
+  programs it lists project by project (`dpwh`, `fmr`, `hfep`, `nia`): overview, program
+  summaries, project rows (filter, sort, page), one row, regions, source documents,
+  reconciliation checks, and DPWH by congressional district; every response carries the
+  House bill disclaimers (see [docs/hgab-api.md](docs/hgab-api.md) for the contract)
 - `GET /api/v1/openapi.json` — OpenAPI 3.1 specification
+
+The rest of the House bill section (the whole bill line by line, DPWH contractors, seats by
+party, multi-purpose buildings) has no endpoints: it is published as JSON, CSV and Parquet
+files on the data host, each set with a `manifest.json`, listed under "Data files" in `/docs`
+and on `/hgab/2027/sources`.
 
 Human-readable documentation is served at `/docs`. The same data is exposed to AI agents
 through a stateless Streamable-HTTP MCP server at `/mcp`
-(`claude mcp add --transport http ph-budget https://<host>/mcp`). The REST handlers and MCP
-tools share one data layer (`src/worker/public-api.ts`), so the two surfaces cannot drift.
+(`claude mcp add --transport http ph-budget https://<host>/mcp`), with tools for every
+dataset (`src/worker/mcp.ts`). The REST handlers and MCP tools share one data layer
+(`src/worker/public-api.ts` and `src/worker/hgab-api.ts`), so the surfaces cannot drift.
 
 Small core datasets are loaded through the Worker or as JSON. Larger hierarchy and object tables are stored as year-partitioned Parquet and queried with DuckDB-Wasm. Production asset URLs are resolved through `VITE_DATA_BASE_URL`; the Worker serves the SPA and handles `/api/*` requests first.
 
