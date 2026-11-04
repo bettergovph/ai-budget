@@ -1,0 +1,173 @@
+/* Foreign-assisted projects (/hgab/2027/foreign-assisted): .hgab-fa-* only.
+   Built on the section's base rules (details, caveats, CTA, tables) and the
+   bar styles the budget-history page uses: enacted ink, NEP hatched, House
+   accent; plus one new style for actual obligations (dotted). */
+@import './hgab-dataset.css';
+
+:root {
+  --hgab-fa-gaa: var(--hgab-gaa, var(--ink-2));
+  --hgab-fa-nep: var(--hgab-nep, var(--ink-3));
+  --hgab-fa-house: var(--hgab-house, var(--accent));
+  --hgab-fa-actual: #3f7d5a;
+}
+
+.hgab-fa-main { padding-top: 8px; }
+.hgab-fa-section + .hgab-fa-section { margin-top: 8px; }
+
+/* --- key figures ---------------------------------------------------------- */
+.hgab-fa-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.hgab-fa-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.hgab-fa-tile b { font-family: var(--font-mono); font-size: 22px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; color: var(--ink); }
+.hgab-fa-tile b.is-down { color: var(--ink-2); }
+.hgab-fa-tile span { font-family: var(--font-body); font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.hgab-fa-tile small { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); }
+
+/* --- the key ---------------------------------------------------------------- */
+.hgab-fa-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.hgab-fa-key li { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.hgab-fa-key i { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px; }
+.hgab-fa-key i.is-gaa { background: var(--hgab-fa-gaa); }
+.hgab-fa-key i.is-nep { background: repeating-linear-gradient(135deg, var(--hgab-fa-nep) 0 1px, transparent 1px 3px); border: 1px solid var(--hgab-fa-nep); }
+.hgab-fa-key i.is-house { background: var(--hgab-fa-house); }
+.hgab-fa-key i.is-actual { background: var(--hgab-fa-actual); }
+
+/* --- paired bars: the largest cuts --------------------------------------- */
+.hgab-fa-pairs { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.hgab-fa-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 4px 14px;
+  align-items: center;
+  min-width: 0;
+}
+.hgab-fa-pair-name { font-family: var(--font-body); font-size: 12.5px; line-height: 1.35; color: var(--ink); min-width: 0; }
+.hgab-fa-pair-name a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-fa-pair-name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.hgab-fa-pair-name small { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); margin-top: 1px; }
+.hgab-fa-tracks { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hgab-fa-track { position: relative; height: 12px; }
+.hgab-fa-seg { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 0 2px 2px 0; }
+.hgab-fa-seg.is-nep { background: repeating-linear-gradient(135deg, var(--hgab-fa-nep) 0 1px, transparent 1px 3px); border: 1px solid var(--hgab-fa-nep); }
+.hgab-fa-seg.is-house { background: var(--hgab-fa-house); }
+.hgab-fa-seg-val {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+.hgab-fa-pair-change { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+
+/* --- the year chart --------------------------------------------------------- */
+.hgab-fa-years {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0 10px;
+  font-family: var(--font-mono);
+}
+.hgab-fa-years .gridline { stroke: var(--rule-soft); stroke-width: 1; }
+.hgab-fa-years .axis { stroke: var(--rule); stroke-width: 1; }
+.hgab-fa-years .tick { font-size: 9px; fill: var(--ink-mute); text-anchor: end; }
+.hgab-fa-years .x { font-size: 10px; fill: var(--ink-2); text-anchor: middle; }
+.hgab-fa-years .val { font-size: 8.5px; fill: var(--ink-3); text-anchor: middle; }
+.hgab-fa-years .bar.is-gaa { fill: var(--hgab-fa-gaa); }
+.hgab-fa-years .bar.is-nep { stroke: var(--hgab-fa-nep); stroke-width: 1; }
+.hgab-fa-years .hatch path { stroke: var(--hgab-fa-nep); stroke-width: 1; }
+.hgab-fa-years .bar.is-house { fill: var(--hgab-fa-house); }
+.hgab-fa-years .bar.is-actual { fill: var(--hgab-fa-actual); }
+.hgab-fa-years .empty { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 2; }
+
+/* --- tables ------------------------------------------------------------------ */
+.hgab-fa-table th.num, .hgab-fa-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hgab-fa-table td.name { min-width: 220px; }
+.hgab-fa-table td.name a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-fa-table td.name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.hgab-fa-table td.name small { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); }
+.hgab-fa-table tr.is-total td { font-weight: 600; border-top: 2px solid var(--rule); }
+.hgab-fa-table tr.is-group th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); padding-top: 10px; }
+.hgab-fa-share { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); margin-left: 4px; }
+.hgab-fa-status {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-2);
+  background: var(--paper-3);
+}
+.hgab-fa-status.is-cut { color: var(--ink-2); background: var(--paper-3); }
+.hgab-fa-status.is-new, .hgab-fa-status.is-raised { color: var(--accent-deep); background: var(--accent-soft); }
+.hgab-fa-status.is-same { color: var(--ink-mute); background: transparent; border: 1px solid var(--rule-soft); }
+.hgab-fa-down { color: var(--ink-2); }
+.hgab-fa-up { color: var(--accent-deep); }
+
+/* --- the two-column notes --------------------------------------------------- */
+.hgab-fa-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.hgab-fa-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.hgab-fa-card h3 { margin: 0; font-family: var(--font-body); font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--ink); }
+.hgab-fa-card p { margin: 0; font-family: var(--font-body); font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+.hgab-fa-card p b { color: var(--ink); font-weight: 600; }
+.hgab-fa-quote {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--rule);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.hgab-fa-codes { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.5; color: var(--ink-3); }
+.hgab-fa-asof { margin: 0 0 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); }
+.hgab-fa-questions { margin: 0; padding-left: 20px; font-family: var(--font-body); font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.hgab-fa-questions li + li { margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .hgab-fa-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgab-fa-cols { grid-template-columns: 1fr; }
+  .hgab-fa-pair { grid-template-columns: 1fr; gap: 2px; }
+}
+@media (max-width: 560px) {
+  .hgab-fa-tiles { grid-template-columns: 1fr; }
+  .hgab-fa-tile b { font-size: 19px; }
+}

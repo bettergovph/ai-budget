@@ -17,6 +17,7 @@ import { LEADERBOARD_ROOT, boardById, shareImageKey } from "./hgab-leaderboard";
 import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
+import { FAP_ROOT, FAP_TITLE } from "./hgab-fap";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
@@ -389,6 +390,16 @@ export function pageMeta(pathname: string): PageMeta {
     };
   }
   // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.
+  // Foreign-assisted projects: the House bill against the NEP, and the budgets since FY2021; before the dataset pattern.
+  if (p === FAP_ROOT) {
+    return {
+      title: `${FAP_TITLE}: ₱130.7 Billion Cut in the FY 2027 House Bill, and Every Budget Since 2021 · ${SITE}`,
+      description:
+        "Every foreign-assisted project in House Bill 10858 against the FY 2027 NEP: 65 loan- and grant-financed projects, " +
+        "₱416.6 billion cut to ₱285.9 billion, by project, department and lender; and what Congress enacted for these " +
+        "projects in every budget since FY 2021, with the unprogrammed appropriations that paid for them.",
+    };
+  }
   if (p === HISTORY_ROOT) {
     return {
       title: `${HISTORY_TITLE}, FY 2020–2027: Flood Control, BIP, SIPAG, School and Health Facilities · ${SITE}`,

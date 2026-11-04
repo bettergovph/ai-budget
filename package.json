@@ -24,6 +24,7 @@
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
+    "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:hgab-contractors": "bash scripts/dpwh-contracts/run.sh",
     "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
