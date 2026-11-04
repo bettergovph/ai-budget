@@ -302,14 +302,13 @@ export function pbcBillionsWords(php: number): string {
 
 /**
  * The posters (npm run build:hgab-poster-redflags), published on the data host at hgab/2027/campaign/ with upload:hgab.
- * `v` is the first 8 hex digits of each file's MD5: the data host caches images for a day and link previews keep them
- * longer, so a rebuilt poster needs a new address. The poster script prints them; verify:hgab compares them with the
- * local files.
+ * The page does not offer them for download (Jason, 2026-11-04: "Remove the poster download"); the 1200×630 is its
+ * link preview. `v` is the first 8 hex digits of each file's MD5: the data host caches images for a day and link
+ * previews keep them longer, so a rebuilt poster needs a new address. The poster script prints them; verify:hgab
+ * compares them with the local files.
  */
 export const RED_FLAG_POSTERS = [
   { key: 'portrait', file: '1t-red-flags-1080x1350.png', width: 1080, height: 1350, label: 'Feed, 4:5', v: '6b156d25' },
   { key: 'square', file: '1t-red-flags-1080x1080.png', width: 1080, height: 1080, label: 'Square', v: '20726bc8' },
   { key: 'og', file: '1t-red-flags-1200x630.png', width: 1200, height: 630, label: 'Link preview', v: '624cd811' },
 ] as const;
-export type RedFlagPoster = (typeof RED_FLAG_POSTERS)[number];
-export const posterPath = (p: RedFlagPoster) => `hgab/2027/campaign/${p.file}${p.v ? `?v=${p.v}` : ''}`;
