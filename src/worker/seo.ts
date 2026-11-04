@@ -26,6 +26,7 @@ import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 import { PARTIES_ROOT } from "../lib/hgab-parties";
 import { CITIZEN_REPORTS_ROOT } from "../lib/citizen-reports";
+import { RED_FLAGS_ROOT } from "../lib/hgab-redflags";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
 
@@ -82,6 +83,7 @@ function canonicalFor(pathname: string): string {
   if (p === "/" || p === "/2027") p = "/2027/overview";
   if (p === "/2027/explore") p = "/2027/search";
   if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") p = "/hgab/2027/overview";
+  if (p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase()) p = RED_FLAGS_ROOT;
   return p === "/" ? CANONICAL_HOST + "/" : CANONICAL_HOST + p;
 }
 
@@ -179,6 +181,8 @@ const STATIC_SITEMAP_PATHS = [
   CONTRACTORS_ROOT,
   // Each district's representative and party, and the DPWH budget by party.
   PARTIES_ROOT,
+  // ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page.
+  RED_FLAGS_ROOT,
 ];
 
 export async function sitemapXml(env: Env): Promise<Response> {

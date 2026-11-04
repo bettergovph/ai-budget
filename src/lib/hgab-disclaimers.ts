@@ -101,6 +101,19 @@ export const DISCLAIMER_PARTIES: Disclaimer = {
     'not establish irregularity or wrongdoing by any party, office or official.',
 };
 
+/**
+ * The red-flag page (`/hgab/2027/1T-redflags`): whose basket it is, what a red flag is and is not. With "No allegations".
+ */
+export const DISCLAIMER_RED_FLAGS: Disclaimer = {
+  id: 'disclaimer-red-flags',
+  title: 'Red flags.',
+  body:
+    'The red-flag basket and its figures are the People’s Budget Coalition’s, as it publishes them; we checked them ' +
+    'against our own reading of the House bill. A red flag marks a budget line that calls for scrutiny and documents. ' +
+    'It does not establish irregularity or wrongdoing by any office or official, and should not be represented as such. ' +
+    'Amounts are allocations in the documents, not spending.',
+};
+
 /** Printed on every multi-purpose building share image, after the board's first note: one sentence of at most 20 words. */
 export const MPB_CARD_DISCLAIMER = 'A total or a ranking is not evidence that anyone asked for a project or did anything wrong.';
 
