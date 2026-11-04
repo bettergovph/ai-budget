@@ -69,7 +69,7 @@ export default function GaaYears() {
       {manifest && (
         <div className="gaa-downloads">
           <a href={dataUrl(`gaa-explorer/${manifest.download}`)} download>
-            Download 2000–2026 Parquet · {manifest.rows.toLocaleString()}{' '}
+            Download the 2000–2026 dataset · {manifest.rows.toLocaleString()}{' '}
             records
           </a>
           <a href={dataUrl('gaa-explorer/coverage.md')}>

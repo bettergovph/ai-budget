@@ -21,6 +21,9 @@ import { buildColumns, buildRow, downloadCsv, filterObjects, objectsToCsv } from
 import { deptTitle } from '../lib/seo';
 import type { ColumnDef, ObjectFilter, RawCell } from '../lib/csv';
 import type { DeptData, FPAP, ObjectItem, BaseEntity, MoverEntry } from '../lib/types';
+import { useGaaSeries } from '../lib/gaa-series-load';
+import { archiveHref, FIRST_DETAIL_YEAR, type GaaSeries } from '../lib/gaa-series';
+import GaaSeriesChart from '../components/GaaSeriesChart';
 
 const FALLBACK_YEAR = 2026;
 
@@ -150,7 +153,40 @@ function KpiStrip({ data, hideOnMobile }: { data: DeptData; hideOnMobile?: boole
 }
 
 /* ---------- Trend chart ---------- */
-function TrendChart({ data, height = 260 }: { data: DeptData; height?: number }) {
+/**
+ * FY2000–2026 when the 27-year series is in (its FY2020–2026 figures are the
+ * GAA Explorer's group totals, which match this page's own totals for every
+ * group except where the department extract files special purpose funds
+ * under a department; the note says so when they differ). Until the series
+ * loads, or if it cannot, the FY2020–2026 chart from the page's own data.
+ */
+function TrendChart({ data, series, height = 260 }: { data: DeptData; series?: GaaSeries; height?: number }) {
+  const hist = series?.departments[data.department.id];
+  if (hist) {
+    const latest = YEARS[YEARS.length - 1];
+    const own = data.total(latest);
+    const theirs = hist.years[latest];
+    const differs = theirs != null && own > 0 && Math.abs(theirs - own) / own > 0.005;
+    return (
+      <>
+        <GaaSeriesChart
+          title={`${data.department.description} · FY 2000 – ${latest}`}
+          meta="NEW APPROPRIATIONS · SOURCE: GAA EXPLORER, 27 YEARS · ₱ BILLIONS"
+          unit="B"
+          height={height + 20}
+          points={series!.national.map((p) => ({ year: p.year, amount: hist.years[p.year] ?? null, status: p.status, note: p.note }))}
+        />
+        {differs && (
+          <p className="note-block gaa-series-note">
+            The GAA Explorer records this group’s FY{latest} new appropriations as {fmt.php(theirs, { unit: 'B' })};
+            the rest of this page shows {fmt.php(own, { unit: 'B' })}, from the department extract, which files
+            some special purpose funds under this department. The bars above use the Explorer’s figures for
+            every year so the series reads the same way throughout.
+          </p>
+        )}
+      </>
+    );
+  }
   const w = 1000;
   const h = height;
   const pad = { l: 56, r: 24, t: 18, b: 36 };
@@ -324,6 +360,10 @@ function YearStrip({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const peak = Math.max(...YEARS.map((y) => data.total(y)));
+  const { series } = useGaaSeries();
+  const hist = series?.departments[data.department.id];
+  const archiveYears = series ? series.years.filter((y) => y < FIRST_DETAIL_YEAR).toSorted((a, b) => b - a) : [];
+  const archivePeak = hist ? Math.max(0, ...archiveYears.map((y) => hist.years[y] ?? 0)) : 0;
 
   function pickYear(y: number) {
     setYear(y);
@@ -361,6 +401,36 @@ function YearStrip({
           );
         })}
       </div>
+      {series && hist && (
+        <>
+          <p className="eyebrow year-strip-archive-eyebrow">
+            Earlier years · FY {archiveYears[archiveYears.length - 1]} – {archiveYears[0]} open in the GAA archive, in that year’s own records
+          </p>
+          <div className="year-strip year-strip-archive" aria-label="Earlier fiscal years, in the GAA archive">
+            {archiveYears.map((y) => {
+              const v = hist.years[y];
+              const href = archiveHref(series, data.department.id, y);
+              const status = series.statuses[y];
+              const meta = v == null
+                ? status === 'reenacted_no_new_gaa' ? 'Reenacted' : 'No record'
+                : `${fmt.shortPhp(v, 'B')} GAA`;
+              const bar = v != null && archivePeak ? (v / archivePeak) * 100 : 0;
+              const body = (
+                <>
+                  <div className="year-cell-num">FY {y}</div>
+                  <div className="year-cell-meta">{meta}</div>
+                  <div className="year-cell-bar"><span style={{ width: `${bar}%` }} /></div>
+                </>
+              );
+              return href ? (
+                <Link key={y} className="year-cell" to={href} title={`FY ${y} in the GAA archive`}>{body}</Link>
+              ) : (
+                <span key={y} className="year-cell is-empty" aria-disabled="true">{body}</span>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2298,6 +2368,7 @@ export default function Portal() {
   const location = useLocation();
   const navigate = useNavigate();
   const view: View = VIEW_BY_SUFFIX[pathSuffix(location.pathname, deptId)] || 'hierarchy';
+  const { series } = useGaaSeries();
   const [hierarchyDepth, setHierarchyDepth] = useState(0);
   const mainRef = useRef<HTMLElement>(null);
   const didMountViewScroll = useRef(false);
@@ -2497,14 +2568,14 @@ export default function Portal() {
       >
         <div className="page-headline">
           <p className="page-eyebrow">
-            Department {deptId} · {view === 'cycle' ? 'FY 2018 – 2026 · Current New Appropriations' : 'FY 2020 – 2026'}
+            Department {deptId} · {view === 'cycle' ? 'FY 2018 – 2026 · Current New Appropriations' : 'FY 2000 – 2026 · line items from FY 2020'}
           </p>
           <h1 className="page-title">{data.department.description}</h1>
         </div>
         {view !== 'methodology' && view !== 'data' && view !== 'report' && view !== 'cycle' && (
           <KpiStrip data={data} hideOnMobile={view !== 'hierarchy'} />
         )}
-        {view === 'hierarchy' && <TrendChart data={data} />}
+        {view === 'hierarchy' && <TrendChart data={data} series={series} />}
         {view === 'report' && <ReportView key={deptId} deptId={deptId} />}
 
         {view === 'hierarchy' && (

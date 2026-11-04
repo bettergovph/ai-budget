@@ -190,6 +190,23 @@ html, body {
   padding: 22px 24px 18px;
   margin-bottom: 32px;
 }
+.gaa-series-legend {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.gaa-series-key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+.gaa-series-key.is-full { background: var(--accent-soft); }
+.gaa-series-key.is-partial { background: var(--accent-soft); opacity: 0.45; outline: 1px dashed var(--accent-deep); outline-offset: -1px; }
+.gaa-series-key.is-none { height: 0; border-top: 2px dashed var(--ink-3); vertical-align: 3px; }
+.gaa-series-note { margin-top: -18px; margin-bottom: 32px; }
 .trend-title {
   display: flex;
   justify-content: space-between;
@@ -935,6 +952,24 @@ html, body {
   color: inherit;
 }
 .year-strip .year-cell:last-child { border-right: none; }
+.year-strip-archive-eyebrow { margin: 14px 0 8px; }
+.year-strip.year-strip-archive {
+  display: flex;
+  flex-wrap: wrap;
+  border-top-width: 1px;
+}
+.year-strip.year-strip-archive .year-cell {
+  flex: 1 1 10%;
+  min-width: 96px;
+  padding: 10px 10px 8px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+.year-strip.year-strip-archive .year-cell .year-cell-num { font-size: 18px; }
+.year-strip.year-strip-archive .year-cell .year-cell-meta { margin-top: 5px; font-size: 10px; }
+.year-strip.year-strip-archive .year-cell.is-empty { color: var(--ink-mute); cursor: default; }
+.year-strip.year-strip-archive .year-cell.is-empty .year-cell-meta { color: var(--ink-mute); }
+.year-strip.year-strip-archive a.year-cell:hover .year-cell-num { text-decoration: underline; }
 .year-cell-num {
   font-family: var(--font-hero);
   font-weight: 700;
