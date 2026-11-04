@@ -27,6 +27,8 @@ import {
 } from '../components/HgabBits';
 import HgabProjects, { Amt, DeltaCell, PageLinks } from '../components/HgabProjects';
 import HgabDownloads from '../components/HgabDownloads';
+import { ProjectsVsWholeNote } from '../components/HgabExplorerBits';
+import { PROJECTS_DEPT, loadExplorerIndex, type ExIndexRow } from '../lib/hgab-explorer';
 import * as fmt from '../lib/format';
 import {
   BRIDGE_LABELS, HGAB_ROOT, HGAB_SOURCE_REPO, PLAIN_TERMS, READING_LABELS, STAGE_LABELS,
@@ -65,6 +67,21 @@ export default function HgabDataset() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Rows the Projects view currently shows, for the Download CSV menu's label.
   const [projectsTotal, setProjectsTotal] = useState<number | null>(null);
+  // DPWH: the whole department, line by line, to reconcile with its projects (optional context).
+  const [whole, setWhole] = useState<{ key: string; row: ExIndexRow } | null>(null);
+  useEffect(() => {
+    const code = Object.keys(PROJECTS_DEPT).find((c) => PROJECTS_DEPT[c] === key);
+    if (!code) return;
+    let live = true;
+    loadExplorerIndex()
+      .then((ix) => {
+        const id = ix.nep_departments?.[code]?.explorer_id;
+        const row = id ? ix.departments.find((r) => r.id === id) : undefined;
+        if (live && row) setWhole({ key, row });
+      })
+      .catch(() => { /* the page reads the same without it */ });
+    return () => { live = false; };
+  }, [key]);
 
   useEffect(() => {
     if (!isDatasetKey(key)) return;
@@ -168,6 +185,10 @@ export default function HgabDataset() {
                 },
               ]}
             />
+
+            {whole?.key === key && houseKey === 'hgab3' && houseTotal != null && (
+              <ProjectsVsWholeNote projects={{ nep: d.totals.nep_php, house: houseTotal }} whole={whole.row} on="projects" />
+            )}
 
             <Caveats items={caveats} />
 

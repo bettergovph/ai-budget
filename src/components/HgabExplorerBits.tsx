@@ -9,6 +9,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as fmt from '../lib/format';
+import { HGAB_ROOT } from '../lib/hgab';
 import {
   EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, NEP_HOW_NOTE, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl,
   shortMoney, titleCase, volumeName,
@@ -52,6 +53,37 @@ export function NepBrowserGapNote({ gap, code, billNep, on }: { gap: NepBrowserG
           {on === 'explorer'
             ? <>This page also counts {shortMoney(imported)} for agencies the NEP files under another department.</>
             : <>The figures above also include {shortMoney(imported)} for agencies the NEP files under another department.</>}
+        </>
+      )}
+    </p>
+  );
+}
+
+/**
+ * DPWH's project pages (/hgab/2027/dpwh) compare its projects only; the explorer has all of DPWH. The
+ * difference is administration and support (the bill's General Administration and Support and Support
+ * to Operations). `on` is the page it sits on.
+ */
+export function ProjectsVsWholeNote({ projects, whole, on }: {
+  projects: { nep: number; house: number };
+  whole: { id: string; nep: number; house: number };
+  on: 'projects' | 'explorer';
+}) {
+  const restNep = whole.nep - projects.nep;
+  const restHouse = whole.house - projects.house;
+  return (
+    <p className="hgab-ex-gap">
+      {on === 'projects' ? (
+        <>
+          These are DPWH’s projects. All of DPWH is {shortMoney(whole.nep)} in the NEP and {shortMoney(whole.house)} in the
+          House bill. The rest is administration and support: {shortMoney(restNep)} in the NEP and {shortMoney(restHouse)} in
+          the House bill. <Link to={explorerPath(whole.id)}>See every DPWH line →</Link>
+        </>
+      ) : (
+        <>
+          DPWH’s <Link to={`${HGAB_ROOT}/dpwh`}>project pages</Link> compare its projects only: {shortMoney(projects.nep)} in the NEP
+          and {shortMoney(projects.house)} in the House bill. The rest of this page is administration and support:{' '}
+          {shortMoney(restNep)} in the NEP and {shortMoney(restHouse)} in the House bill.
         </>
       )}
     </p>

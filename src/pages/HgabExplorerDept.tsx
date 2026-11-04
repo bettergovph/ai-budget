@@ -11,11 +11,12 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { KpiStrip } from '../components/Nep2027Bits';
-import { ExChange, ExStatusChip, ExTree, NepBrowserGapNote, UnderReviewBanner } from '../components/HgabExplorerBits';
+import { ExChange, ExStatusChip, ExTree, NepBrowserGapNote, ProjectsVsWholeNote, UnderReviewBanner } from '../components/HgabExplorerBits';
+import { loadHgabOverview } from '../lib/hgab';
 import * as fmt from '../lib/format';
 import { downloadCsv } from '../lib/csv';
 import {
-  EXPLORER_ROOT, STATUS_LABEL, STATUS_ORDER, agencyCsvRows, fullPhp, explorerPath, loadExplorerDept, titleCase, toCsv,
+  EXPLORER_ROOT, PROJECTS_DEPT, STATUS_LABEL, STATUS_ORDER, agencyCsvRows, fullPhp, explorerPath, loadExplorerDept, titleCase, toCsv,
   type ExAgency, type ExDept,
 } from '../lib/hgab-explorer';
 import '../nep2027.css';
@@ -36,6 +37,21 @@ export default function HgabExplorerDept() {
 
   const dept = loaded?.id === deptId ? loaded.dept : null;
   const err = loaded?.id === deptId ? loaded.err : null;
+
+  // DPWH: its project pages compare projects only; reconcile them with this page (optional context).
+  const projectsKey = dept?.nep_browser ? PROJECTS_DEPT[dept.nep_browser.code] : undefined;
+  const [projects, setProjects] = useState<{ id: string; nep: number; house: number } | null>(null);
+  useEffect(() => {
+    if (!projectsKey) return;
+    let live = true;
+    loadHgabOverview()
+      .then((o) => {
+        const t = o.datasets.find((d) => d.key === projectsKey)?.totals;
+        if (live && t?.hgab3_php != null) setProjects({ id: deptId, nep: t.nep_php, house: t.hgab3_php });
+      })
+      .catch(() => { /* the page reads the same without it */ });
+    return () => { live = false; };
+  }, [projectsKey, deptId]);
 
   useEffect(() => {
     if (dept) document.title = `${titleCase(dept.name)} — House bill line by line · budget.bettergov.ph`;
@@ -105,6 +121,9 @@ export default function HgabExplorerDept() {
 
         {dept.nep_browser && (
           <NepBrowserGapNote gap={dept.nep_browser} code={dept.nep_browser.code} billNep={dept.nep} on="explorer" />
+        )}
+        {projects?.id === deptId && (
+          <ProjectsVsWholeNote projects={projects} whole={{ id: dept.id, nep: dept.nep, house: dept.house }} on="explorer" />
         )}
 
         <div className="hgab-ex-controls">

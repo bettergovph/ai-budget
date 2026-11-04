@@ -698,6 +698,7 @@ async function main(): Promise<void> {
   verifyLineSources();
   verifyWholeBillSummary();
   verifyNepBrowserGap();
+  verifyDpwhProjectsVsWhole();
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
@@ -959,6 +960,35 @@ function verifyNepBrowserGap(): void {
   const off = linked.filter((d) => nd[d.nep_dept!]?.explorer_id !== d.id || d.nep < nd[d.nep_dept!].new_here_php);
   check(`each explorer department links its NEP department, and holds at least the new appropriations kept there (${linked.length})`,
     linked.length > 30 && off.length === 0, off.map((d) => d.id).join(", "));
+}
+
+/**
+ * DPWH's project pages compare projects only; its explorer page has all of DPWH. The two reconcile through
+ * the bill's two administration and support classes, which is what both pages now say.
+ */
+function verifyDpwhProjectsVsWhole(): void {
+  const dpath = resolve(OUT, "explorer", "d", "department-of-public-works-and-highways.json");
+  if (!existsSync(dpath)) return;
+  interface N { k: string; l: string; x?: { n: number; h: number }[]; c?: N[] }
+  const sum = (n: N): [number, number] => {
+    let a = 0, b = 0;
+    for (const x of n.x ?? []) { a += x.n; b += x.h; }
+    for (const c of n.c ?? []) { const [p, q] = sum(c); a += p; b += q; }
+    return [a, b];
+  };
+  const dept = readJson<{ nep: number; house: number; agencies: { tree: N[] }[] }>(dpath);
+  const support: [number, number] = [0, 0];
+  const walk = (ns: N[]) => ns.forEach((n) => {
+    if (n.k === "class" && /^(General Administration and Support|Support to Operations)$/i.test(n.l)) {
+      const [p, q] = sum(n); support[0] += p; support[1] += q;
+    } else walk(n.c ?? []);
+  });
+  dept.agencies.forEach((a) => walk(a.tree));
+  const ov = readJson<{ datasets: { key: string; totals: { nep_php: number; hgab3_php: number | null } }[] }>(resolve(OUT, "overview.json"));
+  const t = ov.datasets.find((d) => d.key === "dpwh")?.totals;
+  check("DPWH: all of DPWH (explorer) minus administration and support = its projects (DPWH pages), in both documents",
+    !!t && dept.nep - support[0] === t.nep_php && dept.house - support[1] === t.hgab3_php,
+    t ? `NEP ${dept.nep} − ${support[0]} vs ${t.nep_php}; House ${dept.house} − ${support[1]} vs ${t.hgab3_php}` : "no dpwh dataset");
 }
 
 /** explorer/summary.json, the overview's whole-bill section: its figures agree with the explorer and the boards. */

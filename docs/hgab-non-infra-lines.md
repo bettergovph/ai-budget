@@ -272,8 +272,25 @@ It then puts the result in `index.json` (`nep_departments`) and on each departme
 | National Building Code Development Fund (automatic) | ₱28,173,000 |
 | NEP browser | ₱643,953,276,000 |
 
-The workbench's own tables compare DPWH projects only: ₱572.924B in the NEP and ₱587.076B in the
-House bill. They leave out ₱69.688B and ₱67.026B of administration and support.
+The workbench's own tables, and our DPWH pages (`/hgab/2027/dpwh`), compare DPWH projects only:
+₱572.924B in the NEP and ₱587.076B in the House bill. They leave out administration and support (the
+bill's General Administration and Support and Support to Operations): ₱69.688B in the NEP and ₱67.026B
+in the House bill.
+
+| DPWH | NEP | House bill |
+| --- | --- | --- |
+| Projects (DPWH pages) | ₱572,924,074,000 | ₱587,075,661,000 |
+| General Administration and Support | ₱18,078,293,000 | ₱18,078,293,000 |
+| Support to Operations | ₱51,609,648,000 | ₱48,948,061,000 |
+| All of DPWH (explorer) | ₱642,612,015,000 | ₱654,102,015,000 |
+
+Where each page says so:
+
+- **DPWH page:** a line under its figures (`ProjectsVsWholeNote`).
+- **Explorer's DPWH page:** the same line.
+- **NEP browser's DPWH projects card:** "projects only".
+- **Check:** `verify:hgab` confirms that the explorer's DPWH, minus those two classes, equals the DPWH
+  pages' totals in both documents.
 
 ## Proof of reference: NEP pages (`nep_pages.py`)
 
