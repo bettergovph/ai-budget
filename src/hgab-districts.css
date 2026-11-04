@@ -1142,6 +1142,10 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
 }
 .hgab-dc-undivided a { color: inherit; }
 .hgab-dc-undivided.is-sum { color: var(--ink-3); }
+/* On a shared card: the way to the district's own projects (`?view=list-legislative#d-…`). */
+.hgab-dc-own { margin: 2px 0 0; font-family: var(--font-body); font-size: 12px; line-height: 1.5; }
+.hgab-dc-own a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.hgab-dc-own a:hover { text-decoration: underline; }
 
 .hgab-dc-bridge {
   margin: 0;

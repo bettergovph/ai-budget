@@ -35,6 +35,7 @@ import {
   residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, type HistorySlot,
 } from '../lib/hgab-districts';
 import { DeoBadges, HgabDetails, SignedPhp } from './HgabBits';
+import { placedListHref } from '../lib/hgab-placed';
 import '../hgab-districts.css';
 
 // ---------------------------------------------------------------------------
@@ -854,6 +855,16 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
       {undivided && (
         <p className="hgab-dc-undivided">
           <SharedLabel ids={coServed} index={index} />
+        </p>
+      )}
+      {undivided && (
+        <p className="hgab-dc-own">
+          <Link
+            to={placedListHref(districtAnchor(card.id))}
+            title={`The 2027 DPWH projects placed in ${card.label}, each counted once: the district’s own figures, not its office’s shared total`}
+          >
+            This district’s own projects →
+          </Link>
         </p>
       )}
       {!undivided && offices.length > 1 && (
