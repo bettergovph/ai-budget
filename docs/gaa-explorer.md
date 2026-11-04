@@ -22,13 +22,24 @@ For local development, `public/data` should link to this checkout's `data`. Exis
 - Early coverage is partial. Historical agency/program/fund summaries and later line items retain their original grains. Null dimensions are not invented.
 - Scopes are selected individually; unprogrammed appropriations are conditional. FY2003 preference schedules are separate.
 - FY2019 retains the selected technical edition and documents the DPWH discrepancy against the Volume I summary.
-- Recorded historical sums are not a comparable national budget series. The existing 2020–2026 trend and department comparison remain explicitly labeled with their narrower range.
+- Recorded historical sums are not a comparable national budget series. The `/gaa` and `/d/:id` trend charts span FY2000–2026 from `series.json` (below) and mark partial-coverage years and reenacted years; the KPI strips, rankings and department comparisons keep their 2020–2026 range.
 - Annual pages and records expose coverage notes, quality flags, source URLs, document/member names, pages/lines when available and checksums. The download's README and coverage documents give detailed limitations.
+
+## The 27-year series (`gaa-explorer/series.json`)
+
+`npm run build:gaa-series` reads the published manifest and `national/index.json` and writes `data/gaa-explorer/series.json` (about 90 KB): one national row per year and one row per department group, FY2000–2026. `-- --upload` puts it on R2 as `gaa-explorer/series.json` and checks the public copy's SHA-256. The crosswalk is `buildGaaSeries` in `src/lib/gaa-series.ts`, tested by `npm run test:gaa-series`.
+
+- A department's figure is its **new appropriations** for the year: the `current_new_appropriations` scope (first preference in FY2003; the published department totals in FY2007–2008) and, for FY2020–2026, the existing extract's group total, which is what the department pages already show.
+- Group names are matched to department ids by normalised name (uppercase, trailing acronym and stray digits dropped) plus five aliases in `GROUP_ALIASES`: DECS → DepEd, DOTC → DOTr, DEPDev → NEDA, PCOO and the Office of the Press Secretary → PCO. Special purpose funds, regions, ARMM/BARMM and DAR (no page) stay in `unmatched`, per year, so nothing is dropped silently.
+- "Automatic Appropriations" (group 04) is the automatic scope's total in FY2002–2019 and the group of that name from FY2020.
+- The national row carries `new_php`, `automatic_php`, `unprogrammed_php` and `total_php` = new + automatic; the total is null when no automatic appropriations are recorded (FY2000, FY2003, FY2005) and the charts plot new appropriations alone there, dashed. Reenacted years are null throughout. The totals match the headline GAA figures from FY2009 (₱1.41T) to FY2026 (₱6.79T).
+- Two groups differ between the Explorer and the department extract in FY2020–2026: Congress (the extract files special purpose funds under department 01, so its page says ₱294B for FY2020 where the Explorer says ₱27B) and Automatic Appropriations (about 0.8%). The department chart uses the Explorer's figures for every year and says so under the chart when they differ from the page's own total.
 
 ## Verification and publishing
 
 ```sh
 npm run test:gaa-explorer
+npm run test:gaa-series
 npm run build
 npm run upload:gaa-explorer  # checksum verification and dry run; no credentials needed
 ```

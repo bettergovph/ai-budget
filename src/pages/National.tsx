@@ -7,10 +7,14 @@ import GaaYears from '../components/GaaYears';
 import type { NationalIndex } from '../lib/types';
 import * as fmt from '../lib/format';
 import { dataUrl } from '../lib/data-url';
+import { useGaaSeries } from '../lib/gaa-series-load';
+import { nationalPlotAmount } from '../lib/gaa-series';
+import GaaSeriesChart from '../components/GaaSeriesChart';
 
 export default function National() {
   const [idx, setIdx] = useState<NationalIndex | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const { series } = useGaaSeries();
   const mainRef = useRef<HTMLElement>(null);
   const groupsRef = useRef<HTMLDivElement>(null);
 
@@ -117,9 +121,26 @@ export default function National() {
         </div>
 
         <div style={{ marginBottom: 14, marginTop: 28 }}>
-          <Eyebrow>National appropriation, FY {idx.years[0]} – {latestYear}</Eyebrow>
+          <Eyebrow>National appropriation, FY {series ? 2000 : idx.years[0]} – {latestYear}</Eyebrow>
         </div>
-        <NationalTrend yearly={idx.national_yearly} />
+        {series ? (
+          <>
+            <GaaSeriesChart
+              title={`National appropriation, FY 2000 – ${latestYear}`}
+              meta="SOURCE: GENERAL APPROPRIATIONS ACT · NEW + AUTOMATIC APPROPRIATIONS · ₱ TRILLIONS"
+              unit="T"
+              points={series.national.map((p) => ({ year: p.year, amount: nationalPlotAmount(p), status: p.status, note: p.note }))}
+            />
+            <p className="note-block gaa-series-note">
+              Each bar is the year’s new appropriations plus automatic appropriations, as the GAA Explorer records
+              them. Before FY2009 coverage is partial and some years record no automatic appropriations, so those
+              bars are new appropriations alone and do not compare with later years. FY2001, FY2004 and FY2006
+              reenacted the previous budget: no new GAA, so no bar. Open a year above for its coverage notes and records.
+            </p>
+          </>
+        ) : (
+          <NationalTrend yearly={idx.national_yearly} />
+        )}
 
         <div ref={groupsRef} id="groups" className="national-groups-head" style={{ marginTop: 40, scrollMarginTop: 220 }}>
           <SectionHead

@@ -28,6 +28,8 @@
     "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
     "build:hgab-parties": "NODE_NO_WARNINGS=1 tsx scripts/build-hgab-parties.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
+    "build:gaa-series": "tsx scripts/build-gaa-series.ts",
+    "test:gaa-series": "tsx --test scripts/gaa-series.test.ts",
     "build:citizen-reports": "tsx scripts/build-citizen-report-shots.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",

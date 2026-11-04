@@ -190,6 +190,23 @@ html, body {
   padding: 22px 24px 18px;
   margin-bottom: 32px;
 }
+.gaa-series-legend {
+  margin: 10px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.gaa-series-key {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+.gaa-series-key.is-full { background: var(--accent-soft); }
+.gaa-series-key.is-partial { background: var(--accent-soft); opacity: 0.45; outline: 1px dashed var(--accent-deep); outline-offset: -1px; }
+.gaa-series-key.is-none { height: 0; border-top: 2px dashed var(--ink-3); vertical-align: 3px; }
+.gaa-series-note { margin-top: -18px; margin-bottom: 32px; }
 .trend-title {
   display: flex;
   justify-content: space-between;
