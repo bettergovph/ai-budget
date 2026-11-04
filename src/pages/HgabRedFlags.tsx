@@ -10,17 +10,16 @@
  * Copy: factual headings with the number in them, sentences of at most 20 words, PBC named as the basket's owner
  * everywhere a total appears; the checking and the rounding sit in "Details for analysts".
  */
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabDetails, HgabHeader, HgabHero } from '../components/HgabBits';
 import { pageMeta } from '../lib/seo';
 import { LINES_UNDER_REVIEW } from '../lib/hgab-explorer';
-import { dataUrl } from '../lib/data-url';
 import {
-  DPWH_PROJECTS, PBC_REPORT, RED_FLAGS_ROOT, RED_FLAGS_TITLE, RED_FLAG_GROUPS, RED_FLAG_LINES, RED_FLAG_POSTERS,
+  DPWH_PROJECTS, PBC_REPORT, RED_FLAGS_ROOT, RED_FLAGS_TITLE, RED_FLAG_GROUPS, RED_FLAG_LINES,
   RED_FLAG_TOTALS, RED_FLAG_UNPROGRAMMED, TRILLION, billHref, isDpwhLine, linesOf, pbcBillions,
-  pbcBillionsWords, pbcChange, posterPath, type RedFlagGroupKey, type RedFlagLine,
+  pbcBillionsWords, pbcChange, type RedFlagGroupKey, type RedFlagLine,
 } from '../lib/hgab-redflags';
 import '../nep2027.css';
 import '../hgab-redflags.css';
@@ -120,32 +119,6 @@ function LineRow({ l }: { l: RedFlagLine }) {
       <td className="num"><Change php={l.change} /></td>
       <td><InTheBill l={l} /></td>
     </tr>
-  );
-}
-
-function Posters() {
-  const [missing, setMissing] = useState(false);
-  const feed = RED_FLAG_POSTERS[0];
-  if (missing) return null;
-  return (
-    <section className="nep-section hgab-rf-section hgab-rf-posters" aria-labelledby="rf-posters">
-      <h2 id="rf-posters" className="hgab-rf-h2">The poster, to download and share</h2>
-      <p className="hgab-rf-dek">The same figures, with both coalition logos. Every line on it is in the table above.</p>
-      <div className="hgab-rf-poster-row">
-        <a href={dataUrl(posterPath(feed))} target="_blank" rel="noopener noreferrer" className="hgab-rf-poster">
-          <img src={dataUrl(posterPath(feed))} width={feed.width} height={feed.height} loading="lazy" onError={() => setMissing(true)}
-            alt={`${RED_FLAGS_TITLE}: ${pbcBillionsWords(T.all.house)} in the House bill against ${pbcBillionsWords(T.all.nep)} in the NEP, every line of the People’s Budget Coalition’s basket.`} />
-        </a>
-        <ul className="hgab-rf-downloads">
-          {RED_FLAG_POSTERS.map((p) => (
-            <li key={p.key}>
-              <a href={dataUrl(posterPath(p))} download={p.file}>{p.label}</a>
-              <span>{p.width}×{p.height} PNG</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
   );
 }
 
@@ -278,8 +251,6 @@ export default function HgabRedFlags() {
             its subtotal by a little.
           </p>
         </section>
-
-        <Posters />
 
         <section className="nep-section hgab-rf-section" aria-labelledby="rf-sources">
           <h2 id="rf-sources" className="hgab-rf-h2">Where the figures come from</h2>
