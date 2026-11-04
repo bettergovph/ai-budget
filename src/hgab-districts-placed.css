@@ -1,9 +1,6 @@
 /* Projects placed in each district (`/hgab/2027/districts?view=list-legislative`, HgabDistrictsPlaced.tsx). The card,
-   the layout and the 2027 panel are the office list's (hgab-districts.css); this adds the "placed here" badge, the
-   count above the figures, how the projects were placed and which offices list them, and the table of what is placed
-   in no single district. */
-
-.hgab-tier.is-placed { --hgab-tier: var(--accent); }
+   the layout and the 2027 panel are the office list's (hgab-districts.css); this adds the count above the figures,
+   how the projects were placed and which offices list them, and the table of what is placed in no single district. */
 
 .hgab-dp-count {
   margin: 0 0 6px;

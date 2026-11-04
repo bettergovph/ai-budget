@@ -529,7 +529,6 @@ const PlacedCard = memo(function PlacedCard({ card, d, level }: { card: District
         <div className="hgab-dc-title">
           <p className="hgab-dc-eyebrow">
             <span title={card.region ?? undefined}>{regionKey === 'other' ? card.region ?? 'Region not recorded' : regionNames(regionKey).name}</span>
-            <span className="hgab-tier is-placed" title="The 2027 DPWH projects placed in this district: its own figures, not an office’s shared total">placed here</span>
           </p>
           <Heading className="hgab-dc-district" id={hid} tabIndex={-1}>
             <Link to={districtPath(card.id)}>{card.label}</Link>
@@ -567,7 +566,7 @@ function PlacedPanel({ d }: { d: DistrictLocated }) {
   const offices = (Object.keys(OFFICE_LABELS) as Array<keyof DistrictLocated['by_office']>).filter((k) => d.by_office[k].rows > 0);
   return (
     <div className="hgab-dc-br hgab-dp-panel">
-      <p className="hgab-dp-count">{projects(d.all.rows)} placed here</p>
+      <p className="hgab-dp-count">{projects(d.all.rows)}</p>
       <Fy27Headline nep={d.all.nep_php} hgab3={d.all.house_php} net={net} scope="The 2027 DPWH projects placed in this district, NEP against the House bill" />
       {moved > 0 && (
         <span className="hgab-dc-br-bar" role="img" aria-label={`How the House bill differs from the NEP: ${barLabel}`}>
