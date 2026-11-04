@@ -293,6 +293,12 @@ export const SCOPE_NOTE: Record<NonNullable<ExLine['z']>, { label: string; to: s
 };
 
 /** Every peso, as published: "₱48,193,049,000". */
+/**
+ * The NEP department (code) whose project list is one of the House bill pages' programs and is most of
+ * the department: DPWH. Its project pages and its explorer page reconcile through administration and support.
+ */
+export const PROJECTS_DEPT: Readonly<Record<string, 'dpwh'>> = { '18': 'dpwh' };
+
 /** "₱642.61B", "₱28.2M": two decimals for billions, as on the leaderboards. */
 export function shortMoney(n: number): string {
   const a = Math.abs(n);

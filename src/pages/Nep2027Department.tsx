@@ -24,7 +24,7 @@ import {
 } from '../lib/nep2027';
 import { datasetSummary } from '../lib/hgab-ui';
 import { NepBrowserGapNote } from '../components/HgabExplorerBits';
-import { explorerPath, loadExplorerIndex, shortMoney, type ExIndexRow, type NepBrowserGap } from '../lib/hgab-explorer';
+import { PROJECTS_DEPT, explorerPath, loadExplorerIndex, shortMoney, type ExIndexRow, type NepBrowserGap } from '../lib/hgab-explorer';
 import '../nep2027.css';
 import '../hgab-links.css';
 
@@ -432,7 +432,9 @@ function HgabCallout({ deptId }: { deptId: string }) {
 
   return (
     <aside className="hgab-crosslink" aria-label="The House bill for this group">
-      <p className="hgab-crosslink-eyebrow">The House bill for this group · {meta.label}</p>
+      <p className="hgab-crosslink-eyebrow">
+        {PROJECTS_DEPT[deptId] === key ? `Its projects, row by row · ${meta.label}` : `The House bill for this group · ${meta.label}`}
+      </p>
       <p className="hgab-crosslink-figures">
         <span>
           <em title={STAGE_LABELS.nep.label}>{STAGE_LABELS.nep.short}</em>
@@ -454,6 +456,7 @@ function HgabCallout({ deptId }: { deptId: string }) {
       </p>
       <p className="hgab-crosslink-scope">
         {datasetSummary(meta)}
+        {PROJECTS_DEPT[deptId] === key && <> Projects only: administration and support are in the line-by-line card above.</>}
       </p>
       <p className="hgab-crosslink-links">
         <Link to={datasetPath(key)}>Compare with the House bill (HB 10858) →</Link>

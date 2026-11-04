@@ -27,6 +27,10 @@ import {
 } from '../components/HgabBits';
 import HgabProjects, { Amt, DeltaCell, PageLinks } from '../components/HgabProjects';
 import HgabDownloads from '../components/HgabDownloads';
+import { ProjectsVsWholeNote } from '../components/HgabExplorerBits';
+import { PROJECTS_DEPT, loadExplorerIndex, type ExIndexRow } from '../lib/hgab-explorer';
+
+const PROJECTS_DEPT_KEYS: ReadonlySet<string> = new Set(Object.values(PROJECTS_DEPT));
 import * as fmt from '../lib/format';
 import {
   BRIDGE_LABELS, HGAB_ROOT, HGAB_SOURCE_REPO, PLAIN_TERMS, READING_LABELS, STAGE_LABELS,
@@ -65,6 +69,21 @@ export default function HgabDataset() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Rows the Projects view currently shows, for the Download CSV menu's label.
   const [projectsTotal, setProjectsTotal] = useState<number | null>(null);
+  // DPWH: the explorer page with all of DPWH, for the note's link (optional; falls back to the explorer index).
+  const [wholeRow, setWholeRow] = useState<{ key: string; row: ExIndexRow } | null>(null);
+  useEffect(() => {
+    const code = Object.keys(PROJECTS_DEPT).find((c) => PROJECTS_DEPT[c] === key);
+    if (!code) return;
+    let live = true;
+    loadExplorerIndex()
+      .then((ix) => {
+        const id = ix.nep_departments?.[code]?.explorer_id;
+        const row = id ? ix.departments.find((r) => r.id === id) : undefined;
+        if (live && row) setWholeRow({ key, row });
+      })
+      .catch(() => { /* the page reads the same without it */ });
+    return () => { live = false; };
+  }, [key]);
 
   useEffect(() => {
     if (!isDatasetKey(key)) return;
@@ -106,6 +125,14 @@ export default function HgabDataset() {
   const delta = houseTotal != null ? houseTotal - d.totals.nep_php : null;
   const pct = pctChange(houseTotal, d.totals.nep_php);
   const houseLabel = d.has_readings ? STAGE_LABELS[houseKey].short : 'House bill';
+  // DPWH's projects are most of the department, so its headline is all of DPWH: the documents' printed new
+  // appropriations, equal to the explorer's line-by-line totals (verify:hgab). The projects are the breakdown.
+  const whole = PROJECTS_DEPT_KEYS.has(d.key) && houseKey === 'hgab3'
+    && d.printed?.nep_new_appropriations_php != null && d.printed?.house_new_appropriations_php != null
+    ? { nep: d.printed.nep_new_appropriations_php, house: d.printed.house_new_appropriations_php }
+    : null;
+  const wholeDelta = whole ? whole.house - whole.nep : null;
+  const wholeId = wholeRow?.key === d.key ? wholeRow.row.id : undefined;
   const plainSummary = datasetSummary(d);
   const caveats = datasetCaveats(d);
   const totalsLabel = plainControlsLabel(d.controls_label).toLowerCase();
@@ -114,7 +141,7 @@ export default function HgabDataset() {
     <>
       <HgabHeader
         crumb={DATASET_SHORT[d.key]}
-        compiledMeta={houseTotal != null ? `${fmt.shortPhp(houseTotal)} · ${houseLabel}` : undefined}
+        compiledMeta={whole ? `${fmt.shortPhp(whole.house)} · ${houseLabel} · all of DPWH` : houseTotal != null ? `${fmt.shortPhp(houseTotal)} · ${houseLabel}` : undefined}
         heroBlend={isOverview}
       />
 
@@ -139,35 +166,70 @@ export default function HgabDataset() {
       <main className="nep-main">
         {isOverview && (
           <>
-            <KpiStrip
-              items={[
-                {
-                  label: STAGE_LABELS.nep.short,
-                  value: fmt.shortPhp(d.totals.nep_php),
-                  sub: `${d.counts.nep.toLocaleString()} rows in the ${STAGE_LABELS.nep.short}`,
-                },
-                {
-                  label: houseLabel,
-                  value: houseTotal == null ? '—' : fmt.shortPhp(houseTotal),
-                  tone: delta == null ? undefined : delta >= 0 ? 'up' : 'down',
-                  sub: delta == null
-                    ? 'No House total for these projects'
-                    : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs ${STAGE_LABELS.nep.short} · ${formatPct(pct)}`,
-                },
-                {
-                  label: 'Rows in each version',
-                  value: `${d.counts.nep.toLocaleString()} → ${houseCount == null ? '—' : houseCount.toLocaleString()}`,
-                  sub: d.has_readings && d.counts.hgab2 != null && d.counts.hgab3 != null
-                    ? `${STAGE_LABELS.nep.short} → House · 2R ${d.counts.hgab2.toLocaleString()} · 3R ${d.counts.hgab3.toLocaleString()} · ${COMPARE_NOT_ADD}`
-                    : `${STAGE_LABELS.nep.short} → House · ${COMPARE_NOT_ADD}`,
-                },
-                {
-                  label: 'What is compared',
-                  value: <span className="hgab-ds-kpi-text" title={plainSummary}>The project lists, not the agency’s whole budget</span>,
-                  sub: `${summary.controls.length.toLocaleString()} published totals, by ${singular(totalsLabel)}`,
-                },
-              ]}
-            />
+            {whole && wholeDelta != null && houseTotal != null && delta != null ? (
+              <KpiStrip
+                items={[
+                  {
+                    label: `${STAGE_LABELS.nep.short} · all of DPWH`,
+                    value: fmt.shortPhp(whole.nep),
+                    sub: `projects ${fmt.shortPhp(d.totals.nep_php)} in ${d.counts.nep.toLocaleString()} rows`,
+                  },
+                  {
+                    label: `${houseLabel} · all of DPWH`,
+                    value: fmt.shortPhp(whole.house),
+                    tone: wholeDelta >= 0 ? 'up' : 'down',
+                    sub: `${wholeDelta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(wholeDelta))} vs ${STAGE_LABELS.nep.short} · ${formatPct(pctChange(whole.house, whole.nep))} · projects ${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))}`,
+                  },
+                  {
+                    label: 'Project rows in each version',
+                    value: `${d.counts.nep.toLocaleString()} → ${houseCount == null ? '—' : houseCount.toLocaleString()}`,
+                    sub: d.has_readings && d.counts.hgab2 != null && d.counts.hgab3 != null
+                      ? `${STAGE_LABELS.nep.short} → House · 2R ${d.counts.hgab2.toLocaleString()} · 3R ${d.counts.hgab3.toLocaleString()} · ${COMPARE_NOT_ADD}`
+                      : `${STAGE_LABELS.nep.short} → House · ${COMPARE_NOT_ADD}`,
+                  },
+                  {
+                    label: 'What is compared',
+                    value: <span className="hgab-ds-kpi-text" title={plainSummary}>Every project, row by row</span>,
+                    sub: `the other ${fmt.shortPhp(whole.nep - d.totals.nep_php)} in the ${STAGE_LABELS.nep.short} is administration and support`,
+                  },
+                ]}
+              />
+            ) : (
+              <KpiStrip
+                items={[
+                  {
+                    label: STAGE_LABELS.nep.short,
+                    value: fmt.shortPhp(d.totals.nep_php),
+                    sub: `${d.counts.nep.toLocaleString()} rows in the ${STAGE_LABELS.nep.short}`,
+                  },
+                  {
+                    label: houseLabel,
+                    value: houseTotal == null ? '—' : fmt.shortPhp(houseTotal),
+                    tone: delta == null ? undefined : delta >= 0 ? 'up' : 'down',
+                    sub: delta == null
+                      ? 'No House total for these projects'
+                      : `${delta >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(delta))} vs ${STAGE_LABELS.nep.short} · ${formatPct(pct)}`,
+                  },
+                  {
+                    label: 'Rows in each version',
+                    value: `${d.counts.nep.toLocaleString()} → ${houseCount == null ? '—' : houseCount.toLocaleString()}`,
+                    sub: d.has_readings && d.counts.hgab2 != null && d.counts.hgab3 != null
+                      ? `${STAGE_LABELS.nep.short} → House · 2R ${d.counts.hgab2.toLocaleString()} · 3R ${d.counts.hgab3.toLocaleString()} · ${COMPARE_NOT_ADD}`
+                      : `${STAGE_LABELS.nep.short} → House · ${COMPARE_NOT_ADD}`,
+                  },
+                  {
+                    label: 'What is compared',
+                    value: <span className="hgab-ds-kpi-text" title={plainSummary}>The project lists, not the agency’s whole budget</span>,
+                    sub: `${summary.controls.length.toLocaleString()} published totals, by ${singular(totalsLabel)}`,
+                  },
+                ]}
+              />
+            )}
+
+            {whole && houseTotal != null && (
+              <ProjectsVsWholeNote projects={{ nep: d.totals.nep_php, house: houseTotal }} whole={{ id: wholeId, ...whole }} on="projects" />
+            )}
+
 
             <Caveats items={caveats} />
 
