@@ -44,21 +44,21 @@ import '../hgab-districts.css';
 // Badges
 // ---------------------------------------------------------------------------
 
-/** An office's tier. Tier B names how many other districts share it. */
+/** An office's tier: "Lone", or "Shared" with how many other districts share it. */
 export function TierBadge({ tier, sharedWith, compact = false }: { tier: 'A' | 'B'; sharedWith: number; compact?: boolean }) {
   const text = officeTierText(tier, sharedWith);
   return (
     <span className={`hgab-tier is-${tier} ${compact ? 'is-compact' : ''}`.trim()} title={tier === 'A'
       ? 'This office serves only this district, so its figures can be read as the district’s.'
       : `This office serves ${sharedWith + 1} districts. Its figures are the whole office’s and are not split between them.`}>
-      <span aria-hidden="true">{tier === 'A' ? 'Tier A' : 'Tier B'}</span>
+      <span aria-hidden="true">{tier === 'A' ? 'Lone' : 'Shared'}</span>
       <small aria-hidden="true">{officeTierBadgeText(tier, sharedWith)}</small>
       <span className="visually-hidden">{text}</span>
     </span>
   );
 }
 
-/** A card's overall answer to "Whose budget is this?": Tier A, Tier B, mixed, or no office. */
+/** A card's overall answer to "Whose budget is this?": lone, shared, mixed, or no office. */
 export function AttributionBadge({ attribution }: { attribution: DistrictCard['attribution'] }) {
   const a = ATTRIBUTION_LABELS[attribution];
   return (

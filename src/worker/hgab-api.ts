@@ -106,7 +106,7 @@ const RULES: string[] = [
     "insertion candidate (House bill only) or a deletion candidate (NEP only), never a confirmed insertion or deletion.",
   `Unconfirmed matches (held: fuzzy or ambiguous pairings) are flagged on every row. ${HGAB_BRIDGE_NOTE} ` +
     "The largest-rows lists leave unconfirmed matches out.",
-  "District figures carry their tier. A shared (Tier B) office's money is never divided between the districts it " +
+  "District figures carry their tier. A shared (tier B) office's money is never divided between the districts it " +
     "serves, and money under the DPWH Central Office and regional offices, which is on no district card, is " +
     "returned as the residual.",
   "Rows with a page on the site carry url; document page references carry pdf_url, which opens the source PDF at that page.",
@@ -1241,8 +1241,8 @@ async function officeLens(env: Env, printed: string) {
       tier: o.tier,
       tier_text:
         o.tier === "A"
-          ? "Tier A · serves one district"
-          : `Tier B · shared by ${o.district_ids.length} districts, not split`,
+          ? "Lone · serves one district"
+          : `Shared by ${o.district_ids.length} districts, not split`,
       districts: o.district_ids.map((id) => ({
         id,
         label: labelOf.get(id) ?? id,
@@ -1278,7 +1278,7 @@ async function officeLens(env: Env, printed: string) {
     tier_meaning: TIER_MEANING,
     note: matched.length
       ? "These are the rows the documents print under this office. The office is associated with the districts " +
-        "listed; no row is assigned to any one of them, and a Tier B office's sums are never split between its " +
+        "listed; no row is assigned to any one of them, and a shared (tier B) office's sums are never split between its " +
         "districts. Lines in office_change (their NEP and House bill sides name different offices) and in " +
         "no_office are held out of the office's district-card figures. Money on no district card is the residual " +
         "in the districts list."
@@ -2070,7 +2070,7 @@ export async function hgabDistrict(env: Env, id: string) {
       representatives_note: REPRESENTATIVES_NOTE,
       note:
         "One district: its card, its representative, and the full history of every office that serves it. A shared " +
-        "(Tier B) office's figures are the whole office's and are not split between the districts it serves.",
+        "(tier B) office's figures are the whole office's and are not split between the districts it serves.",
     },
     disclaimers: OFFICE_VIEW,
     data: {

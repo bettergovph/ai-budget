@@ -284,7 +284,7 @@ export default function HgabDistrict() {
               <h2 id="hgab-dd-howto-title">How to read this page</h2>
               <ol>
                 <li>
-                  <strong>Every figure says whose it is.</strong> Tier A: the office serves only this district. Tier B:
+                  <strong>Every figure says whose it is.</strong> Lone: the office serves only this district. Shared:
                   it serves several, and its figure is shared, not split.
                 </li>
                 <li>
