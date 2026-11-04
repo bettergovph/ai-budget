@@ -129,6 +129,7 @@ export function docsHtml(origin: string): string {
   <h4>Getting started</h4>
   <a href="#overview">Overview</a>
   <a href="#datasets">Datasets &amp; units</a>
+  <a href="#changelog">What's new</a>
   <a href="#conventions">Conventions</a>
   <a href="#pagination">Pagination</a>
   <a href="#errors">Errors</a>
@@ -931,6 +932,104 @@ curl -X POST ${O}/mcp -H "Content-Type: application/json" \\
 <p>Tool results arrive as JSON text inside <code>result.content[0].text</code>, in the same envelopes
 the <a href="#overview">REST API</a> returns. Invalid inputs come back as a result with
 <code>isError: true</code> and a message explaining what to fix.</p>
+
+<h2 id="changelog">What's new</h2>
+<p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
+noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
+
+<h3>4 November 2026</h3>
+<ul>
+  <li><b>API docs.</b> The House bill <a href="#hgab-files">data files</a> that have no endpoint (the whole
+      bill line by line, DPWH contractors, seats by party, multi-purpose buildings) are listed here with
+      their manifests, and this changelog starts.</li>
+</ul>
+
+<h3>3 November 2026</h3>
+<ul>
+  <li><b>DPWH contractors.</b> <a href="${SITE}/hgab/2027/contractors">/hgab/2027/contractors</a>: every
+      contractor's DPWH contracts from 2016 to 2026, and which FY2020–2026 GAA lines each contract carries.
+      A page per contractor, and the data as CSV and Parquet with a <code>manifest.json</code>.</li>
+  <li><b>The House bill by party.</b> <a href="${SITE}/hgab/2027/parties">/hgab/2027/parties</a>: each
+      district's representative and May 2025 party, the DPWH budget by party across three Congresses, a
+      same-office comparison, and a page per party with every line.</li>
+  <li><b>Multi-purpose buildings.</b> Top contractors, DPWH contract links and four leaderboards on the
+      <a href="${SITE}/hgab/2027/multi-purpose">multi-purpose buildings page</a>; map marks never cover one
+      another at any zoom.</li>
+  <li><b>Citizen Reports.</b> <a href="${SITE}/citizen-reports">/citizen-reports</a>: budget analyses
+      published on other sites, in one place.</li>
+</ul>
+
+<h3>2 November 2026</h3>
+<ul>
+  <li><b>Multi-purpose buildings map.</b> <a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a>:
+      every multi-purpose building line from the FY2015 GAA to the FY2027 House bill, with repeats across
+      years, as files (<code>hgab/2027/mpb-years/</code>).</li>
+  <li><b>GAA Explorer, 2000–2026.</b> <a href="${SITE}/gaa">/gaa</a> now reaches back to FY2000 with the
+      same explorer, summary cards and source-record browser for every year.</li>
+  <li><b>Whole bill on the overview.</b> The House bill overview carries the whole bill against the NEP, not
+      only the four programs; the House bill sub-navigation is reordered.</li>
+</ul>
+
+<h3>1 November 2026</h3>
+<ul>
+  <li><b>The whole House bill, line by line.</b> <a href="${SITE}/hgab/2027/explorer">/hgab/2027/explorer</a>:
+      every appropriation line of House Bill 10858 (third reading) against the NEP, by department and
+      agency, with the NEP and House bill page on every row. Downloadable as a zip of CSVs and two Parquet
+      tables, listed in a <code>manifest.json</code> with links versioned by checksum. These pages carry an
+      "Under citizen review" banner until the review is complete.</li>
+  <li><b>Leaderboards for the whole bill.</b> Departments, agencies and budget lines, with increases and
+      cuts as separate boards, on <a href="${SITE}/hgab/2027/leaderboard">/hgab/2027/leaderboard</a>.</li>
+  <li><b>Letters.</b> A letter to a representative can copy the Speaker, the Majority Leader and the
+      Committee on Appropriations.</li>
+</ul>
+
+<h3>28–29 October 2026</h3>
+<ul>
+  <li><b>Multi-purpose buildings.</b> <a href="${SITE}/hgab/2027/multi-purpose">/hgab/2027/multi-purpose</a>:
+      DPWH multi-purpose buildings from the FY2020 GAA to the FY2027 House bill, set beside flood control,
+      DepEd school facilities and DOH health facilities, with a poster.</li>
+  <li><b>Write to your representative.</b> <a href="${SITE}/hgab/2027/letter">/hgab/2027/letter</a>: a
+      letter for every district, filled from the district's own figures.</li>
+  <li>Fix: blank NEP department pages (for example <code>/2027/d/07</code>).</li>
+</ul>
+
+<h3>26–27 October 2026</h3>
+<ul>
+  <li><b>We are not ignorant.</b> <a href="${SITE}/hgab/2027/we-are-not-ignorant">/hgab/2027/we-are-not-ignorant</a>:
+      every inserted and adjusted DPWH project in one list, with a campaign poster and link preview.</li>
+  <li><b>Districts by DPWH office.</b> Browse districts by the district engineering office that serves them;
+      district cards show the net change, a Shared label and the office tier.</li>
+  <li><b>Download CSV</b> on every program page; maps zoom and pan freely; a budget-process timeline on the
+      House bill overview; share images carry an "As of" date.</li>
+  <li><b>Disclaimers</b> on every House bill page, in every API response and in the MCP server
+      (<a href="#hgab-disclaimers">above</a>); DPWH program totals cite Volume I-C, and the Senate's copies
+      are the documents' source.</li>
+</ul>
+
+<h3>25 October 2026</h3>
+<ul>
+  <li><b>House bill FY2027.</b> <a href="${SITE}/hgab/2027">/hgab/2027</a> launches: House Bill 10858 set
+      against the NEP, project by project, for DPWH infrastructure, farm-to-market roads, health facilities
+      and irrigation, with DPWH by congressional district, leaderboards with share images, maps and an
+      intro deck.</li>
+  <li><b>API and MCP.</b> Ten <a href="#hgab-overview">House bill endpoints</a> under
+      <code>/api/v1/hgab/2027</code> and six <code>*_hgab_2027_*</code> <a href="#mcp">MCP tools</a>,
+      reading D1 tables built from the same files the pages read.</li>
+</ul>
+
+<h3>4–9 September 2026</h3>
+<ul>
+  <li><b>Budget hearings.</b> <a href="${SITE}/hearings">/hearings</a>: the House Committee on
+      Appropriations hearings with an interactive transcript and a per-topic deliberation record (who
+      said what, when, with a deep link to the video). In the API as <a href="#hearings-list">seven
+      endpoints</a> and in the MCP server as six <code>*hearing*</code> tools.</li>
+</ul>
+
+<h3>24 August 2026</h3>
+<ul>
+  <li><b>Learn and the glossary.</b> <a href="${SITE}/learn">/learn</a> explains the budget cycle with
+      visual flows; <a href="${SITE}/glossary">/glossary</a> is the full BESF glossary.</li>
+</ul>
 
 <h2>Data sources &amp; attribution</h2>
 <p>Source data is derived from Department of Budget and Management publications, packaged as the
