@@ -23,6 +23,8 @@ import {
   type NepDeptSummary, type NepNationalIndex, type NepRollupRow,
 } from '../lib/nep2027';
 import { datasetSummary } from '../lib/hgab-ui';
+import { NepBrowserGapNote } from '../components/HgabExplorerBits';
+import { explorerPath, loadExplorerIndex, shortMoney, type ExIndexRow, type NepBrowserGap } from '../lib/hgab-explorer';
 import '../nep2027.css';
 import '../hgab-links.css';
 
@@ -135,6 +137,7 @@ export default function Nep2027Department() {
           ]}
         />
 
+        <LineByLineCallout deptId={deptId} />
         <HgabCallout deptId={deptId} />
 
         <div className="nep-tabs" role="tablist">
@@ -356,6 +359,47 @@ const HGAB_DATASET_BY_DEPT: Readonly<Record<string, DatasetKey>> = {
  * published yet (or fails to parse) the card renders nothing rather than an
  * error.
  */
+/**
+ * Every department: the House bill line by line against this department's NEP new appropriations, and
+ * why this page's total is larger (automatic appropriations; agencies the bill files elsewhere).
+ * Optional context: without the explorer index, nothing renders.
+ */
+function LineByLineCallout({ deptId }: { deptId: string }) {
+  const [hit, setHit] = useState<{ id: string; gap: NepBrowserGap; row: ExIndexRow } | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadExplorerIndex()
+      .then((ix) => {
+        const gap = ix.nep_departments?.[deptId];
+        const row = gap?.explorer_id ? ix.departments.find((r) => r.id === gap.explorer_id) : undefined;
+        if (live) setHit(gap && row ? { id: deptId, gap, row } : null);
+      })
+      .catch(() => { /* optional context */ });
+    return () => { live = false; };
+  }, [deptId]);
+  if (!hit || hit.id !== deptId) return null;
+  const { gap, row } = hit;
+  const delta = row.house - row.nep;
+  return (
+    <aside className="hgab-crosslink" aria-label="The House bill, line by line">
+      <p className="hgab-crosslink-eyebrow">The House bill, line by line · new appropriations</p>
+      <p className="hgab-crosslink-figures">
+        <span><em>NEP</em><strong title={`₱${row.nep.toLocaleString()}`}>{shortMoney(row.nep)}</strong></span>
+        <span><em>House bill</em><strong title={`₱${row.house.toLocaleString()}`}>{shortMoney(row.house)}</strong></span>
+        <span className={delta >= 0 ? 'is-up' : 'is-down'}>
+          <em title="House bill minus the NEP">Change</em>
+          <strong>{delta >= 0 ? '+' : ''}{shortMoney(delta)}</strong>
+          {row.nep > 0 && <span className="hgab-crosslink-pct">{`${delta >= 0 ? '+' : '−'}${Math.abs((delta / row.nep) * 100).toFixed(1)}%`}</span>}
+        </span>
+      </p>
+      <NepBrowserGapNote gap={gap} code={deptId} billNep={row.nep} on="nep" />
+      <p className="hgab-crosslink-links">
+        <Link to={explorerPath(row.id)}>Compare every line with the House bill →</Link>
+      </p>
+    </aside>
+  );
+}
+
 function HgabCallout({ deptId }: { deptId: string }) {
   const key = HGAB_DATASET_BY_DEPT[deptId];
   // Keyed by dataset so a card for the previous group never paints over the

@@ -52,8 +52,8 @@ function Movers({ title, rows, boardId, added = false }: { title: string; rows: 
 
 export default function HgabWholeBill({ s, projects }: {
   s: ExSummary;
-  /** DPWH's insertion candidates (overview.json): the projects that moved inside its lines. */
-  projects?: { count: number; php: number } | null;
+  /** DPWH's insertion candidates (overview.json): the projects that moved inside its lines. `strict`: no NEP counterpart at all. */
+  projects?: { count: number; php: number; strict?: boolean } | null;
 }) {
   const st = s.lines.status;
   const d = s.departments;
@@ -87,7 +87,8 @@ export default function HgabWholeBill({ s, projects }: {
       {projects && (
         <p className="hgab-wb-note">
           These figures are at the level the bill’s tables print. Inside the four programs below, projects moved too:
-          DPWH alone has {projects.count.toLocaleString()} insertion candidates worth {money(projects.php)}.
+          DPWH alone has {projects.count.toLocaleString()} insertion candidates{projects.strict ? ' with no NEP counterpart' : ''},
+          {' '}worth {money(projects.php)}.
         </p>
       )}
       <div className="hgab-wb-grid">

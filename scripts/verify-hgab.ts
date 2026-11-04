@@ -697,6 +697,7 @@ async function main(): Promise<void> {
   await verifyLineDownloads(c);
   verifyLineSources();
   verifyWholeBillSummary();
+  verifyNepBrowserGap();
 
   await verifyChangesList(overview, c);
   verifyNotIgnorantPage();
@@ -938,6 +939,26 @@ function verifyLineSources(): void {
   check(`every linked PDF is in the tree (${[...docs].sort().join(", ")})`, missingPdf.length === 0, missingPdf.join(", "));
   const badPage = lines.filter((x) => [x.p, x.q].some((r) => r && !(Number.isInteger(r[1]) && r[1] >= 1))).length;
   check("every page reference has a PDF page from 1", badPage === 0, `${badPage} bad`);
+}
+
+/** index.json nep_departments: each NEP browser department total reconciles with the line-by-line NEP. */
+function verifyNepBrowserGap(): void {
+  const ix = readJson<{ departments: Array<{ id: string; nep: number; nep_dept?: string }>;
+    nep_departments?: Record<string, { all_funds_php: number; automatic_php: number; automatic: { php: number }[]; new_here_php: number;
+      elsewhere: { php: number }[]; explorer_id: string | null }> }>(resolve(OUT, "explorer", "index.json"));
+  const nd = ix.nep_departments ?? {};
+  const codes = Object.keys(nd);
+  const bad = codes.filter((k) => {
+    const r = nd[k];
+    return r.automatic_php !== r.automatic.reduce((a, x) => a + x.php, 0)
+      || r.automatic_php + r.new_here_php + r.elsewhere.reduce((a, x) => a + x.php, 0) !== r.all_funds_php;
+  });
+  check(`every NEP department's total = automatic appropriations + new appropriations kept here + agencies the bill files elsewhere (${codes.length} departments)`,
+    codes.length > 30 && bad.length === 0, bad.join(", "));
+  const linked = ix.departments.filter((d) => d.nep_dept);
+  const off = linked.filter((d) => nd[d.nep_dept!]?.explorer_id !== d.id || d.nep < nd[d.nep_dept!].new_here_php);
+  check(`each explorer department links its NEP department, and holds at least the new appropriations kept there (${linked.length})`,
+    linked.length > 30 && off.length === 0, off.map((d) => d.id).join(", "));
 }
 
 /** explorer/summary.json, the overview's whole-bill section: its figures agree with the explorer and the boards. */
@@ -2105,6 +2126,21 @@ async function verifyCandidateChanges(c: DuckDBConnection): Promise<void> {
       && T.insertions.amount_php - T.deletions.amount_php + T.increased.php - T.decreased.php + T.scope_review.net_php === T.delta_php
       && T.house.amount_php - T.nep.amount_php === T.delta_php,
     JSON.stringify(T) === JSON.stringify(want) ? "identity fails" : "totals differ from the sum of programs");
+
+  // The workbench's stricter DPWH split (its Highlights page), shown under the table: it partitions the same candidates.
+  type Trace = { insertions: { comparison_rows: number; amount_php: number }; deletions: { comparison_rows: number; amount_php: number };
+    unresolved_insertions: { comparison_rows: number; amount_php: number }; possible_replacements: { comparison_rows: number; amount_php: number };
+    untraceable: { rows: number; amount_php: number } };
+  const dp = P.find((p) => p.key === "dpwh") as (typeof P)[number] & { traceability?: Trace | null } | undefined;
+  const t = dp?.traceability;
+  check("DPWH's stricter count (no counterpart, plus held-out rows) partitions its insertion and deletion candidates",
+    !!t && !!dp
+      && t.insertions.comparison_rows + t.unresolved_insertions.comparison_rows === dp.insertions.comparison_rows
+      && t.insertions.amount_php + t.unresolved_insertions.amount_php === dp.insertions.amount_php
+      && t.deletions.comparison_rows + t.possible_replacements.comparison_rows === dp.deletions.comparison_rows
+      && t.deletions.amount_php + t.possible_replacements.amount_php === dp.deletions.amount_php
+      && t.untraceable.rows === t.unresolved_insertions.comparison_rows + t.possible_replacements.comparison_rows,
+    t ? `${t.insertions.comparison_rows} + ${t.unresolved_insertions.comparison_rows} vs ${dp?.insertions.comparison_rows}` : "missing — run npm run import:hgab");
 }
 
 // ---------------------------------------------------------------------------

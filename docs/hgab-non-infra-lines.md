@@ -240,6 +240,41 @@ each row its explorer page. A note says the figures are at the level the bill's 
 quotes DPWH's insertion candidates from `overview.json` to show projects moving inside lines.
 `verify:hgab` checks `summary.json` against `index.json` and `boards.json` (six checks).
 
+## Why the NEP browser shows a bigger department total (`index.json` `nep_departments`)
+
+The NEP browser (`/2027/d/<code>`) shows a department's money in every fund, for every agency DBM files
+under it. For DPWH it shows ₱643.95B, while the line-by-line NEP is ₱642.61B. The bill carries new
+appropriations (fund 101) only. The rest is automatic appropriations (fund 104): retirement and life
+insurance premiums, debt interest and special accounts, which no bill votes on. A few agencies are
+also filed under another department in the bill. For example, DBM files the National Anti-Poverty
+Commission and the Presidential Commission for the Urban Poor under DSWD; the bill lists them under
+Other Executive Offices.
+
+`build_explorer.py` reconciles each of the 37 section-1 NEP departments:
+
+```
+NEP browser total = automatic appropriations + new appropriations of the agencies the bill keeps there
+                    + new appropriations of the agencies it files elsewhere
+```
+
+It then puts the result in `index.json` (`nep_departments`) and on each department page
+(`nep_browser`). The live API's department totals equal `all_funds_php` for all 37.
+
+- **Explorer department page:** says why the NEP browser shows more.
+- **NEP browser department page:** a "House bill, line by line" card with new appropriations against
+  the House bill, the same explanation, and a link to every line.
+- **Checks:** `verify:hgab` checks both reconciliations.
+
+| DPWH | Amount |
+| --- | --- |
+| New appropriations (NEP Vol II-B p. 4; the workbench's "full agency new appropriations") | ₱642,612,015,000 |
+| Retirement and life insurance premiums (automatic) | ₱1,313,088,000 |
+| National Building Code Development Fund (automatic) | ₱28,173,000 |
+| NEP browser | ₱643,953,276,000 |
+
+The workbench's own tables compare DPWH projects only: ₱572.924B in the NEP and ₱587.076B in the
+House bill. They leave out ₱69.688B and ₱67.026B of administration and support.
+
 ## Proof of reference: NEP pages (`nep_pages.py`)
 
 The NEP CSV has no page numbers. The NEP volumes print the same lines in each agency's table "New

@@ -46,10 +46,18 @@ import '../nep2027.css';
 import '../hgab-districts.css';
 import '../hgab-overview.css';
 
-/** DPWH's insertion candidates, for the whole-bill section's note on projects moving inside lines. */
-function dpwhInsertions(cc: HgabCandidateChanges | null | undefined): { count: number; php: number } | null {
+/** The analysis workbench's DPWH Highlights, which lead with the stricter candidate counts. */
+const WORKBENCH_HIGHLIGHTS = 'https://csiiiv.github.io/DPWH-NEP-HB-2027-ANALYSIS/app/#highlights';
+
+/**
+ * DPWH's insertion candidates for the whole-bill section's note on projects moving inside lines: the
+ * stricter count (no NEP counterpart at all) where the overview carries it, as the workbench quotes.
+ */
+function dpwhInsertions(cc: HgabCandidateChanges | null | undefined): { count: number; php: number; strict: boolean } | null {
   const p = cc?.programs.find((x) => x.key === 'dpwh');
-  return p ? { count: p.insertions.count, php: p.insertions.amount_php } : null;
+  if (!p) return null;
+  const t = p.traceability;
+  return t ? { count: t.insertions.count, php: t.insertions.amount_php, strict: true } : { count: p.insertions.count, php: p.insertions.amount_php, strict: false };
 }
 
 export default function HgabOverview() {
@@ -588,6 +596,25 @@ function CandidateChanges({ cc, datasets, sourceUrl }: { cc: HgabCandidateChange
             <span title={fmt.php(s.house_php, { unit: 'full' })}>{money(s.house_php)}</span>.
             The net <CcAmount value={s.net_php} signed money={money} /> is kept apart from the increases and decreases.{' '}
             <Link to={groupPath(p.key, 'scope_review')}>See the {s.count.toLocaleString('en-US')} pairs →</Link>
+          </p>
+        );
+      })}
+
+      {cc.programs.filter((p) => p.traceability).map((p) => {
+        const t = p.traceability!;
+        const name = nameOf.get(p.key) ?? p.label;
+        const amt = (v: number) => <span title={fmt.php(v, { unit: 'full' })}>{money(v)}</span>;
+        return (
+          <p className="hgab-cc-scope is-traceability" key={`${p.key}-trace`}>
+            <strong>
+              Stricter count · {name}: {countOf(t.insertions.count, 'insertion candidates')} ({amt(t.insertions.amount_php)}) and{' '}
+              {countOf(t.deletions.count, 'deletion candidates')} ({amt(t.deletions.amount_php)}) have no counterpart at all.
+            </strong>{' '}
+            The other {t.unresolved_insertions.comparison_rows.toLocaleString('en-US')} House rows ({amt(t.unresolved_insertions.amount_php)}) resemble
+            an NEP project but were not paired. The other {t.possible_replacements.comparison_rows.toLocaleString('en-US')} NEP rows
+            ({amt(t.possible_replacements.amount_php)}) may have been renamed in the House bill.{' '}
+            <a href={WORKBENCH_HIGHLIGHTS} target="_blank" rel="noopener noreferrer">The workbench’s Highlights page</a> leads with these
+            stricter figures.
           </p>
         );
       })}

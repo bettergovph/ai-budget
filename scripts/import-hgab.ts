@@ -332,6 +332,22 @@ interface CandidateProgram {
   };
   scope_review: { count: number; nep_php: number; house_php: number; net_php: number; note: string } | null;
   delta_php: number;
+  /**
+   * DPWH only: the workbench's stricter split (its Highlights page). Of the insertion and deletion
+   * candidates, the "validated" ones have no counterpart at all; the rest are held out because a
+   * title on the other side resembles them (possibly re-titled), so they cannot be traced line to line.
+   */
+  traceability?: CandidateTraceability | null;
+}
+interface CandidateTraceability {
+  source_file: string; source_sha256: string;
+  insertions: { count: number; comparison_rows: number; amount_php: number };
+  deletions: { count: number; comparison_rows: number; amount_php: number };
+  /** House rows that resemble an NEP project but were not paired. */
+  unresolved_insertions: { comparison_rows: number; amount_php: number };
+  /** NEP rows named by unmatched House rows as possible re-titled replacements. */
+  possible_replacements: { comparison_rows: number; amount_php: number };
+  untraceable: { rows: number; amount_php: number };
 }
 interface CandidateChanges {
   source_file: string; source_sha256: string; source_built_at: string; direction: string;
@@ -346,6 +362,41 @@ interface CandidateChanges {
     house: { count: number; amount_php: number }; nep: { count: number; amount_php: number };
     delta_php: number;
   };
+}
+
+/** The workbench's validated / held-out split of DPWH's candidates (comparison_overview_2027.json `highlights`). */
+function dpwhTraceability(src: string, p: CandidateProgram): CandidateTraceability {
+  const file = "analysis/data/comparison_overview_2027.json";
+  const path = resolve(src, file);
+  type Pop = { comparison_rows: number; records?: number; amount_php: number };
+  const h = readJson<{ highlights: {
+    changes: { insertions: Pop; deletions: Pop };
+    insertion_split: { no_suggestion: Pop; unresolved: Pop };
+    deletion_split: { no_suggestion: Pop; suggested: Pop };
+    traceability: { rows: number; amount_php: number };
+  } }>(path).highlights;
+  const t: CandidateTraceability = {
+    source_file: file, source_sha256: sha256(path),
+    insertions: { count: h.changes.insertions.records ?? h.changes.insertions.comparison_rows, comparison_rows: h.changes.insertions.comparison_rows, amount_php: h.changes.insertions.amount_php },
+    deletions: { count: h.changes.deletions.records ?? h.changes.deletions.comparison_rows, comparison_rows: h.changes.deletions.comparison_rows, amount_php: h.changes.deletions.amount_php },
+    unresolved_insertions: { comparison_rows: h.insertion_split.unresolved.comparison_rows, amount_php: h.insertion_split.unresolved.amount_php },
+    possible_replacements: { comparison_rows: h.deletion_split.suggested.comparison_rows, amount_php: h.deletion_split.suggested.amount_php },
+    untraceable: { rows: h.traceability.rows, amount_php: h.traceability.amount_php },
+  };
+  // The split must partition the same candidates as the overview's table.
+  const checks: Array<[string, number, number | null]> = [
+    ["validated insertions = no-counterpart split", t.insertions.comparison_rows, h.insertion_split.no_suggestion.comparison_rows],
+    ["validated + unresolved insertion rows = insertion rows", t.insertions.comparison_rows + t.unresolved_insertions.comparison_rows, p.insertions.comparison_rows],
+    ["validated + unresolved insertion PHP = insertion PHP", t.insertions.amount_php + t.unresolved_insertions.amount_php, p.insertions.amount_php],
+    ["validated deletions = no-counterpart split", t.deletions.comparison_rows, h.deletion_split.no_suggestion.comparison_rows],
+    ["validated + possible-replacement deletion rows = deletion rows", t.deletions.comparison_rows + t.possible_replacements.comparison_rows, p.deletions.comparison_rows],
+    ["validated + possible-replacement deletion PHP = deletion PHP", t.deletions.amount_php + t.possible_replacements.amount_php, p.deletions.amount_php],
+    ["untraceable = unresolved + possible replacements", t.untraceable.rows, t.unresolved_insertions.comparison_rows + t.possible_replacements.comparison_rows],
+    ["untraceable PHP = unresolved + possible replacements", t.untraceable.amount_php, t.unresolved_insertions.amount_php + t.possible_replacements.amount_php],
+  ];
+  const bad = checks.filter(([, x, y]) => x !== y);
+  ensure(bad.length === 0, `dpwh traceability split differs: ${bad.map(([n, x, y]) => `${n} (${x} vs ${y})`).join("; ")}`);
+  return t;
 }
 
 function candidateChanges(src: string, built: Partial<Record<DatasetKey, { meta: HgabDatasetMeta }>>, keys: readonly DatasetKey[]): CandidateChanges {
@@ -414,6 +465,7 @@ function candidateChanges(src: string, built: Partial<Record<DatasetKey, { meta:
     ];
     const bad = checks.filter(([, x, y]) => x !== y);
     ensure(bad.length === 0, `${key} candidate changes differ: ${bad.map(([n, x, y]) => `${n} (${x} vs ${y})`).join("; ")}`);
+    if (key === "dpwh") p.traceability = dpwhTraceability(src, p);
     const ints = [
       p.sources.nep.count, p.sources.nep.amount_php, p.sources.house.count, p.sources.house.amount_php,
       ...[p.insertions, p.deletions, p.unchanged].flatMap((x) => [x.count, x.amount_php]),
