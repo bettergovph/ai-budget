@@ -1,0 +1,191 @@
+/* ₱1 trillion in red flags (/hgab/2027/1T-redflags): .hgab-rf-* only.
+   The groups take the campaign poster's colours (the patronage red, the political offices in ink, infrastructure in
+   a deep red, unprogrammed appropriations hatched), and so do changes: red for more in the House bill, blue for less.
+   Everything else is the section's usual furniture: the NEP table, the details box, the disclaimer. */
+
+.hgab-rf-main {
+  padding-top: 8px;
+  --rf-patronage: #d62828;
+  --rf-political: var(--ink);
+  --rf-infrastructure: #7a1414;
+  --rf-up: #c8102e;
+  --rf-down: var(--accent);
+  --rf-hatch: repeating-linear-gradient(135deg, rgba(122, 20, 20, 0.78) 0 3px, var(--paper) 3px 6px);
+}
+.hgab-rf-section { margin-top: 36px; }
+.hgab-rf-section:first-child { margin-top: 24px; }
+.hgab-rf-h2 {
+  margin: 0 0 4px;
+  font-family: var(--font-hero);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.hgab-rf-dek { margin: 0 0 12px; color: var(--ink-3); font-size: 14px; max-width: 76ch; }
+.hgab-rf-small { margin: 8px 0 0; color: var(--ink-3); font-size: 12.5px; max-width: 90ch; }
+
+.hgab-rf-up { color: var(--rf-up); }
+.hgab-rf-down { color: var(--rf-down); }
+.hgab-rf-same { color: var(--ink-mute); }
+
+/* --- the two bars ---------------------------------------------------------- */
+
+.hgab-rf-bars { margin: 16px 0 14px; max-width: 980px; }
+.hgab-rf-bars-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: 32px 20px;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+  padding-top: 24px;
+}
+.hgab-rf-bars-lab {
+  grid-column: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hgab-rf-bars-lab.is-house, .hgab-rf-bars-tot.is-house { grid-row: 1; }
+.hgab-rf-bars-lab.is-nep, .hgab-rf-bars-tot.is-nep { grid-row: 2; }
+.hgab-rf-tracks { grid-column: 2; grid-row: 1 / span 2; position: relative; align-self: stretch; }
+.hgab-rf-track { position: absolute; left: 0; right: 0; display: flex; }
+.hgab-rf-track.is-house { top: 0; height: 32px; }
+.hgab-rf-track.is-nep { bottom: 0; height: 20px; opacity: 0.55; }
+.hgab-rf-seg { height: 100%; border-right: 2px solid var(--paper); }
+.hgab-rf-seg:last-child { border-right: 0; }
+.hgab-rf-seg.is-patronage, .hgab-rf-swatch.is-patronage { background: var(--rf-patronage); }
+.hgab-rf-seg.is-political, .hgab-rf-swatch.is-political { background: var(--rf-political); }
+.hgab-rf-seg.is-infrastructure, .hgab-rf-swatch.is-infrastructure { background: var(--rf-infrastructure); }
+.hgab-rf-seg.is-unprogrammed, .hgab-rf-swatch.is-unprogrammed { background: var(--rf-hatch); box-shadow: inset 0 0 0 1.5px rgba(122, 20, 20, 0.78); }
+.hgab-rf-tline { position: absolute; top: -24px; bottom: -6px; width: 0; border-left: 2px dashed var(--ink); }
+.hgab-rf-tline span {
+  position: absolute;
+  top: -2px;
+  right: 6px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.hgab-rf-bars-tot {
+  grid-column: 3;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.hgab-rf-bars-tot.is-house { font-size: 19px; color: var(--rf-up); }
+.hgab-rf-bars-tot.is-nep { font-size: 14px; font-weight: 600; color: var(--ink-3); }
+.hgab-rf-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.hgab-rf-key b { font-family: var(--font-mono); font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hgab-rf-key li > span:last-child { font-family: var(--font-mono); font-size: 12px; }
+.hgab-rf-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; }
+
+/* --- the table --------------------------------------------------------------- */
+
+.hgab-rf-table { min-width: 760px; }
+.hgab-rf-table thead th { position: static; }
+.hgab-rf-name { color: var(--ink); max-width: 46ch; }
+.hgab-rf-name sup a { margin-left: 2px; font-size: 10px; color: var(--accent-deep); text-decoration: none; }
+.hgab-rf-house { font-weight: 600; color: var(--ink); }
+.hgab-rf-new {
+  margin-left: 8px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--rf-patronage);
+  border-radius: 2px;
+  vertical-align: 1px;
+}
+.hgab-rf-group th {
+  padding-top: 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
+/* On a phone the table scrolls sideways; the group's name and meaning stay in view and wrap to the screen. */
+.hgab-rf-group-in { position: sticky; left: 12px; max-width: min(100%, calc(100vw - 56px)); }
+.hgab-rf-group-name {
+  display: inline-block;
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--rf-group, var(--ink));
+}
+.hgab-rf-group.is-patronage { --rf-group: var(--rf-patronage); }
+.hgab-rf-group.is-political { --rf-group: var(--rf-political); }
+.hgab-rf-group.is-infrastructure { --rf-group: var(--rf-infrastructure); }
+.hgab-rf-group.is-unprogrammed .hgab-rf-group-name { color: var(--rf-infrastructure); background: var(--paper); box-shadow: inset 0 0 0 1.5px rgba(122, 20, 20, 0.78); }
+.hgab-rf-group-plain {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-3);
+}
+.hgab-rf-table tr:hover .hgab-rf-group-plain { color: var(--ink-3); }
+.hgab-rf-subtotal td { font-weight: 600; color: var(--ink-2); background: var(--paper-2); }
+.hgab-rf-total td { font-weight: 700; color: var(--ink); background: var(--paper-3); border-top: 1px solid var(--rule); }
+.hgab-rf-total.is-all td { font-size: 14px; background: #fdecec; border-top: 2px solid var(--rf-patronage); }
+.hgab-rf-chk { font-size: 12.5px; color: var(--accent-deep); white-space: nowrap; }
+.hgab-rf-chk.is-match::before { content: '✓ '; color: var(--positive); font-weight: 700; }
+.hgab-rf-chk.is-pbc { color: var(--ink-mute); }
+.hgab-rf-notes { margin: 12px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--ink-2); max-width: 100ch; }
+.hgab-rf-notes li + li { margin-top: 4px; }
+.hgab-rf-notes li:target { background: var(--accent-soft); }
+
+/* --- the poster ---------------------------------------------------------------- */
+
+.hgab-rf-poster-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px 28px; }
+.hgab-rf-poster { display: block; flex: 0 1 380px; border: 1px solid var(--rule); line-height: 0; }
+.hgab-rf-poster img { display: block; width: 100%; height: auto; }
+.hgab-rf-downloads { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.hgab-rf-downloads li { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule-soft); }
+.hgab-rf-downloads a { color: var(--accent-deep); font-weight: 600; }
+.hgab-rf-downloads span { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-mute); }
+
+/* --- sources ---------------------------------------------------------------------- */
+
+.hgab-rf-sources { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); max-width: 100ch; }
+.hgab-rf-sources li + li { margin-top: 4px; }
+.hgab-rf-sources a { color: var(--accent-deep); }
+.hgab-rf-section .hgab-details p { font-size: 13px; color: var(--ink-2); max-width: 100ch; }
+.hgab-rf-exact { min-width: 560px; margin: 8px 0 12px; }
+.hgab-rf-exact thead th { position: static; }
+.hgab-rf-exact a { color: var(--accent-deep); }
+.hgab-rf-notice { margin-top: 40px; }
+
+@media (max-width: 640px) {
+  .hgab-rf-bars-grid { column-gap: 8px; }
+  .hgab-rf-bars-tot.is-house { font-size: 15px; }
+  .hgab-rf-bars-tot.is-nep { font-size: 12px; }
+  .hgab-rf-tline span { font-size: 10px; }
+}

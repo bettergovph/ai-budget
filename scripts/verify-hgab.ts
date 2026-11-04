@@ -133,6 +133,7 @@ import {
   DISTRICT_BASES, LOCATION_BASES, LOCATION_REVIEWS, LOCATIONS_SCHEMA, type LocatedCell, type LocationsData,
 } from "../src/lib/hgab-locations";
 import { PLACED_KIND_ROWS, kindPhp, placedNet, placedTotals, sortPlaced } from "../src/lib/hgab-placed";
+import { verifyRedFlags } from "./verify-hgab-redflags";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -717,6 +718,7 @@ async function main(): Promise<void> {
   verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
   await verifyParties(c, check, { out: OUT, words, readerCopyHits });
   await verifyLocations(overview, c);
+  verifyRedFlags(check, { out: OUT, words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 

@@ -21,6 +21,7 @@ import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
+import { PBC_REPORT, RED_FLAGS_ROOT, RED_FLAG_POSTERS, RED_FLAG_TOTALS, pbcBillionsWords } from "./hgab-redflags";
 
 export interface PageMeta {
   title: string;
@@ -302,6 +303,22 @@ export function pageMeta(pathname: string): PageMeta {
       imageWidth: "1200",
       imageHeight: "630",
       imageAlt: "WE ARE NOT IGNORANT: 7,465 inserted and adjusted projects in the 2027 House budget bill, over the list of the projects themselves.",
+    };
+  }
+  // ₱1 trillion in red flags (PBC's red-flag basket): before the dataset pattern. Any letter case, as the address has capitals.
+  if (p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase()) {
+    const og = RED_FLAG_POSTERS.find((x) => x.key === "og")!;
+    return {
+      title: `₱1 Trillion in Red Flags: the People’s Budget Coalition’s Basket in the 2027 House Bill · ${SITE}`,
+      description:
+        `The budget lines the ${PBC_REPORT.by} calls red flags, from aid open to patronage to DPWH's public works, come to ` +
+        `${pbcBillionsWords(RED_FLAG_TOTALS.all.house)} in House Bill 10858, against ${pbcBillionsWords(RED_FLAG_TOTALS.all.nep)} in the NEP. ` +
+        "Every line, checked against the House bill, with the poster to share.",
+      // The poster's link-preview size (npm run build:hgab-poster-redflags, published with upload:hgab); ?v= is its MD5.
+      image: `https://budget-assets.bettergov.ph/hgab/2027/campaign/${og.file}?v=${og.v}`,
+      imageWidth: String(og.width),
+      imageHeight: String(og.height),
+      imageAlt: `₱1 trillion in red flags: ${pbcBillionsWords(RED_FLAG_TOTALS.all.house)} in the 2027 House bill, past ₱1 trillion, against ${pbcBillionsWords(RED_FLAG_TOTALS.all.nep)} in the NEP.`,
     };
   }
   // Write to your representative: before the dataset pattern, which would read "letter" as a program key.

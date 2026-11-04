@@ -29,9 +29,11 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
+import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+  DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS, OFFICE_VIEW_DISCLAIMERS,
+  type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
@@ -41,7 +43,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
 
 /**
  * The section's sub-nav, left to right (Jason's order, 2026-11-02): Overview (the landing page, where `/hgab` and
- * `/hgab/2027` redirect), Line by line (the whole-bill explorer) and Leaderboards; then the dropdowns Districts, the
+ * `/hgab/2027` redirect), Line by line (the whole-bill explorer), Red Flags (PBC's red-flag basket; Jason, 2026-11-04:
+ * "add a link 'Red Flags' after Line by Line") and Leaderboards; then the dropdowns Districts, the
  * four programs and Multi-purpose buildings; Write a letter; and About (Sources, Methodology). The story-style
  * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
  * entries out for now, keeping their pages at their addresses.
@@ -53,6 +56,8 @@ const LEAD_LINKS: readonly NavLink[] = [
     match: (p) => p === HGAB_ROOT || p === '/hgab' || p === `${HGAB_ROOT}/overview`,
   },
   { to: `${HGAB_ROOT}/explorer`, label: 'Line by line' },
+  // Its address has a capital; the page answers in any letter case, and so does the tab.
+  { to: RED_FLAGS_ROOT, label: 'Red Flags', match: (p) => p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase() },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
 ];
 const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
@@ -91,7 +96,7 @@ const ABOUT_MENU: NavMenu = {
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active (`aria-current="page"`). A
  * record page (`/hgab/2027/dpwh/p/…`) counts as its dataset's tab. On
- * desktop the eleven entries sit on one row inside the navy band; on mobile
+ * desktop the twelve entries sit on one row inside the navy band; on mobile
  * the band scrolls horizontally (site-header.css) and the drawer repeats the
  * links, in the same order, under an "FY2027 HGAB" eyebrow.
  */
@@ -609,11 +614,14 @@ export function DisclaimerNotice({
   mpb = false,
   parties = false,
   placements = false,
+  redFlags = false,
   heading,
   className = '',
 }: {
   compact?: boolean;
   offices?: boolean;
+  /** The red-flag page: whose basket it is and what a red flag is, then "No allegations". */
+  redFlags?: boolean;
   /** The page by party: the office disclaimers, then the parties one. */
   parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
@@ -627,6 +635,7 @@ export function DisclaimerNotice({
 }) {
   const list = placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
     : parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
+    : redFlags ? [DISCLAIMER_RED_FLAGS, ...COMPARISON_DISCLAIMERS]
     : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];

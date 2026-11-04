@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { pageMeta } from './lib/seo';
+import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 
 const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
@@ -34,6 +35,7 @@ const HgabMpbYears = lazy(() => import('./pages/HgabMpbYears'));
 const HgabContractors = lazy(() => import('./pages/HgabContractors'));
 const HgabParties = lazy(() => import('./pages/HgabParties'));
 const HgabParty = lazy(() => import('./pages/HgabParty'));
+const HgabRedFlags = lazy(() => import('./pages/HgabRedFlags'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -134,6 +136,8 @@ export default function App() {
           <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
           <Route path="/hgab/2027/contractors" element={<HgabContractors />} />
           <Route path="/hgab/2027/contractors/:key" element={<HgabContractors />} />
+          {/* ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page. */}
+          <Route path={RED_FLAGS_ROOT} element={<HgabRedFlags />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
           {/* A static page published with the data and served by the Worker: load it from the server. */}
           <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />
