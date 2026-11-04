@@ -143,7 +143,7 @@ function YearContents({ coverage: c }: { coverage: GaaCoverage }) {
       </aside>
       <div className="gaa-downloads">
         <a href={dataUrl(`gaa-explorer/${c.file}`)} download>
-          Download FY {c.year} Parquet{c.source_year ? ' (empty facts)' : ''}
+          Download the FY {c.year} dataset{c.source_year ? ' (empty: reenacted budget)' : ''}
         </a>
         <a href={dataUrl('gaa-explorer/coverage.md')}>Coverage notes</a>
         {c.year >= 2020 && (
@@ -361,7 +361,7 @@ export function RecordTable({
       <p role="alert">
         Source records could not be loaded. {error}{' '}
         <button onClick={() => window.location.reload()}>Retry</button> You can
-        also download this year's Parquet above.
+        also download this year's dataset above.
       </p>
     );
   if (!rows)
