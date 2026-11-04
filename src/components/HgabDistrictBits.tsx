@@ -31,10 +31,13 @@ import {
   ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
   cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
   districtLabel, districtRegionKey, dpwhOfficeName, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
-  officeProjectsHref, officeTierBadgeText, officeTierText, regionNames, repName, residualMostlyOffCards,
-  residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, type HistorySlot,
+  officeProjectsHref, officeTierBadgeText, officeTierText, officesFy27, regionNames, repName, residualMostlyOffCards,
+  residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, yearAmount, type HistorySlot,
+  type OfficeGroup,
 } from '../lib/hgab-districts';
 import { DeoBadges, HgabDetails, SignedPhp } from './HgabBits';
+import { placedListHref } from '../lib/hgab-placed';
+import { displayName } from '../lib/hgab-leaderboard';
 import '../hgab-districts.css';
 
 // ---------------------------------------------------------------------------
@@ -856,6 +859,16 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           <SharedLabel ids={coServed} index={index} />
         </p>
       )}
+      {undivided && (
+        <p className="hgab-dc-own">
+          <Link
+            to={placedListHref(districtAnchor(card.id))}
+            title={`The 2027 DPWH projects placed in ${card.label}, each counted once: the district’s own figures, not its office’s shared total`}
+          >
+            This district’s own projects →
+          </Link>
+        </p>
+      )}
       {!undivided && offices.length > 1 && (
         <p className="hgab-dc-undivided is-sum">Total of {offices.length} DPWH offices</p>
       )}
@@ -925,6 +938,196 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
         {!ambiguous && rep?.juris_url && (
           <a className="hgab-cta hgab-cta-quiet" href={rep.juris_url} target="_blank" rel="noopener noreferrer" title="Bills and profile on bills.juris.ph">More Info ↗</a>
         )}
+      </footer>
+    </article>
+  );
+});
+
+/** "Caloocan City, 1st District" → "Caloocan City 1st"; "Pasay City, Lone District" → "Pasay City (lone)". */
+function shortDistrictLabel(d: Pick<DistrictCard, 'jurisdiction' | 'district_label'>): string {
+  const n = d.district_label.replace(/\s*District$/i, '');
+  return /^lone$/i.test(n) ? `${d.jurisdiction} (lone)` : `${d.jurisdiction} ${n}`;
+}
+
+/** "Oscar Malapitan" → "OM"; quoted nicknames are skipped. */
+function initialsOf(name: string): string {
+  return name.replace(/[“”"][^“”"]*[“”"]/g, '').split(/\s+/).filter((w) => /^\p{Lu}/u.test(w)).slice(0, 2).map((w) => w[0]).join('') || '?';
+}
+
+/** A sum over offices that is null, never 0, when no office has a figure. */
+function officesSum(offices: readonly OfficeHistory[], fy: number, stage: 'gaa' | 'nep' | 'hgab3'): number | null {
+  let sum: number | null = null;
+  for (const o of offices) {
+    const v = yearAmount(o, fy, stage);
+    if (v != null) sum = (sum ?? 0) + v;
+  }
+  return sum;
+}
+
+/**
+ * One shared DPWH office in the list (Tier B): the office as the headline,
+ * every legislative district it serves with the representative who holds the
+ * seat, and the office's figures once, undivided. Replaces the identical
+ * district cards a shared office used to repeat. Each district row keeps its
+ * `#d-…` address (the sidebar and "Back to the card" land on it), its page,
+ * and the link to its own placed projects. Nothing here says a representative
+ * requested or controls the office's projects.
+ */
+export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, cards, matched, index, level = 3 }: {
+  group: OfficeGroup;
+  /** Every district the office serves, by label. */
+  cards: readonly DistrictCard[];
+  /** The districts the filters kept. */
+  matched: readonly string[];
+  index: HgabDistrictIndex;
+  level?: 3 | 4 | 5;
+}) {
+  const offices = group.offices;
+  const many = offices.length > 1;
+  const max = Math.max(0, ...offices.flatMap((o) => historySlots(o).map((s) => s.php ?? 0)));
+  const fy27 = officesFy27(offices);
+  const hid = `hgab-dc-${group.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const Heading = level === 5 ? 'h5' : level === 4 ? 'h4' : 'h3';
+  const regionKey = group.region;
+  const n = cards.length;
+  const filtered = matched.length > 0 && matched.length < n;
+  const gaa2026 = officesSum(offices, 2026, 'gaa');
+  const nep2027 = officesSum(offices, 2027, 'nep');
+  const hgab2027 = officesSum(offices, 2027, 'hgab3');
+
+  return (
+    <article className="hgab-dc is-shared" data-attribution="B" data-office={group.id} aria-labelledby={hid}>
+      <header className="hgab-dc-head">
+        <div className="hgab-dc-title">
+          <p className="hgab-dc-eyebrow">
+            <span>{regionKey === 'other' ? 'Region not recorded' : regionNames(regionKey).name}</span>
+            <AttributionBadge attribution="B" />
+          </p>
+          <Heading className="hgab-dc-district hgab-dc-office" id={hid} tabIndex={-1} title={many ? `${offices.length} DPWH district engineering offices, shown together` : `${offices[0]?.name}: a DPWH district engineering office (DEO)`}>
+            {dpwhOfficeName(group.name)}
+          </Heading>
+          <p className="hgab-dc-serves">
+            {many ? 'These offices serve' : 'Serves'} {n} legislative districts. {many ? 'Their' : 'Its'} figures are the whole
+            {many ? ' offices’' : ' office’s'}: shared, not split.
+            {filtered && <span className="hgab-dc-matched"> {matched.length} of the {n} match your filters.</span>}
+          </p>
+        </div>
+      </header>
+
+      <ul className="hgab-dc-members" aria-label={`Legislative districts ${many ? 'these offices serve' : 'this office serves'}, and their representatives`}>
+        {cards.map((d) => {
+          const rep = d.representative;
+          const ambiguous = rep?.status === 'ambiguous';
+          const anchor = districtAnchor(d.id);
+          const who = !rep ? 'No representative found' : ambiguous ? `${(rep.candidates ?? []).length || 'Several'} members listed` : displayName(rep.name);
+          return (
+            <li
+              key={d.id}
+              className={`hgab-dc-member${filtered && !matched.includes(d.id) ? ' is-unmatched' : ''}`}
+              id={anchor}
+              data-anchor={anchor}
+              tabIndex={-1}
+            >
+              <span className="hgab-dc-face" aria-hidden="true">
+                <span className="hgab-dc-face-initials">{ambiguous ? '2' : initialsOf(who)}</span>
+                {!ambiguous && rep?.portrait_url && (
+                  <img src={rep.portrait_url} alt="" loading="lazy" width={34} height={34} onError={(e) => e.currentTarget.remove()} />
+                )}
+              </span>
+              <span className="hgab-dc-member-body">
+                <Link className="hgab-dc-member-district" to={districtPath(d.id)} title={`${d.label}: ${repName(rep)}`}>
+                  {shortDistrictLabel(d)}
+                </Link>
+                <span
+                  className="hgab-dc-member-rep"
+                  title={ambiguous ? `congress.gov.ph lists more than one member for this seat (${repName(rep)}). This page picks neither.` : undefined}
+                >
+                  {who}
+                </span>
+                {many && (
+                  <span className="hgab-dc-member-deo">
+                    <DeoBadges offices={cardOffices(d, index).map((o) => o.name)} jurisdiction={d.jurisdiction} />
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="hgab-dc-ownline">
+        <span>Each district’s own projects:</span>{' '}
+        {cards.map((d, i) => (
+          <span key={d.id}>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            <Link
+              to={placedListHref(districtAnchor(d.id))}
+              title={`The 2027 DPWH projects placed in ${d.label}, each counted once: the district’s own figures, not its office’s shared total`}
+            >
+              {shortDistrictLabel(d)}
+            </Link>
+          </span>
+        ))}
+      </p>
+
+      <CardTabs
+        label={`${dpwhOfficeName(group.name)}: 2027 comparison or budget history`}
+        tabs={[
+          {
+            key: 'fy2027',
+            label: '2027: NEP vs House bill',
+            panel: (
+              <div className="hgab-dc-fy27">
+                {offices.map((o) => <OfficeBridgePanel key={o.id} office={o} withName={many} />)}
+              </div>
+            ),
+          },
+          {
+            key: 'history',
+            label: 'History',
+            panel: (
+              <div className="hgab-dc-history">
+                {offices.map((o, i) => (
+                  <div className="hgab-dc-chartrow" key={o.id}>
+                    <div className="hgab-dc-chartrow-head">
+                      <span title={dpwhOfficeName(o.name)}>{dpwhOfficeName(o.name)}{many ? ` · office ${i + 1} of ${offices.length}` : ''}</span>
+                      <TierBadge tier={o.tier} sharedWith={Math.max(0, o.district_ids.length - 1)} compact />
+                    </div>
+                    <HistoryChart office={o} max={max || undefined} />
+                  </div>
+                ))}
+                <dl className="hgab-dc-figures">
+                  <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office${many ? 's' : ''}.`}>2026 enacted</dt><dd><Figure v={gaa2026} /></dd></div>
+                  <div>
+                    <dt title={`${FISCAL_STAGE_LONG.nep} Whole office${many ? 's' : ''}; not the figure the 2027 tab compares.`}>2027 NEP</dt>
+                    <dd><Figure v={nep2027} /></dd>
+                  </div>
+                  <div>
+                    <dt title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</dt>
+                    <dd>
+                      <Figure v={hgab2027} />
+                      {fy27.delta_php != null && (
+                        <span
+                          className="hgab-delta-line"
+                          title={`House bill (third reading) against the NEP, same named projects: NEP ${fmt.php(fy27.nep_php, { unit: 'full' })} → House bill ${fmt.php(fy27.hgab3_php, { unit: 'full' })}`}
+                        >
+                          <SignedPhp value={fy27.delta_php} /> <span className="hgab-delta">vs the NEP, same projects</span>
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      <footer className="hgab-card-ctas">
+        {offices.map((o) => (
+          <Link key={o.id} className="hgab-cta" to={officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
+            Projects{many ? ` · ${o.name}` : ''}
+          </Link>
+        ))}
       </footer>
     </article>
   );

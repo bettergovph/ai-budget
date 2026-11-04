@@ -932,6 +932,69 @@ export function groupOfficeSectionsByRegion(sections: readonly OfficeSection[]):
 }
 
 // ---------------------------------------------------------------------------
+// The list's cards: a district on its own, or a shared office with all its districts
+// ---------------------------------------------------------------------------
+
+/**
+ * One card in the list. A district whose office group serves it alone
+ * (Tier A, or no office) is a card of its own. A shared (Tier B) group is
+ * one card for the whole office, listing every legislative district it
+ * serves with its representative, so the office's undivided figures appear
+ * once instead of on every district's card.
+ */
+export type ListUnit =
+  | { kind: 'district'; key: string; card: DistrictCard }
+  | {
+      kind: 'shared';
+      key: string;
+      group: OfficeGroup;
+      /** Every district the group serves, by label, whether or not the filters kept it. */
+      cards: DistrictCard[];
+      /** The districts the filters kept, so the card can say how many matched. */
+      matched: string[];
+    };
+
+/**
+ * The list's cards in the order of `ordered` (the filtered, sorted
+ * districts): a shared group takes the place of its first district there,
+ * so sorting by a figure keeps its rank and sorting by name puts it at its
+ * first district.
+ */
+export function listUnits(ordered: readonly DistrictCard[], index: HgabDistrictIndex): ListUnit[] {
+  const og = officeGroups(index);
+  const byId = new Map(index.districts.map((d) => [d.id, d] as const));
+  const matched = new Map<string, string[]>();
+  for (const c of ordered) {
+    const g = og.byDistrict.get(c.id);
+    if (g?.tier === 'B') matched.set(g.id, [...(matched.get(g.id) ?? []), c.id]);
+  }
+  const out: ListUnit[] = [];
+  const seen = new Set<string>();
+  for (const c of ordered) {
+    const g = og.byDistrict.get(c.id);
+    if (g?.tier !== 'B') {
+      out.push({ kind: 'district', key: c.id, card: c });
+      continue;
+    }
+    if (seen.has(g.id)) continue;
+    seen.add(g.id);
+    const cards = g.district_ids.map((id) => byId.get(id)).filter((d): d is DistrictCard => d != null);
+    out.push({ kind: 'shared', key: g.id, group: g, cards, matched: matched.get(g.id) ?? [] });
+  }
+  return out;
+}
+
+/** The districts a card lists: one, or every district a shared office serves. */
+export function unitDistricts(u: ListUnit): DistrictCard[] {
+  return u.kind === 'district' ? [u.card] : u.cards;
+}
+
+/** True when the card lists this district. */
+export function unitHas(u: ListUnit, districtId: string): boolean {
+  return u.kind === 'district' ? u.card.id === districtId : u.cards.some((c) => c.id === districtId);
+}
+
+// ---------------------------------------------------------------------------
 // The list's addresses: `?view=list`, `#region-<key>`, `#d-<district>`
 // ---------------------------------------------------------------------------
 
@@ -979,6 +1042,8 @@ export interface SidebarDistrict {
   shared: boolean;
   /** No office found, so no figure. */
   none: boolean;
+  /** The figure is the House bill amount of the lines placed in the district (the placed list), not its office's. */
+  placed?: boolean;
   /** The DPWH office names serving it, for the small "1st DEO" badge (district mode, when the index is given). */
   offices?: string[];
   /** The district's province or city, which the badge drops from a matching office name. */

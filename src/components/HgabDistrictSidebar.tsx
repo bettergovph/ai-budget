@@ -23,6 +23,8 @@
  * Figures beside each district are the card's 2027 House bill amount: the
  * office's named projects, undivided. "Shared" marks an office that serves
  * other districts too (Tier B or mixed), so its total is not the district's.
+ * On the placed list (`?view=list-legislative`, `figure="placed"`) they are
+ * the House bill amount of the projects placed in the district, its own.
  *
  * "Browse by: District · Office" (`by=office`) puts each region's districts
  * under the office group that serves them (`officeGroups`): the office's name,
@@ -98,12 +100,14 @@ export interface DistrictSidebarProps {
   activeOffice?: string | null;
   /** List: filter the cards to an office group and scroll to them. */
   onOffice?: (office: SidebarOffice) => void;
+  /** What the figures are: the office's 2027 House bill amount (the default), or the lines placed in each district. */
+  figure?: 'office' | 'placed';
 }
 
 export default function DistrictSidebar(props: DistrictSidebarProps) {
   const {
     mode, regions, regionSize, query, onQuery, onCommit, selectedId, focusRegion, narrowed = false, track, onRegion, onDistrict,
-    by = 'district', onBy, activeOffice = null, onOffice,
+    by = 'district', onBy, activeOffice = null, onOffice, figure = 'office',
   } = props;
   const wide = useWide();
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
@@ -359,7 +363,11 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
           onKeyDown={(e) => { if (e.key === 'Enter') onCommit?.(); }}
         />
       </label>
-      {byOffice ? (
+      {figure === 'placed' ? (
+        <p className="hgab-dsb-key">
+          Beside each legislative district: the 2027 House bill amount of the DPWH projects placed in it.
+        </p>
+      ) : byOffice ? (
         <p className="hgab-dsb-key">
           Each region lists its DPWH district engineering offices (DEOs) and the legislative districts each serves.
           Amounts are the office’s 2027 House bill total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
@@ -554,6 +562,15 @@ const Tree = memo(function Tree({
 });
 
 function Amount({ d }: { d: SidebarDistrict }) {
+  if (d.placed) {
+    return (
+      <span className="hgab-dsb-amt">
+        {d.hgab3_php == null
+          ? <span className="is-none" title="No 2027 DPWH project is placed in this district">none placed</span>
+          : <span title={`2027 House bill, the DPWH projects placed here: ${fmt.php(d.hgab3_php, { unit: 'full' })}`}>{fmt.php(d.hgab3_php)}</span>}
+      </span>
+    );
+  }
   if (d.none) return <span className="hgab-dsb-amt is-none" title="No district engineering office found, so no figure">no office</span>;
   return (
     <span className="hgab-dsb-amt">

@@ -27,6 +27,7 @@
     "build:hgab-contractors": "bash scripts/dpwh-contracts/run.sh",
     "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
     "build:hgab-parties": "NODE_NO_WARNINGS=1 tsx scripts/build-hgab-parties.ts",
+    "build:hgab-locations": "tsx scripts/build-hgab-locations.ts",
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "build:gaa-series": "tsx scripts/build-gaa-series.ts",
     "test:gaa-series": "tsx --test scripts/gaa-series.test.ts",

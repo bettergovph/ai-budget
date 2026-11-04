@@ -31,7 +31,7 @@ import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  DISCLAIMER_PARTIES, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
+  DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, OFFICE_VIEW_DISCLAIMERS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
@@ -608,6 +608,7 @@ export function DisclaimerNotice({
   contractors = false,
   mpb = false,
   parties = false,
+  placements = false,
   heading,
   className = '',
 }: {
@@ -617,12 +618,15 @@ export function DisclaimerNotice({
   parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
   mpb?: boolean;
+  /** Projects placed in each district: the placements disclaimer, then no allegations. */
+  placements?: boolean;
   /** Add the contractors disclaimer (pages showing DPWH contracts); 'only' carries it alone (the contractor pages). */
   contractors?: boolean | 'only';
   heading?: string;
   className?: string;
 }) {
-  const list = parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
+  const list = placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
+    : parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
     : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];

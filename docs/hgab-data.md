@@ -88,6 +88,7 @@ builder emit for readers:
 | `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
 | `npm run build:hgab-history` | `scripts/build-hgab-history.ts` | Writes `history.json` and `history.csv`: multi-purpose buildings, flood control, BIP, SIPAG and four other lines from the FY2020 GAA to the FY2027 House bill (see "Budget history"). Flags: `--out`, `--data=data`, `--pbc=<dir>` (or `PBC_2026_DIR`), `--vol-ia=<pdf>` |
 | `npm run build:hgab-mpb-years` | `scripts/hgab-mpb-years/run.sh` | Writes `mpb-years/`: every multi-purpose building line, FY2015 GAA to the FY2027 House bill, placed for the map at `/hgab/2027/multi-purpose/map` (see `docs/hgab-mpb-years.md`). Env: `UPSTREAM_GIT`, `UPSTREAM_DIR`, `SHAPES_DIR`, `HISTORY_DIR`, `OUT` |
+| `npm run build:hgab-locations` | `scripts/build-hgab-locations.ts` | Writes `locations.json`: where the source workbench's location lens places every DPWH line (see "Project placements"). Flags: `--src=<upstream checkout with the lens built>` (required), `--out`, `--contract` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
 Type-check and lint:
@@ -287,6 +288,14 @@ crosswalk authorises ("The one authorized project-level use: the DEO lens",
 `DEO2LEG/README.md`): money is grouped by the office the documents print, a
 shared office's total is never divided, and the Central Office / regional /
 unmatched residual is published for every year and stage.
+
+The data keeps one card per district; the page's list (`?view=list`) draws a
+shared (Tier B) office as one card instead (`listUnits` in
+`src/lib/hgab-districts.ts`, `SharedOfficeCardView`): the office as the
+headline, every legislative district it serves with its representative, and
+the office's figures once. 254 districts make 195 cards (31 shared offices
+cover 90 districts). Each district row keeps its `#d-…` address, its page and
+its "own projects" link.
 
 | Command | Script | Does |
 | --- | --- | --- |
@@ -967,4 +976,92 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 
 - **Known gap.** The FY2024 GAA data has no foreign-assisted DPWH lines with an amount (e.g. the Pasig–Marikina
   River Channel Improvement Project, Phase IV, is ₱0 there and ₱2.56 billion in FY2025); the page says so
   rather than showing zero.
+
+## Project placements (the source's location lens)
+
+Two pages read `locations.json`. **Projects placed in each district**
+(`/hgab/2027/districts?view=list-legislative`, `src/pages/HgabDistrictsPlaced.tsx`, figures in
+`src/lib/hgab-placed.ts`; Jason, 2026-11-03: place every project as the multi-purpose map does,
+and list it by district, "a similar view but their own individual district") has one card per
+legislative district with its own placed lines: NEP → House bill, the six kinds of change, how
+they were placed and which offices list them. The office list (`?view=list`) gives each district
+its office's whole figure, shared and not split (Caloocan 1st, 2nd and 3rd each show the Metro
+Manila 3rd DEO's ₱3.09B); here they show ₱1.78B, ₱0.27B and ₱0.67B. Of the House bill's
+₱587.1B of DPWH lines, ₱466.7B (79.5%) is placed in one district; the rest is listed by reason
+at the foot (shared office ₱25.6B, region only ₱90.1B, held for review ₱4.65B). The office list
+puts 70.2% of the same money on no card, mostly the Central Office's ₱408.2B; ₱300.0B of that is
+placed in one district by the place its title names. "Projects placed in this district" on every
+district page lists the lines one by one.
+
+GPS, checked against the lens (2026-11-03, our multi-purpose reader: upstream `analyze_text`, then
+`WIDER_GPS`): 2,358 of the 17,613 titles publish GPS; the lens places 2,344 of them by the title's
+place, and the GPS point falls in the same district for 2,260, another district for 34, and in no
+single district for 47. GPS would place 17 lines (₱0.31B) the lens leaves out, so the lens is used
+as published, as the multi-purpose map does for FY2027.
+
+Publish after a full verify: `npx tsx scripts/upload-hgab-to-r2.ts --only=locations.json --skip-verify`
+(R2 `hgab/2027/locations.json`; `--only` takes files as well as folders, so nothing else in the shared
+data folder goes up).
+
+The placement is upstream's: the DPWH location
+district lens (`analysis/web/buildLocationLens.py`, method in
+`analysis/docs/location_district_lens_method.md`, added upstream 2026-10-28). Each line is
+placed exactly once, in upstream's order:
+
+| Basis (verbatim) | Reader label | Placed in |
+| --- | --- | --- |
+| `title_psgc` | Place named | the district of the place the title names, when backed by a printed DEO, a clean coordinate, the title's own wording, or a reviewed landmark (`title_gate`) |
+| `deo_to_leg` | Office serves only here | the one district its DEO serves, when the title fixes none |
+| `deo` | Shared office | nowhere: kept with its multi-district DEO, undivided |
+| `region` | Region only | its region (no usable DEO, or the documents' DEOs disagree) |
+| `unassigned` | Unassigned | nowhere |
+
+Split cities (Caloocan, Quezon City, …) resolve through PSGC2LEG's own barangay rows, so a
+title naming "Barangay 171, Caloocan" lands in Caloocan 1st. Those rows agree with the
+statutory split the BetterGov research page uses (RA 6714 / RA 11545: 1st = 1–4, 77–85,
+132–177; 2nd = 5–76, 86–131; 3rd = 178–188). We add no rule of our own.
+
+Upstream gitignores the lens output and its CI currently fails before building it (the
+`prebuild` chain runs `buildLocationLens.py` before `build_cleaned_dataset.py`), so we build it
+in a detached upstream checkout at a pinned commit with upstream's scripts, then import:
+
+```sh
+git -C <upstream clone> worktree add --detach /tmp/dpwh-nep-head <commit>
+cd /tmp/dpwh-nep-head && git submodule update --init dpwh_coor2psgc_geomapping
+# PSGC shapefiles as upstream's CI pins them (altcoder/philippines-psgc-shapefiles a44a730,
+# dist/PH_Adm{1..4}*.shp.zip, unzipped to dpwh_coor2psgc_geomapping/philippines-psgc-shapefiles/data/2023/
+# {Regions,Provdists,Municities,BgySubMuns}); a venv with geopandas 1.1.1, shapely 2.1.2, pandas 2.2.3, pyogrio 0.12.1
+python other-analysis/build_fmr_final_dataset.py && python other-analysis/build_fmr_workbench.py
+python other-analysis/build_hfep_workbench.py && python analysis-nia/build_nia_workbench.py
+(cd analysis/web && node buildComparisonData.mjs && node buildMainOverview.mjs && node buildCongressIndex.mjs)
+python master_list/scripts/build_processing_dataset.py
+python master_list/scripts/build_master_list.py && python master_list/scripts/build_location_interpretations.py
+python master_list/scripts/build_cleaned_dataset.py && python analysis/web/buildLocationLens.py
+cd <this repo> && npm run build:hgab-locations -- --src=/tmp/dpwh-nep-head
+```
+
+`build_master_list.py` and `build_location_interpretations.py` are rerun because upstream's
+committed master-list files were built from a `locations.py` that matches no commit (recorded
+builder hash `24aa85b2…`); all 38 recorded inputs matched byte for byte, including the FMR
+files built from the shapefiles. The builder refuses to write unless the lens's comparison
+payload is ours line for line (id, title, trace, NEP and House amounts) and the 254 district
+ids are the same, and it records the lens commit and every input hash upstream lists.
+
+Our one check on top of the lens: the 116 `title_psgc` lines upstream flags
+`office_location_mismatch` (the place named is outside every district the line's own DEO
+serves) are held out of every district, district null, basis kept. Most are road names whose
+first word is the city at one end ("Lipa City – Alaminos Rd" under the Laguna 3rd DEO, "Butuan
+City – Pianing – Tandag Rd" under Surigao del Sur 1st) or numbered-barangay collisions ("Juan
+Luna Br. 3" under North Manila, placed at Caloocan's Barangay 33). 27 of them (₱1.82B, all on
+the Butuan–Cagayan de Oro–Iligan road, all placed in Iligan City) are counted apart as
+`place_district_mismatch`: upstream's chosen place is Cagayan de Oro (a split city, no
+district), and Iligan wins only as the one tied candidate with a district. Held-out lines are a
+cell of their own in every reconciliation, never dropped.
+
+Groups: a line belongs to the office group of the office label the House bill lists, keyed as
+the leaderboard keys groups; office-change and no-office lines belong to none. Each group's
+reconciliation (placed in its districts, placed elsewhere, kept with the shared office, region
+only) must add up to its lines. `verify:hgab` recomputes every cell from the parquet and checks
+that no representative's name appears in the file. Nothing here attributes a project to a
+person: a placement is where the documents put the work.
 

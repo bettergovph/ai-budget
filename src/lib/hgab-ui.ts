@@ -163,6 +163,7 @@ export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasRea
 export const DISTRICT_VIEWS = [
   { key: 'overview', label: 'Overview', to: '/hgab/2027/districts' },
   { key: 'list', label: 'Districts', to: '/hgab/2027/districts?view=list' },
+  { key: 'list-legislative', label: 'Projects placed in each district', to: '/hgab/2027/districts?view=list-legislative' },
   { key: 'parties', label: 'By party', to: '/hgab/2027/parties' },
 ] as const;
 
@@ -170,6 +171,6 @@ export type DistrictView = (typeof DISTRICT_VIEWS)[number]['key'];
 
 export function districtsView(params: URLSearchParams): DistrictView {
   const v = params.get('view');
-  if (v === 'list' || v === 'overview') return v;
+  if (v === 'list' || v === 'overview' || v === 'list-legislative') return v;
   return ['q', 'region', 'tier', 'sort', 'group'].some((k) => params.has(k)) ? 'list' : 'overview';
 }
