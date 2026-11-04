@@ -984,8 +984,14 @@ function verifyDpwhProjectsVsWhole(): void {
     } else walk(n.c ?? []);
   });
   dept.agencies.forEach((a) => walk(a.tree));
-  const ov = readJson<{ datasets: { key: string; totals: { nep_php: number; hgab3_php: number | null } }[] }>(resolve(OUT, "overview.json"));
-  const t = ov.datasets.find((d) => d.key === "dpwh")?.totals;
+  const ov = readJson<{ datasets: { key: string; totals: { nep_php: number; hgab3_php: number | null };
+    printed?: { nep_new_appropriations_php: number | null; house_new_appropriations_php: number | null } | null }[] }>(resolve(OUT, "overview.json"));
+  const ds = ov.datasets.find((d) => d.key === "dpwh");
+  const t = ds?.totals;
+  // The DPWH pages and the overview card headline "all of DPWH" from the documents' printed totals.
+  check("DPWH: the printed whole-agency totals the DPWH pages headline equal all of DPWH in the explorer",
+    ds?.printed?.nep_new_appropriations_php === dept.nep && ds?.printed?.house_new_appropriations_php === dept.house,
+    `printed ${ds?.printed?.nep_new_appropriations_php} / ${ds?.printed?.house_new_appropriations_php} vs explorer ${dept.nep} / ${dept.house}`);
   check("DPWH: all of DPWH (explorer) minus administration and support = its projects (DPWH pages), in both documents",
     !!t && dept.nep - support[0] === t.nep_php && dept.house - support[1] === t.hgab3_php,
     t ? `NEP ${dept.nep} − ${support[0]} vs ${t.nep_php}; House ${dept.house} − ${support[1]} vs ${t.hgab3_php}` : "no dpwh dataset");

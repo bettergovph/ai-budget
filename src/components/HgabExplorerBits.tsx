@@ -66,7 +66,7 @@ export function NepBrowserGapNote({ gap, code, billNep, on }: { gap: NepBrowserG
  */
 export function ProjectsVsWholeNote({ projects, whole, on }: {
   projects: { nep: number; house: number };
-  whole: { id: string; nep: number; house: number };
+  whole: { id?: string; nep: number; house: number };
   on: 'projects' | 'explorer';
 }) {
   const restNep = whole.nep - projects.nep;
@@ -75,13 +75,14 @@ export function ProjectsVsWholeNote({ projects, whole, on }: {
     <p className="hgab-ex-gap">
       {on === 'projects' ? (
         <>
-          These are DPWH’s projects. All of DPWH is {shortMoney(whole.nep)} in the NEP and {shortMoney(whole.house)} in the
-          House bill. The rest is administration and support: {shortMoney(restNep)} in the NEP and {shortMoney(restHouse)} in
-          the House bill. <Link to={explorerPath(whole.id)}>See every DPWH line →</Link>
+          The figures above are all of DPWH: {shortMoney(whole.nep)} in the NEP and {shortMoney(whole.house)} in the House bill.
+          Its projects, compared row by row on these pages, are {shortMoney(projects.nep)} and {shortMoney(projects.house)}.
+          The rest is administration and support: {shortMoney(restNep)} in the NEP and {shortMoney(restHouse)} in the House
+          bill. <Link to={explorerPath(whole.id)}>See every DPWH line →</Link>
         </>
       ) : (
         <>
-          DPWH’s <Link to={`${HGAB_ROOT}/dpwh`}>project pages</Link> compare its projects only: {shortMoney(projects.nep)} in the NEP
+          DPWH’s <Link to={`${HGAB_ROOT}/dpwh`}>project pages</Link> compare its projects row by row: {shortMoney(projects.nep)} in the NEP
           and {shortMoney(projects.house)} in the House bill. The rest of this page is administration and support:{' '}
           {shortMoney(restNep)} in the NEP and {shortMoney(restHouse)} in the House bill.
         </>

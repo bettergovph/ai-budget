@@ -284,6 +284,15 @@ in the House bill.
 | Support to Operations | ₱51,609,648,000 | ₱48,948,061,000 |
 | All of DPWH (explorer) | ₱642,612,015,000 | ₱654,102,015,000 |
 
+All of DPWH is the headline everywhere. It comes from the documents' printed new appropriations
+(`overview.json` `printed`), which equal the explorer's line-by-line totals; `verify:hgab` checks this.
+The projects are the breakdown.
+
+- **DPWH page figures:** "NEP · all of DPWH" and "House 3R · all of DPWH", with the projects in their
+  sub-lines.
+- **DPWH page header:** the same totals.
+- **Overview's DPWH card:** "All of DPWH", then its projects by reading.
+
 Where each page says so:
 
 - **DPWH page:** a line under its figures (`ProjectsVsWholeNote`).

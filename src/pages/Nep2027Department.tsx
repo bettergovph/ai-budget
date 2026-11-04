@@ -432,7 +432,9 @@ function HgabCallout({ deptId }: { deptId: string }) {
 
   return (
     <aside className="hgab-crosslink" aria-label="The House bill for this group">
-      <p className="hgab-crosslink-eyebrow">The House bill for this group · {meta.label}</p>
+      <p className="hgab-crosslink-eyebrow">
+        {PROJECTS_DEPT[deptId] === key ? `Its projects, row by row · ${meta.label}` : `The House bill for this group · ${meta.label}`}
+      </p>
       <p className="hgab-crosslink-figures">
         <span>
           <em title={STAGE_LABELS.nep.label}>{STAGE_LABELS.nep.short}</em>

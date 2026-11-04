@@ -250,6 +250,10 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
     { key: 'hgab3', php: totals.hgab3_php, rows: counts.hgab3 },
   ];
   const caveats = datasetCaveats(d);
+  // DPWH's projects are most of the department: the card leads with all of DPWH, as its page and the explorer do.
+  const whole = d.key === 'dpwh' && d.printed?.nep_new_appropriations_php != null && d.printed?.house_new_appropriations_php != null
+    ? { nep: d.printed.nep_new_appropriations_php, house: d.printed.house_new_appropriations_php }
+    : null;
   // The data's caveats usually say this already; print it only when they do not.
   const sayIdentical = identicalReadings && !caveats.some((c) => /third reading/i.test(c));
   return (
@@ -262,6 +266,19 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
         <p className="hgab-card-summary">{datasetSummary(d)}</p>
       </header>
 
+      {whole && (
+        <p className="hgab-card-whole">
+          <span className="hgab-card-whole-label">All of DPWH</span>
+          <span className="hgab-amt">{fmt.shortPhp(whole.nep)}</span>
+          <span className="hgab-card-whole-arrow" aria-label="to">→</span>
+          <span className="hgab-amt">{fmt.shortPhp(whole.house)}</span>
+          <span className="hgab-delta-line">
+            <SignedPhp value={whole.house - whole.nep} />{' '}
+            <span className="hgab-delta">({formatPct(pctChange(whole.house, whole.nep))} · {STAGE_LABELS.nep.short} → House 3R)</span>
+          </span>
+        </p>
+      )}
+      {whole && <p className="hgab-card-whole-sub">Its projects, row by row, by reading:</p>}
       <dl className="hgab-card-stages">
         {stages.map((s) => {
           const label = STAGE_LABELS[s.key];
@@ -293,7 +310,7 @@ function DatasetCard({ d, explain }: { d: HgabDatasetMeta; explain: boolean }) {
           The House list is word-for-word the same at second and third reading.
         </p>
       )}
-      {d.printed && (d.printed.nep_new_appropriations_php != null || d.printed.house_new_appropriations_php != null) && (
+      {!whole && d.printed && (d.printed.nep_new_appropriations_php != null || d.printed.house_new_appropriations_php != null) && (
         <p className="hgab-rows" style={{ marginTop: -6 }} title="Broader than the project lists compared on this card">
           Totals published for the whole {d.key === 'dpwh' ? 'agency' : 'program'} — {STAGE_LABELS.nep.short}{' '}
           {fmt.shortPhp(d.printed.nep_new_appropriations_php)} · House{' '}
