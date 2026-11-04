@@ -90,3 +90,9 @@
   .hgab-crosslink-figures { gap: 6px 16px; }
   .hgab-crosslink-figures strong { font-size: 15px; }
 }
+
+/* Why the NEP browser's department total differs from the line-by-line NEP (NepBrowserGapNote, in the
+   explorer's department pages and in the card above). */
+.hgab-ex-gap { font-family: var(--font-body); font-size: 13px; line-height: 1.6; color: var(--ink-2); max-width: 900px; margin: 10px 0 16px; }
+.hgab-ex-gap a { color: var(--accent); }
+.hgab-crosslink .hgab-ex-gap { margin: 8px 0 6px; }

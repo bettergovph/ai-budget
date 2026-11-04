@@ -11,7 +11,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { KpiStrip } from '../components/Nep2027Bits';
-import { ExChange, ExStatusChip, ExTree, UnderReviewBanner } from '../components/HgabExplorerBits';
+import { ExChange, ExStatusChip, ExTree, NepBrowserGapNote, UnderReviewBanner } from '../components/HgabExplorerBits';
 import * as fmt from '../lib/format';
 import { downloadCsv } from '../lib/csv';
 import {
@@ -102,6 +102,10 @@ export default function HgabExplorerDept() {
             },
           ]}
         />
+
+        {dept.nep_browser && (
+          <NepBrowserGapNote gap={dept.nep_browser} code={dept.nep_browser.code} billNep={dept.nep} on="explorer" />
+        )}
 
         <div className="hgab-ex-controls">
           <input

@@ -10,9 +10,53 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import {
-  EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, NEP_HOW_NOTE, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl, volumeName,
-  type ExLine, type ExNode, type LineStatus,
+  EXPENSE_LABEL, KIND_LABEL, LINES_UNDER_REVIEW, NEP_HOW_NOTE, SCOPE_NOTE, STATUS_LABEL, explorerPath, fullPhp, linePdf, reportLineUrl,
+  shortMoney, titleCase, volumeName,
+  type ExLine, type ExNode, type LineStatus, type NepBrowserGap,
 } from '../lib/hgab-explorer';
+import '../hgab-links.css';
+
+const joinAnd = (xs: string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+
+/**
+ * Why the NEP browser's total for a department differs from the line-by-line NEP figure: it counts
+ * automatic appropriations, which no bill votes on, and agencies the bill files under another
+ * department. `on` is the page it sits on; `billNep` is the line-by-line NEP total for the bill's
+ * department, which may also hold agencies DBM files elsewhere.
+ */
+export function NepBrowserGapNote({ gap, code, billNep, on }: { gap: NepBrowserGap; code: string; billNep: number; on: 'explorer' | 'nep' }) {
+  const auto = gap.automatic.slice(0, 3).map((a) => `${a.label} ${shortMoney(a.php)}`);
+  const more = gap.automatic.length - auto.length;
+  const away = gap.elsewhere.filter((e) => e.bill_department);
+  const awayDepts = [...new Set(away.map((e) => titleCase(e.bill_department ?? '')))];
+  const imported = billNep - gap.new_here_php;  // the bill's department also holds agencies DBM files elsewhere
+  return (
+    <p className="hgab-ex-gap">
+      {on === 'explorer'
+        ? <>The <Link to={`/2027/d/${code}`}>NEP browser</Link> shows {shortMoney(gap.all_funds_php)} for this department. </>
+        : <>The House bill is compared with new appropriations only. This page’s {shortMoney(gap.all_funds_php)} counts every fund. </>}
+      {gap.automatic_php > 0 && (
+        <>
+          {on === 'explorer' ? 'That' : 'Its total'} includes {shortMoney(gap.automatic_php)} in automatic appropriations, which no bill votes on
+          {' '}({joinAnd(more > 0 ? [...auto, `${more} more`] : auto)}).{' '}
+        </>
+      )}
+      {away.length > 0 && (
+        <>
+          It also counts {joinAnd(away.map((e) => `${titleCase(e.agency)} (${shortMoney(e.php)})`))}, which the bill lists
+          {' '}under {joinAnd(awayDepts)}.{' '}
+        </>
+      )}
+      {imported > 0 && (
+        <>
+          {on === 'explorer'
+            ? <>This page also counts {shortMoney(imported)} for agencies the NEP files under another department.</>
+            : <>The figures above also include {shortMoney(imported)} for agencies the NEP files under another department.</>}
+        </>
+      )}
+    </p>
+  );
+}
 
 /**
  * "Under citizen review": the whole-bill lines went live before a full review. Full at the top of

@@ -342,3 +342,5 @@ a.hgab-cc-cell:focus-visible { outline: 2px solid var(--accent); outline-offset:
   .hgab-wb-grid { grid-template-columns: minmax(0, 1fr); }
   .hgab-wb-grid.is-one { max-width: none; }
 }
+/* The workbench's stricter DPWH count, under the candidate-changes table. */
+.hgab-cc-scope.is-traceability { --hgab-group: var(--ink-3); }

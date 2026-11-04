@@ -113,6 +113,43 @@ def title_case(s):
     return ''.join(out)
 
 
+def reconcile_nep_departments(rows, bill_dept_of, index_rows):
+    """Per NEP department (section 1): its NEP browser total split into automatic appropriations, the new
+    appropriations of agencies the bill keeps in the same department, and those it files elsewhere."""
+    id_of = {r['name']: r['id'] for r in index_rows}
+    out = {}
+    for code, name, agy, agy_name, new, sub, amt in rows:
+        rec = out.setdefault(code, {'name': name, 'all_funds_php': 0, 'automatic': collections.Counter(),
+                                    'by_bill_dept': collections.Counter(), 'agency_names': {}})
+        amt = int(amt or 0)
+        rec['all_funds_php'] += amt
+        if not new:
+            if amt:
+                rec['automatic'][(sub or 'Automatic appropriations').strip()] += amt
+            continue
+        bd = bill_dept_of.get((code, agy))
+        rec['by_bill_dept'][(bd, agy)] += amt
+        rec['agency_names'][agy] = agy_name
+    result = {}
+    for code, rec in out.items():
+        per_dept = collections.Counter()
+        for (bd, _), amt in rec['by_bill_dept'].items():
+            per_dept[bd] += amt
+        home = max(per_dept, key=per_dept.get) if per_dept else None  # where the bill keeps most of its money
+        elsewhere = [{'agency': rec['agency_names'][agy], 'php': amt, 'bill_department': bd,
+                      'explorer_id': id_of.get(bd) if bd else None}
+                     for (bd, agy), amt in sorted(rec['by_bill_dept'].items(), key=lambda kv: -kv[1]) if bd != home and amt]
+        automatic = [{'label': k, 'php': v} for k, v in rec['automatic'].most_common()]
+        result[code] = {
+            'name': rec['name'], 'all_funds_php': rec['all_funds_php'],
+            'automatic_php': sum(x['php'] for x in automatic), 'automatic': automatic,
+            'new_here_php': per_dept.get(home, 0), 'elsewhere': elsewhere,
+            'explorer_id': id_of.get(home) if home else None,
+        }
+        assert result[code]['automatic_php'] + result[code]['new_here_php'] + sum(x['php'] for x in elsewhere) == rec['all_funds_php'], code
+    return result
+
+
 def build_boards(lines_dir, out_dir, index_rows, dept_docs, built_at):
     """explorer/boards.json: departments, agencies and budget lines ranked by the leaderboards
     (src/lib/hgab-leaderboard.ts, section "whole-bill"). Integer pesos; the boards rank, this file lists."""
@@ -293,6 +330,17 @@ def main(lines_dir, out_dir):
             if a['nep']:
                 nep_key[(a['nep'][1], a['nep'][2])] = a
 
+    # The NEP browser (/2027/d/<code>) shows a department's money in every fund and every agency DBM files under
+    # it. The bill carries new appropriations (fund 101) only, and files a few agencies under another department.
+    # nep_departments reconciles the two: all funds = automatic (fund 104: retirement and life insurance premiums,
+    # debt interest, special accounts) + new appropriations of the agencies the bill keeps here + elsewhere.
+    import duckdb
+    con = duckdb.connect(f'{lines_dir}/nep.duckdb', read_only=True)
+    nep_dept_rows = con.execute("""select DEPARTMENT, any_value(UACS_DPT_DSC), AGENCY, any_value(UACS_AGY_DSC), FUNDCD like '101%',
+                                          UACS_FUNDSUBCAT_DSC, sum(pesos)
+                                   from nep where SORDER = '1' and pesos is not null group by DEPARTMENT, AGENCY, 5, 6""").fetchall()
+    con.close()
+    bill_dept_of = {(m['nep'][1], m['nep'][2]): m['hb'][1] for m in amap if m['nep'] and m['nep'][0] == '1'}
     for r in lines:
         a = depts[r['department']]['agencies'][(r['agency_no'], r['agency'])]
         node = a['root']
@@ -400,12 +448,21 @@ def main(lines_dir, out_dir):
         index_rows.append({'id': ds, 'roman': d['roman'], 'name': d['name'], 'nep': dn, 'house': dh,
                            'lines': dl, 'changed': dc, 'agencies': len(out_agencies),
                            'bytes': os.path.getsize(f'{out_dir}/d/{ds}.json')})
+    nep_departments = reconcile_nep_departments(nep_dept_rows, bill_dept_of, index_rows)
+    for code, rec in nep_departments.items():  # each department page explains the NEP browser's figure
+        if rec['explorer_id']:
+            doc = dept_docs[rec['explorer_id']]
+            doc['nep_browser'] = {'code': code, **rec}
+            with open(f"{out_dir}/d/{rec['explorer_id']}.json", 'w') as f:
+                json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
+            next(r for r in index_rows if r['id'] == rec['explorer_id'])['nep_dept'] = code
     total_h = sum(r['house'] for r in index_rows)
     total_n = sum(r['nep'] for r in index_rows)
     unprog = sum(r['house'] for r in index_rows if r['name'] == 'UNPROGRAMMED APPROPRIATIONS')
     index = {'built_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
              'house_total': total_h, 'nep_total': total_n, 'unprogrammed': unprog,
-             'lines': sum(r['lines'] for r in index_rows), 'status': dict(counts), 'departments': index_rows}
+             'lines': sum(r['lines'] for r in index_rows), 'status': dict(counts), 'departments': index_rows,
+             'nep_departments': nep_departments}
     with open(f'{out_dir}/index.json', 'w') as f:
         json.dump(index, f, indent=1, ensure_ascii=False)
     boards = build_boards(lines_dir, out_dir, index_rows, dept_docs, index['built_at'])

@@ -10,6 +10,7 @@
  * Integer pesos. NEP amounts are the NEP's new appropriations (the same universe as the bill's
  * programmed total). Statuses are candidates, like everywhere else in the section.
  */
+import { shortPhp as fmtShort } from './format';
 import { dataUrl } from './data-url';
 import { HGAB_BASE, HGAB_ROOT, cached, getJson, pdfUrl } from './hgab';
 
@@ -88,6 +89,23 @@ export interface ExAgency {
   tree: ExNode[];
 }
 
+/**
+ * Why the NEP browser (/2027/d/<code>) shows a different total for a department: it counts every fund
+ * and every agency DBM files under the department. all_funds = automatic + new_here + elsewhere.
+ */
+export interface NepBrowserGap {
+  name: string;
+  all_funds_php: number;
+  /** Fund 104: retirement and life insurance premiums, debt interest, special accounts. No bill votes on them. */
+  automatic_php: number;
+  automatic: Array<{ label: string; php: number }>;
+  /** New appropriations of the agencies the bill keeps in this department. */
+  new_here_php: number;
+  /** New appropriations of agencies DBM files here and the bill lists under another department. */
+  elsewhere: Array<{ agency: string; php: number; bill_department: string | null; explorer_id: string | null }>;
+  explorer_id: string | null;
+}
+
 export interface ExDept {
   id: string;
   roman: string;
@@ -96,6 +114,8 @@ export interface ExDept {
   house: number;
   lines: number;
   agencies: ExAgency[];
+  /** The NEP department this page mostly is, and how its NEP browser total reconciles. */
+  nep_browser?: NepBrowserGap & { code: string };
 }
 
 export interface ExIndexRow {
@@ -108,6 +128,8 @@ export interface ExIndexRow {
   changed: number;
   agencies: number;
   bytes: number;
+  /** The NEP department code (/2027/d/<code>) this department mostly is. */
+  nep_dept?: string;
 }
 
 export interface ExIndex {
@@ -118,6 +140,8 @@ export interface ExIndex {
   lines: number;
   status: Partial<Record<LineStatus, number>>;
   departments: ExIndexRow[];
+  /** By NEP department code (section 1). */
+  nep_departments?: Record<string, NepBrowserGap>;
 }
 
 export function loadExplorerIndex(): Promise<ExIndex> {
@@ -269,6 +293,12 @@ export const SCOPE_NOTE: Record<NonNullable<ExLine['z']>, { label: string; to: s
 };
 
 /** Every peso, as published: "₱48,193,049,000". */
+/** "₱642.61B", "₱28.2M": two decimals for billions, as on the leaderboards. */
+export function shortMoney(n: number): string {
+  const a = Math.abs(n);
+  return `${n < 0 ? '−' : ''}₱${a >= 1e9 ? `${(a / 1e9).toFixed(2)}B` : fmtShort(a)}`;
+}
+
 export function fullPhp(n: number): string {
   return `${n < 0 ? '−' : ''}₱${Math.abs(n).toLocaleString('en-US')}`;
 }

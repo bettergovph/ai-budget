@@ -409,6 +409,18 @@ export interface HgabCandidateProgram {
   };
   /** Same-road pairs covering different stretches; null where the workbench has no such group (HFEP). */
   scope_review: { count: number; nep_php: number; house_php: number; net_php: number; note: string } | null;
+  /**
+   * DPWH only: the workbench's stricter split (its Highlights page). `insertions` / `deletions` have no
+   * counterpart at all; the rest are held out as possibly re-titled, so not traceable line to line.
+   */
+  traceability?: {
+    source_file: string; source_sha256: string;
+    insertions: { count: number; comparison_rows: number; amount_php: number };
+    deletions: { count: number; comparison_rows: number; amount_php: number };
+    unresolved_insertions: { comparison_rows: number; amount_php: number };
+    possible_replacements: { comparison_rows: number; amount_php: number };
+    untraceable: { rows: number; amount_php: number };
+  } | null;
   /** House − NEP = insertions − deletions + adjustments.net_php + scope_review.net_php. */
   delta_php: number;
 }
