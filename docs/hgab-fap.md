@@ -1,6 +1,6 @@
 # Foreign-assisted projects (`/hgab/2027/foreign-assisted`)
 
-Status: built 2026-11-04 (branch `hgab-foreign-assisted`), not yet reviewed or published. Jason: "let's start our
+Status: built 2026-11-04, PR #62 (branch `hgab-foreign-assisted`); fap.json and fap.csv are on R2 (uploaded 2026-11-04); the page goes live when the PR merges. Not yet reviewed by Jason. Jason: "let's start our
 report on foreign assisted projects", with section 2.3.1 of PBC's House bill assessment as the reference and a
 look back at how previous budgets compared.
 
@@ -52,8 +52,8 @@ our 31st cut).
 
 ## Not done yet
 
-- Not committed, not uploaded to R2, not deployed. The page reads `hgab/2027/fap.json` from the data host, so
-  `npm run upload:hgab` must run before the page works in production.
+- Deploys with the merge (Workers Builds). Re-run `build:hgab-fap` and the upload if the line-by-line dataset or the
+  NEP extract changes.
 - No poster or share image. No "What's new" entry on `/docs`. No API endpoint.
 - The FY2026 enacted standby (₱97.3B) is PBC's Senate-bill figure; the GAA's own unprogrammed annex was not read.
 - Jason's review of the copy.
