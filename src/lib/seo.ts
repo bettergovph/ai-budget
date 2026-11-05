@@ -18,6 +18,7 @@ import { CHANGES_LIST_ROOT, CHANGES_LIST_TITLE } from "./hgab-changes-list";
 import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
+import { MPB_COMPARE_ROOT } from "./mpb-compare";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
@@ -338,6 +339,16 @@ export function pageMeta(pathname: string): PageMeta {
         "A formal letter from a legislative district's constituents to its representative(s): the DPWH projects House " +
         "Bill 10858 lists for the office serving the district with no match in the NEP, with changed amounts, or dropped, " +
         "and a request for the documents behind them. Download as PDF to sign or as text to edit.",
+    };
+  }
+  // Multi-purpose buildings, the 2027 NEP and House bill side by side.
+  if (p === MPB_COMPARE_ROOT) {
+    return {
+      title: `Multi-Purpose Buildings in the 2027 Budget: the NEP vs the House Bill, Side by Side · ${SITE}`,
+      description:
+        "Every DPWH multi-purpose building line in the FY 2027 NEP and in House Bill 10858 (third reading), side by side on " +
+        "two maps, one dot per line: the amounts, the lines only the House bill has, the lines only the NEP has, and the " +
+        "figures by region.",
     };
   }
   // Multi-purpose buildings map: every line, FY2015 GAA to the FY2027 House bill.

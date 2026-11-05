@@ -758,6 +758,18 @@ export function loadHgabHistory(): Promise<HistoryData> {
   return cached('history', () => getJson<HistoryData>(dataUrl(HISTORY_DATA_PATH), 'Failed to load the budget history'));
 }
 
+/** The 2027 multi-purpose building lines at both stages, and the province outlines, for the NEP vs House bill page. */
+export function loadMpbCompare(): Promise<{ data: MpbData; summary: MpbSummary; geo: HgabGeo }> {
+  return cached('mpb-compare', async () => {
+    const [lines, summary, geo] = await Promise.all([
+      getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
+      getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
+      loadHgabGeo(),
+    ]);
+    return { data: decodeMpbLines(lines), summary, geo };
+  });
+}
+
 /**
  * Every multi-purpose building line, FY2020 GAA to the 2027 House bill, for the map (`npm run build:hgab-mpb-years`),
  * with the DPWH contract matched to each FY2020–FY2026 line (`npm run build:hgab-contractors`). The contracts are

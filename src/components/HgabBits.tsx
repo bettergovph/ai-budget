@@ -27,6 +27,7 @@ import {
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
+import { MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
@@ -77,6 +78,7 @@ const MPB_MENU: NavMenu = {
   items: [
     { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
     { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
+    { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
   ],
 };
 /** Pages a program's menu opens after its own views: DPWH's contractors (FY2016 to FY2026, from DPWH's contract list). */
