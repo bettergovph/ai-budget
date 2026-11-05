@@ -1,0 +1,128 @@
+/* NEP vs House bill for multi-purpose buildings (/hgab/2027/multi-purpose/nep-vs-house-bill): .mpbc-* only.
+   The figure is one dark block, 1200 px wide on desktop, built to be screenshot: its numbers sit in the open sea of
+   each map. Colours of the dots: src/lib/mpb-compare.ts COMPARE_COLORS. */
+
+.mpbc-main { padding-top: 8px; }
+
+/* --- the download bar (outside the figure, so screenshots stay clean) ---------- */
+
+.mpbc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; max-width: 1200px; margin: 8px auto 12px; font-size: 13px; color: var(--ink-3); }
+.mpbc-tools .hgab-cta { cursor: pointer; }
+
+/* --- the figure ------------------------------------------------------------- */
+
+.mpbc-figure {
+  --mpbc-ground: #0c1322;
+  --mpbc-ink: #f3f6fb;
+  --mpbc-ink-2: #c3cddd;
+  --mpbc-ink-3: #8592a8;
+  --mpbc-house: #ff5a5a;
+  --mpbc-nep: #ffc24d;
+  max-width: 1200px;
+  margin: 8px auto 0;
+  padding: 28px 32px 22px;
+  box-sizing: border-box;
+  background: var(--mpbc-ground);
+  color: var(--mpbc-ink);
+  border-radius: 6px;
+}
+.mpbc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.mpbc-kicker {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mpbc-ink-3);
+}
+.mpbc-title {
+  margin: 0;
+  font-family: var(--font-hero);
+  font-size: clamp(24px, 3.3vw, 40px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: var(--mpbc-ink);
+}
+.mpbc-title .is-house { color: var(--mpbc-house); }
+.mpbc-title-line { display: block; }
+.mpbc-logo { height: 30px; width: auto; flex: none; margin-top: 4px; opacity: 0.95; }
+
+.mpbc-change {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 1px;
+  margin: 20px 0 16px;
+  background: #24304a;
+  border: 1px solid #24304a;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mpbc-change > div { padding: 10px 14px; background: #121b2e; }
+.mpbc-change strong {
+  display: block;
+  font-family: var(--font-hero);
+  font-size: clamp(17px, 1.9vw, 24px);
+  font-weight: 800;
+  color: var(--mpbc-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mpbc-change span { display: block; margin-top: 2px; font-size: 12.5px; color: var(--mpbc-ink-2); }
+.mpbc-change .is-house strong { color: var(--mpbc-house); }
+
+.mpbc-maps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.mpbc-map { margin: 0; }
+.mpbc-canvas { position: relative; }
+.mpbc-canvas canvas { display: block; width: 100%; border-radius: 3px; }
+
+/* Each side's total sits in the open sea west of Luzon. */
+.mpbc-side { position: absolute; top: 14px; left: 14px; display: grid; gap: 2px; pointer-events: none; }
+.mpbc-side-name { font-family: var(--font-hero); font-size: clamp(18px, 2vw, 26px); font-weight: 800; color: var(--mpbc-ink); }
+.mpbc-side-sub { font-size: 12.5px; color: var(--mpbc-ink-3); }
+.mpbc-side-php {
+  margin-top: 6px;
+  font-family: var(--font-hero);
+  font-size: clamp(34px, 4.6vw, 58px);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--mpbc-ink);
+  font-variant-numeric: tabular-nums;
+}
+.is-house .mpbc-side-php { color: var(--mpbc-house); }
+.mpbc-side-lines { font-family: var(--font-hero); font-size: clamp(16px, 1.8vw, 22px); font-weight: 700; color: var(--mpbc-ink-2); }
+.mpbc-foot { margin-top: 14px; display: grid; gap: 8px; }
+.mpbc-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--mpbc-ink-2); }
+.mpbc-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.mpbc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.mpbc-sizes { gap: 12px !important; margin-left: auto; }
+.mpbc-sizes span { display: inline-flex; align-items: center; gap: 5px; }
+.mpbc-sizes i { background: rgba(146, 172, 214, 0.55); }
+.mpbc-notes { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--mpbc-ink-3); }
+.mpbc-source { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--mpbc-ink-3); }
+
+/* ?shot=1: the figure alone, at full width, for a clean screenshot. */
+.mpbc-shot { min-height: 100vh; padding: 24px 0; background: #f4f6fa; }
+.mpbc-shot .mpbc-figure { width: 1200px; max-width: none; margin: 0 auto; }
+
+@media (max-width: 760px) {
+  .mpbc-figure { padding: 18px 14px; border-radius: 0; }
+  .mpbc-change { grid-auto-flow: row; }
+  .mpbc-maps { grid-template-columns: 1fr; }
+  .mpbc-side-sub { display: none; }
+  .mpbc-sizes { margin-left: 0; }
+}
+
+/* --- below the figure --------------------------------------------------------- */
+
+.mpbc-section { margin-top: 36px; }
+.mpbc-h2 { margin: 0 0 4px; font-family: var(--font-hero); font-size: 22px; font-weight: 700; color: var(--ink); }
+.mpbc-dek { margin: 0 0 12px; color: var(--ink-3); font-size: 14px; }
+.mpbc-more { margin: 12px 0; font-size: 13px; color: var(--ink-3); }
+.mpbc-tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.mpbc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mpbc-table th, .mpbc-table td { padding: 7px 10px; border-bottom: 1px solid var(--rule-soft); text-align: left; vertical-align: top; }
+.mpbc-table thead th { background: var(--paper-2); font-size: 11.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+.mpbc-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mpbc-sub { display: block; font-size: 11.5px; color: var(--ink-3); }
