@@ -135,7 +135,9 @@ export default function App() {
           {/* Multi-purpose buildings (its own menu): the budget by year, with flood control, BIP, SIPAG, school and health facilities; and every line on a map. */}
           <Route path="/hgab/2027/multi-purpose" element={<HgabHistory />} />
           <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
-          <Route path="/hgab/2027/multi-purpose/nep-vs-house-bill" element={<HgabMpbCompare />} />
+          <Route path="/hgab/2027/multi-purpose/nep-vs-house-bill" element={<HgabMpbCompare key="mpb" />} />
+          {/* Flood control in 2025, 2026 and 2027, side by side ("Flood control projects are back"); no menu entry yet. */}
+          <Route path="/hgab/2027/flood-control" element={<HgabMpbCompare key="flood" topic="flood" />} />
           <Route path="/hgab/2027/contractors" element={<HgabContractors />} />
           <Route path="/hgab/2027/contractors/:key" element={<HgabContractors />} />
           {/* ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page. */}

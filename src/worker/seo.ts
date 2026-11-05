@@ -23,7 +23,7 @@ import { CHANGES_LIST_ROOT } from "../lib/hgab-changes-list";
 import { LETTER_ROOT } from "../lib/hgab-letter";
 import { HISTORY_ROOT } from "../lib/hgab-history";
 import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
-import { MPB_COMPARE_ROOT } from "../lib/mpb-compare";
+import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "../lib/mpb-compare";
 import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 import { PARTIES_ROOT } from "../lib/hgab-parties";
 import { CITIZEN_REPORTS_ROOT } from "../lib/citizen-reports";
@@ -180,6 +180,8 @@ const STATIC_SITEMAP_PATHS = [
   MPB_MAP_ROOT,
   // The 2027 NEP and House bill side by side, for multi-purpose buildings.
   MPB_COMPARE_ROOT,
+  // Flood control in 2025, 2026 and 2027, side by side.
+  FLOOD_COMPARE_ROOT,
   // Every DPWH contractor, FY2016 to FY2026; the contractor pages are linked from it.
   CONTRACTORS_ROOT,
   // Each district's representative and party, and the DPWH budget by party.
