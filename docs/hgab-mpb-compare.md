@@ -13,8 +13,16 @@ impact."
 A dark block, 1200 px wide on desktop:
 - **Headline:** "₱43.2 billion in the NEP. ₱86.3 billion in the House bill."
 - **Change strip:** +₱43.1 billion (100% more), and +2,992 lines (2,815 → 5,807).
-- **Two maps** drawn the same way, NEP dots in blue and House bill dots in red. Each carries its total and its lines on
-  the open sea west of Luzon.
+- **Two maps** drawn the same way, each with its total and its lines on the open sea west of Luzon:
+  - **NEP:** all blue.
+  - **House bill** (Jason, 2026-11-05: "can the existing ones be blue while the added ones are red, the ones not existing
+    as yellow"):
+    - blue: lines the NEP has too (2,499);
+    - red: lines added in the House bill (3,308);
+    - yellow: the NEP's lines it does not have, where they were (316), drawn on top, outside its total.
+
+  The notes say red and yellow are candidates (no matching line found), not confirmed changes. The numbers stay totals
+  only.
 - **Legend, notes and source**, with the page address and the "as of" date.
 
 **Totals only.** Jason (2026-11-05): "we don't need the in the nep only but let's just compare the totals for both".
@@ -33,8 +41,8 @@ too, so the two never differ), the maps from `drawCompareMap`, in the site's fon
 
 - **Dots:** every line is its own dot, never grouped. A line sits at its first GPS point, else at the centre of the
   place its title names. Lines at the same spot fan out in a sunflower; dot area follows the amount.
-- **Drawing:** each map in one colour with a small halo, drawn the same way, so the density compares. Crowded places
-  build up into solid colour.
+- **Drawing:** every dot with a small halo, in passes (blue, red, then yellow on top), both maps the same way, so the
+  density compares. Crowded places build up into solid colour.
 - **Canvas:** plain 2D canvas at twice the screen resolution, over the province outlines (`geo/provinces.json`). There
   are no map tiles, so it draws the same offline and in the poster.
 
@@ -57,9 +65,10 @@ Below the figure: the totals by region (a line's region), with links to the inte
 - Page: `src/pages/HgabMpbCompare.tsx`, styles in `src/hgab-mpb-compare.css`, loader `loadMpbCompare` (the map's
   lines and summary, and the outlines).
 - Checks: `npm run verify:hgab` has a `multi-purpose/nep-vs-house-bill` section (`scripts/verify-hgab-mpb-compare.ts`,
-  8 checks):
+  9 checks):
   - both totals equal `mpb-years/summary.json`;
   - the three kinds and the regions add up;
   - every line is a dot, none off the drawn view;
-  - the figure's words show the totals only, with no breakdown by match, in plain words.
+  - the figure's numbers show the totals only, with no count by match, in plain words;
+  - the House bill map's colours (blue = in both, red = added, yellow = NEP lines it lacks), and the NEP map all blue.
 - No new data: the page reads `mpb-years/` and `geo/`, already published.

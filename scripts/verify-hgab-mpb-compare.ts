@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { decodeMpbLines, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
-import { COMPARE_VIEW, compareByRegion, compareCopy, compareFigures, inView, sideDots } from "../src/lib/mpb-compare";
+import { COMPARE_VIEW, compareByRegion, compareCopy, compareFigures, dotColor, inView, mapDots, sideDots } from "../src/lib/mpb-compare";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
 interface Opts { out: string; words: (s: string) => number; readerCopyHits: (s: string) => string[] }
@@ -38,10 +38,20 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
     f.unmapped === 0 && nepDots.length === f.nep.lines && houseDots.length === f.house.lines && off <= 25);
   // The figure compares the two totals only (Jason, 2026-11-05: "let's just compare the totals for both").
   const cp = compareCopy(f, S.built_at);
-  const words = [cp.notes, ...cp.cells.flatMap((c) => [c.strong, c.span]), ...Object.values(cp.sides).flatMap((s) => Object.values(s))];
-  check("the figure compares the totals only: each side's lines and amount, and the change; no breakdown by match",
+  const numbers = [...cp.cells.flatMap((c) => [c.strong, c.span]), ...Object.values(cp.sides).flatMap((s) => Object.values(s))];
+  const words = [cp.notes, ...numbers, ...cp.legend.map((l) => l.label)];
+  check("the figure's numbers compare the totals only: each side's lines and amount, and the change; no count by match",
     cp.sides.nep.lines === `${f.nep.lines.toLocaleString("en-US")} lines` && cp.sides.house.lines === `${f.house.lines.toLocaleString("en-US")} lines`
-      && cp.cells.length === 2 && !/\b(only|in both|not in the)\b/i.test(words.join(" ")));
+      && cp.cells.length === 2 && !/\b(only|in both|not in the|added)\b/i.test(numbers.join(" ")));
+  // The House bill map: its lines in blue (also in the NEP) and red (added), and the NEP lines it lacks in yellow.
+  const hm = mapDots(data, "house");
+  const colours = (side: "nep" | "house", ds: typeof hm) => ds.reduce((m, d) => ({ ...m, [dotColor(side, d.cls)]: (m[dotColor(side, d.cls)] ?? 0) + 1 }), {} as Record<string, number>);
+  const hc = colours("house", hm);
+  const nc = colours("nep", mapDots(data, "nep"));
+  check(`House bill map: ${hc.blue} blue (also in the NEP), ${hc.red} red (added), ${hc.yellow} yellow (in the NEP, not the House bill); NEP map all blue`,
+    hc.blue === f.paired.lines && hc.red === f.houseOnly.lines && hc.yellow === f.nepOnly.lines && hc.blue + hc.red === f.house.lines
+      && nc.blue === f.nep.lines && Object.keys(nc).length === 1
+      && /yellow lines are not in the House bill’s total/i.test(cp.notes) && /candidates, not confirmed changes/.test(cp.notes));
   check("the figure's words are plain", words.flatMap(o.readerCopyHits).length === 0, words.flatMap(o.readerCopyHits).join(", "));
   process.stdout.write(`  NEP ${f.nep.lines} lines ₱${(f.nep.php / 1e9).toFixed(2)}B → House bill ${f.house.lines} lines ₱${(f.house.php / 1e9).toFixed(2)}B · House only ${f.houseOnly.lines} · NEP only ${f.nepOnly.lines}\n`);
 }

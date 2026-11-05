@@ -13,7 +13,9 @@
  *
  * Dots: one per line, never grouped. A line sits at its first GPS point, else at the centre of the place its title
  * names (or its office's area). Lines at the same spot fan out in a sunflower so each stays visible; dot area follows
- * the line's amount. Each map is one colour (NEP blue, House bill red), drawn the same way.
+ * the line's amount. The NEP map is all blue. The House bill map (Jason, 2026-11-05: "can the existing ones be blue
+ * while the added ones are red, the ones not existing as yellow") shows its lines that the NEP has too in blue, the added
+ * ones in red, and the NEP's lines it does not have in yellow, where they were (not part of its total).
  *
  * The figure compares the two totals only (Jason, 2026-11-05: "we don't need the in the nep only but let's just compare
  * the totals for both"): no breakdown into lines in both, in one document only.
@@ -115,6 +117,15 @@ export function sideDots(data: MpbData, side: CompareSide): CompareDot[] {
   return out;
 }
 
+/**
+ * The dots a map draws: the NEP's lines; or the House bill's (in both, added) and the NEP lines it does not have,
+ * at their NEP amount (drawn in yellow, outside its total).
+ */
+export function mapDots(data: MpbData, side: CompareSide): CompareDot[] {
+  if (side === 'nep') return sideDots(data, 'nep');
+  return [...sideDots(data, 'house'), ...sideDots(data, 'nep').filter((d) => d.cls === 'nep_only')];
+}
+
 /** The view: the archipelago, Batanes to Tawi-Tawi (the Kalayaan islands, far west, are counted, not drawn). */
 export const COMPARE_VIEW: [number, number, number, number] = [116.75, 4.45, 126.75, 21.2];
 const LON_SCALE = Math.cos((12 * Math.PI) / 180);
@@ -170,15 +181,22 @@ export function placeDots(dots: readonly CompareDot[], frame: MapFrame): PlacedD
 // Drawing (a 2D canvas: the page, and later the poster)
 // ---------------------------------------------------------------------------
 
+export type DotColor = 'blue' | 'red' | 'yellow';
 export const COMPARE_COLORS = {
   ground: '#0c1322',
   land: '#1a2436',
   border: '#2a3750',
-  /** Each map's dots: NEP blue, House bill red. */
-  dot: { nep: 'rgba(150, 182, 232, 0.66)', house: 'rgba(255, 64, 64, 0.72)' } as Record<CompareSide, string>,
+  /** Dots: blue = in the NEP (on the House bill map: and in the House bill), red = added in the House bill, yellow = in the NEP, not the House bill. */
+  dot: { blue: 'rgba(150, 182, 232, 0.66)', red: 'rgba(255, 64, 64, 0.72)', yellow: 'rgba(255, 204, 64, 0.92)' } as Record<DotColor, string>,
   /** Solid swatches for legends and halos. */
-  swatch: { nep: '#96b6e8', house: '#ff4848' } as Record<CompareSide, string>,
+  swatch: { blue: '#96b6e8', red: '#ff4848', yellow: '#ffcc40' } as Record<DotColor, string>,
 } as const;
+
+/** A dot's colour on a map: the NEP map is all blue; the House bill map colours by match. */
+export function dotColor(side: CompareSide, cls: CompareClass): DotColor {
+  if (side === 'nep') return 'blue';
+  return cls === 'house_only' ? 'red' : cls === 'nep_only' ? 'yellow' : 'blue';
+}
 
 /** Province outlines as Path2D-ready strings in a frame (computed once per width). */
 export function provincePaths(geo: HgabGeo, frame: MapFrame): string[] {
@@ -198,8 +216,9 @@ export function provincePaths(geo: HgabGeo, frame: MapFrame): string[] {
 }
 
 /**
- * Draw one map: ground, provinces, then every dot in the side's colour with a small halo. Both maps are drawn the same
- * way, so their density compares; crowded places build up into solid colour rather than washing out to white.
+ * Draw one map: ground, provinces, then every dot with a small halo, in passes: blue, then red, then yellow on top (the
+ * few yellow dots stay visible). Both maps are drawn the same way, so their density compares; crowded places build up
+ * into solid colour rather than washing out to white.
  */
 export function drawCompareMap(
   ctx: CanvasRenderingContext2D, frame: MapFrame, provinces: readonly string[], dots: readonly PlacedDot[], side: CompareSide,
@@ -216,12 +235,15 @@ export function drawCompareMap(
     ctx.stroke(p);
   }
   ctx.shadowBlur = Math.max(2, frame.width / 160);
-  ctx.shadowColor = COMPARE_COLORS.swatch[side];
-  ctx.fillStyle = COMPARE_COLORS.dot[side];
-  for (const d of dots) {
-    ctx.beginPath();
-    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fill();
+  for (const color of ['blue', 'red', 'yellow'] as const) {
+    ctx.shadowColor = COMPARE_COLORS.swatch[color];
+    ctx.fillStyle = COMPARE_COLORS.dot[color];
+    for (const d of dots) {
+      if (dotColor(side, d.cls) !== color) continue;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
@@ -263,7 +285,7 @@ export interface CompareCopy {
   /** The change between the two totals. */
   cells: CompareCell[];
   sides: Record<CompareSide, CompareSideCopy>;
-  legend: Array<{ side: CompareSide; label: string }>;
+  legend: Array<{ color: DotColor; label: string }>;
   sizes: Array<{ php: number; label: string }>;
   notes: string;
   source: [string, string];
@@ -289,9 +311,15 @@ export function compareCopy(f: CompareFigures, builtAt: string, offMap = 0): Com
       { strong: `${signed(f.house.lines - f.nep.lines, n)} lines`, span: `${n(f.nep.lines)} in the NEP → ${n(f.house.lines)} in the House bill`, tone: null },
     ],
     sides: { nep: side('nep'), house: side('house') },
-    legend: [{ side: 'nep', label: 'A line in the NEP' }, { side: 'house', label: 'A line in the House bill' }],
+    legend: [
+      { color: 'blue', label: 'In the NEP' },
+      { color: 'red', label: 'Added in the House bill' },
+      { color: 'yellow', label: 'In the NEP, not in the House bill' },
+    ],
     sizes: [5e6, 25e6, 100e6].map((v) => ({ php: v, label: phpWords(v).replace(' million', 'M') })),
     notes: 'One dot is one budget line, sized by its amount and placed by the place its title names (GPS where published). '
+      + 'On the House bill map, red marks lines with no matching NEP line, and yellow marks NEP lines with no matching '
+      + 'House bill line. Both are candidates, not confirmed changes; yellow lines are not in the House bill’s total. '
       + 'Amounts are allocations, not spending.'
       + (offMap > 0 ? ` ${n(offMap)} House bill lines in the Kalayaan islands are counted but off the map’s edge.` : ''),
     source: [

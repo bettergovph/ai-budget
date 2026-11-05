@@ -16,7 +16,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData, type MpbSummary } from '../lib/hgab-mpb-years';
 import {
   COMPARE_COLORS, MPB_COMPARE_IMAGE_NAME, MPB_COMPARE_TITLE, compareByRegion, compareCopy, compareFigures,
-  compareFrame, dotRadius, drawCompareMap, inView, pct, phpWords, placeDots, provincePaths, sideDots, signed,
+  compareFrame, dotRadius, drawCompareMap, inView, mapDots, pct, phpWords, placeDots, provincePaths, sideDots, signed,
   type CompareCopy, type CompareFigures, type CompareSide,
 } from '../lib/mpb-compare';
 import { pageMeta } from '../lib/seo';
@@ -145,7 +145,7 @@ function CompareFigure({ data, summary, geo, f }: { data: MpbData; summary: MpbS
       <footer className="mpbc-foot">
         <ul className="mpbc-legend" aria-label="Legend">
           {copy.legend.map((l) => (
-            <li key={l.side}><i style={{ background: COMPARE_COLORS.swatch[l.side] }} />{l.label}</li>
+            <li key={l.color}><i style={{ background: COMPARE_COLORS.swatch[l.color] }} />{l.label}</li>
           ))}
           <li className="mpbc-sizes">
             {copy.sizes.map((sz) => {
@@ -173,7 +173,7 @@ function CompareMap({ data, geo, side, copy, f }: { data: MpbData; geo: HgabGeo;
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const dots = useMemo(() => sideDots(data, side), [data, side]);
+  const dots = useMemo(() => mapDots(data, side), [data, side]);
   useEffect(() => {
     const c = canvas.current;
     if (!c || !width) return;

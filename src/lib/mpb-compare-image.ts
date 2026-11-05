@@ -8,7 +8,7 @@
 import type { HgabGeo } from './hgab';
 import type { MpbData } from './hgab-mpb-years';
 import {
-  COMPARE_COLORS, compareFrame, dotRadius, drawCompareMap, placeDots, provincePaths, sideDots,
+  COMPARE_COLORS, compareFrame, dotRadius, drawCompareMap, mapDots, placeDots, provincePaths,
   type CompareCopy, type CompareSide,
 } from './mpb-compare';
 
@@ -139,7 +139,7 @@ export async function renderCompareImage(input: {
     ctx.beginPath();
     ctx.rect(0, 0, mw, frame.height);
     ctx.clip();
-    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(sideDots(data, side), frame), side);
+    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(mapDots(data, side), frame), side);
     ctx.restore();
     const s = copy.sides[side];
     const tone = side === 'house' ? C.house : C.ink;
@@ -156,7 +156,7 @@ export async function renderCompareImage(input: {
   ctx.font = `400 13px ${body}`;
   let lx = PAD;
   for (const l of copy.legend) {
-    ctx.fillStyle = COMPARE_COLORS.swatch[l.side];
+    ctx.fillStyle = COMPARE_COLORS.swatch[l.color];
     ctx.beginPath(); ctx.arc(lx + 5, y - 4, 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = C.ink2;
     ctx.fillText(l.label, lx + 16, y);
