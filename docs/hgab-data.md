@@ -55,7 +55,8 @@ builder emit for readers:
 - Document `title` and `notes`: plain names, with the volume and the reading
   kept ("House Bill 10858, Volume I-C: DPWH project list and program totals,
   second reading"). `volume` and `reading` are never reworded — the Sources
-  and Documents tables show them, and `src/lib/hgab-citations.ts` falls back
+  table shows them (with "Used by": the programs citing each; the programs' own
+  Documents views moved there on 2026-11-04 and `?view=documents` redirects to it), and `src/lib/hgab-citations.ts` falls back
   on `reading` when a dataset has no `documents.controls`.
 - Reconciliation `check` and `note` (the Methodology table): one plain
   sentence each, numbers exact, fund and program codes in parentheses at the
@@ -979,7 +980,8 @@ Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 
 
 ## Project placements (the source's location lens)
 
-Two pages read `locations.json`. **Projects placed in each district**
+Two pages read `locations.json`. **Projects placed in each district** (in the Districts menu
+as "Legislative Districts"; the office list `?view=list` is "District Engineering Offices")
 (`/hgab/2027/districts?view=list-legislative`, `src/pages/HgabDistrictsPlaced.tsx`, figures in
 `src/lib/hgab-placed.ts`; Jason, 2026-11-03: place every project as the multi-purpose map does,
 and list it by district, "a similar view but their own individual district") has one card per

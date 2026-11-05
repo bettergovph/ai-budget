@@ -11,18 +11,20 @@
  * and file-format notes sit in "Details for analysts".
  */
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
 import { pageMeta } from '../lib/seo';
 import { dataUrl } from '../lib/data-url';
 import {
-  DATASET_ORDER, HGAB_BASE, HGAB_ROOT, HGAB_SOURCE_REPO, STAGE_LABELS, loadHgabOverview, pdfUrl,
+  DATASET_ORDER, HGAB_BASE, HGAB_ROOT, HGAB_SOURCE_REPO, STAGE_LABELS, datasetPath, loadHgabOverview, pdfUrl,
   projectsParquetUrl, type HgabOverview,
 } from '../lib/hgab';
 import { DATASET_SHORT, formatBytes, ordinal } from '../lib/hgab-ui';
 import { SENATE_BUDGET_PORTAL, isSenatePortal } from '../lib/hgab-citations';
+import { DOCUMENTS_CSV_NAME, documentsCsv, programDocuments } from '../lib/hgab-csv';
+import { downloadCsv } from '../lib/csv';
 import { EXPLORER_ROOT, type DownloadFile, downloadFiles, downloadUrl, loadExplorerDownloads } from '../lib/hgab-explorer';
 import { CONTRACTORS_DOWNLOADS_DIR, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { DYNASTIES_DEVELOPERS, DYNASTIES_SITE, OPEN_HALALAN_URL, PARTIES_DATA_PATH, PARTIES_ROOT } from '../lib/hgab-parties';
@@ -49,6 +51,11 @@ export default function HgabSources() {
     loadHgabOverview().then(setOv).catch((e) => setErr(String(e?.message || e)));
     loadExplorerDownloads().then((m) => setLineFiles(downloadFiles(m))).catch(() => {});
   }, []);
+  // `#documents` (where a program's old Documents link now lands) once the table is drawn.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (ov && hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [ov, hash]);
 
   if (err) return <HgabError message={err} />;
   if (!ov) return <HgabLoading what="the FY2027 House bill sources" />;
@@ -60,6 +67,12 @@ export default function HgabSources() {
       || (a.volume ?? '').localeCompare(b.volume ?? ''),
   );
   const byKey = new Map(ov.datasets.map((d) => [d.key, d]));
+  // Which programs cite each document (each program's Documents view used to list its own; they live here now).
+  const usedBy = (docKey: string) =>
+    DATASET_ORDER.filter((k) => {
+      const ds = byKey.get(k);
+      return ds ? programDocuments(ds, ov.documents).some((x) => x.key === docKey) : false;
+    });
   const repo = ov.source_repo || HGAB_SOURCE_REPO;
   const commit = ov.source_commit ?? '';
   const built = ov.built_at ? new Date(ov.built_at) : null;
@@ -79,11 +92,11 @@ export default function HgabSources() {
 
       <main className="nep-main">
         {/* ---- documents ---- */}
-        <section className="nep-section" aria-labelledby="hgab-src-docs">
+        <section className="nep-section" id="documents" aria-labelledby="hgab-src-docs">
           <SectionHead
             eyebrow="Source documents"
             headline={<span id="hgab-src-docs">The {docs.length.toLocaleString()} published documents</span>}
-            dek="The NEP and the House bill (HB 10858) are published in several volumes. Each link opens the PDF we read; the fingerprint proves which exact copy it was."
+            dek="The NEP and the House bill (HB 10858) are published in several volumes. “Used by” names the programs whose figures cite each one. Each link opens the PDF we read; the fingerprint proves which exact copy it was."
           />
           <div className="nep-table-wrap">
             <table className="nep-table hgab-src-table">
@@ -93,6 +106,7 @@ export default function HgabSources() {
                   <th>Version</th>
                   <th>Reading</th>
                   <th>Volume</th>
+                  <th title="The programs whose figures cite this document">Used by</th>
                   <th className="num" title="PDF file pages this section uses">Pages used</th>
                   <th className="num">Size</th>
                   <th title="SHA-256 checksum of the file as retained">Fingerprint</th>
@@ -114,6 +128,16 @@ export default function HgabSources() {
                     </td>
                     <td>{d.reading ? `${ordinal(d.reading)} reading` : '—'}</td>
                     <td>{d.volume ?? '—'}</td>
+                    <td>
+                      {usedBy(d.key).length
+                        ? usedBy(d.key).map((k, i) => (
+                          <span key={k}>
+                            {i > 0 && ', '}
+                            <Link to={datasetPath(k)}>{DATASET_SHORT[k]}</Link>
+                          </span>
+                        ))
+                        : '—'}
+                    </td>
                     <td className="num">{d.pages ? `${d.pages.from.toLocaleString()}–${d.pages.to.toLocaleString()}` : '—'}</td>
                     <td className="num">{formatBytes(d.bytes)}</td>
                     <td><Sha value={d.sha256} /></td>
@@ -144,6 +168,15 @@ export default function HgabSources() {
               {' '}Our copies are identical to the Senate’s: each has the same fingerprint.
             </p>
           )}
+          <p className="hgab-recon-note">
+            <button
+              type="button"
+              className="nep-more"
+              onClick={() => downloadCsv(DOCUMENTS_CSV_NAME, documentsCsv(ov.datasets, docs, (k) => absoluteUrl(pdfUrl(k))), { excelBom: true })}
+            >
+              Download this list (CSV)
+            </button>
+          </p>
           <HgabDetails>
             <p>
               Pages are one-based PDF file pages, not the page numbers shown on the pages; they are not
@@ -348,4 +381,9 @@ function Sha({ value }: { value: string }) {
       </button>
     </span>
   );
+}
+
+/** An address a CSV cell can carry: the dev data tree is served from the page's origin. */
+function absoluteUrl(u: string): string {
+  return /^https?:/.test(u) ? u : `${window.location.origin}${u}`;
 }

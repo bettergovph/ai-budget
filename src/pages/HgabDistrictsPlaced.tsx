@@ -266,7 +266,7 @@ function PlacedList({ index, data }: { index: HgabDistrictIndex; data: Locations
   return (
     <>
       <HgabHeader
-        crumb={<><Link to={districtPath()}>Districts</Link> › Projects placed in each district</>}
+        crumb={<><Link to={districtPath()}>Districts</Link> › Legislative Districts</>}
         compiledMeta={`${index.districts.length.toLocaleString()} districts · ${totals.total.rows.toLocaleString()} DPWH projects`}
       />
 
@@ -276,10 +276,10 @@ function PlacedList({ index, data }: { index: HgabDistrictIndex; data: Locations
           <>
             <Link to={districtPath()}>Districts</Link>
             <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-            <span className="hgab-crumb-here">Projects placed in each district</span>
+            <span className="hgab-crumb-here">Legislative Districts</span>
           </>
         }
-        title="Projects placed in each district"
+        title="Legislative Districts"
         dek={
           <>
             One card per legislative district, with the 2027 DPWH projects placed in it: by the place the project’s title

@@ -17,7 +17,7 @@
  * the workbench's vocabulary ("bridge", "ledger", "controls", "stages").
  */
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
@@ -40,7 +40,7 @@ import {
 } from '../lib/hgab';
 import { papLabel } from '../lib/hgab-query';
 import {
-  SENATE_BUDGET_PORTAL, controlCitations, isSenatePortal, shownCitations, type HouseCitation,
+  controlCitations, shownCitations, type HouseCitation,
 } from '../lib/hgab-citations';
 import {
   CHANGE_LIST_GROUPS, COMPARE_NOT_ADD, DATASET_SHORT, DIM_TABS, PLAIN, datasetCaveats, datasetSummary, hubViews,
@@ -106,6 +106,8 @@ export default function HgabDataset() {
   if (!isDatasetKey(key)) {
     return <HgabError message={`There is no House-bill program called “${key}”. The four programs are dpwh, fmr, hfep and nia.`} />;
   }
+  // The source documents moved to About › Sources (Jason, 2026-11-04); old links open that list.
+  if (params.get('view') === 'documents') return <Navigate to={`${HGAB_ROOT}/sources#documents`} replace />;
   if (current?.err) return <HgabError message={current.err} />;
   // Overview keeps the navy band and the headline figures; the other views open
   // with a compact heading and go straight to their content.
@@ -263,7 +265,6 @@ export default function HgabDataset() {
             </Suspense>
           )}
           {tab === 'readings' && d.has_readings && <ReadingsTab s={summary} docs={overview.documents} />}
-          {tab === 'documents' && <DocumentsTab s={summary} docs={overview.documents} />}
         </section>
 
         <p className="nep-provenance">
@@ -866,79 +867,3 @@ function ReadingsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] 
 // Documents
 // ---------------------------------------------------------------------------
 
-function DocumentsTab({ s, docs }: { s: HgabDatasetSummary; docs: HgabDocument[] }) {
-  const d = s.dataset;
-  const keys = [...d.documents.nep, ...d.documents.house];
-  const rows = keys.map((k) => docs.find((x) => x.key === k)).filter((x): x is HgabDocument => Boolean(x));
-  const missing = keys.filter((k) => !docs.some((x) => x.key === k));
-  return (
-    <>
-      <SectionHead
-        eyebrow="Source documents"
-        headline="The PDFs behind this program’s figures"
-        dek="Every amount on these pages cites a page in one of these files. Page numbers count PDF file pages, not the page numbers shown on the page. The fingerprint identifies the exact copy we read."
-      />
-      <div className="nep-table-wrap hgab-ds-docs">
-        <table className="nep-table">
-          <thead>
-            <tr>
-              <th className="nep-th-name">Document</th>
-              <th>Version</th>
-              <th>Pages used</th>
-              <th className="num">Size</th>
-              <th title="SHA-256 checksum of the file as retained">Fingerprint</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((doc) => (
-              <tr key={doc.key}>
-                <td className="nep-td-name">
-                  {doc.title}
-                  {doc.notes && <span className="nep-code">{doc.notes}</span>}
-                </td>
-                <td className="nep-td-dim">
-                  {doc.stage === 'nep' ? STAGE_LABELS.nep.label : `House bill, ${doc.reading === 2 ? 'second' : doc.reading === 3 ? 'third' : ''} reading`}
-                </td>
-                <td className="nep-td-dim">{doc.pages ? `${doc.pages.from.toLocaleString()}–${doc.pages.to.toLocaleString()}` : '—'}</td>
-                <td className="num">{doc.bytes ? `${(doc.bytes / 1e6).toFixed(1)} MB` : '—'}</td>
-                <td><span className="hgab-ds-sha" title={doc.sha256}>{doc.sha256.slice(0, 12)}…</span></td>
-                <td>
-                  <span className="hgab-ds-pages">
-                    <a href={pdfUrl(doc.key, doc.pages?.from ?? null)} target="_blank" rel="noopener">Open PDF ↗</a>
-                    {doc.source_url && (
-                      <a href={doc.source_url} target="_blank" rel="noopener" title={isSenatePortal(doc.source_url) ? `Official copy: ${SENATE_BUDGET_PORTAL.name}` : 'Where the original was published'}>
-                        {isSenatePortal(doc.source_url) ? SENATE_BUDGET_PORTAL.short : 'Original'} ↗
-                      </a>
-                    )}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {missing.map((k) => (
-              <tr key={k}>
-                <td className="nep-td-name"><span className="nep-code">{k}</span></td>
-                <td className="nep-td-dim" colSpan={5}>Not in the document list.</td>
-              </tr>
-            ))}
-            {!rows.length && !missing.length && <tr><td colSpan={6} className="nep-empty">No documents listed.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      <HgabDetails>
-        <dl>
-          {rows.map((doc) => (
-            <div key={doc.key} style={{ display: 'contents' }}>
-              <dt>{doc.key}</dt>
-              <dd>{doc.volume ? `${/^[IVX]+(-[A-Z])?\b/.test(doc.volume) ? 'Volume ' : ''}${doc.volume} · ` : ''}SHA-256 <code>{doc.sha256}</code></dd>
-            </div>
-          ))}
-        </dl>
-      </HgabDetails>
-      <p className="nep-hier-note">
-        The full list, with downloads of the extracted tables, is on the{' '}
-        <Link to={`${HGAB_ROOT}/sources`}>Sources</Link> page.
-      </p>
-    </>
-  );
-}
