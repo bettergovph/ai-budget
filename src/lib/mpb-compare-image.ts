@@ -16,7 +16,7 @@ const W = 1200;
 const PAD = 32;
 const GAP = 20;
 const C = {
-  ground: COMPARE_COLORS.ground, ink: '#f3f6fb', ink2: '#c3cddd', ink3: '#8592a8', house: '#ff5a5a', nep: '#ffc24d',
+  ground: COMPARE_COLORS.ground, ink: '#f3f6fb', ink2: '#c3cddd', ink3: '#8592a8', house: '#ff5a5a',
   cell: '#121b2e', cellRule: '#24304a',
 };
 
@@ -112,18 +112,19 @@ export async function renderCompareImage(input: {
     ctx.drawImage(logo, W - PAD - lw, kickerY + 4, lw, lh);
   }
 
-  // The change strip: five cells.
-  const cw = (W - PAD * 2 - 4) / 5;
+  // The change strip: one cell per figure.
+  const cells = copy.cells.length;
+  const cw = (W - PAD * 2 - (cells - 1)) / cells;
   ctx.fillStyle = C.cellRule;
   ctx.fillRect(PAD, stripTop, W - PAD * 2, stripH);
   copy.cells.forEach((cell, i) => {
     const cx = PAD + 1 + i * (cw + 0.5);
     ctx.fillStyle = C.cell;
     ctx.fillRect(cx, stripTop + 1, cw - 0.5, stripH - 2);
-    let size = 21;
+    let size = 22;
     ctx.font = `700 ${size}px ${hero}`;
     while (size > 14 && ctx.measureText(cell.strong).width > cw - 24) ctx.font = `700 ${--size}px ${hero}`;
-    ctx.fillStyle = cell.tone === 'house_only' ? C.house : cell.tone === 'nep_only' ? C.nep : C.ink;
+    ctx.fillStyle = cell.tone === 'house' ? C.house : C.ink;
     ctx.fillText(cell.strong, cx + 14, stripTop + 32);
     ctx.font = `400 12.5px ${body}`;
     ctx.fillStyle = C.ink2;
@@ -138,7 +139,7 @@ export async function renderCompareImage(input: {
     ctx.beginPath();
     ctx.rect(0, 0, mw, frame.height);
     ctx.clip();
-    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(sideDots(data, side), frame));
+    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(sideDots(data, side), frame), side);
     ctx.restore();
     const s = copy.sides[side];
     const tone = side === 'house' ? C.house : C.ink;
@@ -148,18 +149,6 @@ export async function renderCompareImage(input: {
     ctx.font = `400 12.5px ${body}`; ctx.fillStyle = C.ink3; ctx.fillText(s.sub, mx + 14, y + 12); y += 24;
     ctx.font = `700 58px ${hero}`; ctx.fillStyle = tone; ctx.fillText(s.php, mx + 14, y + 52); y += 62;
     ctx.font = `700 22px ${hero}`; ctx.fillStyle = C.ink2; ctx.fillText(s.lines, mx + 14, y + 20);
-    // Its own lines, top right.
-    const own = side === 'house' ? C.house : C.nep;
-    const right = mx + mw - 14;
-    ctx.textAlign = 'right';
-    ctx.font = `400 16px ${body}`; ctx.fillStyle = C.ink2;
-    const restW = ctx.measureText(s.ownRest).width;
-    ctx.fillText(s.ownRest, right, mapTop + 44);
-    ctx.font = `700 32px ${hero}`; ctx.fillStyle = own;
-    ctx.fillText(s.ownCount, right - restW, mapTop + 44);
-    ctx.font = `400 12.5px ${body}`; ctx.fillStyle = C.ink3;
-    ctx.fillText(s.ownLabel, right, mapTop + 66);
-    ctx.textAlign = 'left';
   });
 
   // Legend, notes, source.
@@ -167,7 +156,7 @@ export async function renderCompareImage(input: {
   ctx.font = `400 13px ${body}`;
   let lx = PAD;
   for (const l of copy.legend) {
-    ctx.fillStyle = COMPARE_COLORS.swatch[l.cls];
+    ctx.fillStyle = COMPARE_COLORS.swatch[l.side];
     ctx.beginPath(); ctx.arc(lx + 5, y - 4, 5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = C.ink2;
     ctx.fillText(l.label, lx + 16, y);

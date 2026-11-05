@@ -15,7 +15,7 @@ import { REGION_LABELS, loadMpbCompare, type HgabGeo } from '../lib/hgab';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData, type MpbSummary } from '../lib/hgab-mpb-years';
 import {
-  COMPARE_COLORS, HOUSE_ONLY_NOTE, MPB_COMPARE_IMAGE_NAME, MPB_COMPARE_TITLE, compareByRegion, compareCopy, compareFigures,
+  COMPARE_COLORS, MPB_COMPARE_IMAGE_NAME, MPB_COMPARE_TITLE, compareByRegion, compareCopy, compareFigures,
   compareFrame, dotRadius, drawCompareMap, inView, pct, phpWords, placeDots, provincePaths, sideDots, signed,
   type CompareCopy, type CompareFigures, type CompareSide,
 } from '../lib/mpb-compare';
@@ -131,7 +131,7 @@ function CompareFigure({ data, summary, geo, f }: { data: MpbData; summary: MpbS
 
       <div className="mpbc-change" role="list" aria-label="What changed">
         {copy.cells.map((c) => (
-          <div role="listitem" key={c.span} className={c.tone === 'house_only' ? 'is-house' : c.tone === 'nep_only' ? 'is-nep' : undefined}>
+          <div role="listitem" key={c.span} className={c.tone === 'house' ? 'is-house' : undefined}>
             <strong>{c.strong}</strong><span>{c.span}</span>
           </div>
         ))}
@@ -145,7 +145,7 @@ function CompareFigure({ data, summary, geo, f }: { data: MpbData; summary: MpbS
       <footer className="mpbc-foot">
         <ul className="mpbc-legend" aria-label="Legend">
           {copy.legend.map((l) => (
-            <li key={l.cls}><i style={{ background: COMPARE_COLORS.swatch[l.cls] }} />{l.label}</li>
+            <li key={l.side}><i style={{ background: COMPARE_COLORS.swatch[l.side] }} />{l.label}</li>
           ))}
           <li className="mpbc-sizes">
             {copy.sizes.map((sz) => {
@@ -185,8 +185,8 @@ function CompareMap({ data, geo, side, copy, f }: { data: MpbData; geo: HgabGeo;
     const ctx = c.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(dots, frame));
-  }, [width, dots, geo]);
+    drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(dots, frame), side);
+  }, [width, dots, geo, side]);
   const t = side === 'nep' ? f.nep : f.house;
   const s = copy.sides[side];
   return (
@@ -200,10 +200,6 @@ function CompareMap({ data, geo, side, copy, f }: { data: MpbData; geo: HgabGeo;
           <strong className="mpbc-side-php">{s.php}</strong>
           <span className="mpbc-side-lines">{s.lines}</span>
         </figcaption>
-        <p className={`mpbc-own is-${side}`}>
-          <strong>{s.ownCount}</strong>{s.ownRest}
-          <span>{s.ownLabel}</span>
-        </p>
       </div>
     </figure>
   );
@@ -229,8 +225,6 @@ function RegionTable({ data }: { data: MpbData }) {
               <th scope="col" className="is-num">House bill lines</th>
               <th scope="col" className="is-num">House bill</th>
               <th scope="col" className="is-num">Change</th>
-              <th scope="col" className="is-num">House bill only</th>
-              <th scope="col" className="is-num">NEP only</th>
             </tr>
           </thead>
           <tbody>
@@ -245,15 +239,12 @@ function RegionTable({ data }: { data: MpbData }) {
                   <td className="is-num">{n(r.house.lines)}</td>
                   <td className="is-num">{phpWords(r.house.php)}</td>
                   <td className="is-num">{signed(r.house.php - r.nep.php, phpWords)}{p != null && <span className="mpbc-sub">{p > 0 ? '+' : ''}{p}%</span>}</td>
-                  <td className="is-num is-house">{n(r.houseOnly.lines)}<span className="mpbc-sub">{phpWords(r.houseOnly.php)}</span></td>
-                  <td className="is-num is-nep">{n(r.nepOnly.lines)}<span className="mpbc-sub">{phpWords(r.nepOnly.php)}</span></td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="mpbc-more">{HOUSE_ONLY_NOTE}</p>
     </section>
   );
 }

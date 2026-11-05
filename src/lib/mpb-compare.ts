@@ -13,7 +13,10 @@
  *
  * Dots: one per line, never grouped. A line sits at its first GPS point, else at the centre of the place its title
  * names (or its office's area). Lines at the same spot fan out in a sunflower so each stays visible; dot area follows
- * the line's amount. Drawn with additive blending on a dark ground, so crowded places glow.
+ * the line's amount. Each map is one colour (NEP blue, House bill red), drawn the same way.
+ *
+ * The figure compares the two totals only (Jason, 2026-11-05: "we don't need the in the nep only but let's just compare
+ * the totals for both"): no breakdown into lines in both, in one document only.
  */
 import type { MpbClass, MpbData, MpbLine } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
@@ -24,13 +27,6 @@ export const MPB_COMPARE_TITLE = 'Multi-purpose buildings: NEP vs House bill';
 export type CompareSide = 'nep' | 'house';
 export type CompareClass = Exclude<MpbClass, null>;
 
-/** "In the House bill only" is a candidate: no matching NEP line was found. Said wherever it is shown. */
-export const HOUSE_ONLY_NOTE = '“In the House bill only” means no matching NEP line was found: a candidate, not a confirmed insertion.';
-export const COMPARE_LABELS: Record<CompareClass, string> = {
-  house_only: 'In the House bill only',
-  nep_only: 'In the NEP only',
-  paired: 'In both',
-};
 
 // ---------------------------------------------------------------------------
 // Figures
@@ -76,19 +72,15 @@ export interface RegionRow {
   region: RegionKey | null;
   nep: Tally;
   house: Tally;
-  houseOnly: Tally;
-  nepOnly: Tally;
 }
 
-/** The figures by region (a line's region; null where none), largest House bill amount first. */
+/** The totals by region (a line's region; null where none), largest House bill amount first. */
 export function compareByRegion(data: MpbData): RegionRow[] {
   const by = new Map<RegionKey | null, RegionRow>();
   for (const l of lines2027(data)) {
-    const r = by.get(l.region) ?? { region: l.region, nep: { lines: 0, php: 0 }, house: { lines: 0, php: 0 }, houseOnly: { lines: 0, php: 0 }, nepOnly: { lines: 0, php: 0 } };
+    const r = by.get(l.region) ?? { region: l.region, nep: { lines: 0, php: 0 }, house: { lines: 0, php: 0 } };
     if (l.nep != null) { r.nep.lines++; r.nep.php += l.nep; }
     if (l.house != null) { r.house.lines++; r.house.php += l.house; }
-    if (l.cls === 'house_only') { r.houseOnly.lines++; r.houseOnly.php += l.house ?? 0; }
-    if (l.cls === 'nep_only') { r.nepOnly.lines++; r.nepOnly.php += l.nep ?? 0; }
     by.set(l.region, r);
   }
   return [...by.values()].sort((a, b) => b.house.php - a.house.php || a.nep.php - b.nep.php);
@@ -149,7 +141,7 @@ export interface PlacedDot extends CompareDot { x: number; y: number; r: number 
 
 /**
  * Pixel positions: dots at the same spot (to half a pixel) fan out in a sunflower, largest at the centre, so a
- * barangay with 30 lines shows 30 dots. Highlighted dots (House only, NEP only) are placed last, to draw on top.
+ * barangay with 30 lines shows 30 dots.
  */
 export function placeDots(dots: readonly CompareDot[], frame: MapFrame): PlacedDot[] {
   const spots = new Map<string, CompareDot[]>();
@@ -170,8 +162,8 @@ export function placeDots(dots: readonly CompareDot[], frame: MapFrame): PlacedD
       out.push({ ...d, x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a), r: dotRadius(d.php, frame.width) });
     });
   }
-  const order: Record<CompareClass, number> = { paired: 0, nep_only: 1, house_only: 1 };
-  return out.sort((a, b) => order[a.cls] - order[b.cls] || b.r - a.r);
+  // Largest first, so the small dots stay visible on top.
+  return out.sort((a, b) => b.r - a.r);
 }
 
 // ---------------------------------------------------------------------------
@@ -182,11 +174,10 @@ export const COMPARE_COLORS = {
   ground: '#0c1322',
   land: '#1a2436',
   border: '#2a3750',
-  paired: 'rgba(146, 172, 214, 0.34)',
-  house_only: 'rgba(255, 64, 64, 0.72)',
-  nep_only: 'rgba(255, 190, 60, 0.85)',
-  /** Solid swatches for legends and figures. */
-  swatch: { paired: '#92acd6', house_only: '#ff4848', nep_only: '#ffbe3c' } as Record<CompareClass, string>,
+  /** Each map's dots: NEP blue, House bill red. */
+  dot: { nep: 'rgba(150, 182, 232, 0.66)', house: 'rgba(255, 64, 64, 0.72)' } as Record<CompareSide, string>,
+  /** Solid swatches for legends and halos. */
+  swatch: { nep: '#96b6e8', house: '#ff4848' } as Record<CompareSide, string>,
 } as const;
 
 /** Province outlines as Path2D-ready strings in a frame (computed once per width). */
@@ -207,11 +198,12 @@ export function provincePaths(geo: HgabGeo, frame: MapFrame): string[] {
 }
 
 /**
- * Draw one map: ground, provinces, then every dot. Lines in both are added together, so crowded places glow; the
- * lines only one side has (House bill only, NEP only) go on top in their own colour with a small halo, so a dense
- * cluster of them stays red (or amber) instead of washing out to white.
+ * Draw one map: ground, provinces, then every dot in the side's colour with a small halo. Both maps are drawn the same
+ * way, so their density compares; crowded places build up into solid colour rather than washing out to white.
  */
-export function drawCompareMap(ctx: CanvasRenderingContext2D, frame: MapFrame, provinces: readonly string[], dots: readonly PlacedDot[]): void {
+export function drawCompareMap(
+  ctx: CanvasRenderingContext2D, frame: MapFrame, provinces: readonly string[], dots: readonly PlacedDot[], side: CompareSide,
+): void {
   ctx.save();
   ctx.fillStyle = COMPARE_COLORS.ground;
   ctx.fillRect(0, 0, frame.width, frame.height);
@@ -223,20 +215,13 @@ export function drawCompareMap(ctx: CanvasRenderingContext2D, frame: MapFrame, p
     ctx.fill(p, 'evenodd');
     ctx.stroke(p);
   }
-  const dot = (d: PlacedDot) => {
+  ctx.shadowBlur = Math.max(2, frame.width / 160);
+  ctx.shadowColor = COMPARE_COLORS.swatch[side];
+  ctx.fillStyle = COMPARE_COLORS.dot[side];
+  for (const d of dots) {
     ctx.beginPath();
     ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-    ctx.fillStyle = COMPARE_COLORS[d.cls];
     ctx.fill();
-  };
-  ctx.globalCompositeOperation = 'lighter';
-  for (const d of dots) if (d.cls === 'paired') dot(d);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.shadowBlur = Math.max(2, frame.width / 160);
-  for (const d of dots) {
-    if (d.cls === 'paired') continue;
-    ctx.shadowColor = COMPARE_COLORS.swatch[d.cls];
-    dot(d);
   }
   ctx.restore();
 }
@@ -269,15 +254,16 @@ export function asOfDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-export interface CompareCell { strong: string; span: string; tone: CompareClass | null }
-export interface CompareSideCopy { name: string; sub: string; php: string; lines: string; ownCount: string; ownRest: string; ownLabel: string }
+export interface CompareCell { strong: string; span: string; tone: CompareSide | null }
+export interface CompareSideCopy { name: string; sub: string; php: string; lines: string }
 export interface CompareCopy {
   kicker: string;
   /** The headline in runs; `house` runs are drawn in the House bill's red. */
   title: Array<{ text: string; house?: boolean }>;
+  /** The change between the two totals. */
   cells: CompareCell[];
   sides: Record<CompareSide, CompareSideCopy>;
-  legend: Array<{ cls: CompareClass; label: string }>;
+  legend: Array<{ side: CompareSide; label: string }>;
   sizes: Array<{ php: number; label: string }>;
   notes: string;
   source: [string, string];
@@ -288,32 +274,25 @@ export function compareCopy(f: CompareFigures, builtAt: string, offMap = 0): Com
   const p = pct(f.house.php, f.nep.php) ?? 0;
   const side = (s: CompareSide): CompareSideCopy => {
     const t = s === 'nep' ? f.nep : f.house;
-    const own = s === 'nep' ? f.nepOnly : f.houseOnly;
     return {
       name: s === 'nep' ? 'NEP' : 'House bill',
       sub: s === 'nep' ? 'The President’s budget' : 'House Bill 10858, third reading',
       php: phpShort(t.php),
       lines: `${n(t.lines)} lines`,
-      ownCount: n(own.lines),
-      ownRest: ` lines, ${phpShort(own.php)}`,
-      ownLabel: s === 'nep' ? 'in the NEP only' : 'in the House bill only',
     };
   };
   return {
     kicker: 'Multi-purpose buildings · 2027 budget',
     title: [{ text: `${phpWords(f.nep.php)} in the NEP. ` }, { text: phpWords(f.house.php), house: true }, { text: ' in the House bill.' }],
     cells: [
-      { strong: signed(change, phpWords), span: p >= 0 ? `${p}% more than the NEP` : `${-p}% less than the NEP`, tone: null },
-      { strong: `${signed(f.house.lines - f.nep.lines, n)} lines`, span: `${n(f.nep.lines)} → ${n(f.house.lines)}`, tone: null },
-      { strong: `${n(f.houseOnly.lines)} lines · ${phpShort(f.houseOnly.php)}`, span: COMPARE_LABELS.house_only, tone: 'house_only' },
-      { strong: `${n(f.nepOnly.lines)} lines · ${phpShort(f.nepOnly.php)}`, span: COMPARE_LABELS.nep_only, tone: 'nep_only' },
-      { strong: `${n(f.paired.lines)} lines`, span: `In both · ${n(f.paired.higher)} higher, ${n(f.paired.lower)} lower`, tone: null },
+      { strong: `${signed(change, phpWords)} in the House bill`, span: p >= 0 ? `${p}% more than the NEP (${phpShort(f.nep.php)} → ${phpShort(f.house.php)})` : `${-p}% less than the NEP`, tone: 'house' },
+      { strong: `${signed(f.house.lines - f.nep.lines, n)} lines`, span: `${n(f.nep.lines)} in the NEP → ${n(f.house.lines)} in the House bill`, tone: null },
     ],
     sides: { nep: side('nep'), house: side('house') },
-    legend: (['paired', 'house_only', 'nep_only'] as const).map((cls) => ({ cls, label: COMPARE_LABELS[cls] })),
+    legend: [{ side: 'nep', label: 'A line in the NEP' }, { side: 'house', label: 'A line in the House bill' }],
     sizes: [5e6, 25e6, 100e6].map((v) => ({ php: v, label: phpWords(v).replace(' million', 'M') })),
     notes: 'One dot is one budget line, sized by its amount and placed by the place its title names (GPS where published). '
-      + `${HOUSE_ONLY_NOTE} Amounts are allocations, not spending.`
+      + 'Amounts are allocations, not spending.'
       + (offMap > 0 ? ` ${n(offMap)} House bill lines in the Kalayaan islands are counted but off the map’s edge.` : ''),
     source: [
       'Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines',

@@ -12,11 +12,16 @@ impact."
 
 A dark block, 1200 px wide on desktop:
 - **Headline:** "₱43.2 billion in the NEP. ₱86.3 billion in the House bill."
-- **Change strip:** the change in pesos and in lines; the lines in the House bill only and in the NEP only; the lines
-  in both, with how many are higher or lower.
-- **Two maps** drawn the same way. Each carries its total and lines on the open sea west of Luzon, and its own lines in
-  the Philippine Sea.
+- **Change strip:** +₱43.1 billion (100% more), and +2,992 lines (2,815 → 5,807).
+- **Two maps** drawn the same way, NEP dots in blue and House bill dots in red. Each carries its total and its lines on
+  the open sea west of Luzon.
 - **Legend, notes and source**, with the page address and the "as of" date.
+
+**Totals only.** Jason (2026-11-05): "we don't need the in the nep only but let's just compare the totals for both".
+An earlier version broke the lines down into in both (2,499), not in the House bill (316) and not in the NEP (3,308).
+"In the NEP only: 316" beside the NEP map read as if the NEP had only 316 multi-purpose buildings, so the figure and
+the region table now show each document's totals and the change only. `compareFigures` still counts the breakdown, and
+the verifier checks it adds up.
 
 `?shot=1` shows the figure alone at its full width, for a clean screenshot (in Chrome: DevTools → the
 `section.mpbc-figure` node → Capture node screenshot).
@@ -28,8 +33,8 @@ too, so the two never differ), the maps from `drawCompareMap`, in the site's fon
 
 - **Dots:** every line is its own dot, never grouped. A line sits at its first GPS point, else at the centre of the
   place its title names. Lines at the same spot fan out in a sunflower; dot area follows the amount.
-- **Drawing:** lines in both are added together, so crowded places glow. The lines only one side has go on top in solid
-  red (House bill only) or amber (NEP only) with a small halo, so dense clusters stay red instead of washing out.
+- **Drawing:** each map in one colour with a small halo, drawn the same way, so the density compares. Crowded places
+  build up into solid colour.
 - **Canvas:** plain 2D canvas at twice the screen resolution, over the province outlines (`geo/provinces.json`). There
   are no map tiles, so it draws the same offline and in the poster.
 
@@ -39,11 +44,9 @@ Figures (2026-11-02 build of the map's lines):
 | --- | ---: | ---: |
 | NEP | 2,815 | ₱43,209,739,000 |
 | House bill | 5,807 | ₱86,264,219,000 |
-| House bill only (a candidate: no matching NEP line found) | 3,308 | ₱48.21B |
-| NEP only | 316 | ₱5.09B |
-| In both | 2,499 (68 higher, 27 lower) | NEP ₱38.12B, House bill ₱38.05B |
+| Change | +2,992 | +₱43,054,480,000 (+100%) |
 
-Below the figure: the same by region (a line's region), with links to the interactive map and the budget by year.
+Below the figure: the totals by region (a line's region), with links to the interactive map and the budget by year.
 
 ## Code
 
@@ -54,9 +57,9 @@ Below the figure: the same by region (a line's region), with links to the intera
 - Page: `src/pages/HgabMpbCompare.tsx`, styles in `src/hgab-mpb-compare.css`, loader `loadMpbCompare` (the map's
   lines and summary, and the outlines).
 - Checks: `npm run verify:hgab` has a `multi-purpose/nep-vs-house-bill` section (`scripts/verify-hgab-mpb-compare.ts`,
-  7 checks):
+  8 checks):
   - both totals equal `mpb-years/summary.json`;
   - the three kinds and the regions add up;
   - every line is a dot, none off the drawn view;
-  - the House-bill-only note's wording.
+  - the figure's words show the totals only, with no breakdown by match, in plain words.
 - No new data: the page reads `mpb-years/` and `geo/`, already published.
