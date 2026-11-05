@@ -99,7 +99,7 @@ export default function HgabDistricts() {
   }, []);
   useEffect(() => {
     const t = pageMeta(districtPath()).title;
-    document.title = view === 'list' ? `All districts · ${t}` : view === 'list-legislative' ? `Projects placed in each district · ${t}` : t;
+    document.title = view === 'list' ? `District Engineering Offices · ${t}` : view === 'list-legislative' ? `Legislative Districts · ${t}` : t;
   }, [view]);
 
   if (legacyListHash) return <Navigate replace to={`${districtListHref()}${hash}`} />;
@@ -595,7 +595,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   return (
     <>
       <HgabHeader
-        crumb={<><Link to={districtPath()}>Districts</Link> › All districts</>}
+        crumb={<><Link to={districtPath()}>Districts</Link> › District Engineering Offices</>}
         compiledMeta={`${all.length.toLocaleString()} districts · ${offices.length.toLocaleString()} DPWH offices`}
       />
 
@@ -605,10 +605,10 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
           <>
             <Link to={districtPath()}>Districts</Link>
             <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-            <span className="hgab-crumb-here">All districts</span>
+            <span className="hgab-crumb-here">District Engineering Offices</span>
           </>
         }
-        title="Districts"
+        title="District Engineering Offices"
         dek={
           <>
             One card per legislative district, with the DPWH office that serves it as a small badge. A DPWH office that

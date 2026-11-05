@@ -23,7 +23,7 @@ import {
 } from './hgab';
 import { SENATE_BUDGET_PORTAL, controlCitations, isSenatePortal, type HouseCitation } from './hgab-citations';
 import { projectCsvColumns, readingLabel, tableCsv, type CsvColumn } from './hgab-query';
-import { CHANGE_LIST_GROUPS, DIM_TABS } from './hgab-ui';
+import { CHANGE_LIST_GROUPS, DATASET_SHORT, DIM_TABS } from './hgab-ui';
 
 type Docs = readonly HgabDocument[];
 
@@ -334,14 +334,23 @@ function sourceName(url: string | null): string | null {
   }
 }
 
+/** The Sources page's documents list, as a file. */
+export const DOCUMENTS_CSV_NAME = `bettergov-house-bill-${HGAB_YEAR}-documents.csv`;
+
 /**
- * The Documents view: every file this program's figures cite. `pdfUrl` turns a
- * document key into the address of our retained copy.
+ * Every source document, in the order given (the Sources table), with
+ * `used_by`: the programs whose figures cite it (`programDocuments`), joined
+ * by "; ". `pdfUrl` turns a document key into the address of our retained copy.
  */
-export function documentsCsv(dataset: HgabDatasetMeta, docs: Docs, pdfUrl: (key: string) => string): string {
-  type Row = ReturnType<typeof programDocuments>[number];
+export function documentsCsv(datasets: readonly HgabDatasetMeta[], docs: Docs, pdfUrl: (key: string) => string): string {
+  type Row = { key: string; doc: HgabDocument; used_by: string };
   const version = (d: HgabDocument) =>
     d.stage === 'nep' ? STAGE_LABELS.nep.label : d.reading === 2 ? STAGE_LABELS.hgab2.label : d.reading === 3 ? STAGE_LABELS.hgab3.label : 'House bill';
+  const rows: Row[] = docs.map((doc) => ({
+    key: doc.key,
+    doc,
+    used_by: datasets.filter((ds) => programDocuments(ds, docs).some((x) => x.key === doc.key)).map((ds) => DATASET_SHORT[ds.key]).join('; '),
+  }));
   return tableCsv<Row>([
     { key: 'key', pick: (x) => x.key },
     { key: 'title', pick: (x) => x.doc?.title },
@@ -357,5 +366,6 @@ export function documentsCsv(dataset: HgabDatasetMeta, docs: Docs, pdfUrl: (key:
     { key: 'source_url', pick: (x) => x.doc?.source_url },
     { key: 'pdf_url', pick: (x) => (x.doc ? pdfUrl(x.key) : null) },
     { key: 'notes', pick: (x) => x.doc?.notes },
-  ], programDocuments(dataset, docs));
+    { key: 'used_by', pick: (x) => x.used_by || null },
+  ], rows);
 }
