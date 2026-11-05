@@ -109,6 +109,8 @@
 .mpbc-sizes span { display: inline-flex; align-items: center; gap: 5px; }
 .mpbc-sizes i { background: rgba(146, 172, 214, 0.55); }
 .mpbc-notes { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--mpbc-ink-3); }
+.mpbc-disclaimer { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--mpbc-ink-2); }
+.mpbc-disclaimer strong { color: var(--mpbc-ink); }
 .mpbc-source { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; margin: 0; font-family: var(--font-mono); font-size: 11.5px; color: var(--mpbc-ink-3); }
 
 /* ?shot=1: the figure alone, at full width, for a clean screenshot. */

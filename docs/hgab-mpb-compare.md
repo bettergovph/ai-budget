@@ -116,6 +116,20 @@ The same figure with three maps, and the same dot scale, so the pages compare.
 
 **Region table:** 2025, 2026, 2027 NEP and 2027 House bill; amounts, with lines below.
 
+**Disclaimers** (Jason, 2026-11-05: "I need a disclaimer"):
+- **On the figure** (page, `?shot=1`, PNG), both topics, since the figure travels without the page:
+  `COMPARE_CARD_DISCLAIMER`, "Independent and unofficial: our reading of the published budget documents. A line or a
+  total is not evidence of wrongdoing."
+- **Below the page:** `DISCLAIMER_FLOOD` after "Independent and unofficial". It says:
+  - 2025 and 2026 are enacted budgets; 2027 is the proposal and the House bill, not yet law;
+  - placement is our reading and can be wrong;
+  - red and yellow are candidates;
+  - no allegations;
+  - amounts are allocations, not spending.
+
+  It is also on the Methodology page's disclaimers. Both are in `src/lib/hgab-disclaimers.ts`, and verify:hgab checks
+  them.
+
 | | Lines | Amount |
 | --- | ---: | ---: |
 | FY2025 GAA | 4,766 | ₱346,620,462,000 |

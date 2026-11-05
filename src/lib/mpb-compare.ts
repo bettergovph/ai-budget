@@ -27,6 +27,7 @@
  * The figure compares totals only (Jason, 2026-11-05: "we don't need the in the nep only but let's just compare the
  * totals for both"): no breakdown into lines in both, in one document only.
  */
+import { COMPARE_CARD_DISCLAIMER } from './hgab-disclaimers';
 import type { MpbClass, MpbData, MpbLine } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
 
@@ -425,6 +426,8 @@ export interface CompareCopy {
   legend: Array<{ color: DotColor; label: string }>;
   sizes: Array<{ php: number; label: string }>;
   notes: string;
+  /** The figure's own disclaimer (Jason, 2026-11-05: "I need a disclaimer"): it travels without the page. */
+  disclaimer: string;
   source: [string, string];
 }
 
@@ -451,6 +454,7 @@ export function compareCopy(
       : '');
   const shared = {
     sizes: topic.sizes.map((v) => ({ php: v, label: phpWords(v).replace(' million', 'M') })),
+    disclaimer: COMPARE_CARD_DISCLAIMER,
     source: [topic.source, `${topic.url} · As of ${asOfDate(builtAt)}`] as [string, string],
   };
   const one = (php: number, tone: 'red' | null = null): CompareAmount[] => [{ php: phpShort(php), label: null, tone }];

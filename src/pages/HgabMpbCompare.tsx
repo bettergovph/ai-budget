@@ -87,7 +87,7 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
             <Link to={HISTORY_ROOT}>The multi-purpose building budget by year →</Link>
           </p>
         )}
-        <DisclaimerNotice compact />
+        <DisclaimerNotice compact flood={key === 'flood'} />
       </main>
       <SiteFooter />
     </>
@@ -193,6 +193,7 @@ function CompareFigure({ topic, input, f }: FigureProps) {
           </li>
         </ul>
         <p className="mpbc-notes">{copy.notes}</p>
+        <p className="mpbc-disclaimer"><strong>Disclaimer.</strong> {copy.disclaimer}</p>
         <p className="mpbc-source"><span>{copy.source[0]}</span><span>{copy.source[1]}</span></p>
       </footer>
     </section>

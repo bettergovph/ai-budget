@@ -7,6 +7,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD } from "../src/lib/hgab-disclaimers";
 import type { HistoryData } from "../src/lib/hgab-history";
 import { decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
 import {
@@ -18,6 +19,7 @@ type Check = (name: string, ok: boolean, detail?: string) => void;
 interface Opts { out: string; words: (s: string) => number; readerCopyHits: (s: string) => string[] }
 
 const n = (v: number) => v.toLocaleString("en-US");
+const sentences = (s: string) => s.split(/(?<=[.!?])\s+/);
 
 /** The checks both pages share: totals, kinds, regions, dots and colours, plain words, the title. */
 function verifyTopic(
@@ -72,6 +74,11 @@ function verifyTopic(
     !/\b(only|in both|not in the|added)\b/i.test(numbers.join(" "))
       && /yellow lines are not in the House bill’s total/i.test(cp.notes) && /candidates, not confirmed changes/.test(cp.notes));
   check("the figure's words are plain", words.flatMap(o.readerCopyHits).length === 0, words.flatMap(o.readerCopyHits).join(", "));
+  // Jason (2026-11-05): "I need a disclaimer". The figure travels without the page, so it carries its own.
+  check("the figure carries its disclaimer: independent and unofficial, not evidence of wrongdoing; two sentences of at most 20 words",
+    cp.disclaimer === COMPARE_CARD_DISCLAIMER && sentences(cp.disclaimer).length === 2 && sentences(cp.disclaimer).every((x) => o.words(x) <= 20)
+      && /independent and unofficial/i.test(cp.disclaimer) && /not evidence of wrongdoing/.test(cp.disclaimer)
+      && o.readerCopyHits(cp.disclaimer).length === 0, cp.disclaimer);
   const title = cp.title.map((line) => line.map((r) => r.text).join(""));
   check(`the large title names the subject ("${topic.subject}"), then the totals`,
     title[0] === topic.subject && /in the (2027 )?House bill/.test(title.slice(1).join(" ")) && title.length >= 2, title.join(" / "));
@@ -115,5 +122,10 @@ function verifyFloodCompare(check: Check, o: Opts): void {
       && S.budgets.filter((b) => b.stage === "gaa").every((b) => b.not_drawn.lines === 0));
   check(`the FY2027 lines not on the map are the ${S.nationwide.lines} budgeted nationwide`,
     data.lines.filter((l) => l.fy === 2027 && l.level === "none").length === S.nationwide.lines);
+  check("the page's disclaimer: enacted budgets beside proposals not yet law, placement our reading, candidates, no allegations, not spending",
+    /enacted budgets/.test(DISCLAIMER_FLOOD.body) && /not yet law/.test(DISCLAIMER_FLOOD.body) && /can be wrong/.test(DISCLAIMER_FLOOD.body)
+      && /candidates/.test(DISCLAIMER_FLOOD.body) && /irregularity or wrongdoing/.test(DISCLAIMER_FLOOD.body) && /not spending/.test(DISCLAIMER_FLOOD.body)
+      && sentences(DISCLAIMER_FLOOD.body).every((x) => o.words(x) <= 25) && o.readerCopyHits(DISCLAIMER_FLOOD.body).length === 0,
+    sentences(DISCLAIMER_FLOOD.body).map((x) => o.words(x)).join(", "));
   verifyTopic(check, o, COMPARE_TOPICS.flood, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, foreignOnly);
 }

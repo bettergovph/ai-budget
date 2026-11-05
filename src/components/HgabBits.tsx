@@ -33,7 +33,8 @@ import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS, OFFICE_VIEW_DISCLAIMERS,
+  DISCLAIMER_FLOOD, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS,
+  OFFICE_VIEW_DISCLAIMERS,
   type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
@@ -619,6 +620,7 @@ export function DisclaimerNotice({
   parties = false,
   placements = false,
   redFlags = false,
+  flood = false,
   heading,
   className = '',
 }: {
@@ -626,6 +628,8 @@ export function DisclaimerNotice({
   offices?: boolean;
   /** The red-flag page: whose basket it is and what a red flag is, then "No allegations". */
   redFlags?: boolean;
+  /** Flood control, 2025 to 2027: enacted budgets beside proposals, placement, candidates, no allegations. */
+  flood?: boolean;
   /** The page by party: the office disclaimers, then the parties one. */
   parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
@@ -640,6 +644,7 @@ export function DisclaimerNotice({
   const list = placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
     : parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
     : redFlags ? [DISCLAIMER_RED_FLAGS, ...COMPARISON_DISCLAIMERS]
+    : flood ? [DISCLAIMER_FLOOD]
     : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];

@@ -24,7 +24,7 @@ import {
 } from '../lib/hgab';
 import { DATASET_SHORT, RECON_STATUS_LABEL, reconStatusClass } from '../lib/hgab-ui';
 import {
-  DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB, DISCLAIMER_NO_ALLEGATIONS,
+  DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_UPSTREAM_URL, DISCLAIMER_CONTRACTORS, DISCLAIMER_FLOOD, DISCLAIMER_MPB, DISCLAIMER_NO_ALLEGATIONS,
   DISCLAIMER_OFFICES, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import '../nep2027.css';
@@ -352,7 +352,7 @@ export default function HgabMethodology() {
           <SectionHead
             eyebrow="Disclaimers"
             headline="Read before quoting any figure from this section"
-            dek="The first two paragraphs are the analysis repository’s own disclaimer, word for word. The next four are ours, for the multi-purpose building boards, projects placed in each district, DPWH contractors and the page by party. The rest adapts its full notice of 23 October 2026."
+            dek="The first two paragraphs are the analysis repository’s own disclaimer, word for word. The next five are ours, for the multi-purpose building boards, projects placed in each district, DPWH contractors, the page by party and flood control from 2025 to 2027. The rest adapts its full notice of 23 October 2026."
           />
           <p className="hgab-plain-intro">
             This is our own reading of the documents, not an official record. A possible change is a lead
@@ -364,6 +364,7 @@ export default function HgabMethodology() {
           <NoticeItem d={DISCLAIMER_PLACEMENTS} />
           <NoticeItem d={DISCLAIMER_CONTRACTORS} />
           <NoticeItem d={DISCLAIMER_PARTIES} />
+          <NoticeItem d={DISCLAIMER_FLOOD} />
 
           <DeoRestrictions />
 

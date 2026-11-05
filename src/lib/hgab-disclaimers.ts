@@ -114,6 +114,26 @@ export const DISCLAIMER_RED_FLAGS: Disclaimer = {
     'Amounts are allocations in the documents, not spending.',
 };
 
+/**
+ * Flood control, 2025 to 2027 (`/hgab/2027/flood-control`): enacted budgets beside the 2027 proposals, how lines are
+ * placed, what red and yellow mean, and what a line does not say.
+ */
+export const DISCLAIMER_FLOOD: Disclaimer = {
+  id: 'disclaimer-flood',
+  title: 'Flood control, 2025 to 2027.',
+  body:
+    'The 2025 and 2026 figures are enacted budgets. The 2027 figures are the President’s proposal and the House bill, ' +
+    'not yet law. Each line sits where its title, its DPWH office or its region places it; that placement is our ' +
+    'reading and can be wrong. Red and yellow lines on the 2027 map are candidates from comparing the two documents, ' +
+    'not confirmed changes. A line, a total or a map alone does not establish irregularity or wrongdoing by any ' +
+    'contractor, office or official. Amounts are allocations, not spending.',
+};
+/**
+ * Printed on the side-by-side figures (the page, `?shot=1` and the PNG), which travel without the page: two sentences of
+ * at most 20 words.
+ */
+export const COMPARE_CARD_DISCLAIMER =
+  'Independent and unofficial: our reading of the published budget documents. A line or a total is not evidence of wrongdoing.';
 /** Printed on every multi-purpose building share image, after the board's first note: one sentence of at most 20 words. */
 export const MPB_CARD_DISCLAIMER = 'A total or a ranking is not evidence that anyone asked for a project or did anything wrong.';
 

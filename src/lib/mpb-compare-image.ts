@@ -27,13 +27,13 @@ function fontVar(name: string, fallback: string): string {
   return v || fallback;
 }
 
-/** Lines of `text` that fit `max` in the current font. */
-function wrap(ctx: CanvasRenderingContext2D, text: string, max: number): string[] {
+/** Lines of `text` that fit `max` in the current font; the first line starts `indent` in (after a label). */
+function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, indent = 0): string[] {
   const out: string[] = [];
   let line = '';
   for (const w of text.split(/\s+/)) {
     const next = line ? `${line} ${w}` : w;
-    if (ctx.measureText(next).width > max && line) { out.push(line); line = w; } else line = next;
+    if (ctx.measureText(next).width + (out.length ? 0 : indent) > max && line) { out.push(line); line = w; } else line = next;
   }
   if (line) out.push(line);
   return out;
@@ -86,9 +86,15 @@ export async function renderCompareImage(input: {
   const footTop = mapTop + frame.height + 16;
   measure.font = `400 12.5px ${body}`;
   const noteLines = wrap(measure, copy.notes, W - PAD * 2);
+  // The disclaimer, after a bold "Disclaimer." (the figure travels without the page).
+  const discLabel = 'Disclaimer.';
+  measure.font = `600 12.5px ${body}`;
+  const discIndent = measure.measureText(`${discLabel} `).width;
+  measure.font = `400 12.5px ${body}`;
+  const discLines = wrap(measure, copy.disclaimer, W - PAD * 2, discIndent);
   measure.font = `400 11.5px ${mono}`;
   const sourceSplit = measure.measureText(copy.source[0]).width + measure.measureText(copy.source[1]).width > W - PAD * 2 - 24;
-  const H = Math.ceil(footTop + 28 + noteLines.length * 18 + 26 + (sourceSplit ? 16 : 0) + 22);
+  const H = Math.ceil(footTop + 28 + noteLines.length * 18 + 6 + discLines.length * 18 + 26 + (sourceSplit ? 16 : 0) + 22);
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * scale);
@@ -207,6 +213,17 @@ export async function renderCompareImage(input: {
   ctx.font = `400 12.5px ${body}`;
   ctx.fillStyle = C.ink3;
   for (const line of noteLines) { y += 18; ctx.fillText(line, PAD, y); }
+  y += 6;
+  discLines.forEach((line, i) => {
+    y += 18;
+    if (i === 0) {
+      ctx.font = `600 12.5px ${body}`; ctx.fillStyle = C.ink; ctx.fillText(discLabel, PAD, y);
+      ctx.font = `400 12.5px ${body}`;
+    }
+    ctx.fillStyle = C.ink2;
+    ctx.fillText(line, PAD + (i === 0 ? discIndent : 0), y);
+  });
+  ctx.fillStyle = C.ink3;
   y += 26;
   ctx.font = `400 11.5px ${mono}`;
   ctx.fillText(copy.source[0], PAD, y);
