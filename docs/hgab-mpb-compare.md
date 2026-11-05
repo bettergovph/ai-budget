@@ -1,7 +1,10 @@
-# Multi-purpose buildings: the 2027 NEP vs the House bill, side by side
+# Budgets side by side on maps: multi-purpose buildings and flood control
 
-`/hgab/2027/multi-purpose/nep-vs-house-bill` (Multi-purpose buildings menu → NEP vs House bill; the menu is hidden in
-the nav for now, see `NAV_HIDDEN`).
+Two pages, one design (`CompareTopic` in `src/lib/mpb-compare.ts`):
+- `/hgab/2027/multi-purpose/nep-vs-house-bill`: the 2027 NEP vs the House bill, two maps. It's in the Multi-purpose
+  buildings menu → NEP vs House bill, which is hidden in the nav for now (see `NAV_HIDDEN`).
+- `/hgab/2027/flood-control`, "Flood control projects are back": 2025, 2026 and 2027, three maps. No menu entry yet;
+  see [Flood control](#flood-control) below.
 
 Jason (2026-11-05): "a different page side by side comparison of 2027's NEP vs HGAB for multi-purpose buildings … more
 points visible in the philippines to demonstrate the density and intensity of the changes … numbers visible as I would
@@ -74,4 +77,89 @@ Below the figure: the totals by region (a line's region), with links to the inte
   - the figure's numbers show the totals only, with no count by match, in plain words;
   - the House bill map's colours (blue = in both, red = added, yellow = NEP lines it lacks), and the NEP map all blue;
   - the large title names multi-purpose buildings, then both totals.
-- No new data: the page reads `mpb-years/` and `geo/`, already published.
+- The multi-purpose page reads `mpb-years/` and `geo/`, already published.
+
+## Flood control
+
+Jason (2026-11-05):
+- "grab the flood control projects. With our title 'Flood control projects are back'";
+- then, "the proper comparison is 2025, 2026, and 2027. For 2027 combine both nep and gab but with just different
+  colours".
+
+The same figure with three maps, and the same dot scale, so the pages compare.
+
+**Headline,** three lines:
+- "Flood control projects are back"
+- "₱346.6 billion in 2025. ₱4.8 billion in 2026."
+- "₱96.1 billion in the 2027 House bill." (the amount in red)
+
+**Change strip:**
+- −₱341.9 billion in 2026 (99% less than 2025);
+- +₱98.7 billion in the 2027 NEP;
+- −₱7.3 billion in the House bill (7% less than the NEP).
+
+**Maps,** each labelled above: three maps leave no open sea for the labels.
+- **2025:** the GAA, all red: its title run, amount and dots (Jason, 2026-11-05: "Make 2025 red themed"). The legend
+  is headed "On the 2027 map:", and the notes say the 2025 map's lines are red and the 2026 map's blue.
+- **2026:** the GAA, all blue. Its sub-line reads "all foreign-assisted", from the chart's foreign-assisted part.
+- **2027:** the NEP and the House bill on one map, coloured as the multi-purpose House bill map:
+  - blue 982 (in both);
+  - red 478 (added in the House bill);
+  - yellow 275 (NEP lines the House bill lacks, outside its total).
+
+  Its label carries both amounts, named.
+
+**Notes** add:
+- what flood control means here;
+- where head-office lines that name no place sit;
+- that 4 FY2027 lines budgeted nationwide are counted but not on the map.
+
+**Region table:** 2025, 2026, 2027 NEP and 2027 House bill; amounts, with lines below.
+
+| | Lines | Amount |
+| --- | ---: | ---: |
+| FY2025 GAA | 4,766 | ₱346,620,462,000 |
+| FY2026 GAA (all foreign-assisted) | 10 | ₱4,760,870,000 |
+| 2027 NEP | 1,261 | ₱103,450,431,000 |
+| 2027 House bill | 1,464 | ₱96,109,265,000 |
+
+### The lines
+
+`npm run build:hgab-flood-compare` (`scripts/hgab-flood-compare/`, about 11 s) writes `data/hgab/2027/flood-compare/`:
+`lines.json` in the multi-purpose map's format, and `summary.json`. The lines are the flood control series on the chart
+by year, so every budget adds up to it, or nothing is written:
+- **FY2025 and FY2026 GAA** (the site's DPWH extract): the Flood Management Program (3201…), plus BIP and SIPAG flood
+  mitigation (300225/300237, 300219/300234), which only 2025 has.
+- **2027:** the Flood Management Program.
+- **Left out,** as on the chart: drainage and flood titles under other programs (522 lines in 2027, mostly the
+  Convergence and Special Support Program).
+
+**Placement** follows the multi-purpose map's order:
+1. GPS in the title.
+2. The place the title names:
+   - **GAA:** upstream's Matcher, with the office's region and province as hints, as the multi-purpose map reads GAA
+     titles. A head-office (Central Office) line has no office hint, so when the Matcher can't read it, it goes to the
+     one province its title names (upstream's name finder), never a town. That covers 54 lines in 2025 and 2 in 2026.
+   - **2027:** the source's location lens (`row_psgc`).
+3. The DPWH office.
+4. The region. A head-office line goes to the region the budget lists it under (16 in 2025, 8 in 2026, all Metro
+   Manila). The 2027 lens places head-office lines the same way.
+
+**The lens** is the one behind the district pages (`locations.json`, commit d76863a):
+- the build checks every 2027 line's basis and target against it;
+- it checks the lens's comparison against ours, line for line;
+- "in both / added / not in the House bill" are the lens's own buckets.
+
+**Environment:** the build reuses the multi-purpose map's venv, pinned workbench files and centroid cache. Run
+`npm run build:hgab-mpb-years` once first, with the lens checkout at `/tmp/dpwh-nep-head` (`LENS_DIR`).
+
+**Checks:** the `flood-control` verify section adds:
+- all four budgets equal the chart;
+- 2026, and only 2026, is all foreign-assisted;
+- every 2025 and 2026 line is drawn;
+- the nationwide lines.
+
+It also runs the shared checks per budget and per map.
+
+**Publish:** upload before the page deploys, with
+`npx tsx scripts/upload-hgab-to-r2.ts --only=flood-compare --skip-verify`.
