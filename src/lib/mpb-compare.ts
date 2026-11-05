@@ -280,8 +280,11 @@ export interface CompareCell { strong: string; span: string; tone: CompareSide |
 export interface CompareSideCopy { name: string; sub: string; php: string; lines: string }
 export interface CompareCopy {
   kicker: string;
-  /** The headline in runs; `house` runs are drawn in the House bill's red. */
-  title: Array<{ text: string; house?: boolean }>;
+  /**
+   * The headline, line by line, each in runs; `house` runs are drawn in the House bill's red. It names the subject
+   * first (Jason, 2026-11-05: "we forgot to put 'Multi Purpose Buildings' … as part of the large title").
+   */
+  title: Array<Array<{ text: string; house?: boolean }>>;
   /** The change between the two totals. */
   cells: CompareCell[];
   sides: Record<CompareSide, CompareSideCopy>;
@@ -304,8 +307,11 @@ export function compareCopy(f: CompareFigures, builtAt: string, offMap = 0): Com
     };
   };
   return {
-    kicker: 'Multi-purpose buildings · 2027 budget',
-    title: [{ text: `${phpWords(f.nep.php)} in the NEP. ` }, { text: phpWords(f.house.php), house: true }, { text: ' in the House bill.' }],
+    kicker: '2027 budget · NEP vs House bill',
+    title: [
+      [{ text: 'Multi-purpose buildings' }],
+      [{ text: `${phpWords(f.nep.php)} in the NEP. ` }, { text: phpWords(f.house.php), house: true }, { text: ' in the House bill.' }],
+    ],
     cells: [
       { strong: `${signed(change, phpWords)} in the House bill`, span: p >= 0 ? `${p}% more than the NEP (${phpShort(f.nep.php)} → ${phpShort(f.house.php)})` : `${-p}% less than the NEP`, tone: 'house' },
       { strong: `${signed(f.house.lines - f.nep.lines, n)} lines`, span: `${n(f.nep.lines)} in the NEP → ${n(f.house.lines)} in the House bill`, tone: null },

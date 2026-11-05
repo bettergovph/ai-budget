@@ -67,12 +67,12 @@ export async function renderCompareImage(input: {
   const titleMax = W - PAD * 2 - (logo ? 190 : 0);
   const titleWidth = (s: number) => {
     measure.font = `700 ${s}px ${hero}`;
-    return copy.title.reduce((a, r) => a + measure.measureText(r.text).width, 0);
+    return Math.max(...copy.title.map((line) => line.reduce((a, r) => a + measure.measureText(r.text).width, 0)));
   };
   while (titleSize > 26 && titleWidth(titleSize) > titleMax) titleSize -= 1;
   const kickerY = 28;
   const titleTop = kickerY + 19;
-  const stripTop = titleTop + Math.round(titleSize * 1.1) + 18;
+  const stripTop = titleTop + Math.round(titleSize * 1.1 * copy.title.length) + 18;
   const stripH = 66;
   const mapTop = stripTop + stripH + 16;
   const mw = (W - PAD * 2 - GAP) / 2;
@@ -100,12 +100,14 @@ export async function renderCompareImage(input: {
   ctx.fillText(copy.kicker.toUpperCase(), PAD, kickerY + 12);
   if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px';
   ctx.font = `700 ${titleSize}px ${hero}`;
-  let x = PAD;
-  for (const r of copy.title) {
-    ctx.fillStyle = r.house ? C.house : C.ink;
-    ctx.fillText(r.text, x, titleTop + titleSize * 0.92);
-    x += ctx.measureText(r.text).width;
-  }
+  copy.title.forEach((line, i) => {
+    let x = PAD;
+    for (const r of line) {
+      ctx.fillStyle = r.house ? C.house : C.ink;
+      ctx.fillText(r.text, x, titleTop + titleSize * (0.92 + 1.1 * i));
+      x += ctx.measureText(r.text).width;
+    }
+  });
   if (logo) {
     const lh = 30;
     const lw = (logo.naturalWidth / logo.naturalHeight) * lh;

@@ -11,7 +11,9 @@ impact."
 ## The figure (screenshot this)
 
 A dark block, 1200 px wide on desktop:
-- **Headline:** "₱43.2 billion in the NEP. ₱86.3 billion in the House bill."
+- **Headline**, two lines (Jason, 2026-11-05: "we forgot to put 'Multi Purpose Buildings' … as part of the large
+  title"): "Multi-purpose buildings" / "₱43.2 billion in the NEP. ₱86.3 billion in the House bill." The kicker above
+  it reads "2027 budget · NEP vs House bill".
 - **Change strip:** +₱43.1 billion (100% more), and +2,992 lines (2,815 → 5,807).
 - **Two maps** drawn the same way, each with its total and its lines on the open sea west of Luzon:
   - **NEP:** all blue.
@@ -65,10 +67,11 @@ Below the figure: the totals by region (a line's region), with links to the inte
 - Page: `src/pages/HgabMpbCompare.tsx`, styles in `src/hgab-mpb-compare.css`, loader `loadMpbCompare` (the map's
   lines and summary, and the outlines).
 - Checks: `npm run verify:hgab` has a `multi-purpose/nep-vs-house-bill` section (`scripts/verify-hgab-mpb-compare.ts`,
-  9 checks):
+  10 checks):
   - both totals equal `mpb-years/summary.json`;
   - the three kinds and the regions add up;
   - every line is a dot, none off the drawn view;
   - the figure's numbers show the totals only, with no count by match, in plain words;
-  - the House bill map's colours (blue = in both, red = added, yellow = NEP lines it lacks), and the NEP map all blue.
+  - the House bill map's colours (blue = in both, red = added, yellow = NEP lines it lacks), and the NEP map all blue;
+  - the large title names multi-purpose buildings, then both totals.
 - No new data: the page reads `mpb-years/` and `geo/`, already published.

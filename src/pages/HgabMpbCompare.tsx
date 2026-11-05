@@ -123,7 +123,11 @@ function CompareFigure({ data, summary, geo, f }: { data: MpbData; summary: MpbS
         <div>
           <p className="mpbc-kicker">{copy.kicker}</p>
           <h2 id="mpbc-title" className="mpbc-title">
-            {copy.title.map((r, i) => (r.house ? <span key={i} className="is-house">{r.text}</span> : <span key={i}>{r.text}</span>))}
+            {copy.title.map((line, i) => (
+              <span key={i} className="mpbc-title-line">
+                {line.map((r, j) => (r.house ? <span key={j} className="is-house">{r.text}</span> : <span key={j}>{r.text}</span>))}
+              </span>
+            ))}
           </h2>
         </div>
         <img className="mpbc-logo" src={LOGO} alt="BetterGov.ph" onError={(e) => { e.currentTarget.style.display = 'none'; }} />

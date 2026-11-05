@@ -53,5 +53,8 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
       && nc.blue === f.nep.lines && Object.keys(nc).length === 1
       && /yellow lines are not in the House bill’s total/i.test(cp.notes) && /candidates, not confirmed changes/.test(cp.notes));
   check("the figure's words are plain", words.flatMap(o.readerCopyHits).length === 0, words.flatMap(o.readerCopyHits).join(", "));
+  const title = cp.title.map((line) => line.map((r) => r.text).join(""));
+  check("the large title names multi-purpose buildings, then both totals",
+    title[0] === "Multi-purpose buildings" && title[1].includes(`in the NEP`) && title[1].includes(`in the House bill`), title.join(" / "));
   process.stdout.write(`  NEP ${f.nep.lines} lines ₱${(f.nep.php / 1e9).toFixed(2)}B → House bill ${f.house.lines} lines ₱${(f.house.php / 1e9).toFixed(2)}B · House only ${f.houseOnly.lines} · NEP only ${f.nepOnly.lines}\n`);
 }

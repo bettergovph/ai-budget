@@ -45,6 +45,7 @@
   color: var(--mpbc-ink);
 }
 .mpbc-title .is-house { color: var(--mpbc-house); }
+.mpbc-title-line { display: block; }
 .mpbc-logo { height: 30px; width: auto; flex: none; margin-top: 4px; opacity: 0.95; }
 
 .mpbc-change {
