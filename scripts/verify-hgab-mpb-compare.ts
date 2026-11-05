@@ -69,7 +69,15 @@ function verifyTopic(
       && (unmapped.length === 0 || cp.notes.includes(`${n(unmapped.length)} lines budgeted nationwide`)));
   // The figure compares totals only (Jason, 2026-11-05: "let's just compare the totals for both").
   const numbers = [...cp.cells.flatMap((c) => [c.strong, c.span]), ...cp.panels.flatMap((p) => [p.lines, ...p.amounts.map((a) => a.php)])];
-  const words = [cp.notes, ...numbers, ...cp.legend.map((l) => l.label), ...cp.panels.map((p) => p.sub)];
+  const words = [cp.notes, ...numbers, ...cp.legend.flatMap((g) => [g.title ?? "", ...g.items.map((l) => l.label)]), ...cp.panels.map((p) => p.sub)];
+  // Each map's colours are named on the legend (Jason, 2026-11-05: "the legend with red made it confusing for 2025 as
+  // 2025 is red"): a GAA year's colour beside its year, the House bill / 2027 map's three in their own group.
+  const gaaPanels = topic.panels.filter((p): p is "gaa-2025" | "gaa-2026" => p === "gaa-2025" || p === "gaa-2026");
+  const matchGroup = cp.legend[cp.legend.length - 1];
+  check(`the legend names each map's colours (${cp.legend.map((g) => `${g.title ? `${g.title} ` : ""}${g.items.map((l) => `${l.color} ${l.label}`).join(", ")}`).join(" | ")})`,
+    gaaPanels.every((p) => cp.legend.some((g) => g.title == null && g.items.some((l) => l.color === GAA_PANEL_COLOR[p] && l.label.startsWith(p.slice(4)))))
+      && matchGroup.items.map((l) => l.color).join() === "blue,red,yellow"
+      && (gaaPanels.length === 0 ? cp.legend.length === 1 : cp.legend.length === 2 && /2027/.test(matchGroup.title ?? "")));
   check("the figure's numbers compare totals only: each map's lines and amount(s), and the changes; no count by match",
     !/\b(only|in both|not in the|added)\b/i.test(numbers.join(" "))
       && /yellow lines are not in the House bill’s total/i.test(cp.notes) && /candidates, not confirmed changes/.test(cp.notes));

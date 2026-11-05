@@ -413,6 +413,8 @@ export interface CompareCell { strong: string; span: string; tone: 'red' | null 
 /** An amount on a map's label; `label` names it when the map shows two (flood control's 2027: NEP, House bill). */
 export interface CompareAmount { php: string; label: string | null; tone: 'red' | null }
 export interface ComparePanelCopy { key: PanelKey; name: string; sub: string; amounts: CompareAmount[]; lines: string }
+/** A row of the legend: what each colour means, on the maps its title names (no title: every map). */
+export interface LegendGroup { title: string | null; items: Array<{ color: DotColor; label: string }> }
 export interface CompareCopy {
   kicker: string;
   /** The headline, line by line, each in runs; `red` runs are drawn in red. It names the subject first. */
@@ -421,9 +423,11 @@ export interface CompareCopy {
   cells: CompareCell[];
   /** One per map, left to right. */
   panels: ComparePanelCopy[];
-  /** Names what the legend explains when the colours mean something on one map only (flood control: "On the 2027 map:"). */
-  legendTitle: string | null;
-  legend: Array<{ color: DotColor; label: string }>;
+  /**
+   * One row per group. Flood control's red means two things (Jason, 2026-11-05: "the legend with red made it confusing
+   * for 2025 as 2025 is red"): its first row names the 2025 and 2026 maps' colours, the second the 2027 map's.
+   */
+  legend: LegendGroup[];
   sizes: Array<{ php: number; label: string }>;
   notes: string;
   /** The figure's own disclaimer (Jason, 2026-11-05: "I need a disclaimer"): it travels without the page. */
@@ -487,15 +491,25 @@ export function compareCopy(
           lines: `${n(f.nep.lines)} → ${n(f.house.lines)} lines`,
         },
       ],
-      legendTitle: 'On the 2027 map:',
       legend: [
-        { color: 'blue', label: 'In the NEP and the House bill' },
-        { color: 'red', label: 'Added in the House bill' },
-        { color: 'yellow', label: 'In the NEP, not in the House bill' },
+        {
+          title: null,
+          items: [
+            { color: GAA_PANEL_COLOR['gaa-2025'], label: '2025 budget lines' },
+            { color: GAA_PANEL_COLOR['gaa-2026'], label: '2026 budget lines' },
+          ],
+        },
+        {
+          title: 'On the 2027 map:',
+          items: [
+            { color: 'blue', label: 'In the NEP and the House bill' },
+            { color: 'red', label: 'Added in the House bill' },
+            { color: 'yellow', label: 'In the NEP, not in the House bill' },
+          ],
+        },
       ],
       notes: `${topic.scope} ${DOTS_NOTE}`
         + 'Head-office lines that name no place sit at the region the budget lists them under. '
-        + 'The 2025 map’s lines are red, the 2026 map’s blue. '
         + 'On the 2027 map, red marks House bill lines with no matching NEP line, and yellow marks NEP lines with no '
         + `matching House bill line. ${CANDIDATES_NOTE}${tail}`,
       ...shared,
@@ -516,12 +530,14 @@ export function compareCopy(
       { key: 'nep', name: 'NEP', sub: 'The President’s budget', amounts: one(f.nep.php), lines: `${n(f.nep.lines)} lines` },
       { key: 'house', name: 'House bill', sub: 'House Bill 10858, third reading', amounts: one(f.house.php, 'red'), lines: `${n(f.house.lines)} lines` },
     ],
-    legendTitle: null,
-    legend: [
-      { color: 'blue', label: 'In the NEP' },
-      { color: 'red', label: 'Added in the House bill' },
-      { color: 'yellow', label: 'In the NEP, not in the House bill' },
-    ],
+    legend: [{
+      title: null,
+      items: [
+        { color: 'blue', label: 'In the NEP' },
+        { color: 'red', label: 'Added in the House bill' },
+        { color: 'yellow', label: 'In the NEP, not in the House bill' },
+      ],
+    }],
     notes: `${topic.scope ? `${topic.scope} ` : ''}${DOTS_NOTE}`
       + 'On the House bill map, red marks lines with no matching NEP line, and yellow marks NEP lines with no matching '
       + `House bill line. ${CANDIDATES_NOTE}${tail}`,

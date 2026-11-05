@@ -94,7 +94,8 @@ export async function renderCompareImage(input: {
   const discLines = wrap(measure, copy.disclaimer, W - PAD * 2, discIndent);
   measure.font = `400 11.5px ${mono}`;
   const sourceSplit = measure.measureText(copy.source[0]).width + measure.measureText(copy.source[1]).width > W - PAD * 2 - 24;
-  const H = Math.ceil(footTop + 28 + noteLines.length * 18 + 6 + discLines.length * 18 + 26 + (sourceSplit ? 16 : 0) + 22);
+  const legendRows = copy.legend.length;
+  const H = Math.ceil(footTop + 28 + (legendRows - 1) * 22 + noteLines.length * 18 + 6 + discLines.length * 18 + 26 + (sourceSplit ? 16 : 0) + 22);
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(W * scale);
@@ -184,21 +185,25 @@ export async function renderCompareImage(input: {
   // Legend, notes, source.
   let y = footTop + 14;
   ctx.font = `400 13px ${body}`;
-  let lx = PAD;
-  if (copy.legendTitle) {
-    ctx.font = `600 13px ${body}`;
-    ctx.fillStyle = C.ink;
-    ctx.fillText(copy.legendTitle, lx, y);
-    lx += ctx.measureText(copy.legendTitle).width + 12;
-    ctx.font = `400 13px ${body}`;
-  }
-  for (const l of copy.legend) {
-    ctx.fillStyle = COMPARE_COLORS.swatch[l.color];
-    ctx.beginPath(); ctx.arc(lx + 5, y - 4, 5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = C.ink2;
-    ctx.fillText(l.label, lx + 16, y);
-    lx += 16 + ctx.measureText(l.label).width + 22;
-  }
+  // One row per legend group; the dot sizes sit at the right of the last row.
+  copy.legend.forEach((g, gi) => {
+    if (gi > 0) y += 22;
+    let lx = PAD;
+    if (g.title) {
+      ctx.font = `600 13px ${body}`;
+      ctx.fillStyle = C.ink;
+      ctx.fillText(g.title, lx, y);
+      lx += ctx.measureText(g.title).width + 12;
+      ctx.font = `400 13px ${body}`;
+    }
+    for (const l of g.items) {
+      ctx.fillStyle = COMPARE_COLORS.swatch[l.color];
+      ctx.beginPath(); ctx.arc(lx + 5, y - 4, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = C.ink2;
+      ctx.fillText(l.label, lx + 16, y);
+      lx += 16 + ctx.measureText(l.label).width + 22;
+    }
+  });
   let sx = W - PAD;
   for (const sz of [...copy.sizes].reverse()) {
     const r = dotRadius(sz.php, legendWidth(np));

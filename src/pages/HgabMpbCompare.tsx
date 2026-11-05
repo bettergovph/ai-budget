@@ -11,7 +11,7 @@
  *
  * Data and drawing: src/lib/mpb-compare.ts (pure figures, dot layout, and a canvas drawing the poster can reuse).
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
@@ -181,9 +181,14 @@ function CompareFigure({ topic, input, f }: FigureProps) {
 
       <footer className="mpbc-foot">
         <ul className="mpbc-legend" aria-label="Legend">
-          {copy.legendTitle && <li className="mpbc-legend-title">{copy.legendTitle}</li>}
-          {copy.legend.map((l) => (
-            <li key={l.color}><i style={{ background: COMPARE_COLORS.swatch[l.color] }} />{l.label}</li>
+          {copy.legend.map((g, gi) => (
+            <Fragment key={gi}>
+              {gi > 0 && <li className="mpbc-legend-break" aria-hidden="true" />}
+              {g.title && <li className="mpbc-legend-title">{g.title}</li>}
+              {g.items.map((l) => (
+                <li key={l.color}><i style={{ background: COMPARE_COLORS.swatch[l.color] }} />{l.label}</li>
+              ))}
+            </Fragment>
           ))}
           <li className="mpbc-sizes">
             {copy.sizes.map((sz) => {

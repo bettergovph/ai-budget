@@ -99,8 +99,7 @@ The same figure with three maps, and the same dot scale, so the pages compare.
 - −₱7.3 billion in the House bill (7% less than the NEP).
 
 **Maps,** each labelled above: three maps leave no open sea for the labels.
-- **2025:** the GAA, all red: its title run, amount and dots (Jason, 2026-11-05: "Make 2025 red themed"). The legend
-  is headed "On the 2027 map:", and the notes say the 2025 map's lines are red and the 2026 map's blue.
+- **2025:** the GAA, all red: its title run, amount and dots (Jason, 2026-11-05: "Make 2025 red themed").
 - **2026:** the GAA, all blue. Its sub-line reads "all foreign-assisted", from the chart's foreign-assisted part.
 - **2027:** the NEP and the House bill on one map, coloured as the multi-purpose House bill map:
   - blue 982 (in both);
@@ -113,6 +112,14 @@ The same figure with three maps, and the same dot scale, so the pages compare.
 - what flood control means here;
 - where head-office lines that name no place sit;
 - that 4 FY2027 lines budgeted nationwide are counted but not on the map.
+
+**Legend,** two rows, because red means two things (Jason, 2026-11-05: "the legend with red made it confusing for
+2025 as 2025 is red"):
+- "● 2025 budget lines ● 2026 budget lines";
+- "On the 2027 map: ● In the NEP and the House bill ● Added in the House bill ● In the NEP, not in the House bill",
+  with the dot sizes on the right.
+
+verify:hgab checks that each map's colours are named.
 
 **Region table:** 2025, 2026, 2027 NEP and 2027 House bill; amounts, with lines below.
 

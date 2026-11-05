@@ -105,6 +105,8 @@
 .mpbc-legend li { display: inline-flex; align-items: center; gap: 7px; }
 .mpbc-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .mpbc-legend .mpbc-legend-title { margin-right: -6px; font-weight: 600; color: var(--mpbc-ink); }
+/* A new legend row (flood control: the 2025 and 2026 maps, then the 2027 map). */
+.mpbc-legend .mpbc-legend-break { flex-basis: 100%; height: 0; margin: -3px 0; }
 .mpbc-sizes { gap: 12px !important; margin-left: auto; }
 .mpbc-sizes span { display: inline-flex; align-items: center; gap: 5px; }
 .mpbc-sizes i { background: rgba(146, 172, 214, 0.55); }
