@@ -4,6 +4,11 @@
 
 .mpbc-main { padding-top: 8px; }
 
+/* --- the download bar (outside the figure, so screenshots stay clean) ---------- */
+
+.mpbc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; max-width: 1200px; margin: 8px auto 12px; font-size: 13px; color: var(--ink-3); }
+.mpbc-tools .hgab-cta { cursor: pointer; }
+
 /* --- the figure ------------------------------------------------------------- */
 
 .mpbc-figure {

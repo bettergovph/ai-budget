@@ -21,6 +21,11 @@ A dark block, 1200 px wide on desktop:
 `?shot=1` shows the figure alone at its full width, for a clean screenshot (in Chrome: DevTools → the
 `section.mpbc-figure` node → Capture node screenshot).
 
+**Download image (PNG)** above the figure (Jason, 2026-11-05: "Give me a downloadable version!"):
+`src/lib/mpb-compare-image.ts` draws the same figure on a canvas at twice its size (2400 × 2578 px, about 1.4 MB,
+`bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png`). The words come from `compareCopy` (used by the page
+too, so the two never differ), the maps from `drawCompareMap`, in the site's fonts. It's loaded only when clicked.
+
 - **Dots:** every line is its own dot, never grouped. A line sits at its first GPS point, else at the centre of the
   place its title names. Lines at the same spot fan out in a sunflower; dot area follows the amount.
 - **Drawing:** lines in both are added together, so crowded places glow. The lines only one side has go on top in solid

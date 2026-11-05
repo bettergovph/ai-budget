@@ -15,21 +15,16 @@ import { REGION_LABELS, loadMpbCompare, type HgabGeo } from '../lib/hgab';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData, type MpbSummary } from '../lib/hgab-mpb-years';
 import {
-  COMPARE_COLORS, COMPARE_LABELS, HOUSE_ONLY_NOTE, MPB_COMPARE_TITLE, compareByRegion, compareFigures, compareFrame,
-  dotRadius, drawCompareMap, inView, pct, phpWords, placeDots, provincePaths, sideDots, signed,
-  type CompareFigures, type CompareSide,
+  COMPARE_COLORS, HOUSE_ONLY_NOTE, MPB_COMPARE_IMAGE_NAME, MPB_COMPARE_TITLE, compareByRegion, compareCopy, compareFigures,
+  compareFrame, dotRadius, drawCompareMap, inView, pct, phpWords, placeDots, provincePaths, sideDots, signed,
+  type CompareCopy, type CompareFigures, type CompareSide,
 } from '../lib/mpb-compare';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
 import '../hgab-mpb-compare.css';
 
-const SITE_URL = 'budget.bettergov.ph/hgab/2027/multi-purpose/nep-vs-house-bill';
 const n = (v: number) => v.toLocaleString('en-US');
-const bShort = (v: number) => `₱${(v / 1e9).toFixed(1)}B`;
-const asOf = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
-};
+const LOGO = '/brand/bettergov-horizontal-white.png';
 
 export default function HgabMpbCompare() {
   const [params] = useSearchParams();
@@ -62,6 +57,7 @@ export default function HgabMpbCompare() {
         dek={<>The President’s budget and the House bill, side by side, with every line on the map. <Link to="?shot=1">Open the figure alone</Link> for a clean screenshot.</>}
       />
       <main className="nep-main mpbc-main">
+        <DownloadBar data={state.data} summary={state.summary} geo={state.geo} f={figures} />
         <CompareFigure data={state.data} summary={state.summary} geo={state.geo} f={figures} />
         <RegionTable data={state.data} />
         <p className="mpbc-more">
@@ -79,62 +75,94 @@ export default function HgabMpbCompare() {
 // The figure (screenshot this)
 // ---------------------------------------------------------------------------
 
+/** The figure's words for this data (the image uses the same). */
+function useCopy(data: MpbData, summary: MpbSummary, f: CompareFigures): CompareCopy {
+  const offMap = useMemo(() => sideDots(data, 'house').filter((d) => !inView(d)).length, [data]);
+  return useMemo(() => compareCopy(f, summary.built_at, offMap), [f, summary.built_at, offMap]);
+}
+
+/** Download the figure as a PNG, drawn on a canvas at twice its size (outside the figure, so screenshots stay clean). */
+function DownloadBar({ data, summary, geo, f }: { data: MpbData; summary: MpbSummary; geo: HgabGeo; f: CompareFigures }) {
+  const copy = useCopy(data, summary, f);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const download = async () => {
+    setBusy(true); setFailed(null);
+    try {
+      const { renderCompareImage } = await import('../lib/mpb-compare-image');
+      const canvas = await renderCompareImage({ data, geo, copy, logoUrl: LOGO, scale: 2 });
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
+      if (!blob) throw new Error('the browser could not make the image');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = MPB_COMPARE_IMAGE_NAME;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      setFailed(String((e as Error)?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mpbc-tools">
+      <button type="button" className="hgab-cta hgab-cta-primary" onClick={download} disabled={busy}>
+        {busy ? 'Drawing the image…' : 'Download image (PNG)'}
+      </button>
+      <span>The figure below as one picture, 2,400 pixels wide, ready to post.</span>
+      {failed && <span role="status">The image did not draw ({failed}).</span>}
+    </div>
+  );
+}
+
 function CompareFigure({ data, summary, geo, f }: { data: MpbData; summary: MpbSummary; geo: HgabGeo; f: CompareFigures }) {
-  const change = f.house.php - f.nep.php;
-  const offMap = useMemo(() => (['nep', 'house'] as CompareSide[]).map((s) => sideDots(data, s).filter((d) => !inView(d)).length), [data]);
+  const copy = useCopy(data, summary, f);
   return (
     <section className="mpbc-figure" id="figure" aria-labelledby="mpbc-title">
       <header className="mpbc-head">
         <div>
-          <p className="mpbc-kicker">Multi-purpose buildings · 2027 budget</p>
+          <p className="mpbc-kicker">{copy.kicker}</p>
           <h2 id="mpbc-title" className="mpbc-title">
-            {phpWords(f.nep.php)} in the NEP. <span className="is-house">{phpWords(f.house.php)}</span> in the House bill.
+            {copy.title.map((r, i) => (r.house ? <span key={i} className="is-house">{r.text}</span> : <span key={i}>{r.text}</span>))}
           </h2>
         </div>
-        <img className="mpbc-logo" src="/brand/bettergov-horizontal-white.png" alt="BetterGov.ph" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        <img className="mpbc-logo" src={LOGO} alt="BetterGov.ph" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
       </header>
 
       <div className="mpbc-change" role="list" aria-label="What changed">
-        <div role="listitem"><strong>{signed(change, phpWords)}</strong><span>{pct(f.house.php, f.nep.php)}% more than the NEP</span></div>
-        <div role="listitem"><strong>{signed(f.house.lines - f.nep.lines, n)} lines</strong><span>{n(f.nep.lines)} → {n(f.house.lines)}</span></div>
-        <div role="listitem" className="is-house"><strong>{n(f.houseOnly.lines)} lines · {bShort(f.houseOnly.php)}</strong><span>In the House bill only</span></div>
-        <div role="listitem" className="is-nep"><strong>{n(f.nepOnly.lines)} lines · {bShort(f.nepOnly.php)}</strong><span>In the NEP only</span></div>
-        <div role="listitem"><strong>{n(f.paired.lines)} lines</strong><span>In both · {n(f.paired.higher)} higher, {n(f.paired.lower)} lower</span></div>
+        {copy.cells.map((c) => (
+          <div role="listitem" key={c.span} className={c.tone === 'house_only' ? 'is-house' : c.tone === 'nep_only' ? 'is-nep' : undefined}>
+            <strong>{c.strong}</strong><span>{c.span}</span>
+          </div>
+        ))}
       </div>
 
       <div className="mpbc-maps">
-        <CompareMap data={data} geo={geo} side="nep" f={f} />
-        <CompareMap data={data} geo={geo} side="house" f={f} />
+        <CompareMap data={data} geo={geo} side="nep" copy={copy} f={f} />
+        <CompareMap data={data} geo={geo} side="house" copy={copy} f={f} />
       </div>
 
       <footer className="mpbc-foot">
         <ul className="mpbc-legend" aria-label="Legend">
-          {(['paired', 'house_only', 'nep_only'] as const).map((c) => (
-            <li key={c}><i style={{ background: COMPARE_COLORS.swatch[c] }} />{COMPARE_LABELS[c]}</li>
+          {copy.legend.map((l) => (
+            <li key={l.cls}><i style={{ background: COMPARE_COLORS.swatch[l.cls] }} />{l.label}</li>
           ))}
           <li className="mpbc-sizes">
-            {[5e6, 25e6, 100e6].map((v) => {
-              const r = dotRadius(v, 600);
-              return <span key={v}><i style={{ width: r * 2, height: r * 2 }} />{phpWords(v).replace(' million', 'M')}</span>;
+            {copy.sizes.map((sz) => {
+              const r = dotRadius(sz.php, 600);
+              return <span key={sz.php}><i style={{ width: r * 2, height: r * 2 }} />{sz.label}</span>;
             })}
           </li>
         </ul>
-        <p className="mpbc-notes">
-          One dot is one budget line, sized by its amount and placed by the place its title names (GPS where published).
-          {' '}{HOUSE_ONLY_NOTE} Amounts are allocations, not spending.
-          {offMap[1] > 0 && <> {n(offMap[1])} House bill lines in the Kalayaan islands are counted but off the map’s edge.</>}
-        </p>
-        <p className="mpbc-source">
-          <span>Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines</span>
-          <span>{SITE_URL} · As of {asOf(summary.built_at)}</span>
-        </p>
+        <p className="mpbc-notes">{copy.notes}</p>
+        <p className="mpbc-source"><span>{copy.source[0]}</span><span>{copy.source[1]}</span></p>
       </footer>
     </section>
   );
 }
 
 /** One side's map: its amounts on the open sea (top left), its own lines (top right), every line as a dot. */
-function CompareMap({ data, geo, side, f }: { data: MpbData; geo: HgabGeo; side: CompareSide; f: CompareFigures }) {
+function CompareMap({ data, geo, side, copy, f }: { data: MpbData; geo: HgabGeo; side: CompareSide; copy: CompareCopy; f: CompareFigures }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [width, setWidth] = useState(0);
@@ -160,21 +188,21 @@ function CompareMap({ data, geo, side, f }: { data: MpbData; geo: HgabGeo; side:
     drawCompareMap(ctx, frame, provincePaths(geo, frame), placeDots(dots, frame));
   }, [width, dots, geo]);
   const t = side === 'nep' ? f.nep : f.house;
-  const own = side === 'nep' ? f.nepOnly : f.houseOnly;
+  const s = copy.sides[side];
   return (
     <figure className={`mpbc-map is-${side}`}>
       <div className="mpbc-canvas" ref={wrap}>
         <canvas ref={canvas} role="img"
           aria-label={`${side === 'nep' ? 'NEP' : 'House bill'}: ${n(t.lines)} multi-purpose building lines, ${phpWords(t.php)}, one dot each`} />
         <figcaption className="mpbc-side">
-          <span className="mpbc-side-name">{side === 'nep' ? 'NEP' : 'House bill'}</span>
-          <span className="mpbc-side-sub">{side === 'nep' ? 'The President’s budget' : 'House Bill 10858, third reading'}</span>
-          <strong className="mpbc-side-php">{bShort(t.php)}</strong>
-          <span className="mpbc-side-lines">{n(t.lines)} lines</span>
+          <span className="mpbc-side-name">{s.name}</span>
+          <span className="mpbc-side-sub">{s.sub}</span>
+          <strong className="mpbc-side-php">{s.php}</strong>
+          <span className="mpbc-side-lines">{s.lines}</span>
         </figcaption>
         <p className={`mpbc-own is-${side}`}>
-          <strong>{n(own.lines)}</strong> lines, {bShort(own.php)}
-          <span>{side === 'nep' ? 'in the NEP only' : 'in the House bill only'}</span>
+          <strong>{s.ownCount}</strong>{s.ownRest}
+          <span>{s.ownLabel}</span>
         </p>
       </div>
     </figure>

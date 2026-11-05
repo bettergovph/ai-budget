@@ -252,3 +252,72 @@ export function phpWords(v: number): string {
 }
 export const signed = (v: number, f: (x: number) => string) => (v > 0 ? `+${f(v)}` : v < 0 ? `−${f(-v)}` : f(0));
 export const pct = (to: number, from: number) => (from ? Math.round(((to - from) / from) * 100) : null);
+
+// ---------------------------------------------------------------------------
+// The figure's words: one builder for the page and the downloadable image, so they never differ
+// ---------------------------------------------------------------------------
+
+const n = (v: number) => v.toLocaleString('en-US');
+/** "₱43.2B". */
+export const phpShort = (v: number) => `₱${(v / 1e9).toFixed(1)}B`;
+export const MPB_COMPARE_URL = 'budget.bettergov.ph/hgab/2027/multi-purpose/nep-vs-house-bill';
+export const MPB_COMPARE_IMAGE_NAME = 'bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png';
+
+/** "November 2, 2026", in Manila. */
+export function asOfDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+export interface CompareCell { strong: string; span: string; tone: CompareClass | null }
+export interface CompareSideCopy { name: string; sub: string; php: string; lines: string; ownCount: string; ownRest: string; ownLabel: string }
+export interface CompareCopy {
+  kicker: string;
+  /** The headline in runs; `house` runs are drawn in the House bill's red. */
+  title: Array<{ text: string; house?: boolean }>;
+  cells: CompareCell[];
+  sides: Record<CompareSide, CompareSideCopy>;
+  legend: Array<{ cls: CompareClass; label: string }>;
+  sizes: Array<{ php: number; label: string }>;
+  notes: string;
+  source: [string, string];
+}
+
+export function compareCopy(f: CompareFigures, builtAt: string, offMap = 0): CompareCopy {
+  const change = f.house.php - f.nep.php;
+  const p = pct(f.house.php, f.nep.php) ?? 0;
+  const side = (s: CompareSide): CompareSideCopy => {
+    const t = s === 'nep' ? f.nep : f.house;
+    const own = s === 'nep' ? f.nepOnly : f.houseOnly;
+    return {
+      name: s === 'nep' ? 'NEP' : 'House bill',
+      sub: s === 'nep' ? 'The President’s budget' : 'House Bill 10858, third reading',
+      php: phpShort(t.php),
+      lines: `${n(t.lines)} lines`,
+      ownCount: n(own.lines),
+      ownRest: ` lines, ${phpShort(own.php)}`,
+      ownLabel: s === 'nep' ? 'in the NEP only' : 'in the House bill only',
+    };
+  };
+  return {
+    kicker: 'Multi-purpose buildings · 2027 budget',
+    title: [{ text: `${phpWords(f.nep.php)} in the NEP. ` }, { text: phpWords(f.house.php), house: true }, { text: ' in the House bill.' }],
+    cells: [
+      { strong: signed(change, phpWords), span: p >= 0 ? `${p}% more than the NEP` : `${-p}% less than the NEP`, tone: null },
+      { strong: `${signed(f.house.lines - f.nep.lines, n)} lines`, span: `${n(f.nep.lines)} → ${n(f.house.lines)}`, tone: null },
+      { strong: `${n(f.houseOnly.lines)} lines · ${phpShort(f.houseOnly.php)}`, span: COMPARE_LABELS.house_only, tone: 'house_only' },
+      { strong: `${n(f.nepOnly.lines)} lines · ${phpShort(f.nepOnly.php)}`, span: COMPARE_LABELS.nep_only, tone: 'nep_only' },
+      { strong: `${n(f.paired.lines)} lines`, span: `In both · ${n(f.paired.higher)} higher, ${n(f.paired.lower)} lower`, tone: null },
+    ],
+    sides: { nep: side('nep'), house: side('house') },
+    legend: (['paired', 'house_only', 'nep_only'] as const).map((cls) => ({ cls, label: COMPARE_LABELS[cls] })),
+    sizes: [5e6, 25e6, 100e6].map((v) => ({ php: v, label: phpWords(v).replace(' million', 'M') })),
+    notes: 'One dot is one budget line, sized by its amount and placed by the place its title names (GPS where published). '
+      + `${HOUSE_ONLY_NOTE} Amounts are allocations, not spending.`
+      + (offMap > 0 ? ` ${n(offMap)} House bill lines in the Kalayaan islands are counted but off the map’s edge.` : ''),
+    source: [
+      'Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines',
+      `${MPB_COMPARE_URL} · As of ${asOfDate(builtAt)}`,
+    ],
+  };
+}
