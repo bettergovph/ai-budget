@@ -102,6 +102,27 @@ export const DISCLAIMER_PARTIES: Disclaimer = {
 };
 
 /**
+ * Every section that shows a party (Jason, 2026-11-06: "We need full disclaimers that members switch parties and the
+ * data should be cited properly, the data are based on electoral data. We need disclaimers on the sections with party
+ * data"): the party grids, the by-party pages, a district's party line, How we read parties, Methodology. The last
+ * words link to the page that shows every seat (PARTY_DATA_LINK_TEXT).
+ */
+export const DISCLAIMER_PARTY_DATA: Disclaimer = {
+  id: 'disclaimer-party-data',
+  title: 'Party data.',
+  body:
+    'Every party here comes from election results: the party each winner ran under, as Open Halalan records them and ' +
+    'BetterGov Dynasties publishes them. Members often switch parties during a term, and those switches are not ' +
+    'recorded, so a member’s party today may differ. A seat is matched to its race by province or city, district number ' +
+    'and towns; a district whose towns changed carries no party. A party’s figure is the budget in the districts its ' +
+    'candidates won, and it grows with the seats it held. It does not establish that a party or a member requested, ' +
+    'sponsored or controlled any line, or any irregularity or wrongdoing. Every seat, its race and its source: see how we ' +
+    'read parties.',
+};
+/** The trailing words of DISCLAIMER_PARTY_DATA.body that link to the How we read parties page. */
+export const PARTY_DATA_LINK_TEXT = 'how we read parties';
+
+/**
  * The red-flag page (`/hgab/2027/1T-redflags`): whose basket it is, what a red flag is and is not. With "No allegations".
  */
 export const DISCLAIMER_RED_FLAGS: Disclaimer = {

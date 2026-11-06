@@ -766,7 +766,7 @@ export function loadHgabHistory(): Promise<HistoryData> {
 }
 
 /** Each Congress's representatives and parties on today's districts (`npm run build:hgab-congress-seats`). */
-function loadCongressSeats(): Promise<CongressSeatsFile> {
+export function loadCongressSeats(): Promise<CongressSeatsFile> {
   return cached('congress-seats', () => getJson<CongressSeatsFile>(dataUrl(CONGRESS_SEATS_PATH), 'Failed to load the representatives by Congress'));
 }
 

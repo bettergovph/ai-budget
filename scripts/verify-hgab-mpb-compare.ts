@@ -8,8 +8,12 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { CONGRESS_TERMS, PARTY_CODE_ALIASES, termOfYear, type CongressSeatsFile } from "../src/lib/hgab-congress-seats";
-import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD, PARTY_CARD_DISCLAIMER } from "../src/lib/hgab-disclaimers";
+import {
+  CONGRESS_SEATS_CSV_FIELDS, CONGRESS_TERMS, PARTY_CODE_ALIASES, termOfYear, type CongressSeatsFile,
+} from "../src/lib/hgab-congress-seats";
+import {
+  COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD, DISCLAIMER_PARTY_DATA, PARTY_CARD_DISCLAIMER, PARTY_DATA_LINK_TEXT,
+} from "../src/lib/hgab-disclaimers";
 import type { PartiesData } from "../src/lib/hgab-parties";
 import type { HistoryData } from "../src/lib/hgab-history";
 import { MPB_CSV_FIELDS, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
@@ -115,6 +119,38 @@ function verifyCongressSeats(check: Check, o: Opts): CongressSeatsFile | null {
   check(`18th and 19th Congress: ${compared} seats compared with the by-party page's elections, party and towns alike`, compared > 400 && crossed.length === 0, crossed.slice(0, 3).join("; "));
   check("party codes read alike across years (2016's LAKAS-CMD is LAKAS)",
     C.terms.every((t) => Object.values(t.seats).every((x) => !x[0] || !(x[0] in PARTY_CODE_ALIASES))));
+
+  // How we read parties (Jason, 2026-11-06: "We need the data exposed on how we mapped the parties … the data should be
+  // cited properly, the data are based on electoral data"): the citation, every seat's race, the CSV.
+  check("the file cites the election data: Open Halalan's citation, BetterGov Dynasties, the data's date and license; 254 districts named",
+    !!C.source.citation && /Open Halalan/.test(C.source.citation) && /dynasties\.bettergov\.ph/.test(C.source.site ?? "")
+      && !!C.source.data_vintage && !!C.source.license && /not recorded/.test(C.source.note) && (C.districts?.length ?? 0) === 254);
+  // A seat with no race is one the by-party page reads from outside the results (a special election), with its source.
+  const noRace = C.terms.flatMap((t) => Object.values(t.seats).filter((x) => !x[3] && !/special election.*Source: https?:\/\//.test(x[7] ?? "")));
+  const multi = C.terms.flatMap((t) => Object.values(t.seats).filter((x) => /an error in the source/.test(x[7] ?? "")));
+  check(`every seat names its race (Dynasties id) and, when one person won, the winner; ${multi.length} one-seat races with several winners flagged, none given a party`,
+    noRace.length === 0 && multi.every((x) => !x[0])
+      && C.terms.every((t) => Object.values(t.seats).every((x) => !x[0] || !!x[4] || /two-seat race|House lists two/i.test(`${x[7] ?? ""} ${x[1] ?? ""}`) || (x[1] ?? "").includes(" / "))));
+  const csvPath = resolve(o.out, "parties/congress-seats.csv");
+  if (existsSync(csvPath)) {
+    const text = readFileSync(csvPath, "utf8").replace(/^\uFEFF/, "");
+    const lines = text.trimEnd().split("\n");
+    const head = lines[0].split(",");
+    check(`congress-seats.csv: its ${head.length} columns are the fields the page describes; ${lines.length - 1} rows, 254 per Congress; checksum the JSON's`,
+      head.join() === CONGRESS_SEATS_CSV_FIELDS.map((f) => f.name).join() && lines.length - 1 === 254 * C.terms.length
+        && C.terms.every((t) => lines.filter((l) => l.startsWith(`${t.congress},${t.year},`)).length === 254)
+        && createHash("sha256").update(readFileSync(csvPath)).digest("hex") === C.outputs?.["congress-seats.csv"].sha256,
+      head.join(","));
+  } else check("congress-seats.csv present", false, csvPath);
+
+  // The party data disclaimer, on every section that shows a party (Jason: "We need disclaimers on the sections with
+  // party data", "full disclaimers that members switch parties").
+  const b = DISCLAIMER_PARTY_DATA.body;
+  check("the party data disclaimer: election results, Open Halalan and BetterGov Dynasties, members switch parties, not recorded, how seats match, no allegations; links the page; plain, at most 25 words a sentence",
+    /election results/.test(b) && /Open Halalan/.test(b) && /BetterGov Dynasties/.test(b) && /switch parties during a term/.test(b)
+      && /not recorded/.test(b) && /towns changed carries no party/.test(b) && /irregularity or wrongdoing/.test(b)
+      && b.endsWith(`${PARTY_DATA_LINK_TEXT}.`) && sentences(b).every((x) => o.words(x) <= 25) && o.readerCopyHits(b).length === 0,
+    sentences(b).map((x) => o.words(x)).join(", "));
   return C;
 }
 

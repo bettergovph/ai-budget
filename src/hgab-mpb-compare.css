@@ -167,3 +167,14 @@
 .mpbc-fields dd { margin: 0; color: var(--ink-2); }
 .mpbc-caveats { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
 .mpbc-caveats li { margin: 3px 0; }
+
+/* How we read parties (/hgab/2027/parties/by-congress): Congress tabs, search, every seat, the citation. */
+.pd-controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 6px; }
+.pd-tab { padding: 6px 10px; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.pd-tab span { color: var(--ink-3); }
+.pd-tab.is-on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.pd-search { margin-left: auto; min-width: 240px; padding: 6px 10px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; }
+.pd-seats td { vertical-align: top; }
+.pd-links a { display: inline-block; margin-right: 10px; white-space: nowrap; }
+.pd-cite { margin: 10px 0 0; padding: 10px 14px; border-left: 3px solid var(--rule); background: var(--paper-2); font-size: 13px; color: var(--ink-2); }
+@media (max-width: 760px) { .pd-search { margin-left: 0; min-width: 0; width: 100%; } }
