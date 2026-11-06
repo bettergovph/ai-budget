@@ -24,7 +24,7 @@ import {
   type AboutData, type ComparePanelCopy, type CompareCopy, type GridSpec, type MatrixCopy, type PartyYearMatrix, type RegionRow,
   type RegionYearMatrix, type ScopeRow, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
 } from '../lib/mpb-compare';
-import { PARTIES_ROOT } from '../lib/hgab-parties';
+import { PARTY_DATA_ROOT, PARTY_DATA_TITLE } from '../lib/hgab-congress-seats';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
 import '../hgab-mpb-compare.css';
@@ -353,8 +353,12 @@ function PartyYearTable({ topic, parties, builtAt }: { topic: CompareTopic; part
   const grid = useMemo(() => partyGrid(parties), [parties]);
   const copy = useMemo(() => partyCopy(topic, parties, builtAt, grid.folded), [topic, parties, builtAt, grid.folded]);
   return (
-    <YearGrid id="by-party-and-year" heading="By party and year" spec={grid.spec} copy={copy} imageName={topic.partyImageName}
-      after={<> Each district’s representative today is on <Link to={PARTIES_ROOT}>the 2027 House bill by party</Link>.</>} />
+    <>
+      <YearGrid id="by-party-and-year" heading="By party and year" spec={grid.spec} copy={copy} imageName={topic.partyImageName}
+        after={<> Every seat in every Congress, its race and its source: <Link to={PARTY_DATA_ROOT}>{PARTY_DATA_TITLE.toLowerCase()} →</Link></>} />
+      {/* Jason, 2026-11-06: "We need disclaimers on the sections with party data". */}
+      <DisclaimerNotice compact partyData heading="About the party data" />
+    </>
   );
 }
 

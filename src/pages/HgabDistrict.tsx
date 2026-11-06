@@ -57,6 +57,7 @@ import { LIST_COLUMNS, coerceRow, parquetSource, sqlStr } from '../lib/hgab-quer
 import { DEO_MEANING } from '../lib/hgab-leaderboard';
 import { letterPath, letterSlug } from '../lib/hgab-letter';
 import { PARTIES_ROOT, partyFull, partyName, partyShort, seatHistory, type PartiesData } from '../lib/hgab-parties';
+import { PARTY_DATA_ROOT } from '../lib/hgab-congress-seats';
 import '../hgab-districts.css';
 
 const TOP_N = 15;
@@ -368,6 +369,8 @@ function SeatParty({ data, districtId }: { data: PartiesData; districtId: string
       Party: <strong title={partyFull(seat.party)}>{partyName(seat.party)}</strong>, as they ran in May 2025.
       {won.length > 0 && <> The seat’s earlier winners ran for {won.map((e) => `${partyShort(e.party!)} (${e.year})`).join(' and ')}.</>}
       {redrawn.length > 0 && <> The district had other towns in {redrawn.join(' and ')}.</>}
+      {' '}Parties are as the election results record them; members may switch party during a term
+      ({/* Jason, 2026-11-06: "We need disclaimers on the sections with party data" */}<Link to={PARTY_DATA_ROOT}>how we read parties</Link>).
       {' '}<Link to={PARTIES_ROOT}>Every district by party →</Link>
     </p>
   );

@@ -30,11 +30,13 @@ import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
+import { PARTY_DATA_ROOT } from '../lib/hgab-congress-seats';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
 import { FAP_ROOT } from '../lib/hgab-fap';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  DISCLAIMER_FLOOD, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS,
+  DISCLAIMER_FLOOD, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PARTY_DATA, DISCLAIMER_PLACEMENTS,
+  DISCLAIMER_RED_FLAGS, PARTY_DATA_LINK_TEXT,
   OFFICE_VIEW_DISCLAIMERS,
   type Disclaimer,
 } from '../lib/hgab-disclaimers';
@@ -594,16 +596,22 @@ export function StageAmounts({ row }: { row: ProjectRow }) {
 }
 
 /** One disclaimer: bold title, then the body; its closing "DEO mapping restrictions" links to their summary. */
+/** The words in a disclaimer's body that link to a page: the DEO mapping restrictions, How we read parties. */
+const DISCLAIMER_LINKS: ReadonlyArray<[text: string, to: string]> = [
+  [DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH],
+  [PARTY_DATA_LINK_TEXT, PARTY_DATA_ROOT],
+];
+
 function DisclaimerItem({ d }: { d: Disclaimer }) {
-  const i = d.body.lastIndexOf(DEO_RESTRICTIONS_LINK_TEXT);
+  const link = DISCLAIMER_LINKS.map(([text, to]) => ({ text, to, i: d.body.lastIndexOf(text) })).find((x) => x.i >= 0);
   return (
     <p className="hgab-disclaimer-item">
       <strong>{d.title}</strong>{' '}
-      {i < 0 ? d.body : (
+      {!link ? d.body : (
         <>
-          {d.body.slice(0, i)}
-          <Link to={DEO_RESTRICTIONS_PATH}>{DEO_RESTRICTIONS_LINK_TEXT}</Link>
-          {d.body.slice(i + DEO_RESTRICTIONS_LINK_TEXT.length)}
+          {d.body.slice(0, link.i)}
+          <Link to={link.to}>{link.text}</Link>
+          {d.body.slice(link.i + link.text.length)}
         </>
       )}
     </p>
@@ -628,6 +636,7 @@ export function DisclaimerNotice({
   placements = false,
   redFlags = false,
   flood = false,
+  partyData = false,
   heading,
   className = '',
 }: {
@@ -637,6 +646,11 @@ export function DisclaimerNotice({
   redFlags?: boolean;
   /** Flood control, 2025 to 2027: enacted budgets beside proposals, placement, candidates, no allegations. */
   flood?: boolean;
+  /**
+   * A section that shows parties: the party data disclaimer (election results, members switch parties, how seats are
+   * matched, no allegations). Alone, or after the page's own with another flag; the by-party pages carry it always.
+   */
+  partyData?: boolean;
   /** The page by party: the office disclaimers, then the parties one. */
   parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
@@ -648,13 +662,15 @@ export function DisclaimerNotice({
   heading?: string;
   className?: string;
 }) {
-  const list = placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
+  const only = partyData && !(placements || parties || redFlags || flood || mpb || contractors || offices);
+  const base = only ? [] : placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
     : parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
     : redFlags ? [DISCLAIMER_RED_FLAGS, ...COMPARISON_DISCLAIMERS]
     : flood ? [DISCLAIMER_FLOOD]
     : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];
+  const list = partyData || parties ? [...base, DISCLAIMER_PARTY_DATA] : base;
   return (
     <aside className={`hgab-disclaimer ${compact ? 'is-compact' : ''} ${className}`.trim()} aria-label={heading ?? 'Disclaimer'}>
       <p className={`hgab-disclaimer-eyebrow ${heading ? 'is-heading' : ''}`.trim()}>{heading ?? 'Disclaimer'}</p>
