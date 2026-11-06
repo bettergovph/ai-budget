@@ -139,3 +139,16 @@
 .mpbc-table thead th { background: var(--paper-2); font-size: 11.5px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
 .mpbc-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mpbc-sub { display: block; font-size: 11.5px; color: var(--ink-3); }
+
+/* By region and year: a heat table, the region column fixed while the years scroll; its download beside the heading. */
+.mpbc-matrix-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 24px; }
+.mpbc-tools.is-inline { margin: 2px 0 0; }
+.mpbc-matrix th, .mpbc-matrix td { padding: 6px 8px; }
+.mpbc-matrix td { border-left: 1px solid rgba(255, 255, 255, 0.5); }
+.mpbc-matrix tbody th, .mpbc-matrix tfoot th {
+  position: sticky; left: 0; z-index: 1; background: var(--paper, #fff); font-weight: 500; white-space: nowrap; text-align: left;
+}
+.mpbc-matrix thead th:first-child { position: sticky; left: 0; z-index: 2; }
+.mpbc-matrix tfoot th, .mpbc-matrix tfoot td { border-top: 2px solid var(--rule); font-weight: 700; background: var(--paper-2); }
+@media (max-width: 760px) { .mpbc-matrix-name { display: none; } }
+
