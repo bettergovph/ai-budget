@@ -8,11 +8,14 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD } from "../src/lib/hgab-disclaimers";
+import { CONGRESS_TERMS, PARTY_CODE_ALIASES, termOfYear, type CongressSeatsFile } from "../src/lib/hgab-congress-seats";
+import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD, PARTY_CARD_DISCLAIMER } from "../src/lib/hgab-disclaimers";
+import type { PartiesData } from "../src/lib/hgab-parties";
 import type { HistoryData } from "../src/lib/hgab-history";
 import { MPB_CSV_FIELDS, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
 import {
-  COMPARE_TOPICS, COMPARE_VIEW, FLOOD_CSV_FIELDS, GAA_PANEL_COLOR, budgetSource, matrixCopy, mpbScope, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
+  COMPARE_TOPICS, COMPARE_VIEW, FLOOD_CSV_FIELDS, GAA_PANEL_COLOR, budgetSource, floodDistrictMatrix, linesDistrictMatrix,
+  matrixCopy, mpbScope, partyCopy, partyGrid, partyMatrix, type DistrictYearMatrix, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
   inView, linesMatrix, panelDots, type BudgetKey, type CompareTopic, type FloodCompareSummary, type RegionYearMatrix,
 } from "../src/lib/mpb-compare";
 
@@ -75,6 +78,86 @@ function verifyMatrix(
       const row = m.rows.find((x) => x.region === r.region);
       return !!row && topic.budgets.every((k, j) => row.cells[mapped[j]].php === r.by[k].php && row.cells[mapped[j]].lines === r.by[k].lines);
     }));
+}
+
+/**
+ * Each Congress's seats on today's districts (parties/congress-seats.json, `npm run build:hgab-congress-seats`): the five
+ * Congresses, every district counted once per Congress, the 20th's parties the by-party page's, the 18th's and 19th's the
+ * by-party page's election seats wherever that page matched a race to one district with the same towns.
+ */
+function verifyCongressSeats(check: Check, o: Opts): CongressSeatsFile | null {
+  process.stdout.write("\nparties/congress-seats.json (each Congress's representative and party, for the party-by-year grids)\n");
+  const path = resolve(o.out, "parties/congress-seats.json");
+  check("congress-seats.json present (npm run build:hgab-congress-seats)", existsSync(path), path);
+  if (!existsSync(path)) return null;
+  const C = JSON.parse(readFileSync(path, "utf8")) as CongressSeatsFile;
+  const P = JSON.parse(readFileSync(resolve(o.out, "parties/parties.json"), "utf8")) as PartiesData;
+  check(`the five Congresses, 16th to 20th, with the budgets each passed (${C.terms.map((t) => `${t.congress}th: ${t.budget_years.join("/")}`).join("; ")})`,
+    C.terms.map((t) => `${t.year}:${t.budget_years.join(",")}`).join("|") === CONGRESS_TERMS.map((t) => `${t.year}:${t.budget_years.join(",")}`).join("|")
+      && [2015, 2019, 2020, 2023, 2026, 2027].every((fy) => termOfYear(fy)?.budget_years.includes(fy)));
+  check(`every one of the 254 districts counted once per Congress (${C.terms.map((t) => `${t.year}: ${t.counts.same} same, ${t.counts.changed} changed, ${t.counts.absent} no race`).join("; ")})`,
+    C.terms.every((t) => t.counts.same + t.counts.changed + t.counts.absent === 254 && Object.keys(t.seats).length === t.counts.same + t.counts.changed));
+  const t25 = C.terms.find((t) => t.year === 2025)!;
+  const off25 = P.seats.filter((s) => t25.seats[s.district_id]?.[0] !== s.party);
+  check("20th Congress: each district's party is the by-party page's", off25.length === 0 && P.seats.length === 254, off25.slice(0, 3).map((s) => s.district_id).join(", "));
+  const alias = (p: string | null) => (p ? PARTY_CODE_ALIASES[p] ?? p : null);
+  const crossed: string[] = [];
+  let compared = 0;
+  for (const e of P.elections.filter((x) => x.year === 2019 || x.year === 2022)) {
+    const t = C.terms.find((x) => x.year === e.year)!;
+    for (const s of e.seats) {
+      if (s.territory !== "same" || s.district_ids.length !== 1) continue;
+      compared++;
+      const ours = t.seats[s.district_ids[0]];
+      if (!ours || ours[2] !== "same" || ours[0] !== alias(s.party)) crossed.push(`${e.year} ${s.district_ids[0]}: ${ours?.[0]} vs ${s.party}`);
+    }
+  }
+  check(`18th and 19th Congress: ${compared} seats compared with the by-party page's elections, party and towns alike`, compared > 400 && crossed.length === 0, crossed.slice(0, 3).join("; "));
+  check("party codes read alike across years (2016's LAKAS-CMD is LAKAS)",
+    C.terms.every((t) => Object.values(t.seats).every((x) => !x[0] || !(x[0] in PARTY_CODE_ALIASES))));
+  return C;
+}
+
+/**
+ * The party-by-year grid (Jason, 2026-11-06: "map the charts based on their political party for that year"): every
+ * column adds up to the region grid's total; each budget carries the Congress that passed it; a party's budget is only
+ * districts it held with the same towns; the drawn rows (folded, plain) add up too; the words are plain.
+ */
+function verifyPartyMatrix(check: Check, o: Opts, topic: CompareTopic, dm: DistrictYearMatrix, regionTotals: Array<{ lines: number; php: number }>,
+  C: CongressSeatsFile, builtAt: string): void {
+  const m = partyMatrix(dm, C);
+  const sum = (rows: typeof m.rows, i: number) => rows.reduce((a, r) => ({ lines: a.lines + r.cells[i].lines, php: a.php + r.cells[i].php }), { lines: 0, php: 0 });
+  check(`party grid: every column's rows (parties and the rows with none) add up to the region grid's total`,
+    m.budgets.every((_, i) => { const t = sum(m.rows, i); return t.php === regionTotals[i].php && t.lines === regionTotals[i].lines; })
+      && dm.budgets.every((_, i) => dm.rows.reduce((a, r) => a + r.cells[i].php, 0) === regionTotals[i].php));
+  check(`party grid: each budget carries the Congress that passed it (${m.terms.map((t, i) => `${m.budgets[i].key} ${t.congress}th`).filter((_, i) => i === 0 || m.terms[i].congress !== m.terms[i - 1].congress).join(", ")})`,
+    m.budgets.every((b, i) => termOfYear(b.fy)?.year === m.terms[i].year));
+  const wrong: string[] = [];
+  m.budgets.forEach((b, i) => {
+    const t = C.terms.find((x) => x.year === m.terms[i].year)!;
+    let party = 0;
+    for (const r of dm.rows) {
+      const s = r.district ? t.seats[r.district] : undefined;
+      if (s && s[2] === "same" && s[0]) party += r.cells[i].php;
+    }
+    const got = m.rows.filter((r) => r.kind === "party").reduce((a, r) => a + r.cells[i].php, 0);
+    if (got !== party) wrong.push(b.key);
+  });
+  check("party grid: a party's budget is only the districts it held with the same towns; held counts within the Congress's",
+    wrong.length === 0 && m.rows.filter((r) => r.kind === "party").every((r) => r.held.every((h, i) => h <= (C.terms.find((x) => x.year === m.terms[i].year)?.counts.same ?? 0))),
+    wrong.join(", "));
+  const grid = partyGrid(m);
+  check(`party grid as drawn: ${grid.spec.rows.filter((r) => r.heat).length - (grid.folded.length ? 1 : 0)} parties, ${grid.folded.length} folded into Other parties, every column still adding up`,
+    m.budgets.every((_, i) => grid.spec.rows.reduce((a, r) => a + r.cells[i].php, 0) === regionTotals[i].php)
+      && grid.spec.groups!.reduce((a, g) => a + g.span, 0) === m.budgets.length && grid.spec.rows.every((r) => r.titles.length === m.budgets.length));
+  const cp = partyCopy(topic, m, builtAt, grid.folded);
+  const words = [cp.kicker, cp.title, cp.dek, ...cp.notes, cp.disclaimer];
+  check("party grid's words: the Congress rule, no switches captured, districts held, the disclaimer; plain, sentences of at most 25 words",
+    cp.disclaimer === PARTY_CARD_DISCLAIMER && sentences(cp.disclaimer).every((x) => o.words(x) <= 20)
+      && cp.notes.some((x) => /Congress that passed it, elected in 2013 \(2015–2016\)/.test(x)) && cp.notes.some((x) => /switches during a term are not captured/.test(x))
+      && cp.notes.some((x) => /number of districts it held/.test(x)) && /\.png$/.test(topic.partyImageName)
+      && words.flatMap(o.readerCopyHits).length === 0 && cp.notes.flatMap(sentences).every((x) => o.words(x) <= 25),
+    [...words.flatMap(o.readerCopyHits), ...cp.notes.flatMap(sentences).filter((x) => o.words(x) > 25)].join(" | "));
 }
 
 /** The checks both pages share: totals, kinds, regions, dots and colours, plain words, the title. */
@@ -150,6 +233,7 @@ function verifyTopic(
 }
 
 export function verifyMpbCompare(check: Check, o: Opts): void {
+  const C = verifyCongressSeats(check, o);
   process.stdout.write("\nmulti-purpose/nep-vs-house-bill (the 2027 NEP and House bill side by side)\n");
   const dir = resolve(o.out, "mpb-years");
   const files = ["lines.json", "summary.json"].map((f) => resolve(dir, f));
@@ -160,6 +244,7 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
     verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, []);
     const m = linesMatrix(data, S.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: "title_only" as const }) })));
     verifyMatrix(check, COMPARE_TOPICS.mpb, data, m, (key) => S.budgets.find((x) => x.key === key), o, S.built_at);
+    if (C) verifyPartyMatrix(check, o, COMPARE_TOPICS.mpb, linesDistrictMatrix(data, m.budgets), m.totals, C, S.built_at);
     // About this data (Jason, 2026-11-06: "Let's do the same for MPBs"): the grouping, the fields, the CSV.
     const sc = mpbScope(data, S);
     check(`how we grouped them: one row per budget; budget lines by heading, then lines in by title; each adds up to the map's figures (${[...new Set(sc.flatMap((r) => r.parts.map((p) => p.label)))].join(" | ")})`,
@@ -186,10 +271,10 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
     check(`matrix: the budgets with no multi-purpose building line (${m.budgets.filter((b) => b.note).map((b) => b.fy).join(", ")}) are marked`,
       m.budgets.filter((b) => b.note).every((b) => b.fy < 2018 && b.note === "title_only") && m.budgets.some((b) => b.note));
   }
-  verifyFloodCompare(check, o);
+  verifyFloodCompare(check, o, C);
 }
 
-function verifyFloodCompare(check: Check, o: Opts): void {
+function verifyFloodCompare(check: Check, o: Opts, C: CongressSeatsFile | null): void {
   process.stdout.write("\nflood-control (flood control in 2025, 2026 and 2027, side by side)\n");
   const dir = resolve(o.out, "flood-compare");
   const files = ["lines.json", "summary.json"].map((f) => resolve(dir, f));
@@ -226,6 +311,7 @@ function verifyFloodCompare(check: Check, o: Opts): void {
     return i < 0 || php == null || php !== S.matrix.totals[i][1] ? undefined : { lines: S.matrix.totals[i][0], php };
   }, o, S.built_at);
   const years = Array.from({ length: 12 }, (_, i) => `gaa-${2015 + i}`).concat("nep-2027", "house-2027");
+  if (C) verifyPartyMatrix(check, o, COMPARE_TOPICS.flood, floodDistrictMatrix(S), floodMatrix(S).totals, C, S.built_at);
   check(`matrix: every budget we have, FY2015 GAA to the 2027 House bill; 2015 to 2017 marked as the older code set`,
     S.matrix.budgets.map((b) => b.key).join() === years.join()
       && S.matrix.budgets.every((b) => (b.note === "former_codes") === (b.stage === "gaa" && b.fy <= 2017)));

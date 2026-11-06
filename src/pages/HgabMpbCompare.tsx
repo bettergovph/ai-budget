@@ -11,7 +11,7 @@
  *
  * Data and drawing: src/lib/mpb-compare.ts (pure figures, dot layout, and a canvas drawing the poster can reuse).
  */
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
@@ -20,9 +20,11 @@ import { HISTORY_ROOT, HISTORY_TITLE, listHref } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData } from '../lib/hgab-mpb-years';
 import {
   COMPARE_COLORS, COMPARE_TOPICS, compareByRegion, compareCopy, compareFigures, compareFrame, dotRadius,
-  drawCompareMap, heatColor, inView, legendWidth, matrixCopy, matrixLabel, panelDots, phpCell, pct, phpWords, placeDots, provincePaths, signed,
-  type AboutData, type ComparePanelCopy, type CompareCopy, type RegionRow, type RegionYearMatrix, type ScopeRow, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
+  drawCompareMap, heatColor, inView, legendWidth, matrixCopy, matrixLabel, panelDots, partyCopy, partyGrid, phpCell, pct, phpWords, placeDots, provincePaths, signed,
+  type AboutData, type ComparePanelCopy, type CompareCopy, type GridSpec, type MatrixCopy, type PartyYearMatrix, type RegionRow,
+  type RegionYearMatrix, type ScopeRow, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
 } from '../lib/mpb-compare';
+import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
 import '../hgab-mpb-compare.css';
@@ -78,6 +80,7 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
         <CompareFigure topic={topic} input={state} f={figures} />
         {key === 'mpb' && <RegionTable topic={topic} data={state.data} />}
         <RegionYearTable topic={topic} matrix={state.matrix} builtAt={state.builtAt} />
+        <PartyYearTable topic={topic} parties={state.parties} builtAt={state.builtAt} />
         <AboutThisData topic={topic} about={state.about} />
         {key === 'flood' ? (
           <p className="mpbc-more">
@@ -313,29 +316,69 @@ function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
   );
 }
 
+/** The region grid's rows (north to south, then No region), for the page and its image. */
+function regionSpec(matrix: RegionYearMatrix): GridSpec {
+  const rows = [...matrix.rows].sort((a, b) =>
+    (a.region ? REGION_ORDER.indexOf(a.region) : 99) - (b.region ? REGION_ORDER.indexOf(b.region) : 99));
+  return {
+    budgets: matrix.budgets, groups: null, headLabel: 'Region', totals: matrix.totals, totalLabel: 'All regions',
+    rows: rows.map((r) => ({
+      key: r.region ?? 'none',
+      short: r.region ? REGION_LABELS[r.region].short : 'No region',
+      name: r.region ? REGION_LABELS[r.region].name : null,
+      cells: r.cells, heat: true,
+      titles: r.cells.map((c) => (c.lines ? `${n(c.lines)} ${c.lines === 1 ? 'line' : 'lines'}, ${phpWords(c.php)}` : 'No line')),
+    })),
+  };
+}
+
 /**
  * Every region in every budget (Jason, 2026-11-06: "I want a matrix of the MPBs per region and per year. I want the same
- * for flood control as well"). Regions north to south, budgets oldest first; a cell goes from light green to red with
- * its amount (heatColor), and each column adds up to the budget's total in the last row.
+ * for flood control as well").
  */
 function RegionYearTable({ topic, matrix, builtAt }: { topic: CompareTopic; matrix: RegionYearMatrix; builtAt: string }) {
-  const rows = useMemo(() => [...matrix.rows].sort((a, b) =>
-    (a.region ? REGION_ORDER.indexOf(a.region) : 99) - (b.region ? REGION_ORDER.indexOf(b.region) : 99)), [matrix.rows]);
-  const max = Math.max(...matrix.rows.flatMap((r) => r.cells.map((c) => c.php)));
+  const spec = useMemo(() => regionSpec(matrix), [matrix]);
   const copy = useMemo(() => matrixCopy(topic, matrix, builtAt), [topic, matrix, builtAt]);
+  return (
+    <YearGrid id="by-region-and-year" heading="By region and year" spec={spec} copy={copy} imageName={topic.matrixImageName}
+      after={<> See <a href="#about-data">how we grouped them</a>.</>} />
+  );
+}
+
+/**
+ * Every party in every budget (Jason, 2026-11-06: "map the charts based on their political party for that year"): the
+ * party of the district's representative in the Congress that passed the budget, the Congress over its years.
+ */
+function PartyYearTable({ topic, parties, builtAt }: { topic: CompareTopic; parties: PartyYearMatrix; builtAt: string }) {
+  const grid = useMemo(() => partyGrid(parties), [parties]);
+  const copy = useMemo(() => partyCopy(topic, parties, builtAt, grid.folded), [topic, parties, builtAt, grid.folded]);
+  return (
+    <YearGrid id="by-party-and-year" heading="By party and year" spec={grid.spec} copy={copy} imageName={topic.partyImageName}
+      after={<> Each district’s representative today is on <Link to={PARTIES_ROOT}>the 2027 House bill by party</Link>.</>} />
+  );
+}
+
+/**
+ * A year grid (regions or parties): rows, budgets oldest first, an All row; a cell goes from light green to red with its
+ * amount (heatColor) against the largest shaded cell; rows that carry no region or party are plain. "Download image
+ * (PNG)" draws the same table (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo, our disclaimer").
+ */
+function YearGrid({ id, heading, spec, copy, imageName, after }: {
+  id: string; heading: string; spec: GridSpec; copy: MatrixCopy; imageName: string; after?: ReactNode;
+}) {
+  const max = Math.max(...spec.rows.filter((r) => r.heat).flatMap((r) => r.cells.map((c) => c.php)));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  // The shareable image (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo, our disclaimer").
   const download = async () => {
     setBusy(true); setFailed(null);
     try {
       const { renderMatrixImage } = await import('../lib/mpb-matrix-image');
-      const canvas = await renderMatrixImage({ matrix, copy, logoUrl: LOGO_ON_WHITE, scale: 2 });
+      const canvas = await renderMatrixImage({ spec, copy, logoUrl: LOGO_ON_WHITE, scale: 2 });
       const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
       if (!blob) throw new Error('the browser could not make the image');
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = topic.matrixImageName;
+      a.download = imageName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     } catch (e) {
@@ -349,16 +392,12 @@ function RegionYearTable({ topic, matrix, builtAt }: { topic: CompareTopic; matr
     const t = Math.sqrt(php / max);
     return { background: heatColor(t), color: t > 0.72 ? '#fff' : undefined };
   };
-  const cell = (c: { lines: number; php: number }, b: number, style?: CSSProperties) => (
-    <td key={b} className="is-num" style={style} title={c.lines ? `${n(c.lines)} ${c.lines === 1 ? 'line' : 'lines'}, ${phpWords(c.php)}` : 'No line'}>
-      {c.lines ? phpCell(c.php) : '—'}
-    </td>
-  );
+  const hId = `${id}-h`;
   return (
-    <section className="nep-section mpbc-section" id="by-region-and-year" aria-labelledby="mpbc-matrix-h">
+    <section className="nep-section mpbc-section" id={id} aria-labelledby={hId}>
       <div className="mpbc-matrix-head">
         <div>
-          <h2 id="mpbc-matrix-h" className="mpbc-h2">By region and year</h2>
+          <h2 id={hId} className="mpbc-h2">{heading}</h2>
           <p className="mpbc-dek">{copy.dek} Hover a cell for its lines.</p>
         </div>
         <div className="mpbc-tools is-inline">
@@ -371,32 +410,40 @@ function RegionYearTable({ topic, matrix, builtAt }: { topic: CompareTopic; matr
       <div className="mpbc-tablewrap">
         <table className="mpbc-table mpbc-matrix">
           <thead>
+            {spec.groups && (
+              <tr className="mpbc-groups">
+                <th aria-hidden="true" />
+                {spec.groups.map((g) => <th key={g.label} scope="colgroup" colSpan={g.span}>{g.label}</th>)}
+              </tr>
+            )}
             <tr>
-              <th scope="col">Region</th>
-              {matrix.budgets.map((b) => <th key={b.key} scope="col" className="is-num">{matrixLabel(b)}{b.note ? '*' : ''}</th>)}
+              <th scope="col">{spec.headLabel}</th>
+              {spec.budgets.map((b) => <th key={b.key} scope="col" className="is-num">{matrixLabel(b)}{b.note ? '*' : ''}</th>)}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.region ?? 'none'}>
-                <th scope="row">
-                  {r.region ? <>{REGION_LABELS[r.region].short}<span className="mpbc-matrix-name"> · {REGION_LABELS[r.region].name}</span></> : 'No region'}
-                </th>
-                {r.cells.map((c, i) => cell(c, i, heat(c.php)))}
+            {spec.rows.map((r) => (
+              <tr key={r.key} className={r.heat ? undefined : 'is-plain'}>
+                <th scope="row">{r.short}{r.name && <span className="mpbc-matrix-name"> · {r.name}</span>}</th>
+                {r.cells.map((c, i) => (
+                  <td key={i} className="is-num" style={r.heat ? heat(c.php) : undefined} title={r.titles[i]}>
+                    {c.lines ? phpCell(c.php) : '—'}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row">All regions</th>
-              {matrix.totals.map((c, i) => cell(c, i))}
+              <th scope="row">{spec.totalLabel}</th>
+              {spec.totals.map((c, i) => (
+                <td key={i} className="is-num" title={c.lines ? `${n(c.lines)} lines, ${phpWords(c.php)}` : 'No line'}>{c.lines ? phpCell(c.php) : '—'}</td>
+              ))}
             </tr>
           </tfoot>
         </table>
       </div>
-      <p className="mpbc-more">
-        {copy.notes.join(' ')} See <a href="#about-data">how we grouped them</a>.
-      </p>
+      <p className="mpbc-more">{copy.notes.join(' ')}{after}</p>
     </section>
   );
 }

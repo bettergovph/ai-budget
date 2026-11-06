@@ -134,6 +134,12 @@ export const DISCLAIMER_FLOOD: Disclaimer = {
  */
 export const COMPARE_CARD_DISCLAIMER =
   'Independent and unofficial: our reading of the published budget documents. A line or a total is not evidence of wrongdoing.';
+/**
+ * Printed on the party-by-year grids and their images (Jason, 2026-11-06: "map the charts based on their political party
+ * for that year"): two sentences of at most 20 words.
+ */
+export const PARTY_CARD_DISCLAIMER =
+  'Independent and unofficial: our reading of the published budget documents. A party’s total is not evidence that it asked for any line or did anything wrong.';
 /** Printed on every multi-purpose building share image, after the board's first note: one sentence of at most 20 words. */
 export const MPB_CARD_DISCLAIMER = 'A total or a ranking is not evidence that anyone asked for a project or did anything wrong.';
 

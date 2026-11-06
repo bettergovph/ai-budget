@@ -42,7 +42,8 @@ Outputs (contract: src/lib/hgab-mpb-years.ts MpbLinesFile, FY2027 only; src/lib/
   lines.json    the mapped budgets' lines (FY2025, FY2026, 2027), in the multi-purpose map's format
   lines.csv     every line, every budget (UTF-8 with BOM; CSV_COLUMNS)
   summary.json  per mapped budget: lines, pesos, placement census, the chart's figure and its foreign-assisted part;
-                the matrix (each region's lines and pesos in every budget); the scope (how each budget's lines were
+                the matrix (each region's lines and pesos in every budget) and the same by legislative district;
+                the scope (how each budget's lines were
                 grouped, from which source, against which check, and the flood-titled lines left out); checks
 """
 from __future__ import annotations
@@ -649,13 +650,14 @@ def main():
     # ------------------------------------------------------------------ the matrix: each region, every budget
     amount = lambda l, b: l['gaa_php'] if b['stage'] == 'gaa' else (l['nep_php'] if b['stage'] == 'nep' else l['house_php'])
     matrix_rows = defaultdict(lambda: [[0, 0] for _ in MATRIX_BUDGETS])
+    district_rows = defaultdict(lambda: [[0, 0] for _ in MATRIX_BUDGETS])  # the party-by-year grid's input
     matrix_totals = [[0, 0] for _ in MATRIX_BUDGETS]
     for l in lines:
         for i, b in enumerate(MATRIX_BUDGETS):
             v = amount(l, b) if l['fy'] == b['fy'] else None
             if v is None:
                 continue
-            for cell in (matrix_rows[l['region']][i], matrix_totals[i]):
+            for cell in (matrix_rows[l['region']][i], district_rows[l['district']][i], matrix_totals[i]):
                 cell[0] += 1
                 cell[1] += v
     scope = []
@@ -762,6 +764,10 @@ def main():
                    'rows': [{'region': r, 'cells': cells}
                             for r, cells in sorted(matrix_rows.items(), key=lambda x: (x[0] is None, x[0] or ''))],
                    'totals': matrix_totals},
+        # Each legislative district's lines and pesos in the same budgets (null: no single district), for the
+        # party-by-year grid (Jason, 2026-11-06: "map the charts based on their political party for that year").
+        'district_matrix': {'rows': [{'district': d, 'cells': cells}
+                                     for d, cells in sorted(district_rows.items(), key=lambda x: (x[0] is None, x[0] or ''))]},
         'head_office': {str(fy): {'province_named': head_office[(fy, 'province')], 'listed_region': head_office[(fy, 'listed_region')]}
                         for fy in GAA_YEARS},
         'nationwide': {'lines': len(nationwide), 'nep_php': sum(l['nep_php'] or 0 for l in nationwide),

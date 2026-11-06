@@ -27,7 +27,9 @@
  * The figure compares totals only (Jason, 2026-11-05: "we don't need the in the nep only but let's just compare the
  * totals for both"): no breakdown into lines in both, in one document only.
  */
-import { COMPARE_CARD_DISCLAIMER } from './hgab-disclaimers';
+import type { CongressSeatsFile } from './hgab-congress-seats';
+import { COMPARE_CARD_DISCLAIMER, PARTY_CARD_DISCLAIMER } from './hgab-disclaimers';
+import { partyName } from './hgab-parties';
 import type { MpbClass, MpbData, MpbLine, MpbSummary } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
 
@@ -74,6 +76,9 @@ export interface CompareTopic {
   /** The region-by-year matrix's own title and downloadable image (Jason, 2026-11-06: "a shareable version"). */
   matrixTitle: string;
   matrixImageName: string;
+  /** The party-by-year grid's (Jason, 2026-11-06: "map the charts based on their political party for that year"). */
+  partyTitle: string;
+  partyImageName: string;
 }
 
 export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
@@ -85,6 +90,8 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     imageName: 'bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png', sizes: [5e6, 25e6, 100e6],
     matrixTitle: 'Multi-purpose buildings by region and year',
     matrixImageName: 'bettergov-multi-purpose-buildings-by-region-2015-2027.png',
+    partyTitle: 'Multi-purpose buildings by party and year',
+    partyImageName: 'bettergov-multi-purpose-buildings-by-party-2015-2027.png',
   },
   flood: {
     // Jason, 2026-11-05: "With our title 'Flood control projects are back'".
@@ -96,6 +103,8 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     imageName: 'bettergov-flood-control-2025-2027.png', sizes: [10e6, 50e6, 250e6],
     matrixTitle: 'Flood control by region and year',
     matrixImageName: 'bettergov-flood-control-by-region-2015-2027.png',
+    partyTitle: 'Flood control by party and year',
+    partyImageName: 'bettergov-flood-control-by-party-2015-2027.png',
   },
 };
 
@@ -105,6 +114,8 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
  */
 export interface CompareInput {
   data: MpbData; builtAt: string; geo: HgabGeo; foreignOnly: BudgetKey[]; matrix: RegionYearMatrix; about: AboutData;
+  /** The party-by-year matrix: each budget by the party of its district's representative in the Congress that passed it. */
+  parties: PartyYearMatrix;
 }
 
 /**
@@ -279,10 +290,18 @@ export interface MatrixCopy {
   source: [string, string];
 }
 
+/** The footnote for the starred columns ("* The 2015 to 2017 budgets …"), or none. */
+function starNote(budgets: readonly MatrixBudget[]): string[] {
+  const marked = budgets.filter((b) => b.note);
+  if (!marked.length) return [];
+  const span = `${marked[0].fy} to ${marked[marked.length - 1].fy}`;
+  return [marked[0].note === 'former_codes'
+    ? `* The ${span} budgets use an older code set; their flood control lines are its flood families.`
+    : `* The ${span} budgets have no multi-purpose building line, so their lines are counted by title.`];
+}
+
 export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: string): MatrixCopy {
   const first = m.budgets[0];
-  const marked = m.budgets.filter((b) => b.note);
-  const span = marked.length ? `${marked[0].fy} to ${marked[marked.length - 1].fy}` : '';
   const what = topic.key === 'flood' ? 'flood control' : 'multi-purpose building';
   return {
     kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill`,
@@ -290,9 +309,7 @@ export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: st
     dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill, by the region its title or office places it in. Cells run from light green (less) to red (more).`,
     notes: [
       'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.',
-      ...(marked.length === 0 ? [] : [marked[0].note === 'former_codes'
-        ? `* The ${span} budgets use an older code set; their flood control lines are its flood families.`
-        : `* The ${span} budgets have no multi-purpose building line, so their lines are counted by title.`]),
+      ...starNote(m.budgets),
       ...(topic.key === 'flood'
         ? ['Head-office lines that name no place count in the region the budget lists them under, mostly Metro Manila, or under No region where the file lists none.']
         : []),
@@ -301,6 +318,199 @@ export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: st
     disclaimer: COMPARE_CARD_DISCLAIMER,
     source: [
       `Source: GAA ${first.fy}–2026 (DBM), NEP 2027 (DBM), House Bill 10858, third reading; DPWH ${what} lines`,
+      `${topic.url} · As of ${asOfDate(builtAt)}`,
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A table either grid draws (page and image): rows with labels, cells, a total row, optional column groups
+// ---------------------------------------------------------------------------
+
+export interface GridRow {
+  key: string;
+  /** "NCR", "Lakas–CMD", "Not in one district". */
+  short: string;
+  /** Shown after the short label, quieter: "Metro Manila", "Nationalist People’s Coalition". */
+  name: string | null;
+  cells: Tally[];
+  /** Shaded green to red (false: rows that carry no region or party, shown plain). */
+  heat: boolean;
+  /** Each cell's hover text. */
+  titles: string[];
+}
+export interface GridSpec {
+  budgets: MatrixBudget[];
+  /** Column groups over the years (the party grid: each Congress). */
+  groups: Array<{ label: string; span: number }> | null;
+  headLabel: string;
+  rows: GridRow[];
+  totals: Tally[];
+  totalLabel: string;
+}
+
+const lineCount = (c: Tally) => `${c.lines.toLocaleString('en-US')} ${c.lines === 1 ? 'line' : 'lines'}`;
+
+// ---------------------------------------------------------------------------
+// The party-by-year matrix (Jason, 2026-11-06: "map the charts based on their political party for that year"; a budget
+// carries the party of the district's representative in the Congress that passed it; a district whose towns changed
+// since that election is kept apart)
+// ---------------------------------------------------------------------------
+
+/** Each legislative district's lines and amount in every budget (district null: the line sits in no single district). */
+export interface DistrictYearMatrix { budgets: MatrixBudget[]; rows: Array<{ district: string | null; cells: Tally[] }>; totals: Tally[] }
+
+/** The district matrix of a set of lines (multi-purpose buildings: the map's lines). */
+export function linesDistrictMatrix(data: MpbData, budgets: readonly MatrixBudget[]): DistrictYearMatrix {
+  const t = (): Tally => ({ lines: 0, php: 0 });
+  const by = new Map<string | null, Tally[]>();
+  const totals = budgets.map(t);
+  for (const l of data.lines) {
+    budgets.forEach((b, i) => {
+      if (l.fy !== b.fy) return;
+      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      if (v == null) return;
+      const d = l.district >= 0 ? data.districts[l.district].id : null;
+      const cells = by.get(d) ?? budgets.map(t);
+      for (const c of [cells[i], totals[i]]) { c.lines++; c.php += v; }
+      by.set(d, cells);
+    });
+  }
+  return { budgets: [...budgets], rows: [...by].map(([district, cells]) => ({ district, cells })), totals };
+}
+
+/** Flood control's district matrix, as its build writes it (the same budgets as its region matrix). */
+export function floodDistrictMatrix(s: FloodCompareSummary): DistrictYearMatrix {
+  const tally = ([lines, php]: [number, number]): Tally => ({ lines, php });
+  return {
+    budgets: s.matrix.budgets,
+    rows: s.district_matrix.rows.map((r) => ({ district: r.district, cells: r.cells.map(tally) })),
+    totals: s.matrix.totals.map(tally),
+  };
+}
+
+/** Where a line's budget goes: a party, or one of the rows that carry none. */
+export type PartyRowKind = 'party' | 'changed' | 'absent' | 'no_party' | 'no_district';
+export interface PartyRow {
+  key: string; kind: PartyRowKind; party: string | null; cells: Tally[];
+  /** Party rows: the districts its members held in that Congress (towns unchanged), per budget. */
+  held: number[];
+}
+export interface PartyYearMatrix {
+  budgets: MatrixBudget[];
+  /** Each budget's Congress, in column order. */
+  terms: Array<{ label: string; congress: number; year: number }>;
+  rows: PartyRow[];
+  totals: Tally[];
+}
+
+export function partyMatrix(dm: DistrictYearMatrix, seats: CongressSeatsFile): PartyYearMatrix {
+  const termOf = dm.budgets.map((b) => seats.terms.find((t) => t.budget_years.includes(b.fy)) ?? null);
+  const rows = new Map<string, PartyRow>();
+  const row = (kind: PartyRowKind, party: string | null) => {
+    const key = kind === 'party' ? party! : `·${kind}`;
+    if (!rows.has(key)) rows.set(key, { key, kind, party, cells: dm.budgets.map(() => ({ lines: 0, php: 0 })), held: dm.budgets.map(() => 0) });
+    return rows.get(key)!;
+  };
+  for (const r of dm.rows) {
+    r.cells.forEach((c, i) => {
+      if (!c.lines) return;
+      const s = r.district != null ? termOf[i]?.seats[r.district] : undefined;
+      const kind: PartyRowKind = r.district == null ? 'no_district' : !s ? 'absent' : s[2] === 'changed' ? 'changed' : !s[0] ? 'no_party' : 'party';
+      const target = row(kind, kind === 'party' ? s![0] : null).cells[i];
+      target.lines += c.lines; target.php += c.php;
+    });
+  }
+  for (const r of rows.values()) {
+    if (r.kind !== 'party') continue;
+    r.held = termOf.map((t) => (t ? Object.values(t.seats).filter((s) => s[2] === 'same' && s[0] === r.party).length : 0));
+  }
+  return {
+    budgets: [...dm.budgets],
+    terms: termOf.map((t) => ({ label: t?.label ?? '', congress: t?.congress ?? 0, year: t?.year ?? 0 })),
+    rows: [...rows.values()],
+    totals: dm.totals,
+  };
+}
+
+const PARTY_SPECIAL: Record<Exclude<PartyRowKind, 'party'>, { short: string; name: string | null }> = {
+  changed: { short: 'District’s towns changed', name: 'since that election' },
+  absent: { short: 'No race on record', name: 'a district created since, or not in the results' },
+  no_party: { short: 'No party on record', name: null },
+  no_district: { short: 'Not in one district', name: 'shared offices, head office, no place named' },
+};
+
+/** A party's label: its name when short ("Lakas–CMD", "Liberal Party"), else its code with the name after it. */
+export function partyLabel(code: string): { short: string; name: string | null } {
+  const name = partyName(code);
+  return name.length <= 18 || name === code ? { short: name, name: null } : { short: code, name };
+}
+
+/**
+ * The party grid as drawn: parties by their total over every budget, largest first; those under `foldBelow` of the
+ * party total folded into "Other parties"; then the rows that carry no party; the Congress over each run of years.
+ */
+export function partyGrid(m: PartyYearMatrix, foldBelow = 0.01): { spec: GridSpec; folded: string[] } {
+  const total = (r: PartyRow) => r.cells.reduce((a, c) => a + c.php, 0);
+  const parties = m.rows.filter((r) => r.kind === 'party').sort((a, b) => total(b) - total(a) || a.key.localeCompare(b.key));
+  const all = parties.reduce((a, r) => a + total(r), 0);
+  const kept = parties.filter((r) => total(r) >= all * foldBelow);
+  const small = parties.filter((r) => total(r) < all * foldBelow);
+  const titles = (r: PartyRow) => r.cells.map((c, i) => (c.lines
+    ? `${lineCount(c)}, ${phpWords(c.php)}${r.kind === 'party' ? `; ${r.held[i]} ${r.held[i] === 1 ? 'district' : 'districts'} held` : ''}`
+    : r.kind === 'party' && r.held[i] ? `No line; ${r.held[i]} ${r.held[i] === 1 ? 'district' : 'districts'} held` : 'No line'));
+  const rows: GridRow[] = kept.map((r) => ({ key: r.key, ...partyLabel(r.key), cells: r.cells, heat: true, titles: titles(r) }));
+  if (small.length) {
+    const cells = m.budgets.map((_, i) => small.reduce((a, r) => ({ lines: a.lines + r.cells[i].lines, php: a.php + r.cells[i].php }), { lines: 0, php: 0 }));
+    rows.push({ key: '·other', short: 'Other parties', name: `${small.length} smaller parties`, cells, heat: true,
+      titles: cells.map((c) => (c.lines ? `${lineCount(c)}, ${phpWords(c.php)}` : 'No line')) });
+  }
+  for (const kind of ['changed', 'absent', 'no_party', 'no_district'] as const) {
+    const r = m.rows.find((x) => x.kind === kind);
+    if (r && total(r) > 0) rows.push({ key: r.key, short: PARTY_SPECIAL[kind].short, name: PARTY_SPECIAL[kind].name, cells: r.cells, heat: false, titles: titles(r) });
+  }
+  const groups: Array<{ label: string; span: number }> = [];
+  for (const t of m.terms) {
+    const last = groups[groups.length - 1];
+    if (last && last.label === t.label) last.span++;
+    else groups.push({ label: t.label, span: 1 });
+  }
+  return {
+    spec: { budgets: m.budgets, groups, headLabel: 'Party', rows, totals: m.totals, totalLabel: 'All' },
+    folded: small.map((r) => r.key),
+  };
+}
+
+/** The party grid's words (page and image). */
+export function partyCopy(topic: CompareTopic, m: PartyYearMatrix, builtAt: string, folded: readonly string[]): MatrixCopy {
+  const first = m.budgets[0];
+  const what = topic.key === 'flood' ? 'flood control' : 'multi-purpose building';
+  // "2013 (2015–2016), 2016 (2017–2019), …": each Congress's election and the budget years it passed.
+  const runs: Array<{ year: number; from: number; to: number }> = [];
+  m.budgets.forEach((b, i) => {
+    const last = runs[runs.length - 1];
+    if (last && last.year === m.terms[i].year) last.to = b.fy;
+    else runs.push({ year: m.terms[i].year, from: b.fy, to: b.fy });
+  });
+  const elected = runs.map((r) => `${r.year} (${r.from === r.to ? r.from : `${r.from}–${r.to}`})`).join(', ');
+  return {
+    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill`,
+    title: topic.partyTitle,
+    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill, by the party of its district’s representative in the Congress that passed the budget. Cells run from light green (less) to red (more).`,
+    notes: [
+      `Each budget carries the Congress that passed it, elected in ${elected}.`,
+      'The party is the one the district’s representative ran under; switches during a term are not captured.',
+      'A party’s total grows with the number of districts it held.',
+      'Lines not placed in one district, and districts whose towns changed since that election, carry no party.',
+      'The 2013 results list some races only as a total, so those districts show as No race on record.',
+      ...(folded.length ? [`Other parties: ${folded.length} smaller parties, each under 1% of the total.`] : []),
+      'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.',
+      ...starNote(m.budgets),
+      'Amounts are allocations, not spending.',
+    ],
+    disclaimer: PARTY_CARD_DISCLAIMER,
+    source: [
+      `Source: GAA ${first.fy}–2026, NEP 2027 (DBM), House Bill 10858; election results: Open Halalan, via BetterGov Dynasties`,
       `${topic.url} · As of ${asOfDate(builtAt)}`,
     ],
   };
@@ -346,6 +556,8 @@ export interface FloodCompareSummary {
     rows: Array<{ region: RegionKey | null; cells: Array<[number, number]> }>;
     totals: Array<[number, number]>;
   };
+  /** Each legislative district's [lines, pesos] in the matrix's budgets (district null: no single district). */
+  district_matrix: { rows: Array<{ district: string | null; cells: Array<[number, number]> }> };
   /** GAA head-office lines the title matcher cannot read: placed by the one province named, or at the listed region. */
   head_office: Record<string, { province_named: number; listed_region: number }>;
   /** FY2027 lines budgeted nationwide: counted, not on the map. */

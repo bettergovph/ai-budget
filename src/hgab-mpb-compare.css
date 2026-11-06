@@ -151,6 +151,11 @@
 .mpbc-matrix thead th:first-child { position: sticky; left: 0; z-index: 2; }
 .mpbc-matrix tfoot th, .mpbc-matrix tfoot td { border-top: 2px solid var(--rule); font-weight: 700; background: var(--paper-2); }
 @media (max-width: 760px) { .mpbc-matrix-name { display: none; } }
+/* The party grid: each Congress over its years; rows that carry no party plain. */
+.mpbc-matrix .mpbc-groups th { padding: 5px 8px 0; text-align: center; font-size: 11px; font-weight: 600; color: var(--ink-3);
+  border-left: 1px solid var(--rule); border-bottom: 0; background: var(--paper-2); }
+.mpbc-matrix .mpbc-groups th:first-child { border-left: 0; }
+.mpbc-matrix tr.is-plain th, .mpbc-matrix tr.is-plain td { color: var(--ink-3); }
 
 /* About this data (flood control): the grouping table, the CSV's fields, the caveats. */
 .mpbc-h3 { margin: 22px 0 6px; font-family: var(--font-hero); font-size: 17px; font-weight: 700; color: var(--ink); }
