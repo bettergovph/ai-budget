@@ -65,6 +65,7 @@ export const MPB_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = [
   { name: 'flags', about: 'Notes on the reading, such as text_repaired, gps_not_drawn or office_elsewhere.' },
   { name: 'nep_pdf_page', about: 'The page of the published NEP the line is printed on (2027).' },
   { name: 'house_bill_pdf_page', about: 'The page of the published House bill the line is printed on (2027).' },
+  { name: 'gaa_pdf_page', about: 'The page of DBM’s technical GAA for DPWH the line is printed on (2019).' },
 ];
 /** The full CSV's path, versioned by its checksum: the data host caches CSV for hours, so a rebuilt file needs a new URL. */
 export const mpbCsvPath = (s: Pick<MpbSummary, 'outputs'>) => `${MPB_CSV_PATH}?v=${s.outputs['lines.csv'].sha256.slice(0, 12)}`;
@@ -205,6 +206,8 @@ export interface MpbLine {
   cls: MpbClass;
   nepPage: number | null;
   housePage: number | null;
+  /** FY2019: the page of DBM's technical GAA for DPWH its code is printed on (GAA_2019_DOCUMENT). */
+  gaaPage: number | null;
   /** Lower-case title, place and office, for the search box. */
   search: string;
   /** The same-title key (titleKey) with the place, or the office when the title names none. */
@@ -259,6 +262,7 @@ export function decodeMpbLines(f: MpbLinesFile): MpbData {
       cls: cls == null ? null : f.classes[cls],
       nepPage: at(row, 'nep_page') as number | null,
       housePage: at(row, 'house_page') as number | null,
+      gaaPage: at(row, 'gaa_page') as number | null,
       search: `${title} ${place >= 0 ? f.places[place][2] : ''} ${officeName ?? ''}`.toLowerCase(),
       tkey: `${titleKey(title)}|${place >= 0 ? `p${place}` : `o${officeName ?? ''}`}`,
     };
@@ -542,7 +546,36 @@ export const CLASS_LABELS: Record<Exclude<MpbClass, null>, string> = {
 };
 
 /** The record page of a FY2027 line (its NEP and House bill pages, with the PDFs). */
-export const recordHref = (l: MpbLine) => (l.fy === 2027 ? `/hgab/2027/dpwh/p/${encodeURIComponent(l.id)}` : null);
+/** DBM's technical GAA for DPWH, FY2019: the map reads its text (the build's TEXT_2019); a FY2019 line links to its page. */
+export const GAA_2019_DOCUMENT = 'https://www.dbm.gov.ph/wp-content/uploads/GAA/GAA2019/TechGAA2019/DPWH/A.pdf';
+/** The department as the GAA records print it (the records page's department filter). */
+const GAA_RECORDS_DPWH = 'Department of Public Works and Highways (DPWH)';
+
+/** Where a line is printed: a page on this site (`external` false) or DBM's own document. */
+export interface LineSource { href: string; external: boolean; label: string }
+
+/**
+ * Where a line is printed, so a reader can check that it exists (Jason, 2026-11-06: "link them as well to prove that
+ * they exist"). Each budget's line links to its source as the site holds it:
+ *   - 2027: its record page (the NEP and House bill pages it is printed on);
+ *   - FY2020–FY2026: the project in the GAA browser (DBM's GAA extract; every map line is under the Office of the
+ *     Secretary, agency 001, and verify:hgab checks each code is there);
+ *   - FY2015–FY2018: its record in the GAA records, found by its code (DBM's spreadsheet, the file named);
+ *   - FY2019: its page of DBM's technical GAA (the build checks the code is printed on it).
+ */
+export function lineSource(l: MpbLine): LineSource | null {
+  if (l.fy === 2027) return { href: `/hgab/2027/dpwh/p/${encodeURIComponent(l.id)}`, external: false, label: 'Its record: the NEP and House bill pages' };
+  if (!l.code) return null;
+  // The id as the browser keys it (a few codes carry the extract's trailing spaces, so it is encoded).
+  if (l.fy >= 2020) return { href: `/gaa/${l.fy}/18/18-001/${encodeURIComponent(`18-001-${l.code}`)}`, external: false, label: `The project in the FY${l.fy} GAA browser` };
+  if (l.fy === 2019) {
+    return l.gaaPage
+      ? { href: `${GAA_2019_DOCUMENT}#page=${l.gaaPage}`, external: true, label: `Page ${l.gaaPage} of DBM’s FY2019 GAA for DPWH` }
+      : null;
+  }
+  const q = new URLSearchParams({ scope: 'current_new_appropriations', view: 'records', department: GAA_RECORDS_DPWH, q: l.code });
+  return { href: `/gaa/${l.fy}/records?${q}`, external: false, label: `Its record in the FY${l.fy} GAA records` };
+}
 
 // ---------------------------------------------------------------------------
 // CSV of the lines on screen

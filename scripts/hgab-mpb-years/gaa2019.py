@@ -10,8 +10,8 @@ PAP and prints its total; codes with 00000 in digits 8–12 head groups inside i
 without a code that end in amounts are region and office headings ("National Capital Region (NCR)", "Central Office");
 in this edition every project group sits under the Central Office.
 
-parse() returns the project lines, the printed PAP totals and a reconciliation: for every Operations PAP, the lines
-under it against the total its heading prints.
+parse() returns the project lines (each with the document page its code is printed on), the printed PAP totals and a
+reconciliation: for every Operations PAP, the lines under it against the total its heading prints.
 
 Usage: gaa2019.py <text file>   (prints the reconciliation)
 """
@@ -41,7 +41,15 @@ def is_heading_code(code: str) -> bool:
 
 
 def parse(path: str):
-    text = open(path, encoding='utf-8').read().splitlines()
+    raw = open(path, encoding='utf-8').read()
+    text = raw.splitlines()
+    # The document page of each text line: the text ends every page with a form feed, which splitlines() also splits
+    # on, so a line kept with its ending closes a page when that ending is a form feed.
+    page_of, page = [], 1
+    for ln in raw.splitlines(keepends=True):
+        page_of.append(page)
+        if ln.endswith('\f'):
+            page += 1
     projects = []
     pap_totals = {}  # 6-digit PAP -> printed total
     pap_titles = {}
@@ -90,7 +98,7 @@ def parse(path: str):
             pap_titles.setdefault(code[:6], title)
         elif not is_heading_code(code):
             projects.append({'code': code, 'title': title, 'php': total, 'region': region, 'office': office,
-                             'line': i + 1})
+                             'line': i + 1, 'page': page_of[i]})
         i = j + 1
     # One entry per code: the project list prints each once; keep the first and count repeats.
     seen, unique, repeats = set(), [], 0
@@ -113,7 +121,7 @@ def parse(path: str):
     m = re.search(r'as indicated hereunder\.*\s*P\s*(\d{1,3}(?:,\d{3})+)', '\n'.join(text[:40]))
     department = int(m.group(1).replace(',', '')) if m else None
     return {'lines': unique, 'pap_totals': pap_totals, 'pap_titles': pap_titles, 'recon': recon, 'repeats': repeats,
-            'department_total': department}
+            'department_total': department, 'pages': raw.count('\f')}
 
 
 if __name__ == '__main__':

@@ -24,7 +24,8 @@ export function gaaRecordQuery(url: string, filter: GaaRecordFilter) {
   }
   if (filter.search) {
     clauses.push(
-      "contains(lower(concat_ws(' ', department_dsc, agency_dsc, fpap_dsc, program_dsc, operunit_dsc, fund_dsc, expense_dsc, object_dsc, source_text)), lower(?))",
+      // fpap_code too: the multi-purpose building map links a line to its record by its code.
+      "contains(lower(concat_ws(' ', department_dsc, agency_dsc, fpap_code, fpap_dsc, program_dsc, operunit_dsc, fund_dsc, expense_dsc, object_dsc, source_text)), lower(?))",
     );
     params.push(filter.search);
   }

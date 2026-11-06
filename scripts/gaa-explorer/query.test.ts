@@ -12,7 +12,7 @@ test('scope, literal search, null groups and pagination preserve source boundari
       CASE WHEN i < 60 THEN 'new' ELSE 'unprogrammed' END AS budget_scope,
       CASE WHEN i % 2 = 0 THEN 'Agency group' ELSE NULL END AS department_dsc,
       'O''Brien agency' AS agency_dsc, 'program_total' AS grain,
-      NULL::VARCHAR AS fpap_dsc, NULL::VARCHAR AS program_dsc,
+      lpad(i::VARCHAR, 15, '3') AS fpap_code, NULL::VARCHAR AS fpap_dsc, NULL::VARCHAR AS program_dsc,
       NULL::VARCHAR AS operunit_dsc, NULL::VARCHAR AS fund_dsc,
       NULL::VARCHAR AS expense_dsc, NULL::VARCHAR AS object_dsc,
       NULL::VARCHAR AS source_text FROM range(70) r(i)`);
@@ -46,6 +46,9 @@ test('scope, literal search, null groups and pagination preserve source boundari
       (await execute({ scope: 'new', search: "%' OR 1=1 --", page: 1 })).length,
       0,
     );
+    // A project's code finds its record (the multi-purpose building map links a line by its code).
+    const byCode = await execute({ scope: 'new', search: '333333333333342', page: 1 });
+    assert.deepEqual(byCode.map((r) => Number(r.record_id)), [42]);
     assert.equal(
       (await execute({ scope: 'unprogrammed', page: 1 })).length,
       10,

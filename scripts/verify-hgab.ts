@@ -122,8 +122,8 @@ import {
   type HistoryData, type HistoryPartDef,
 } from "../src/lib/hgab-history";
 import {
-  CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, linesCsv, mapMarks, repeatGroups,
-  titleKey, type MpbLinesFile, type MpbSummary,
+  CLASS_LABELS, FLAG_TEXT, GAA_2019_DOCUMENT, LEVEL_LABELS, MPB_YEARS, PLACED_LABELS, REPEAT_LABELS, decodeMpbLines, lineSource,
+  linesCsv, mapMarks, repeatGroups, titleKey, type MpbLinesFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
 import { DETAIL_FROM, SPREAD_FROM, dotRadius, groupRadius, layoutMarks, markRadius, toWorld } from "../src/lib/mpb-dodge";
 import { verifyContractors } from "./verify-hgab-contractors";
@@ -2911,6 +2911,51 @@ async function verifyMpbYears(c: DuckDBConnection): Promise<void> {
   const ids27 = new Set(y27.map((l) => l.id));
   for (const [id, r] of pq) if (r.pap === MPB_PAP && !ids27.has(id)) off27.push(`${id} missing`);
   check(`FY2027: ${y27.length.toLocaleString("en-US")} lines; every BIP multi-purpose building row is in, amounts as projects.parquet has them`, off27.length === 0, off27.slice(0, 4).join("; "));
+
+  // Each line's title links to where it is printed (lineSource: proof the line exists), and each link holds its line:
+  //   FY2020–FY2026: the GAA browser's project (data/18/fpaps.json, under the Office of the Secretary), amount for amount;
+  //   FY2015–FY2018: the GAA records the link searches by code (its department and scope), amount for amount;
+  //   FY2019: the page of the technical GAA it opens prints its code (the text keeps a form feed between pages);
+  //   FY2027: its record page.
+  {
+    const offS: string[] = [];
+    const fp = new Map(readJson<{ data: Array<{ id: string; years: Record<string, { amount: number }> }> }>(resolve(GAA, "fpaps.json")).data
+      .map((x) => [x.id, x.years]));
+    const DEPT = "Department of Public Works and Highways (DPWH)";
+    const SCOPE = "current_new_appropriations";
+    const recs = histFiles.every((f) => existsSync(f))
+      ? new Map((await c.runAndReadAll(`SELECT fy, fpap_code, SUM(amount) FROM read_parquet([${histFiles.map((f) => `'${q(f)}'`).join(", ")}], union_by_name = true)
+          WHERE department_dsc = '${q(DEPT)}' AND budget_scope = '${SCOPE}' GROUP BY 1, 2`)).getRows().map((r) => [`${num(r[0])}|${String(r[1])}`, num(r[2])]))
+      : new Map<string, number>();
+    const pages19 = existsSync(t19) ? readFileSync(t19, "utf8").split("\f") : [];
+    const doc19 = (S.inputs.gaa_history as { "2019_text"?: { document?: string } } | undefined)?.["2019_text"]?.document;
+    if (doc19 !== GAA_2019_DOCUMENT) offS.push(`GAA_2019_DOCUMENT is not the document the build read (${doc19})`);
+    for (const l of D.lines) {
+      const s = lineSource(l);
+      if (!s) { offS.push(`${l.id}: no link`); continue; }
+      const u = new URL(s.href, "https://budget.bettergov.ph");
+      if (l.fy === 2027) {
+        if (s.external || u.pathname !== `/hgab/2027/dpwh/p/${encodeURIComponent(l.id)}` || !pq.has(l.id)) offS.push(`${l.id}: record link`);
+      } else if (l.fy >= 2020) {
+        const m = /^\/gaa\/(\d{4})\/18\/18-001\/(18-001-[^/]+)$/.exec(u.pathname);
+        if (m) m[2] = decodeURIComponent(m[2]);
+        const amt = m && Number(m[1]) === l.fy ? fp.get(m[2])?.[String(l.fy)]?.amount : undefined;
+        if (s.external || amt == null || Math.round(amt * 1000) !== l.gaa) offS.push(`${l.id}: GAA browser ${u.pathname} ${peso(amt == null ? null : amt * 1000)}`);
+      } else if (l.fy === 2019) {
+        const page = Number(/^#page=(\d+)$/.exec(u.hash)?.[1]);
+        if (!s.external || !s.href.startsWith(`${GAA_2019_DOCUMENT}#`) || !pages19[page - 1]?.includes(l.code!)) offS.push(`${l.id}: page ${page}`);
+      } else {
+        const p = u.searchParams;
+        const ok = !s.external && u.pathname === `/gaa/${l.fy}/records` && p.get("view") === "records" && p.get("department") === DEPT
+          && p.get("scope") === SCOPE && p.get("q") === l.code && recs.get(`${l.fy}|${l.code}`) === l.gaa;
+        if (!ok) offS.push(`${l.id}: records ${peso(recs.get(`${l.fy}|${l.code}`))}`);
+      }
+    }
+    const n = (f: (fy: number) => boolean) => D.lines.filter((l) => f(l.fy)).length.toLocaleString("en-US");
+    check(`every line links to where it is printed: ${n((y) => y >= 2020 && y < 2027)} to the GAA browser, ${n((y) => y < 2019)} to the GAA records, `
+      + `${n((y) => y === 2019)} to their page of the FY2019 technical GAA, ${n((y) => y === 2027)} to their record; each holds its line`,
+      offS.length === 0 && pages19.length > 1500 && recs.size > 0, offS.slice(0, 4).join("; "));
+  }
 
   // 3. Per budget: the summary from the lines, and the PAP lines equal the multi-purpose page's chart.
   const mpb = H.series.find((x) => x.key === "mpb")!;

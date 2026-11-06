@@ -445,7 +445,7 @@ def main():
     ensure(not bad19, f'FY2019: headings that the parsed lines do not add up to: {bad19}')
     for x in t19['lines']:
         gaa_rows.append({'fy': TEXT_YEAR, 'code': x['code'], 'desc': x['title'], 'php': x['php'], 'ou': x['office'],
-                         'reg': None, 'source': 'text', 'ou_php': x['php'], 'offices': 1})
+                         'reg': None, 'source': 'text', 'ou_php': x['php'], 'offices': 1, 'page': x['page']})
     paps.update({(TEXT_YEAR, k): tidy_label(v) for k, v in t19.get('pap_titles', {}).items()})
     log(f"FY2019 text: {len(t19['lines']):,} DPWH lines, ₱{total19:,} = the document's total; "
         f"{len(t19['recon'])} headings reconcile")
@@ -625,6 +625,8 @@ def main():
         lines.append({
             'id': lid, 'fy': fy, 'title': title, 'title_published': title_pub if title != title_pub else None,
             'code': code, 'gaa_php': php, 'nep_php': None, 'house_php': None, 'class': None,
+            # FY2019: the page of DBM's technical GAA its code is printed on (the map links it, as proof the line exists)
+            'gaa_page': row.get('page'),
             'office': ou_name,
             # The PAP: the extract's heading; FY2018 shares FY2020's codes; FY2015 prints it in the title; FY2016–FY2017
             # files carry none.
@@ -783,6 +785,12 @@ def main():
     check('2019:headings', not bad19,
           f"FY2019: every one of its {len(t19['recon'])} Operations headings equals the lines under it "
           f"(300200 against the document's own program table; its heading counts a ₱1.9 billion group twice)")
+    pages19 = (hist_dir / TEXT_2019).read_text(encoding='utf-8').split('\f')
+    off19 = [l['id'] for l in lines if l['fy'] == TEXT_YEAR
+             and not (l['gaa_page'] and 1 <= l['gaa_page'] <= t19['pages'] and l['code'] in pages19[l['gaa_page'] - 1])]
+    check('2019:pages', not off19 and t19['pages'] == 1527,
+          f"FY2019: every line's code is printed on its page of the {t19['pages']:,}-page technical GAA"
+          + (f'; not on it: {off19[:5]}' if off19 else ''))
     check('placement:every-line-once', sum(census.values()) == len(lines), f'{len(lines):,} lines, each placed once')
     check('lens:rows', sum(1 for l in lines if l['fy'] == 2027) == lens['counts']['rows'],
           f"FY2027 rows equal the source lens ({lens['counts']['rows']:,})")
@@ -806,17 +814,19 @@ def main():
     district_ix = {d: i for i, d in enumerate(district_list)}
     region_list = sorted({l['region'] for l in lines if l['region']} | {p['region'] for p in place_list if p['region']})
     region_ix = {r: i for i, r in enumerate(region_list)}
-    # One array per line; FY2027-only fields last and trailing nulls dropped, so a GAA line ends after `flags`
-    # (or `pts`). `id` is the UACS code for GAA lines (line id `gaa:<fy>:<code>`), the comparison row id for FY2027.
+    # One array per line; FY2027-only fields next to last and trailing nulls dropped, so a GAA line ends after `flags`
+    # (or `pts`), except FY2019's, which ends with `gaa_page` (added last so older readers, which read by column name,
+    # are unaffected). `id` is the UACS code for GAA lines (line id `gaa:<fy>:<code>`), the comparison row id for FY2027.
     cols = ['id', 'fy', 'title', 'office', 'pap', 'rule', 'level', 'place', 'district', 'basis', 'region', 'flags',
-            'gaa_php', 'pts', 'nep_php', 'house_php', 'class', 'nep_page', 'house_page']
+            'gaa_php', 'pts', 'nep_php', 'house_php', 'class', 'nep_page', 'house_page', 'gaa_page']
     nx = lambda d, k: -1 if k is None else d[k]
 
     def row_of(l):
         r = [l['code'] if l['fy'] < 2027 else l['id'], l['fy'], l['title'], nx(office_ix, l['office']), pap_ix[l['pap']],
              RULES.index(l['rule']), LEVELS.index(l['level']), nx(place_ix, l['place']), nx(district_ix, l['district']),
              BASES.index(l['basis']), nx(region_ix, l['region']), l['flags'], l['gaa_php'], l['pts'], l['nep_php'],
-             l['house_php'], CLASSES.index(l['class']) if l['class'] else None, l.get('nep_page'), l.get('house_page')]
+             l['house_php'], CLASSES.index(l['class']) if l['class'] else None, l.get('nep_page'), l.get('house_page'),
+             l.get('gaa_page')]
         while r and r[-1] is None:
             r.pop()
         return r
@@ -865,6 +875,7 @@ def main():
             ';'.join(f'{a},{b}' for a, b in l['pts']) if l['pts'] else '',
             our_districts[l['district']]['label'] if l['district'] else '', l['district'] or '', l['basis'] or '',
             ';'.join(k for k, bit in FLAGS.items() if l['flags'] & bit), l.get('nep_page') or '', l.get('house_page') or '',
+            l.get('gaa_page') or '',
         ])
     (out / 'lines.csv').write_bytes(('\ufeff' + buf.getvalue()).encode('utf-8'))
 
@@ -911,7 +922,7 @@ def main():
 CSV_COLUMNS = ['fiscal_year', 'line_id', 'title', 'title_as_published', 'gaa_php', 'nep_php', 'house_bill_php',
                'fy2027_comparison', 'uacs_code', 'pap', 'scope_rule', 'dpwh_office', 'region', 'placed_by', 'place',
                'place_psgc', 'longitude', 'latitude', 'gps_points', 'legislative_district', 'legislative_district_id',
-               'district_from', 'flags', 'nep_pdf_page', 'house_bill_pdf_page']
+               'district_from', 'flags', 'nep_pdf_page', 'house_bill_pdf_page', 'gaa_pdf_page']
 
 
 def round_geometry(g, nd):
