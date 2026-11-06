@@ -1083,8 +1083,9 @@ p.hgab-review-tag { margin-bottom: 10px; }
  * The panel is position: fixed at the button (set inline by ProgramMenu), so
  * the sideways-scrolling sub-nav on phones never clips it. */
 .hgab-subnav-item { position: relative; display: inline-flex; }
-/* Twelve entries (Overview to About): a closer gap than the shared 26px so they fit one row at 1280px, and labels
-   that never break onto two lines. Narrower desktops scroll the row sideways, as phones do (site-header.css). */
+/* Eleven entries (Overview to About; twelve with Red Flags, hidden for now): a closer gap than the shared 26px so
+   they fit one row at 1280px, and labels that never break onto two lines. Narrower desktops scroll the row sideways,
+   as phones do (site-header.css). */
 @media (min-width: 721px) {
   .primary-subnav .view-tabs.section-tabs.hgab-subnav {
     gap: 16px;

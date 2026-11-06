@@ -65,6 +65,24 @@ will mix them up.
 | DPWH Isabela 4th DEO (shared row headline) | Isabela 4th district office |
 | DPWH offices, DEOs | district offices |
 
+## Lone and shared offices
+
+Readers see **Lone** (the DPWH office serves only this district) and **Shared**
+(it serves several districts; its figures are not split). "Tier A" and "Tier B"
+confused readers (Jason, 2026-11-04), so they appear nowhere on the pages or the
+images. The data and the API keep the codes `A` and `B` (`tier`,
+`attribution`); API and MCP descriptions say "lone (tier A)" and "shared
+(tier B)" so the words and the codes meet.
+
+| Say | Not |
+| --- | --- |
+| Lone · only this district | Tier A |
+| Shared by 3 districts, not split | Tier B · shared by 3 districts |
+| Shared or mixed (filter) | Tier B or mixed |
+
+"Lone" here is the office, not the "Lone District" in a district's name
+("Abra, Lone District" is a province with one legislative district).
+
 ## Removed
 
 - "What one row is" — no longer shown anywhere. The technical `grain` stays

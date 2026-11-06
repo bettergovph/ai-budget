@@ -162,16 +162,6 @@
 .hgab-rf-notes li + li { margin-top: 4px; }
 .hgab-rf-notes li:target { background: var(--accent-soft); }
 
-/* --- the poster ---------------------------------------------------------------- */
-
-.hgab-rf-poster-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px 28px; }
-.hgab-rf-poster { display: block; flex: 0 1 380px; border: 1px solid var(--rule); line-height: 0; }
-.hgab-rf-poster img { display: block; width: 100%; height: auto; }
-.hgab-rf-downloads { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
-.hgab-rf-downloads li { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--rule-soft); }
-.hgab-rf-downloads a { color: var(--accent-deep); font-weight: 600; }
-.hgab-rf-downloads span { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-mute); }
-
 /* --- sources ---------------------------------------------------------------------- */
 
 .hgab-rf-sources { margin: 4px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--ink-2); max-width: 100ch; }

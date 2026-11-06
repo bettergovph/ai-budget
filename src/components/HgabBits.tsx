@@ -27,19 +27,21 @@ import {
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
+import { MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
 import { FAP_ROOT } from '../lib/hgab-fap';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
-  DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS, OFFICE_VIEW_DISCLAIMERS,
+  DISCLAIMER_FLOOD, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS,
+  OFFICE_VIEW_DISCLAIMERS,
   type Disclaimer,
 } from '../lib/hgab-disclaimers';
 import { deoBadge, deoBadgeTitle } from '../lib/hgab-leaderboard';
 import '../hgab.css';
 
-interface NavLink { to: string; label: string; match?: (path: string) => boolean }
+interface NavLink { to: string; label: string; match?: (path: string) => boolean; /** For NAV_HIDDEN. */ key?: string }
 interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: string; label: string; to: string }> }
 
 /**
@@ -58,17 +60,19 @@ const LEAD_LINKS: readonly NavLink[] = [
   },
   { to: `${HGAB_ROOT}/explorer`, label: 'Line by line' },
   // Its address has a capital; the page answers in any letter case, and so does the tab.
-  { to: RED_FLAGS_ROOT, label: 'Red Flags', match: (p) => p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase() },
+  { key: 'red-flags', to: RED_FLAGS_ROOT, label: 'Red Flags', match: (p) => p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase() },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
   { to: FAP_ROOT, label: 'Foreign-assisted' },
 ];
 const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
 /**
  * Entries kept out of the sub-nav and the drawer for now (Jason, 2026-11-03: "hide the By party link for now from the
- * navbar. Including the Multi-purpose buildings"): Districts → By party, and the Multi-purpose buildings menu. Their
- * pages and the links inside pages stay; take a key out to bring its entry back.
+ * navbar. Including the Multi-purpose buildings"): Districts → By party, and the Multi-purpose buildings menu; and Red
+ * Flags (2026-11-04: "hide the 1T redflags link for now from the subnav"). Their pages and the links inside pages
+ * stay; take a key out to bring its entry back.
  */
-const NAV_HIDDEN: ReadonlySet<string> = new Set(['parties', 'multi-purpose']);
+const NAV_HIDDEN: ReadonlySet<string> = new Set(['parties', 'multi-purpose', 'red-flags']);
+const SHOWN_LEAD_LINKS = LEAD_LINKS.filter((n) => !n.key || !NAV_HIDDEN.has(n.key));
 
 /** Multi-purpose buildings are DPWH lines, with a menu of their own: the budget by year, and every line on a map. */
 const MPB_MENU: NavMenu = {
@@ -77,6 +81,7 @@ const MPB_MENU: NavMenu = {
   items: [
     { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
     { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
+    { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
   ],
 };
 /** Pages a program's menu opens after its own views: DPWH's contractors (FY2016 to FY2026, from DPWH's contract list). */
@@ -98,7 +103,7 @@ const ABOUT_MENU: NavMenu = {
  * The sub-nav is page navigation, so each entry behaves as a tab: the one
  * matching the current route is marked active (`aria-current="page"`). A
  * record page (`/hgab/2027/dpwh/p/…`) counts as its dataset's tab. On
- * desktop the twelve entries sit on one row inside the navy band; on mobile
+ * desktop the eleven entries sit on one row inside the navy band; on mobile
  * the band scrolls horizontally (site-header.css) and the drawer repeats the
  * links, in the same order, under an "FY2027 HGAB" eyebrow.
  */
@@ -148,7 +153,7 @@ export function HgabHeader({
       compiledMeta={compiledMeta ?? 'House Bill 10858 · 2nd and 3rd reading'}
       subNav={
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 House bill sections">
-          {LEAD_LINKS.map(link)}
+          {SHOWN_LEAD_LINKS.map(link)}
           <SectionMenu
             label="Districts"
             items={DISTRICT_VIEWS.filter((v) => !NAV_HIDDEN.has(v.key)).map((v) => ({ key: v.key, label: v.label, to: v.to }))}
@@ -175,7 +180,7 @@ export function HgabHeader({
       drawerExtras={
         <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 House bill sections">
           <p className="hgab-drawer-eyebrow">The House bill for 2027</p>
-          {LEAD_LINKS.map(link)}
+          {SHOWN_LEAD_LINKS.map(link)}
           <div className="hgab-drawer-group">
             <Link to={`${HGAB_ROOT}/districts`} className={districtsActive ? 'active' : ''} aria-current={districtsKey === 'overview' ? 'page' : undefined}>
               Districts
@@ -617,6 +622,7 @@ export function DisclaimerNotice({
   parties = false,
   placements = false,
   redFlags = false,
+  flood = false,
   heading,
   className = '',
 }: {
@@ -624,6 +630,8 @@ export function DisclaimerNotice({
   offices?: boolean;
   /** The red-flag page: whose basket it is and what a red flag is, then "No allegations". */
   redFlags?: boolean;
+  /** Flood control, 2025 to 2027: enacted budgets beside proposals, placement, candidates, no allegations. */
+  flood?: boolean;
   /** The page by party: the office disclaimers, then the parties one. */
   parties?: boolean;
   /** The multi-purpose building boards: their own disclaimer (with `contractors`, the contractors one after it). */
@@ -638,6 +646,7 @@ export function DisclaimerNotice({
   const list = placements ? [DISCLAIMER_PLACEMENTS, DISCLAIMER_NO_ALLEGATIONS]
     : parties ? [...OFFICE_VIEW_DISCLAIMERS, DISCLAIMER_PARTIES]
     : redFlags ? [DISCLAIMER_RED_FLAGS, ...COMPARISON_DISCLAIMERS]
+    : flood ? [DISCLAIMER_FLOOD]
     : mpb ? [DISCLAIMER_MPB, ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])]
     : contractors === 'only' ? [DISCLAIMER_CONTRACTORS]
       : [...(offices ? OFFICE_VIEW_DISCLAIMERS : COMPARISON_DISCLAIMERS), ...(contractors ? [DISCLAIMER_CONTRACTORS] : [])];

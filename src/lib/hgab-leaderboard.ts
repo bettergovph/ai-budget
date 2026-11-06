@@ -1093,11 +1093,11 @@ export function officeLabel(entry: Pick<LeaderEntry, 'tier' | 'offices' | 'peopl
 // Attribution tier and residual (required on every office-based view)
 // ---------------------------------------------------------------------------
 
-/** "Tier A · only this district" / "Tier B · shared by 3 districts, not split". */
+/** "Lone · only this district" / "Shared by 3 districts, not split" (short: "Lone" / "Shared · 3 districts"). */
 export function tierText(entry: Pick<LeaderEntry, 'tier' | 'people'>, short = false): string {
-  if (entry.tier === 'A') return short ? 'Tier A' : 'Tier A · only this district';
+  if (entry.tier === 'A') return short ? 'Lone' : 'Lone · only this district';
   const n = entry.people.length;
-  return short ? `Tier B · ${n} districts` : `Tier B · shared by ${n} districts, not split`;
+  return short ? `Shared · ${n} districts` : `Shared by ${n} districts, not split`;
 }
 
 const pctOf = (part: number, whole: number) => (whole ? `${Math.round((part / whole) * 100)}%` : '—');

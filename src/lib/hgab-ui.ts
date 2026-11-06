@@ -111,7 +111,9 @@ export function sentenceCase(s: string): string {
  * The views of a program hub (`/hgab/2027/:dataset?view=`). The section
  * sub-nav lists them in each program's dropdown and the hub reads the same
  * list to validate `?view=`, so the two can never disagree. Only DPWH prints
- * two House readings that differ, so only it has the readings view.
+ * two House readings that differ, so only it has the readings view. The
+ * source documents are on About › Sources, which names the programs each one
+ * serves (Jason, 2026-11-04); `?view=documents` opens that list.
  */
 export const HUB_VIEWS = [
   { key: 'overview', label: 'Overview' },
@@ -119,7 +121,6 @@ export const HUB_VIEWS = [
   { key: 'changes', label: 'Changes' },
   { key: 'map', label: 'Map' },
   { key: 'readings', label: '2nd vs 3rd reading' },
-  { key: 'documents', label: 'Documents' },
 ] as const;
 
 export type HubView = (typeof HUB_VIEWS)[number]['key'];
@@ -155,15 +156,17 @@ export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasRea
 ];
 
 /**
- * The Districts section has two views: an overview (the summary figures and
- * the money no district card shows) and the list of districts. The list is
- * `?view=list`; links that still carry list filters (q, region, tier, sort,
- * group) without a view open the list too, so older shared URLs keep working.
+ * The Districts menu: an overview (the summary figures and the money no
+ * district card shows); "District Engineering Offices", the list by DPWH
+ * office (`?view=list`); "Legislative Districts", each district's own placed
+ * projects (`?view=list-legislative`); and the seats by party. Links that
+ * still carry list filters (q, region, tier, sort, group) without a view open
+ * the office list, so older shared URLs keep working.
  */
 export const DISTRICT_VIEWS = [
   { key: 'overview', label: 'Overview', to: '/hgab/2027/districts' },
-  { key: 'list', label: 'Districts', to: '/hgab/2027/districts?view=list' },
-  { key: 'list-legislative', label: 'Projects placed in each district', to: '/hgab/2027/districts?view=list-legislative' },
+  { key: 'list', label: 'District Engineering Offices', to: '/hgab/2027/districts?view=list' },
+  { key: 'list-legislative', label: 'Legislative Districts', to: '/hgab/2027/districts?view=list-legislative' },
   { key: 'parties', label: 'By party', to: '/hgab/2027/parties' },
 ] as const;
 

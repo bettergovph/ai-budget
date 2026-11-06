@@ -99,7 +99,7 @@ export default function HgabDistricts() {
   }, []);
   useEffect(() => {
     const t = pageMeta(districtPath()).title;
-    document.title = view === 'list' ? `All districts · ${t}` : view === 'list-legislative' ? `Projects placed in each district · ${t}` : t;
+    document.title = view === 'list' ? `District Engineering Offices · ${t}` : view === 'list-legislative' ? `Legislative Districts · ${t}` : t;
   }, [view]);
 
   if (legacyListHash) return <Navigate replace to={`${districtListHref()}${hash}`} />;
@@ -146,9 +146,9 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
                 value: all.length.toLocaleString(),
                 sub: `${offices.length.toLocaleString()} DPWH offices (DEOs) · ${index.crosswalk.relationships.toLocaleString()} office-to-district links`,
               },
-              { label: 'Tier A districts', value: tierA.toLocaleString(), sub: 'the office serves only this district, so its figure is the district’s' },
+              { label: 'Lone office', value: tierA.toLocaleString(), sub: 'districts whose office serves only them, so its figure is the district’s' },
               {
-                label: 'Tier B or mixed',
+                label: 'Shared or mixed',
                 value: shared.toLocaleString(),
                 sub: `the office is shared with other districts; the figure is not split${none ? ` · ${none.toLocaleString()} ${none === 1 ? 'district has' : 'districts have'} no office found` : ''}`,
               },
@@ -579,7 +579,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
     chips.push({ key: 'region', label: 'Region', value: regionKey ? regionNames(regionKey).name : filters.region, remove: () => update({ region: '' }) });
   }
   if (filters.tier) {
-    const tierChip = { A: 'Tier A', B: 'Tier B or mixed', none: 'No office found' }[filters.tier];
+    const tierChip = { A: 'Lone', B: 'Shared or mixed', none: 'No office found' }[filters.tier];
     chips.push({ key: 'tier', label: 'Whose budget', value: tierChip, title: TIER_FILTER_LABELS[filters.tier], remove: () => update({ tier: '' }) });
   }
   if (filters.office) {
@@ -595,7 +595,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   return (
     <>
       <HgabHeader
-        crumb={<><Link to={districtPath()}>Districts</Link> › All districts</>}
+        crumb={<><Link to={districtPath()}>Districts</Link> › District Engineering Offices</>}
         compiledMeta={`${all.length.toLocaleString()} districts · ${offices.length.toLocaleString()} DPWH offices`}
       />
 
@@ -605,10 +605,10 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
           <>
             <Link to={districtPath()}>Districts</Link>
             <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-            <span className="hgab-crumb-here">All districts</span>
+            <span className="hgab-crumb-here">District Engineering Offices</span>
           </>
         }
-        title="Districts"
+        title="District Engineering Offices"
         dek={
           <>
             One card per legislative district, with the DPWH office that serves it as a small badge. A DPWH office that
@@ -935,7 +935,7 @@ function DistrictsDetails({ index }: { index: HgabDistrictIndex }) {
           sort keys <code>hgab3</code>, <code>gaa2026</code>, <code>change</code> (fy2027 block, compared population),{' '}
           <code>growth</code> (mean annual GAA, 18th → 20th Congress), <code>name</code>; <code>group=none</code> for the
           flat list; office groups are union-find over ledger offices and the districts they serve, as on the
-          leaderboards, and a Tier B group is one card listing all its districts; <code>by=office</code> orders the cards by
+          leaderboards, and a shared group (tier B in the data) is one card listing all its districts; <code>by=office</code> orders the cards by
           group and lists offices in the sidebar (groups ranked on their summed office figures);{' '}
           <code>office=</code> takes one group: its office ids without <code>office:</code>, joined by <code>+</code>, or
           any one of them (<code>office=metro-manila-3rd-deo</code>); <code>#region-III</code> opens one region

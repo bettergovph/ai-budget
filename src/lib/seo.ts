@@ -19,6 +19,7 @@ import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { FAP_ROOT, FAP_TITLE } from "./hgab-fap";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
+import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
@@ -339,6 +340,26 @@ export function pageMeta(pathname: string): PageMeta {
         "A formal letter from a legislative district's constituents to its representative(s): the DPWH projects House " +
         "Bill 10858 lists for the office serving the district with no match in the NEP, with changed amounts, or dropped, " +
         "and a request for the documents behind them. Download as PDF to sign or as text to edit.",
+    };
+  }
+  // Multi-purpose buildings, the 2027 NEP and House bill side by side.
+  if (p === MPB_COMPARE_ROOT) {
+    return {
+      title: `Multi-Purpose Buildings in the 2027 Budget: the NEP vs the House Bill, Side by Side · ${SITE}`,
+      description:
+        "Every DPWH multi-purpose building line in the FY 2027 NEP and in House Bill 10858 (third reading), side by side on " +
+        "two maps, one dot per line: the amounts, the lines only the House bill has, the lines only the NEP has, and the " +
+        "figures by region.",
+    };
+  }
+  // Flood control in 2025, 2026 and 2027, side by side.
+  if (p === FLOOD_COMPARE_ROOT) {
+    return {
+      title: `Flood Control Projects Are Back: DPWH Flood Control in 2025, 2026 and 2027 · ${SITE}`,
+      description:
+        "Every DPWH flood control line in the FY 2025 and FY 2026 budgets, the FY 2027 NEP and House Bill 10858 (third " +
+        "reading), on three maps, one dot per line: ₱346.6 billion in 2025, ₱4.8 billion in 2026, and 2027's NEP and " +
+        "House bill on one map, with the lines the House bill added and the NEP lines it left out, by region.",
     };
   }
   // Multi-purpose buildings map: every line, FY2015 GAA to the FY2027 House bill.

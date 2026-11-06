@@ -24,7 +24,7 @@ import { runQuery } from '../lib/duckdb';
 import { downloadCsv } from '../lib/csv';
 import { dataUrl } from '../lib/data-url';
 import {
-  BRIDGE_ORDER, HGAB_BASE, loadHgabMap, pdfUrl, projectsParquetUrl,
+  BRIDGE_ORDER, HGAB_BASE, loadHgabMap, projectsParquetUrl,
   type DatasetKey, type HgabDatasetMap, type HgabDatasetSummary, type HgabDocument,
 } from '../lib/hgab';
 import {
@@ -32,8 +32,8 @@ import {
   type ProjectFilters,
 } from '../lib/hgab-query';
 import {
-  changeSummaryCsv, changesRowCount, csvFileName, dimsCsv, dimsRowCount, documentsCsv, largestChangesCsv,
-  mapPointsCsv, newAtThirdCsv, programDocuments, programTotalsCsv, projectRowCount, readingStatusCsv, regionsCsv,
+  changeSummaryCsv, changesRowCount, csvFileName, dimsCsv, dimsRowCount, largestChangesCsv,
+  mapPointsCsv, newAtThirdCsv, programTotalsCsv, projectRowCount, readingStatusCsv, regionsCsv,
   regionsRowCount,
 } from '../lib/hgab-csv';
 import type { HubView } from '../lib/hgab-ui';
@@ -53,11 +53,6 @@ interface CsvItem {
 }
 
 const rows = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'row' : 'rows'}`;
-
-/** Absolute address: DuckDB and a CSV cell both need one; the dev data tree is served from the page's origin. */
-function absolute(u: string): string {
-  return /^https?:/.test(u) ? u : `${window.location.origin}${u}`;
-}
 
 async function queryProjectsCsv(key: DatasetKey, filters: ProjectFilters): Promise<string> {
   const res = await runQuery(exportSql(projectsParquetUrl(key), filters));
@@ -231,14 +226,6 @@ export default function HgabDownloads({
         });
         break;
       }
-      case 'documents':
-        out.push({
-          id: 'documents',
-          label: `This view: documents (${rows(programDocuments(d, docs).length)})`,
-          file: csvFileName(key, 'documents'),
-          build: () => documentsCsv(d, docs, (k) => absolute(pdfUrl(k))),
-        });
-        break;
     }
     return out;
   }, [d, key, view, summary, docs, params, projectsTotal, map, mapFailed]);

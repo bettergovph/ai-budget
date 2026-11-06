@@ -50,8 +50,8 @@ export function sortPhrase(key: DistrictSortKey): string {
 
 /** The "Whose budget?" filter. */
 export const TIER_FILTER_LABELS: Record<Exclude<TierFilter, ''>, string> = {
-  A: 'Tier A · the office serves only this district',
-  B: 'Tier B or mixed · the office is shared; figures not split',
+  A: 'Lone · the office serves only this district',
+  B: 'Shared or mixed · the office is shared; figures not split',
   none: 'No office found',
 };
 
@@ -271,9 +271,13 @@ export function isOfficeLedger(office: Pick<OfficeHistory, 'kind'>): boolean {
 // Cards
 // ---------------------------------------------------------------------------
 
-/** The plain meaning of the two tiers, said once per page right after the first "Tier" badge. */
+/**
+ * The plain meaning of the two tiers, said once per page right after the first
+ * badge. Readers see "Lone" and "Shared"; "Tier A" and "Tier B" confused them
+ * (Jason, 2026-11-04). The data and API keep the codes A and B.
+ */
 export const TIER_MEANING =
-  'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.';
+  'Lone: the office serves one district, so its figure can be read as that district’s. Shared: the office serves several districts, so the figure is shared and is not split between them.';
 
 /**
  * A card's overall answer to "Whose budget is this?". `short` is the badge,
@@ -282,15 +286,15 @@ export const TIER_MEANING =
  */
 export const ATTRIBUTION_LABELS: Record<DistrictCard['attribution'], { short: string; badge: string; label: string; help: string }> = {
   A: {
-    short: 'Tier A',
+    short: 'Lone',
     badge: 'only this district',
-    label: 'Tier A · the office serves only this district',
+    label: 'Lone · the office serves only this district',
     help: 'Every office that builds here serves only this district. Its figures can be read as this district’s.',
   },
   B: {
-    short: 'Tier B',
-    badge: 'shared, not split',
-    label: 'Tier B · shared office total, not split',
+    short: 'Shared',
+    badge: 'not split',
+    label: 'Shared · the office total, not split',
     help: 'Every office that builds here also serves other districts. The figures are the whole office’s. They are shared, not split.',
   },
   mixed: {
@@ -307,16 +311,16 @@ export const ATTRIBUTION_LABELS: Record<DistrictCard['attribution'], { short: st
   },
 };
 
-/** "Tier A · serves only this district" or "Tier B · shared with 2 other districts, not split". */
+/** "Lone · serves only this district" or "Shared with 2 other districts, not split". */
 export function officeTierText(tier: 'A' | 'B', sharedWith: number): string {
   return tier === 'A'
-    ? 'Tier A · serves only this district'
-    : `Tier B · shared with ${sharedWith} other ${sharedWith === 1 ? 'district' : 'districts'}, not split`;
+    ? 'Lone · serves only this district'
+    : `Shared with ${sharedWith} other ${sharedWith === 1 ? 'district' : 'districts'}, not split`;
 }
 
-/** The short form on a badge: "serves only this district" / "shared with 2 · not split". */
+/** The small print beside the badge ("Lone" / "Shared"): "serves only this district" / "with 2 others · not split". */
 export function officeTierBadgeText(tier: 'A' | 'B', sharedWith: number): string {
-  return tier === 'A' ? 'serves only this district' : `shared with ${sharedWith} · not split`;
+  return tier === 'A' ? 'serves only this district' : `with ${sharedWith} ${sharedWith === 1 ? 'other' : 'others'} · not split`;
 }
 
 /** "District engineering office (DEO)" / "Sub-district engineering office" / "Regional grouping". */
@@ -839,17 +843,17 @@ export function officeGroupTitle(group: Pick<OfficeGroup, 'offices' | 'name'>): 
   return `${group.name}: ${group.offices.length} DPWH district engineering offices (DEOs), shown together`;
 }
 
-/** "Tier A · only this district", "Tier B · shared by 5 districts, not split", "No DPWH office found". */
+/** "Lone · only this district", "Shared by 5 districts, not split", "No DPWH office found". */
 export function officeGroupTierText(tier: OfficeGroup['tier'], districts: number): string {
-  if (tier === 'A') return 'Tier A · only this district';
-  if (tier === 'B') return `Tier B · shared by ${districts} districts, not split`;
+  if (tier === 'A') return 'Lone · only this district';
+  if (tier === 'B') return `Shared by ${districts} districts, not split`;
   return NO_OFFICE_GROUP_NAME;
 }
 
-/** The sidebar's short mark: "Tier A", "Tier B · 5 districts", "no office". */
+/** The sidebar's short mark: "Lone", "Shared · 5 districts", "no office". */
 export function officeGroupTierShort(tier: OfficeGroup['tier'], districts: number): string {
-  if (tier === 'A') return 'Tier A';
-  if (tier === 'B') return `Tier B · ${districts} districts`;
+  if (tier === 'A') return 'Lone';
+  if (tier === 'B') return `Shared · ${districts} districts`;
   return 'no office';
 }
 

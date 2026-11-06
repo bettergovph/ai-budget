@@ -128,6 +128,7 @@ import {
 import { DETAIL_FROM, SPREAD_FROM, dotRadius, groupRadius, layoutMarks, markRadius, toWorld } from "../src/lib/mpb-dodge";
 import { verifyContractors } from "./verify-hgab-contractors";
 import { verifyMpbBoards } from "./verify-hgab-mpb-boards";
+import { verifyMpbCompare } from "./verify-hgab-mpb-compare";
 import { verifyParties } from "./verify-hgab-parties";
 import {
   DISTRICT_BASES, LOCATION_BASES, LOCATION_REVIEWS, LOCATIONS_SCHEMA, type LocatedCell, type LocationsData,
@@ -715,6 +716,7 @@ async function main(): Promise<void> {
   await verifyLetters(overview, c);
   await verifyHistory(c);
   await verifyMpbYears(c);
+  verifyMpbCompare(check, { out: OUT, words, readerCopyHits });
   await verifyContractors(c, check, { out: OUT, gaa: GAA, contracts: CONTRACTS, words, readerCopyHits });
   verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
   await verifyParties(c, check, { out: OUT, words, readerCopyHits });

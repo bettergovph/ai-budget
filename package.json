@@ -26,6 +26,7 @@
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
+    "build:hgab-flood-compare": "bash scripts/hgab-flood-compare/run.sh",
     "build:hgab-contractors": "bash scripts/dpwh-contracts/run.sh",
     "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
     "build:hgab-parties": "NODE_NO_WARNINGS=1 tsx scripts/build-hgab-parties.ts",

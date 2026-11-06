@@ -45,6 +45,7 @@ import {
   MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
+import { FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, foreignOnlyBudgets, type CompareInput, type FloodCompareSummary } from './mpb-compare';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -91,7 +92,7 @@ export const PLAIN_TERMS: Record<string, { term: string; meaning: string }> = {
   deo: { term: 'District engineering office', meaning: 'The DPWH field office that carries out projects in an area. One office can serve more than one legislative district, and its number need not match the district’s.' },
   fap: { term: 'Foreign-assisted project', meaning: 'A project paid for partly with a loan or grant from abroad.' },
   candidate: { term: 'Candidate', meaning: 'A match or a gap found by comparing project names, places and amounts. It is a lead for checking, not a confirmed change.' },
-  tier: { term: 'Tier A and Tier B', meaning: 'Tier A: the office serves one district, so its figure can be read as that district’s. Tier B: the office serves several districts, so the figure is shared and is not split between them.' },
+  tier: { term: 'Lone and shared offices', meaning: 'Lone: the office serves one district, so its figure can be read as that district’s. Shared: the office serves several districts, so the figure is shared and is not split between them.' },
   residual: { term: 'Not assigned to a district', meaning: 'Money listed under the DPWH Central Office or a regional office. It does not appear on any district card.' },
   stages: { term: 'Two versions, not two budgets', meaning: 'The NEP and the House bill are two versions of the same budget. Compare them; never add them together.' },
 };
@@ -757,6 +758,30 @@ export function loadHgabDistricts(): Promise<HgabDistrictIndex> {
 /** Budget history, FY2020 GAA to the 2027 House bill (`npm run build:hgab-history`). */
 export function loadHgabHistory(): Promise<HistoryData> {
   return cached('history', () => getJson<HistoryData>(dataUrl(HISTORY_DATA_PATH), 'Failed to load the budget history'));
+}
+
+/** The 2027 multi-purpose building lines at both stages, and the province outlines, for the NEP vs House bill page. */
+export function loadMpbCompare(): Promise<CompareInput> {
+  return cached('mpb-compare', async () => {
+    const [lines, summary, geo] = await Promise.all([
+      getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
+      getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
+      loadHgabGeo(),
+    ]);
+    return { data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: [] };
+  });
+}
+
+/** The flood control lines of the 2025 and 2026 budgets and the 2027 NEP and House bill (`npm run build:hgab-flood-compare`). */
+export function loadFloodCompare(): Promise<CompareInput> {
+  return cached('flood-compare', async () => {
+    const [lines, summary, geo] = await Promise.all([
+      getJson<MpbLinesFile>(dataUrl(FLOOD_LINES_PATH), 'Failed to load the flood control lines'),
+      getJson<FloodCompareSummary>(dataUrl(FLOOD_SUMMARY_PATH), 'Failed to load the flood control summary'),
+      loadHgabGeo(),
+    ]);
+    return { data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: foreignOnlyBudgets(summary) };
+  });
 }
 
 /** Foreign-assisted projects, the FY2027 House bill against the NEP and the budgets since FY2020 (`npm run build:hgab-fap`). */

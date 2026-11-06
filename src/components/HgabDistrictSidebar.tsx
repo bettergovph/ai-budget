@@ -62,7 +62,7 @@ function useWide(): boolean {
   );
 }
 
-const SHARED_TITLE = 'Tier B or mixed: the office serves several districts, so this figure is shared and not split.';
+const SHARED_TITLE = 'Shared: the office serves several districts, so this figure is shared and not split.';
 const OFFICE_AMOUNT_TITLE = 'The office’s 2027 House bill amount, named projects only. It belongs to the whole office and is not split between its districts.';
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
