@@ -152,3 +152,13 @@
 .mpbc-matrix tfoot th, .mpbc-matrix tfoot td { border-top: 2px solid var(--rule); font-weight: 700; background: var(--paper-2); }
 @media (max-width: 760px) { .mpbc-matrix-name { display: none; } }
 
+/* About this data (flood control): the grouping table, the CSV's fields, the caveats. */
+.mpbc-h3 { margin: 22px 0 6px; font-family: var(--font-hero); font-size: 17px; font-weight: 700; color: var(--ink); }
+.mpbc-scope th[scope="row"] { min-width: 150px; font-weight: 600; }
+.mpbc-scope .mpbc-part { display: block; }
+.mpbc-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 6px 24px; margin: 8px 0 0; font-size: 13px; }
+.mpbc-fields div { display: grid; grid-template-columns: 170px 1fr; gap: 8px; }
+.mpbc-fields dt code { font-size: 12px; }
+.mpbc-fields dd { margin: 0; color: var(--ink-2); }
+.mpbc-caveats { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.mpbc-caveats li { margin: 3px 0; }
