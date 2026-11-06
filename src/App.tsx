@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { pageMeta } from './lib/seo';
 import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 import { FAP_ROOT } from './lib/hgab-fap';
+import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
 
 const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
@@ -39,6 +40,7 @@ const HgabParties = lazy(() => import('./pages/HgabParties'));
 const HgabParty = lazy(() => import('./pages/HgabParty'));
 const HgabRedFlags = lazy(() => import('./pages/HgabRedFlags'));
 const HgabFap = lazy(() => import('./pages/HgabFap'));
+const HgabPartyData = lazy(() => import('./pages/HgabPartyData'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -127,6 +129,8 @@ export default function App() {
           <Route path="/hgab/2027/districts/:id" element={<HgabDistrict />} />
           {/* Each district's representative and party (May 2025), and the DPWH budget by party; under the Districts menu. */}
           <Route path="/hgab/2027/parties" element={<HgabParties />} />
+          {/* How we read each district's party, 16th to 20th Congress: every seat and its source. */}
+          <Route path={PARTY_DATA_ROOT} element={<HgabPartyData />} />
           <Route path="/hgab/2027/parties/:party" element={<HgabParty />} />
           {/* Leaderboards: the gallery, and one board with its share image. */}
           <Route path="/hgab/2027/leaderboard" element={<HgabLeaderboard />} />

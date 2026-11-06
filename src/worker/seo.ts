@@ -26,6 +26,7 @@ import { MPB_MAP_ROOT } from "../lib/hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "../lib/mpb-compare";
 import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 import { PARTIES_ROOT } from "../lib/hgab-parties";
+import { PARTY_DATA_ROOT } from "../lib/hgab-congress-seats";
 import { CITIZEN_REPORTS_ROOT } from "../lib/citizen-reports";
 import { RED_FLAGS_ROOT } from "../lib/hgab-redflags";
 
@@ -186,6 +187,8 @@ const STATIC_SITEMAP_PATHS = [
   CONTRACTORS_ROOT,
   // Each district's representative and party, and the DPWH budget by party.
   PARTIES_ROOT,
+  // How we read each district's party, 16th to 20th Congress: every seat and its source.
+  PARTY_DATA_ROOT,
   // ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page.
   RED_FLAGS_ROOT,
 ];

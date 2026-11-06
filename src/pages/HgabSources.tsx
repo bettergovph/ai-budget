@@ -28,6 +28,9 @@ import { downloadCsv } from '../lib/csv';
 import { EXPLORER_ROOT, type DownloadFile, downloadFiles, downloadUrl, loadExplorerDownloads } from '../lib/hgab-explorer';
 import { CONTRACTORS_DOWNLOADS_DIR, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { DYNASTIES_DEVELOPERS, DYNASTIES_SITE, OPEN_HALALAN_URL, PARTIES_DATA_PATH, PARTIES_ROOT } from '../lib/hgab-parties';
+import {
+  CONGRESS_SEATS_CSV_NAME, CONGRESS_SEATS_CSV_PATH, CONGRESS_SEATS_PATH, PARTY_DATA_ROOT, PARTY_DATA_TITLE,
+} from '../lib/hgab-congress-seats';
 import '../nep2027.css';
 
 const PATH = `${HGAB_ROOT}/sources`;
@@ -232,6 +235,17 @@ export default function HgabSources() {
                 <li><a href={dataUrl(PARTIES_DATA_PATH)}>parties/parties.json</a><span className="hgab-dl-kind">JSON</span></li>
               </ul>
             </div>
+            <div className="hgab-dl-group">
+              <h3>Seats by Congress</h3>
+              <p className="hgab-dl-sub">
+                each district’s winner and party in the 16th to 20th Congress, from the election results, with each race and its
+                source · <Link to={PARTY_DATA_ROOT}>{PARTY_DATA_TITLE.toLowerCase()}</Link>
+              </p>
+              <ul>
+                <li><a href={dataUrl(CONGRESS_SEATS_PATH)}>parties/congress-seats.json</a><span className="hgab-dl-kind">JSON</span></li>
+                <li><a href={dataUrl(CONGRESS_SEATS_CSV_PATH)} download={CONGRESS_SEATS_CSV_NAME}>parties/congress-seats.csv</a><span className="hgab-dl-kind">CSV, 1,270 seats</span></li>
+              </ul>
+            </div>
             {DATASET_ORDER.map((k) => {
               const d = byKey.get(k);
               return (
@@ -296,9 +310,11 @@ LIMIT 25;`}</pre>
               <tr>
                 <th>Parties</th>
                 <td>
-                  <a href={OPEN_HALALAN_URL} target="_blank" rel="noopener noreferrer">Open Halalan ↗</a>’s election results, 2019 to 2025, as{' '}
+                  <a href={OPEN_HALALAN_URL} target="_blank" rel="noopener noreferrer">Open Halalan ↗</a>’s election results, 2013 to 2025, as{' '}
                   <a href={DYNASTIES_SITE} target="_blank" rel="noopener noreferrer">BetterGov Dynasties ↗</a> publishes them
-                  {' '}(<a href={DYNASTIES_DEVELOPERS} target="_blank" rel="noopener noreferrer">API ↗</a>). Each representative’s party is the one they ran under in May 2025.
+                  {' '}(<a href={DYNASTIES_DEVELOPERS} target="_blank" rel="noopener noreferrer">API ↗</a>). Each representative’s party is the one they ran
+                  {' '}under for the seat; switches during a term are not recorded. Every seat, its race and how a budget year gets its party:
+                  {' '}<Link to={PARTY_DATA_ROOT}>{PARTY_DATA_TITLE.toLowerCase()}</Link>.
                 </td>
               </tr>
               <tr>

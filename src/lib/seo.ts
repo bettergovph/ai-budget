@@ -22,6 +22,7 @@ import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
+import { PARTY_DATA_ROOT } from "./hgab-congress-seats";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
 import { PBC_REPORT, RED_FLAGS_ROOT, RED_FLAG_POSTERS, RED_FLAG_TOTALS, pbcBillionsWords } from "./hgab-redflags";
 
@@ -380,6 +381,16 @@ export function pageMeta(pathname: string): PageMeta {
         "Each of the 254 legislative districts with its representative and the party they ran under in May 2025, from the " +
         "election results as BetterGov Dynasties publishes them, and the DPWH projects House Bill 10858 added at the offices " +
         "serving each party's districts. Shared offices stay whole; the 18th and 19th Congresses' enacted budgets too.",
+    };
+  }
+  // How we read each district's party, 16th to 20th Congress: before one party's page, which shares the prefix.
+  if (p === PARTY_DATA_ROOT) {
+    return {
+      title: `How We Read Parties: House Seats by Congress, 2013–2025, from the Election Results · ${SITE}`,
+      description:
+        "Every legislative district in the 16th to 20th Congress with the winner and the party they ran under, as Open Halalan's " +
+        "election results record them and BetterGov Dynasties publishes them; how each budget year gets its party; the race and " +
+        "source for each seat; what is not captured, such as party switches; and a CSV of all 1,270 seats.",
     };
   }
   // One party's page (or the shared offices'): its people and every line behind its row. The page sets its name.
