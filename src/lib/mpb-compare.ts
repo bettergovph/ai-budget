@@ -28,7 +28,7 @@
  * totals for both"): no breakdown into lines in both, in one document only.
  */
 import { COMPARE_CARD_DISCLAIMER } from './hgab-disclaimers';
-import type { MpbClass, MpbData, MpbLine } from './hgab-mpb-years';
+import type { MpbClass, MpbData, MpbLine, MpbSummary } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
 
 export const MPB_COMPARE_ROOT = '/hgab/2027/multi-purpose/nep-vs-house-bill';
@@ -101,9 +101,117 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
 
 /**
  * What a page draws from: the lines, when they were built, the province outlines, the budgets paid for wholly with
- * foreign loans or grants, and the region-by-year matrix.
+ * foreign loans or grants, the region-by-year matrix, and (flood control) how each budget's lines were grouped.
  */
-export interface CompareInput { data: MpbData; builtAt: string; geo: HgabGeo; foreignOnly: BudgetKey[]; matrix: RegionYearMatrix }
+export interface CompareInput {
+  data: MpbData; builtAt: string; geo: HgabGeo; foreignOnly: BudgetKey[]; matrix: RegionYearMatrix; about: AboutData;
+}
+
+/**
+ * "About this data" (Jason, 2026-11-06: for flood control, "a description how we grouped them, what fields and caveats";
+ * then "Let's do the same for MPBs"): how each budget's lines were grouped, the CSV's fields and where to download it.
+ */
+export interface AboutData {
+  scope: ScopeRow[];
+  /** The last column's heading: what each budget leaves out (flood control: flood words under other codes). */
+  leftOutLabel: string;
+  fields: ReadonlyArray<{ name: string; about: string }>;
+  csvUrl: string;
+  csvBytes: number;
+  csvName: string;
+  /** Flood control: the words that mark a flood control work in a title. */
+  floodWords: string | null;
+}
+
+/**
+ * How one budget's lines were grouped: the source, each family of lines counted, what the total is checked against, and
+ * what the budget leaves out. Flood control's come from its build (`flood_titled_elsewhere`, the lines with flood words in
+ * their titles under other codes); multi-purpose buildings' from the map's summary (`mpbScope`, the items listed at ₱0).
+ */
+export interface ScopeRow {
+  key: string; fy: number; stage: 'gaa' | 'nep' | 'house';
+  source: string;
+  parts: Array<{ label: string; lines: number; php: number }>;
+  lines: number; php: number;
+  /** The chart by year's figure (FY2020 on), or null. */
+  chart_php: number | null;
+  /** chart: the total is the chart's; chart_budget_lines: the budget-line part is (multi-purpose buildings). */
+  check: 'chart' | 'chart_budget_lines' | 'printed_headings' | null;
+  flood_titled_elsewhere?: Tally;
+  left_out?: Tally;
+}
+
+/** Where a budget's lines come from, in plain words (the flood control build writes the same). */
+export function budgetSource(fy: number, stage: 'gaa' | 'nep' | 'house'): string {
+  if (stage === 'nep') return 'NEP 2027 (DBM), as the source workbench reads it';
+  if (stage === 'house') return 'House Bill 10858, third reading, as the source workbench reads it';
+  if (fy >= 2020) return 'DBM GAA extract on this site';
+  if (fy === 2019) return 'DBM technical GAA for DPWH, read from the document’s text';
+  return `DBM technical GAA ${fy === 2015 ? 'CSV' : 'spreadsheet'}, from the GAA history release`;
+}
+
+const MPB_TITLE_PART = 'Lines under other headings whose titles name a multi-purpose building';
+/** A multi-purpose building budget line's heading, short. */
+function mpbPart(pap: string): string {
+  if (/\bBIP\b|Basic Infrastructure/i.test(pap)) return 'BIP multi-purpose buildings';
+  if (/SIPAG|Sustainable Infrastructure/i.test(pap)) return 'SIPAG multi-purpose buildings';
+  if (/MULTI-?PURPOSE/i.test(pap)) return 'Local Program multi-purpose buildings and facilities';
+  return pap;
+}
+
+/** Multi-purpose buildings' grouping, from the map's lines and summary: budget lines by heading, then lines in by title. */
+export function mpbScope(data: MpbData, s: MpbSummary): ScopeRow[] {
+  return s.budgets.map((b) => {
+    const parts = new Map<string, Tally>();
+    for (const l of data.lines) {
+      if (l.fy !== b.fy) continue;
+      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      if (v == null) continue;
+      const label = l.rule === 'title' ? MPB_TITLE_PART : mpbPart(l.pap);
+      const t = parts.get(label) ?? { lines: 0, php: 0 };
+      t.lines++; t.php += v;
+      parts.set(label, t);
+    }
+    const order = (label: string) => (label === MPB_TITLE_PART ? 1 : 0);
+    return {
+      key: b.key, fy: b.fy, stage: b.stage, source: budgetSource(b.fy, b.stage),
+      parts: [...parts].sort((x, y) => order(x[0]) - order(y[0]) || y[1].php - x[1].php).map(([label, t]) => ({ label, ...t })),
+      lines: b.lines, php: b.php, chart_php: b.history_php,
+      check: b.history_php != null ? 'chart_budget_lines' : b.fy === 2019 ? 'printed_headings' : null,
+      left_out: { lines: b.listed_at_zero, php: 0 },
+    };
+  });
+}
+
+export const FLOOD_CSV_PATH = 'hgab/2027/flood-compare/lines.csv';
+export const FLOOD_CSV_NAME = 'bettergov-flood-control-2015-2027.csv';
+
+/** lines.csv, column by column (the build's CSV_COLUMNS, in order; verify:hgab checks the header). */
+export const FLOOD_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = [
+  { name: 'fiscal_year', about: 'The budget year.' },
+  { name: 'document', about: 'GAA, the enacted budget; for 2027, the NEP and the House bill.' },
+  { name: 'line_id', about: 'The line’s code: its UACS code in a GAA, the comparison row in 2027.' },
+  { name: 'uacs_code', about: 'The UACS code the GAA prints (GAA lines only).' },
+  { name: 'title', about: 'The line’s title, with spacing and garbled characters cleaned.' },
+  { name: 'title_as_published', about: 'The title as printed, when cleaning changed it.' },
+  { name: 'program', about: 'The heading the line sits under; for 2015 to 2017, the former flood code it carries.' },
+  { name: 'dpwh_office', about: 'The DPWH office that carries the line, as the budget lists it.' },
+  { name: 'gaa_php', about: 'The amount in the enacted budget, in pesos (2015 to 2026).' },
+  { name: 'nep_php', about: 'The amount in the 2027 NEP, in pesos.' },
+  { name: 'house_bill_php', about: 'The amount in the House bill, in pesos.' },
+  { name: 'fy2027_comparison', about: 'in_both, house_bill_only or nep_only: a match between the two documents, a candidate, not a confirmed change.' },
+  { name: 'region', about: 'The region its title or office places it in; blank when none.' },
+  { name: 'placed_by', about: 'What placed it: GPS in the title, the barangay, town, city or province it names, the DPWH office, or the region.' },
+  { name: 'place', about: 'The place it sits at.' },
+  { name: 'place_psgc', about: 'The place’s PSGC code, when it is a named place.' },
+  { name: 'longitude', about: 'Where it is drawn: the GPS point, else the place’s centre.' },
+  { name: 'latitude', about: 'As longitude.' },
+  { name: 'legislative_district', about: 'Today’s legislative district its place lies in, or its office serves alone.' },
+  { name: 'legislative_district_id', about: 'The same district’s id on this site.' },
+  { name: 'flags', about: 'Notes on the reading, such as text_repaired, gps_not_drawn or office_elsewhere.' },
+  { name: 'nep_pdf_page', about: 'The page of the published NEP the line is printed on (2027).' },
+  { name: 'house_bill_pdf_page', about: 'The page of the published House bill the line is printed on (2027).' },
+];
 
 // ---------------------------------------------------------------------------
 // The region-by-year matrix (Jason, 2026-11-06: "I want a matrix of the MPBs per region and per year. I want the same
@@ -227,6 +335,11 @@ export interface FloodCompareSummary {
     not_drawn: Tally;
     classes: Record<string, number>;
   }>;
+  /** How each budget's lines were grouped, FY2015 GAA to the House bill. */
+  scope: ScopeRow[];
+  /** The words that mark a flood control work in a title (the lines left out, under other codes). */
+  flood_words: string;
+  outputs: Record<'lines.json' | 'lines.csv', { sha256: string; bytes: number }>;
   /** Each region's [lines, pesos] in every budget, FY2015 GAA to the House bill, and each budget's total (= the chart from FY2020). */
   matrix: {
     budgets: MatrixBudget[];

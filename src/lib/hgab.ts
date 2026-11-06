@@ -41,11 +41,12 @@ import {
   type LineContract, type MpbContractsFile,
 } from './hgab-contractors';
 import {
-  MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary,
+  MPB_CSV_FIELDS, MPB_CSV_NAME, MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, mpbCsvPath,
+  type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
 import {
-  FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, floodMatrix, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
+  FLOOD_CSV_FIELDS, FLOOD_CSV_NAME, FLOOD_CSV_PATH, FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, floodMatrix, mpbScope, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
 } from './mpb-compare';
 
 export const HGAB_YEAR = 2027;
@@ -771,7 +772,13 @@ export function loadMpbCompare(): Promise<CompareInput> {
     ]);
     const data = decodeMpbLines(lines);
     const budgets = summary.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: 'title_only' as const }) }));
-    return { data, builtAt: summary.built_at, geo, foreignOnly: [], matrix: linesMatrix(data, budgets) };
+    return {
+      data, builtAt: summary.built_at, geo, foreignOnly: [], matrix: linesMatrix(data, budgets),
+      about: {
+        scope: mpbScope(data, summary), leftOutLabel: 'Listed at ₱0 (left out)', fields: MPB_CSV_FIELDS,
+        csvUrl: dataUrl(mpbCsvPath(summary)), csvBytes: summary.outputs['lines.csv'].bytes, csvName: MPB_CSV_NAME, floodWords: null,
+      },
+    };
   });
 }
 
@@ -786,6 +793,12 @@ export function loadFloodCompare(): Promise<CompareInput> {
     return {
       data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: foreignOnlyBudgets(summary),
       matrix: floodMatrix(summary),
+      about: {
+        scope: summary.scope.map((r) => ({ ...r, left_out: r.flood_titled_elsewhere })),
+        leftOutLabel: 'Flood words, other codes (not counted)', fields: FLOOD_CSV_FIELDS, floodWords: summary.flood_words,
+        csvBytes: summary.outputs['lines.csv'].bytes, csvName: FLOOD_CSV_NAME,
+        csvUrl: `${dataUrl(FLOOD_CSV_PATH)}?v=${summary.outputs['lines.csv'].sha256.slice(0, 12)}`,
+      },
     };
   });
 }

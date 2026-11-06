@@ -5,13 +5,14 @@
  *   - flood control (/hgab/2027/flood-control): flood-compare/, against its summary and the flood control series on the
  *     chart by year (history.json), in all four budgets.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD } from "../src/lib/hgab-disclaimers";
 import type { HistoryData } from "../src/lib/hgab-history";
-import { decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
+import { MPB_CSV_FIELDS, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
 import {
-  COMPARE_TOPICS, COMPARE_VIEW, GAA_PANEL_COLOR, matrixCopy, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
+  COMPARE_TOPICS, COMPARE_VIEW, FLOOD_CSV_FIELDS, GAA_PANEL_COLOR, budgetSource, matrixCopy, mpbScope, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
   inView, linesMatrix, panelDots, type BudgetKey, type CompareTopic, type FloodCompareSummary, type RegionYearMatrix,
 } from "../src/lib/mpb-compare";
 
@@ -20,6 +21,25 @@ interface Opts { out: string; words: (s: string) => number; readerCopyHits: (s: 
 
 const n = (v: number) => v.toLocaleString("en-US");
 const sentences = (s: string) => s.split(/(?<=[.!?])\s+/);
+
+/** RFC 4180 rows (quoted fields may hold commas, quotes and newlines). */
+function csvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (ch !== "\r") cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
 
 /**
  * The region-by-year matrix (Jason, 2026-11-06: "a matrix of the MPBs per region and per year … the same for flood
@@ -140,6 +160,29 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
     verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, []);
     const m = linesMatrix(data, S.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: "title_only" as const }) })));
     verifyMatrix(check, COMPARE_TOPICS.mpb, data, m, (key) => S.budgets.find((x) => x.key === key), o, S.built_at);
+    // About this data (Jason, 2026-11-06: "Let's do the same for MPBs"): the grouping, the fields, the CSV.
+    const sc = mpbScope(data, S);
+    check(`how we grouped them: one row per budget; budget lines by heading, then lines in by title; each adds up to the map's figures (${[...new Set(sc.flatMap((r) => r.parts.map((p) => p.label)))].join(" | ")})`,
+      sc.length === S.budgets.length && sc.every((r, i) => {
+        const b = S.budgets[i];
+        const title = r.parts.find((p) => p.label.startsWith("Lines under other headings"));
+        const budgetLines = r.parts.filter((p) => p !== title).reduce((a, p) => a + p.php, 0);
+        return r.php === b.php && r.lines === b.lines && r.parts.reduce((a, p) => a + p.php, 0) === b.php
+          && budgetLines === b.pap_php && (title?.php ?? 0) === b.title_only_php && (b.pap_rule || budgetLines === 0);
+      }));
+    check("how we grouped them: from 2020 the budget lines equal our chart by year; 2019 against the printed headings; the ₱0 items left out are counted",
+      sc.every((r, i) => (r.fy >= 2020 ? r.check === "chart_budget_lines" && S.budgets[i].pap_php === r.chart_php : r.fy === 2019 ? r.check === "printed_headings" : r.check === null))
+        && sc.every((r, i) => r.left_out?.lines === S.budgets[i].listed_at_zero) && sc.some((r) => r.left_out?.lines)
+        && sc.every((r) => r.source === budgetSource(r.fy, r.stage)));
+    const mpbCsv = resolve(dir, "lines.csv");
+    if (existsSync(mpbCsv)) {
+      const fd = readFileSync(mpbCsv).subarray(0, 4096).toString("utf8").replace(/^\uFEFF/, "");
+      const head = fd.split("\n")[0].split(",");
+      check(`the map's lines.csv: its ${head.length} columns are the fields the page describes, in order`,
+        head.join() === MPB_CSV_FIELDS.map((f) => f.name).join(), head.join(","));
+    }
+    const mpbWords = [...MPB_CSV_FIELDS.map((f) => f.about), ...sc.map((r) => r.source), ...sc.flatMap((r) => r.parts.map((p) => p.label))];
+    check("the fields and the grouping are in plain words", mpbWords.flatMap(o.readerCopyHits).length === 0, mpbWords.flatMap(o.readerCopyHits).join(", "));
     check(`matrix: the budgets with no multi-purpose building line (${m.budgets.filter((b) => b.note).map((b) => b.fy).join(", ")}) are marked`,
       m.budgets.filter((b) => b.note).every((b) => b.fy < 2018 && b.note === "title_only") && m.budgets.some((b) => b.note));
   }
@@ -187,4 +230,31 @@ function verifyFloodCompare(check: Check, o: Opts): void {
     S.matrix.budgets.map((b) => b.key).join() === years.join()
       && S.matrix.budgets.every((b) => (b.note === "former_codes") === (b.stage === "gaa" && b.fy <= 2017)));
 
+  // How we grouped them (Jason, 2026-11-06: "we need a description how we grouped them, what fields and caveats").
+  const partsOk = S.scope.every((r) => r.parts.length > 0 && r.parts.reduce((a, p) => a + p.php, 0) === r.php
+    && r.parts.reduce((a, p) => a + p.lines, 0) === r.lines);
+  const sameAsMatrix = S.scope.every((r, i) => r.key === S.matrix.budgets[i].key && r.php === S.matrix.totals[i][1] && r.lines === S.matrix.totals[i][0]);
+  check(`how we grouped them: one row per budget; each row's parts add up to its total, which is the matrix's (${S.scope.map((r) => r.parts.map((p) => p.label).join(" + ")).filter((v, i, a) => a.indexOf(v) === i).join(" | ")})`,
+    partsOk && sameAsMatrix && S.scope.length === years.length);
+  check("how we grouped them: each total's check named — the chart from 2020, the printed headings in 2019, none before; flood-titled lines elsewhere tallied",
+    S.scope.every((r) => (r.fy >= 2020 ? r.check === "chart" && r.chart_php === r.php : r.fy === 2019 ? r.check === "printed_headings" : r.check === null))
+      && S.scope.every((r) => r.flood_titled_elsewhere.lines >= 0) && S.scope.some((r) => r.flood_titled_elsewhere.lines > 0)
+      && S.scope.filter((r) => r.fy <= 2017).every((r) => r.parts.length === 1 && /Former flood control codes/.test(r.parts[0].label)));
+  // The CSV: its header is the fields the page describes; one row per line; each budget's amounts add up to the matrix.
+  const csvPath = resolve(dir, "lines.csv");
+  check("lines.csv present, its checksum the summary's", existsSync(csvPath)
+    && createHash("sha256").update(readFileSync(csvPath)).digest("hex") === S.outputs["lines.csv"].sha256);
+  if (existsSync(csvPath)) {
+    const rows = csvRows(readFileSync(csvPath, "utf8").replace(/^\uFEFF/, ""));
+    const [head, ...body] = rows;
+    const at = Object.fromEntries(head.map((h, i) => [h, i]));
+    const sum = (k: string, fy: number) => body.reduce((a, r) => (Number(r[at.fiscal_year]) === fy && r[at[k]] !== "" ? { lines: a.lines + 1, php: a.php + Number(r[at[k]]) } : a), { lines: 0, php: 0 });
+    const csvTotals = S.matrix.budgets.map((b) => sum(b.stage === "gaa" ? "gaa_php" : b.stage === "nep" ? "nep_php" : "house_bill_php", b.fy));
+    check(`lines.csv: its ${head.length} columns are the fields the page describes, in order`, head.join() === FLOOD_CSV_FIELDS.map((f) => f.name).join(), head.join(","));
+    check(`lines.csv: ${n(body.length)} rows, one per line; every budget's amounts add up to the matrix`,
+      body.every((r) => r.length === head.length)
+        && csvTotals.every((t, i) => t.lines === S.matrix.totals[i][0] && t.php === S.matrix.totals[i][1]));
+  }
+  const fieldWords = FLOOD_CSV_FIELDS.map((f) => f.about).concat(S.scope.map((r) => r.source), S.scope.flatMap((r) => r.parts.map((p) => p.label)));
+  check("the fields and the grouping are in plain words", fieldWords.flatMap(o.readerCopyHits).length === 0, fieldWords.flatMap(o.readerCopyHits).join(", "));
 }

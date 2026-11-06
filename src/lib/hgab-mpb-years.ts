@@ -38,6 +38,34 @@ export const MPB_SUMMARY_PATH = `${BASE}/summary.json`;
 export const MPB_DISTRICTS_PATH = `${BASE}/districts.geojson`;
 export const MPB_CSV_PATH = `${BASE}/lines.csv`;
 export const MPB_CSV_NAME = 'bettergov-multi-purpose-buildings-2015-2027.csv';
+/** lines.csv, column by column (the build's CSV_COLUMNS, in order; verify:hgab checks the header). */
+export const MPB_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = [
+  { name: 'fiscal_year', about: 'The budget year.' },
+  { name: 'line_id', about: 'The line’s id: gaa:<year>:<UACS code> in a GAA, the comparison row in 2027.' },
+  { name: 'title', about: 'The line’s title, with spacing and garbled characters cleaned.' },
+  { name: 'title_as_published', about: 'The title as printed, when cleaning changed it.' },
+  { name: 'gaa_php', about: 'The amount in the enacted budget, in pesos (2015 to 2026).' },
+  { name: 'nep_php', about: 'The amount in the 2027 NEP, in pesos.' },
+  { name: 'house_bill_php', about: 'The amount in the House bill, in pesos.' },
+  { name: 'fy2027_comparison', about: 'in_both, house_bill_only or nep_only: a match between the two documents, a candidate, not a confirmed change.' },
+  { name: 'uacs_code', about: 'The UACS code the GAA prints (GAA lines only).' },
+  { name: 'pap', about: 'The heading the line sits under, as the budget prints it.' },
+  { name: 'scope_rule', about: 'Why it counts: pap (a multi-purpose building budget line), title (its title names one), or pap+title.' },
+  { name: 'dpwh_office', about: 'The DPWH office that carries the line, as the budget lists it.' },
+  { name: 'region', about: 'The region its title or office places it in; blank when none.' },
+  { name: 'placed_by', about: 'What placed it: GPS in the title, the barangay, town, city or province it names, the DPWH office, or the region.' },
+  { name: 'place', about: 'The place it sits at.' },
+  { name: 'place_psgc', about: 'The place’s PSGC code, when it is a named place.' },
+  { name: 'longitude', about: 'Where it is drawn: the GPS point, else the place’s centre.' },
+  { name: 'latitude', about: 'As longitude.' },
+  { name: 'gps_points', about: 'Every GPS point the title prints, longitude,latitude; separated by semicolons.' },
+  { name: 'legislative_district', about: 'Today’s legislative district its place lies in, or its office serves alone.' },
+  { name: 'legislative_district_id', about: 'The same district’s id on this site.' },
+  { name: 'district_from', about: 'How the district was found: title (its place), gps, or deo (the office’s one district).' },
+  { name: 'flags', about: 'Notes on the reading, such as text_repaired, gps_not_drawn or office_elsewhere.' },
+  { name: 'nep_pdf_page', about: 'The page of the published NEP the line is printed on (2027).' },
+  { name: 'house_bill_pdf_page', about: 'The page of the published House bill the line is printed on (2027).' },
+];
 /** The full CSV's path, versioned by its checksum: the data host caches CSV for hours, so a rebuilt file needs a new URL. */
 export const mpbCsvPath = (s: Pick<MpbSummary, 'outputs'>) => `${MPB_CSV_PATH}?v=${s.outputs['lines.csv'].sha256.slice(0, 12)}`;
 
