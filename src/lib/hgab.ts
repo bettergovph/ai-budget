@@ -33,6 +33,7 @@ import {
 } from './hgab-leaderboard';
 import { LETTER_INDEX_PATH, letterFile, type LetterData, type LetterIndex } from './hgab-letter';
 import { HISTORY_DATA_PATH, type HistoryData } from './hgab-history';
+import { FAP_DATA_PATH, type FapData } from './hgab-fap';
 import { PARTIES_DATA_PATH, partyLinesPath, type PartiesData, type PartyLinesFile } from './hgab-parties';
 import {
   CONTRACTORS_INDEX_PATH, CONTRACTORS_MANIFEST_PATH, CONTRACTORS_MPB_PATH, CONTRACTORS_SUMMARY_PATH, contractorShardPath,
@@ -812,6 +813,11 @@ export function loadFloodCompare(): Promise<CompareInput> {
       parties: partyMatrix(floodDistrictMatrix(summary), seats),
     };
   });
+}
+
+/** Foreign-assisted projects, the FY2027 House bill against the NEP and the budgets since FY2020 (`npm run build:hgab-fap`). */
+export function loadHgabFap(): Promise<FapData> {
+  return cached('fap', () => getJson<FapData>(dataUrl(FAP_DATA_PATH), 'Failed to load the foreign-assisted projects'));
 }
 
 /**

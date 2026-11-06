@@ -31,6 +31,7 @@ import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
+import { FAP_ROOT } from '../lib/hgab-fap';
 import {
   COMPARISON_DISCLAIMERS, DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMER_CONTRACTORS, DISCLAIMER_MPB,
   DISCLAIMER_FLOOD, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_PARTIES, DISCLAIMER_PLACEMENTS, DISCLAIMER_RED_FLAGS,
@@ -61,6 +62,7 @@ const LEAD_LINKS: readonly NavLink[] = [
   // Its address has a capital; the page answers in any letter case, and so does the tab.
   { key: 'red-flags', to: RED_FLAGS_ROOT, label: 'Red Flags', match: (p) => p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase() },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
+  { to: FAP_ROOT, label: 'Foreign-assisted' },
 ];
 const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
 /**
