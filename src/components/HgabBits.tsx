@@ -27,7 +27,7 @@ import {
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
-import { MPB_COMPARE_ROOT } from '../lib/mpb-compare';
+import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { RED_FLAGS_ROOT } from '../lib/hgab-redflags';
@@ -66,12 +66,11 @@ const LEAD_LINKS: readonly NavLink[] = [
 ];
 const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
 /**
- * Entries kept out of the sub-nav and the drawer for now (Jason, 2026-11-03: "hide the By party link for now from the
- * navbar. Including the Multi-purpose buildings"): Districts → By party, and the Multi-purpose buildings menu; and Red
- * Flags (2026-11-04: "hide the 1T redflags link for now from the subnav"). Their pages and the links inside pages
- * stay; take a key out to bring its entry back.
+ * Entries kept out of the sub-nav and the drawer: a key here hides its entry (Districts → By party is `parties`, the
+ * Multi-purpose buildings menu `multi-purpose`, Red Flags `red-flags`), keeping the page at its address. Empty since
+ * Jason, 2026-11-06: "make the hidden links available now" (they were hidden 2026-11-03 and 2026-11-04).
  */
-const NAV_HIDDEN: ReadonlySet<string> = new Set(['parties', 'multi-purpose', 'red-flags']);
+const NAV_HIDDEN: ReadonlySet<string> = new Set<string>();
 const SHOWN_LEAD_LINKS = LEAD_LINKS.filter((n) => !n.key || !NAV_HIDDEN.has(n.key));
 
 /** Multi-purpose buildings are DPWH lines, with a menu of their own: the budget by year, and every line on a map. */
@@ -84,9 +83,15 @@ const MPB_MENU: NavMenu = {
     { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
   ],
 };
-/** Pages a program's menu opens after its own views: DPWH's contractors (FY2016 to FY2026, from DPWH's contract list). */
+/**
+ * Pages a program's menu opens after its own views: DPWH's flood control (FY2015 to the 2027 House bill, "Flood control
+ * projects are back") and contractors (FY2016 to FY2026, from DPWH's contract list).
+ */
 const PROGRAM_EXTRAS: Partial<Record<DatasetKey, NavMenu['items']>> = {
-  dpwh: [{ key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT }],
+  dpwh: [
+    { key: 'flood-control', label: 'Flood control', to: FLOOD_COMPARE_ROOT },
+    { key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT },
+  ],
 };
 const ABOUT_MENU: NavMenu = {
   key: 'about',

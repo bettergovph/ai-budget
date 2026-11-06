@@ -59,7 +59,10 @@ Figures (2026-11-02 build of the map's lines):
 | House bill | 5,807 | ₱86,264,219,000 |
 | Change | +2,992 | +₱43,054,480,000 (+100%) |
 
-Below the figure: the totals by region (a line's region), with links to the interactive map and the budget by year.
+Below the figure:
+- the NEP vs House bill totals by region (a line's region);
+- the region-by-year matrix (see [By region and year](#by-region-and-year));
+- links to the interactive map and the budget by year.
 
 ## Code
 
@@ -121,7 +124,8 @@ The same figure with three maps, and the same dot scale, so the pages compare.
 
 verify:hgab checks that each map's colours are named.
 
-**Region table:** 2025, 2026, 2027 NEP and 2027 House bill; amounts, with lines below.
+**Below the figure:** the region-by-year matrix (FY2020 GAA to the 2027 House bill), which replaces the earlier
+four-column region table.
 
 **Disclaimers** (Jason, 2026-11-05: "I need a disclaimer"):
 - **On the figure** (page, `?shot=1`, PNG), both topics, since the figure travels without the page:
@@ -184,3 +188,196 @@ It also runs the shared checks per budget and per map.
 
 **Publish:** upload before the page deploys, with
 `npx tsx scripts/upload-hgab-to-r2.ts --only=flood-compare --skip-verify`.
+
+## By region and year
+
+Jason (2026-11-06):
+- "I want a matrix of the MPBs per region and per year. I want the same for flood control as well. You can put it in
+  their individual pages";
+- "For flood control we need it for multiple years that we have";
+- "we need a description how we grouped them, what fields and caveats as well";
+- "Let's use a light green to red tone for the grid colours".
+
+Each page has a "By region and year" table:
+- **Rows:** the regions, north to south, then "No region"; the last row is "All regions".
+- **Columns:** the budgets, oldest first.
+- **Cells:** the amount (₱4.2B, ₱512M). The colour runs from light green through soft amber to red by the square root of
+  the cell's share of the largest cell (`heatColor`). Hover a cell for its line count. On phones the region column
+  stays fixed and shows the short name.
+- **A line's region** is the one its title or office places it in, the same as on the maps.
+
+**Download image (PNG)** beside the heading (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo,
+our disclaimer, that I can download as well"). `src/lib/mpb-matrix-image.ts` draws the same table on a white card,
+2560 × about 2030 px, loaded only when clicked:
+- the BetterGov logo (`bettergov-horizontal-primary.png`), a red top rule, the kicker and the title;
+- every cell in the page's colours, and a less-to-more colour key;
+- the notes, the disclaimer (`COMPARE_CARD_DISCLAIMER`), the source, the page address and the "as of" date.
+
+The words come from `matrixCopy`, which the page's table uses too. The region column fits its longest name.
+- Flood control: `bettergov-flood-control-by-region-2015-2027.png`.
+- Multi-purpose buildings: `bettergov-multi-purpose-buildings-by-region-2015-2027.png`.
+
+**Multi-purpose buildings:** every budget the map holds, FY2015 GAA to the 2027 House bill (14 columns). It's computed
+in the browser from `mpb-years/lines.json` (`linesMatrix`).
+- FY2015–FY2017 are starred (`note: title_only`): those budgets have no multi-purpose building line, so their lines
+  are counted by title.
+- Totals are the map's, title-only lines included.
+
+**Flood control:** every budget we have line by line, FY2015 GAA to the 2027 House bill (14 columns). The matrix is in
+`summary.json` (`matrix`); `lines.json` keeps only the mapped budgets.
+
+### Multi-purpose buildings: About this data
+
+Jason (2026-11-06): "Let's do the same for MPBs". The page's "About this data" section (#about-data, `AboutThisData`,
+shared with flood control) has three parts:
+- **How we grouped them** (`mpbScope`, from the map's lines and summary): per budget, the budget lines by heading
+  (Local Program 2018–2021; BIP and SIPAG from 2022; BIP in 2027), then the lines under other headings whose titles name
+  a multi-purpose building. The checks are the chart by year for the budget lines from 2020, and the printed headings
+  in 2019. The last column is the items listed at ₱0 (2017: 3,165).
+- **Fields:** `MPB_CSV_FIELDS`, the map build's `CSV_COLUMNS` in order. It links the map's `lines.csv` (36.4 MB,
+  `mpbCsvPath`).
+- **Caveats:**
+  - the budget lines change with the structure;
+  - 2015–2017 are in by title only;
+  - title lines put the totals above the chart;
+  - the title rule;
+  - the ₱0 items;
+  - the 2019 edition;
+  - regions and No region;
+  - offices matched by name;
+  - 2027's candidates;
+  - allocations, not spending.
+
+verify:hgab checks:
+- the grouping's parts add up to the map's budget figures (budget lines = `pap_php`, titles = `title_only_php`);
+- the checks;
+- the CSV header against the fields;
+- plain words.
+
+No new data: it reads `mpb-years/`, already published.
+
+### Flood control: how the lines are grouped
+
+`build:hgab-flood-compare` counts each budget by its own flood control codes:
+
+| Budget | Source | Counted | Total checked against |
+| --- | --- | --- | --- |
+| FY2015–FY2017 GAA | GAA history release (CSV 2015, spreadsheets 2016–2017) | the older code set's flood families, 162… and 292…, named from their lines (maintenance and repair, river basins and master plans, local flood works and a disaster fund, foreign-assisted projects) | no published total |
+| FY2018 GAA | GAA history release (spreadsheet) | Flood Management Program (3201…), Local Program flood control and drainage (300106–300109) | no published total |
+| FY2019 GAA | the technical GAA's text (`gaa2019.py`) | the same codes | the headings the document prints |
+| FY2020–FY2026 GAA | the site's extract | the chart's flood series: Flood Management Program, Local Program flood lines (2020–2021), BIP and SIPAG flood mitigation (2022–2025) | the chart by year |
+| 2027 NEP, House bill | the source workbench | the Flood Management Program | the chart by year |
+
+`summary.json` `scope` records each budget's source, parts (lines, pesos), check, and the lines with flood words in
+their titles under other codes (`FLOOD_WORDS`, not counted; ₱13–25B a year). The page's "About this data" section shows
+the grouping table, the CSV's fields (`FLOOD_CSV_FIELDS`, the build's `CSV_COLUMNS` in order) and the caveats.
+
+**`lines.csv`:** every line of every budget, 39,572 rows, about 16.5 MB. The page links it with
+`?v=<sha256[:12]>`, since the data host caches CSV for a day.
+
+**Placement before 2020:**
+- 2015–2019 offices are matched to today's offices by name, as on the multi-purpose map.
+- District qualifiers are dropped from titles for matching, and "Maguindanao" is read as its successor province.
+- The 2016, 2017 and 2019 files carry no region field. Their head-office lines that name no place stay under "No
+  region": ₱9.3B, ₱8.4B and ₱5.9B.
+
+**Checks:** verify:hgab checks both matrices. For each:
+- every column adds up to its total;
+- every total is the build's (flood control: the chart's from FY2020);
+- the mapped columns equal the drawn lines region by region.
+
+It also checks:
+- flood control's columns run FY2015 GAA to the 2027 House bill, with 2015–2017 starred;
+- the shareable image's words: the title, disclaimer, source, address and notes, in plain words;
+- (About this data) for flood control:
+  - each grouping row's parts add up to the matrix's total;
+  - each row's check is named;
+  - the CSV's header matches the described fields, it has one row per line, and its amounts add up to the matrix
+    per budget;
+  - plain words.
+
+517/517.
+
+**Publish:** upload `flood-compare/` (`lines.json`, `lines.csv`, `summary.json`) before the code deploys. The summary only
+adds fields, so the live page keeps working.
+
+## By party and year
+
+Jason (2026-11-06): "Our next mission is map the charts based on their political party for that year". His choices:
+- a budget carries the party of the district's representative in the Congress that passed it;
+- a party-by-year grid;
+- a district whose towns changed since that election is kept apart.
+
+Each page has a "By party and year" grid below "By region and year" (`PartyYearTable`, the same `YearGrid` and
+image).
+- **Rows:** parties by their total over every budget, largest first. Parties under 1% of the party total are folded
+  into "Other parties" (`partyGrid`). Then come the rows that carry no party, plain:
+  - District's towns changed;
+  - No race on record;
+  - No party on record;
+  - Not in one district.
+- **Columns:** the budgets, with each Congress over its years:
+
+  | Congress | Elected | Budgets |
+  | --- | --- | --- |
+  | 16th | 2013 | 2015–2016 |
+  | 17th | 2016 | 2017–2019 |
+  | 18th | 2019 | 2020–2022 |
+  | 19th | 2022 | 2023–2025 |
+  | 20th | 2025 | 2026, the 2027 NEP and House bill |
+- **Hover:** each cell shows its lines, amount and the districts the party held.
+- **Download image (PNG):** `bettergov-{topic}-by-party-2015-2027.png`, with `PARTY_CARD_DISCLAIMER`.
+
+**How a line gets a party** (`partyMatrix`): line → its legislative district (the same district the maps use: the
+title's place, the GPS point, or the office's one district) → that district's seat in the Congress that passed the
+budget (`congress-seats.json`) → the party the winner ran under. No party when:
+- the line has no single district;
+- the district had no race that year;
+- its towns changed since;
+- the race has no party on record.
+
+Multi-purpose buildings build the district matrix in the browser from the map's lines (`linesDistrictMatrix`).
+Flood control's build writes it to `summary.json` (`district_matrix`).
+
+**`congress-seats.json`** (`npm run build:hgab-congress-seats`, `scripts/build-hgab-congress-seats.ts`) covers each of
+the 254 districts in each Congress:
+- **Matching:** the by-party page's (`build-hgab-parties.ts`), copied rather than imported, because that script
+  writes on load. It finds a district's race by province or city and district number, and calls the towns "same" when
+  they match the 2025 race's.
+- **20th Congress:** `parties.json`'s seats as they are.
+- **Earlier Congresses:** the winner's party. 2016's "LAKAS-CMD" is read as "LAKAS" (`PARTY_CODE_ALIASES`); joint
+  tickets and local chapters are kept as printed.
+
+| Election | Same towns | Changed | No race |
+| --- | ---: | ---: | ---: |
+| 2013 | 170 | 23 | 61 |
+| 2016 | 209 | 23 | 22 |
+| 2019 | 217 | 19 | 18 |
+| 2022 | 243 | 6 | 5 |
+| 2025 | 254 | 0 | 0 |
+
+The 2013 results list some races only as a province or Metro Manila total, not by district.
+
+**Caveats (in the grid's notes):**
+- the party is the one the representative ran under; switches during a term are not captured;
+- a party's total grows with the districts it held;
+- placement is the maps' reading.
+
+**Checks:** verify:hgab checks:
+- the five Congresses;
+- every district counted once per Congress;
+- the 20th's parties equal the by-party page's;
+- 455 seats from 2019 and 2022 equal the by-party page's elections (party and towns);
+- party codes read alike.
+
+Per grid:
+- every column adds up to the region grid's total;
+- each budget's Congress is right;
+- a party's budget is only districts it held with the same towns;
+- the folded rows still add up;
+- the words are plain.
+
+533/533.
+
+**Publish:** upload `parties/congress-seats.json` and `flood-compare/summary.json` (`district_matrix`) before the code
+deploys.
