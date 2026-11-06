@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Every flood control line in the FY2015 to FY2026 GAA, the 2027 NEP and the House bill, placed for
 /hgab/2027/flood-control. The maps draw FY2025, FY2026 and 2027 (Jason, 2026-11-05: "the proper comparison is 2025,
-2026, and 2027"); every year feeds the region-by-year matrix (Jason, 2026-11-06: "I want a matrix of the MPBs per
-region and per year. I want the same for flood control", "For flood control we need it for multiple years that we
-have").
+2026, and 2027"); every year feeds the region-by-year matrix and the CSV (Jason, 2026-11-06: "I want a matrix of the
+MPBs per region and per year. I want the same for flood control", "For flood control we need it for multiple years that
+we have", "we need a description how we grouped them, what fields and caveats as well").
 
 Which lines, each budget's own flood codes (scope_of):
   - FY2020 to FY2026 GAA: the flood control series on the multi-purpose page's chart (src/lib/hgab-history.ts, series
@@ -14,6 +14,7 @@ Which lines, each budget's own flood codes (scope_of):
   - FY2015 to FY2017: the older code set's flood control families, 162… and 292… (by their lines: maintenance and
     repair, river basin and master-plan projects, local flood works and a disaster fund, foreign-assisted projects);
   - 2027 NEP and House bill: the Flood Management Program.
+Lines with flood words in their titles under other codes are not counted; they are tallied per budget (FLOOD_WORDS).
 
 Where each line goes on the map, first that works (the multi-purpose map's order, scripts/hgab-mpb-years/build.py):
   1. GPS printed in the title (upstream analyze_text(), else WIDER_GPS; points outside the Philippines or at sea
@@ -39,12 +40,14 @@ Usage: build.py --upstream=<dir> --lens=<checkout> --shapes=<dir> [--data=data] 
 
 Outputs (contract: src/lib/hgab-mpb-years.ts MpbLinesFile, FY2027 only; src/lib/mpb-compare.ts FloodCompareSummary):
   lines.json    the mapped budgets' lines (FY2025, FY2026, 2027), in the multi-purpose map's format
+  lines.csv     every line, every budget (UTF-8 with BOM; CSV_COLUMNS)
   summary.json  per mapped budget: lines, pesos, placement census, the chart's figure and its foreign-assisted part;
-                the matrix (each region's lines and pesos in every budget); checks
+                the matrix (each region's lines and pesos in every budget); the scope (how each budget's lines were
+                grouped, from which source, against which check, and the flood-titled lines left out); checks
 """
 from __future__ import annotations
 
-import argparse, json, re, subprocess, sys
+import argparse, csv, io, json, re, subprocess, sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -65,7 +68,7 @@ import gaa2019  # noqa: E402
 from upstream import COMMIT, FILES, REPO  # noqa: E402
 
 PROGRAM = 'Flood Management Program'
-GAA_YEARS = list(range(2015, 2027))  # placed: the matrix
+GAA_YEARS = list(range(2015, 2027))  # placed: the matrix and the CSV
 MAP_GAA_YEARS = [2025, 2026]          # drawn: lines.json
 SITE_FROM = 2020                      # the site's GAA extract (data/18); before it, the GAA history release
 FORMER_FROM, FORMER_TO = 2015, 2017   # the older code set
@@ -74,6 +77,23 @@ FORMER_FROM, FORMER_TO = 2015, 2017   # the older code set
 GAA_PREFIXES = ('3201', '300225', '300237', '300219', '300234', '300106', '300107', '300108', '300109')
 # FY2015–FY2017: the older code set's flood control families (no headings in the files; named by their lines).
 FORMER_PREFIXES = ('162', '292')
+FAMILIES = [  # (label, prefixes) for the scope table
+    ('Flood Management Program', ('3201',)),
+    ('Local Program: flood control and drainage', ('300106', '300107', '300108', '300109')),
+    ('BIP flood mitigation', ('300225', '300237')),
+    ('SIPAG flood mitigation', ('300219', '300234')),
+    ('Former flood control codes (162…, 292…)', FORMER_PREFIXES),
+]
+# Words that mark a flood control work in a title: the tally of lines left out, under other codes.
+FLOOD_WORDS = re.compile(r'flood|drainage|dike|revetment|river control|sabo|pumping station|seawall|slope protection',
+                         re.IGNORECASE)
+SOURCES = {
+    'history': 'DBM technical GAA {kind}, from the GAA history release',
+    'text': 'DBM technical GAA for DPWH, read from the document’s text',
+    'site': 'DBM GAA extract on this site',
+    'nep': 'NEP 2027 (DBM), as the source workbench reads it',
+    'house': 'House Bill 10858, third reading, as the source workbench reads it',
+}
 FY2027 = [{'key': 'nep-2027', 'fy': 2027, 'stage': 'nep'}, {'key': 'house-2027', 'fy': 2027, 'stage': 'house'}]
 BUDGETS = [*({'key': f'gaa-{fy}', 'fy': fy, 'stage': 'gaa'} for fy in MAP_GAA_YEARS), *FY2027]
 MATRIX_BUDGETS = [*({'key': f'gaa-{fy}', 'fy': fy, 'stage': 'gaa',
@@ -84,6 +104,11 @@ def scope_of(fy: int, code: str) -> bool:
     """A GAA line is flood control when its code is in its year's flood families."""
     return code.startswith(FORMER_PREFIXES if fy <= FORMER_TO else GAA_PREFIXES)
 
+
+def family_of(fy: int, code: str) -> str:
+    if fy <= FORMER_TO:
+        return FAMILIES[-1][0]
+    return next(label for label, prefixes in FAMILIES[:-1] if code.startswith(prefixes))
 REGION_IN_TITLE = re.compile(r'\b(?:Region\s+(?:IV-?[AB]|X{0,1}(?:IX|IV|V?I{0,3}))\b|NCR|CAR|BARMM|CARAGA|MIMAROPA|'
                              r'CALABARZON|SOCCSKSARGEN)', re.I)
 BUCKET_CLASS = {'insertions': 'house_only', 'deletions': 'nep_only', 'unchanged': 'paired', 'increased': 'paired',
@@ -409,7 +434,16 @@ def main():
         gaa_rows.append({'fy': TEXT_YEAR, 'code': x['code'], 'desc': x['title'], 'php': x['php'], 'ou': x['office'],
                          'ou_php': x['php'], 'reg': None, 'source': 'text', 'offices': 1})
     paps.update({(TEXT_YEAR, k): tidy_label(v) for k, v in t19.get('pap_titles', {}).items()})
-    gaa_rows = [r for r in gaa_rows if scope_of(r['fy'], r['code'])]
+    # Lines with flood words in their titles under other codes: not counted, reported (the caveats).
+    titled_elsewhere = Counter()
+    in_scope = []
+    for r in gaa_rows:
+        if scope_of(r['fy'], r['code']):
+            in_scope.append(r)
+        elif FLOOD_WORDS.search(r['desc'] or ''):
+            titled_elsewhere[(r['fy'], 'lines')] += 1
+            titled_elsewhere[(r['fy'], 'php')] += r['php']
+    gaa_rows = in_scope
     for pap in sorted({r['code'][:6] for r in gaa_rows if r['fy'] == TEXT_YEAR}):
         rc = t19['recon'].get(pap)
         ensure(rc and rc['ok'], f'FY2019 {pap}: the lines do not add up to the heading the document prints ({rc})')
@@ -563,6 +597,15 @@ def main():
         log(f'FY{fy} GAA placed: ' + ' '.join(f'{k}={gaa_census.get((fy, k), 0)}' for k in LEVELS)
             + f"  (head office: {head_office[(fy, 'province')]} by the province named, {head_office[(fy, 'listed_region')]} at the listed region)")
 
+    # FY2027: titles with flood words outside the Flood Management Program (not counted)
+    for nep, house in con.execute(f"""SELECT nep_php, hgab3_php FROM read_parquet('{data / 'hgab/2027/dpwh/projects.parquet'}')
+                                      WHERE program <> ? AND regexp_matches(lower(title), ?)""",
+                                  [PROGRAM, FLOOD_WORDS.pattern]).fetchall():
+        for stage, v in (('nep', nep), ('house', house)):
+            if v is not None:
+                titled_elsewhere[(2027, stage, 'lines')] += 1
+                titled_elsewhere[(2027, stage, 'php')] += v
+
     # ------------------------------------------------------------------ budgets, the chart, checks
     history = json.loads((data / 'hgab/2027/history.json').read_text())
     col = {c['key']: i for i, c in enumerate(history['columns'])}
@@ -615,12 +658,56 @@ def main():
             for cell in (matrix_rows[l['region']][i], matrix_totals[i]):
                 cell[0] += 1
                 cell[1] += v
+    scope = []
     for i, b in enumerate(MATRIX_BUDGETS):
         hist = flood['php'][col[b['key']]] if b['key'] in col else None
         if hist is not None:
             check(f'matrix:{b["key"]}', matrix_totals[i][1] == hist,
                   f"matrix {b['key']}: {matrix_totals[i][0]:,} lines, ₱{matrix_totals[i][1]:,} = the flood control chart")
+        sel = [l for l in lines if l['fy'] == b['fy'] and amount(l, b) is not None]
+        parts = Counter()
+        for l in sel:
+            label = PROGRAM if b['fy'] == 2027 else family_of(l['fy'], l['code'])
+            parts[(label, 'lines')] += 1
+            parts[(label, 'php')] += amount(l, b)
+        out_key = (b['fy'], 'lines') if b['stage'] == 'gaa' else (2027, b['stage'], 'lines')
+        scope.append({
+            **{k: b[k] for k in ('key', 'fy', 'stage')},
+            'source': SOURCES['site' if b['fy'] >= SITE_FROM and b['stage'] == 'gaa' else 'text' if b['fy'] == TEXT_YEAR
+                              else 'history' if b['stage'] == 'gaa' else b['stage']].format(
+                                  kind='CSV' if b['fy'] == 2015 else 'spreadsheet'),
+            'parts': [{'label': label, 'lines': parts[(label, 'lines')], 'php': parts[(label, 'php')]}
+                      for label, _ in FAMILIES if parts[(label, 'lines')]],
+            'lines': matrix_totals[i][0], 'php': matrix_totals[i][1],
+            # What the total is checked against: the chart by year (FY2020 on); FY2019 the headings the document prints.
+            'chart_php': hist,
+            'check': 'chart' if hist is not None else 'printed_headings' if b['fy'] == TEXT_YEAR else None,
+            'flood_titled_elsewhere': {'lines': titled_elsewhere[out_key], 'php': titled_elsewhere[out_key[:-1] + ('php',)]},
+        })
     log('matrix: ' + ' '.join(f"{b['key']}={t[0]}/₱{t[1] / 1e9:.1f}B" for b, t in zip(MATRIX_BUDGETS, matrix_totals)))
+
+    # ------------------------------------------------------------------ every line as CSV (every budget)
+    level_words = {'gps': 'GPS in the title', 'barangay': 'barangay named in the title',
+                   'municipality': 'municipality named in the title', 'city': 'city named in the title',
+                   'province': 'province named in the title', 'deo': 'DPWH office', 'region': 'region',
+                   'none': 'not placed (budgeted nationwide)'}
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator='\n')
+    w.writerow(CSV_COLUMNS)
+    for l in sorted(lines, key=lambda l: (l['fy'], l['code'] or l['id'])):
+        pl = places.get(l['place']) if l['place'] else None
+        pt = l['pts'][0] if l['pts'] else ((pl['lng'], pl['lat']) if pl else ('', ''))
+        w.writerow([
+            l['fy'], 'GAA' if l['fy'] < 2027 else 'NEP and House bill', l['code'] or l['id'], l['code'] or '', l['title'],
+            l.get('title_published') or '', l['pap'], l['office'] or '', l['gaa_php'] if l['gaa_php'] is not None else '',
+            l['nep_php'] if l['nep_php'] is not None else '', l['house_php'] if l['house_php'] is not None else '',
+            {'house_only': 'house_bill_only', 'nep_only': 'nep_only', 'paired': 'in_both'}.get(l['class'], ''),
+            l['region'] or '', level_words[l['level']], pl['label'] if pl else '',
+            pl['key'].removeprefix('psgc:') if pl and pl['key'].startswith('psgc:') else '', pt[0], pt[1],
+            our_districts[l['district']]['label'] if l['district'] else '', l['district'] or '',
+            ';'.join(k for k, bit in FLAGS.items() if l['flags'] & bit), l['nep_page'] or '', l['house_page'] or '',
+        ])
+    (out / 'lines.csv').write_bytes(('\ufeff' + buf.getvalue()).encode('utf-8'))
 
     # ------------------------------------------------------------------ write (the multi-purpose map's format): the maps' budgets only
     built_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -669,6 +756,8 @@ def main():
                    for f in ('hgab/2027/dpwh/projects.parquet', 'hgab/2027/districts.json', 'hgab/2027/locations.json',
                              'hgab/2027/history.json', '18/full_extract.csv')},
         'budgets': budgets,
+        'scope': scope,
+        'flood_words': FLOOD_WORDS.pattern,
         'matrix': {'budgets': MATRIX_BUDGETS,
                    'rows': [{'region': r, 'cells': cells}
                             for r, cells in sorted(matrix_rows.items(), key=lambda x: (x[0] is None, x[0] or ''))],
@@ -680,11 +769,19 @@ def main():
         'totals': {'lines': len(lines), 'places': len(places), 'gps_points': sum(len(l['pts'] or []) for l in lines),
                    'flags': {k: sum(1 for l in lines if l['flags'] & bit) for k, bit in FLAGS.items()}},
         'checks': checks,
-        'outputs': {'lines.json': {'sha256': sha256(out / 'lines.json'), 'bytes': (out / 'lines.json').stat().st_size}},
+        # The page links lines.csv with ?v=<sha256[:12]>: the data host caches CSV for a day.
+        'outputs': {f: {'sha256': sha256(out / f), 'bytes': (out / f).stat().st_size} for f in ('lines.json', 'lines.csv')},
     }
     write_json(out / 'summary.json', summary, indent=1)
-    for f in ('lines.json', 'summary.json'):
+    for f in ('lines.json', 'lines.csv', 'summary.json'):
         log(f'  wrote {out / f}  {(out / f).stat().st_size / 1e6:.2f} MB')
+
+
+# lines.csv: one row per line and budget year (src/lib/mpb-compare.ts FLOOD_CSV_FIELDS describes each).
+CSV_COLUMNS = ['fiscal_year', 'document', 'line_id', 'uacs_code', 'title', 'title_as_published', 'program', 'dpwh_office',
+               'gaa_php', 'nep_php', 'house_bill_php', 'fy2027_comparison', 'region', 'placed_by', 'place', 'place_psgc',
+               'longitude', 'latitude', 'legislative_district', 'legislative_district_id', 'flags', 'nep_pdf_page',
+               'house_bill_pdf_page']
 
 
 if __name__ == '__main__':
