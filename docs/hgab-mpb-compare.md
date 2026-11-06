@@ -300,3 +300,84 @@ It also checks:
 
 **Publish:** upload `flood-compare/` (`lines.json`, `lines.csv`, `summary.json`) before the code deploys. The summary only
 adds fields, so the live page keeps working.
+
+## By party and year
+
+Jason (2026-11-06): "Our next mission is map the charts based on their political party for that year". His choices:
+- a budget carries the party of the district's representative in the Congress that passed it;
+- a party-by-year grid;
+- a district whose towns changed since that election is kept apart.
+
+Each page has a "By party and year" grid below "By region and year" (`PartyYearTable`, the same `YearGrid` and
+image).
+- **Rows:** parties by their total over every budget, largest first. Parties under 1% of the party total are folded
+  into "Other parties" (`partyGrid`). Then come the rows that carry no party, plain:
+  - District's towns changed;
+  - No race on record;
+  - No party on record;
+  - Not in one district.
+- **Columns:** the budgets, with each Congress over its years:
+
+  | Congress | Elected | Budgets |
+  | --- | --- | --- |
+  | 16th | 2013 | 2015–2016 |
+  | 17th | 2016 | 2017–2019 |
+  | 18th | 2019 | 2020–2022 |
+  | 19th | 2022 | 2023–2025 |
+  | 20th | 2025 | 2026, the 2027 NEP and House bill |
+- **Hover:** each cell shows its lines, amount and the districts the party held.
+- **Download image (PNG):** `bettergov-{topic}-by-party-2015-2027.png`, with `PARTY_CARD_DISCLAIMER`.
+
+**How a line gets a party** (`partyMatrix`): line → its legislative district (the same district the maps use: the
+title's place, the GPS point, or the office's one district) → that district's seat in the Congress that passed the
+budget (`congress-seats.json`) → the party the winner ran under. No party when:
+- the line has no single district;
+- the district had no race that year;
+- its towns changed since;
+- the race has no party on record.
+
+Multi-purpose buildings build the district matrix in the browser from the map's lines (`linesDistrictMatrix`).
+Flood control's build writes it to `summary.json` (`district_matrix`).
+
+**`congress-seats.json`** (`npm run build:hgab-congress-seats`, `scripts/build-hgab-congress-seats.ts`) covers each of
+the 254 districts in each Congress:
+- **Matching:** the by-party page's (`build-hgab-parties.ts`), copied rather than imported, because that script
+  writes on load. It finds a district's race by province or city and district number, and calls the towns "same" when
+  they match the 2025 race's.
+- **20th Congress:** `parties.json`'s seats as they are.
+- **Earlier Congresses:** the winner's party. 2016's "LAKAS-CMD" is read as "LAKAS" (`PARTY_CODE_ALIASES`); joint
+  tickets and local chapters are kept as printed.
+
+| Election | Same towns | Changed | No race |
+| --- | ---: | ---: | ---: |
+| 2013 | 170 | 23 | 61 |
+| 2016 | 209 | 23 | 22 |
+| 2019 | 217 | 19 | 18 |
+| 2022 | 243 | 6 | 5 |
+| 2025 | 254 | 0 | 0 |
+
+The 2013 results list some races only as a province or Metro Manila total, not by district.
+
+**Caveats (in the grid's notes):**
+- the party is the one the representative ran under; switches during a term are not captured;
+- a party's total grows with the districts it held;
+- placement is the maps' reading.
+
+**Checks:** verify:hgab checks:
+- the five Congresses;
+- every district counted once per Congress;
+- the 20th's parties equal the by-party page's;
+- 455 seats from 2019 and 2022 equal the by-party page's elections (party and towns);
+- party codes read alike.
+
+Per grid:
+- every column adds up to the region grid's total;
+- each budget's Congress is right;
+- a party's budget is only districts it held with the same towns;
+- the folded rows still add up;
+- the words are plain.
+
+533/533.
+
+**Publish:** upload `parties/congress-seats.json` and `flood-compare/summary.json` (`district_matrix`) before the code
+deploys.
