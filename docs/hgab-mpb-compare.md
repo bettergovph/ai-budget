@@ -381,3 +381,57 @@ Per grid:
 
 **Publish:** upload `parties/congress-seats.json` and `flood-compare/summary.json` (`district_matrix`) before the code
 deploys.
+
+### How we read parties (transparency)
+
+Jason (2026-11-06): "We need the data exposed on how we mapped the parties. This is risky so it requires
+transparency. It could be a different page linked via sources. We need full disclaimers that members switch parties
+and the data should be cited properly, the data are based on electoral data. We need disclaimers on the sections with
+party data".
+
+**The page:** `/hgab/2027/parties/by-congress` ("How we read parties", `HgabPartyData.tsx`). It's linked from:
+- Sources (the "Parties" source row, and a "Seats by Congress" download group);
+- each party grid's notes;
+- the party data disclaimer;
+- the district pages' party line.
+
+It shows:
+- the disclaimer first;
+- how a budget gets a party (the steps, and the Congress → budgets table);
+- coverage per Congress;
+- every seat for a chosen Congress (`?congress=`, `?q=`): district, representative, party (and as printed), towns,
+  and Race ↗ (Dynasties API) and Winner ↗ (Dynasties person page) links;
+- the party codes, with seats per Congress and the alias;
+- downloads and fields;
+- sources and a "cite as" line;
+- caveats: switches during a term, a party's total grows with its seats, changed towns, local codes, party-list
+  members not included, no allegations.
+
+**`congress-seats.json` additions:**
+- each seat tuple adds race id, person id, province slug, party as printed, and a note (for the 20th Congress: the
+  by-party page's seat note and its source);
+- `source` carries the Open Halalan citation, BetterGov Dynasties' site, API and developers page, the data vintage and
+  the license;
+- `districts` holds labels and regions; `aliases`; `outputs` holds the CSV's sha256.
+
+**`congress-seats.csv`:** 1,270 rows (254 × 5 Congresses), 15 columns (`CONGRESS_SEATS_CSV_FIELDS`). A one-seat race the
+results list with several winners is a source error: no party, and the note says so (7: 2013 and 2016). Only Taguig's
+two-seat race may give two winners one party.
+
+**`DISCLAIMER_PARTY_DATA`** ("Party data.") says:
+- parties come from election results (Open Halalan, BetterGov Dynasties);
+- members often switch parties during a term, and those switches are not recorded;
+- how seats match, and that changed towns carry no party;
+- a party's figure is the budget in the districts its candidates won, and grows with seats;
+- no allegations.
+
+It ends with a link to the page. It appears on:
+- each party grid (`DisclaimerNotice partyData`, "About the party data");
+- the by-party pages (the `parties` notice);
+- the new page;
+- Methodology.
+
+The district page's party line adds a short version.
+
+verify:hgab checks the citation fields, every seat's race (or its special-election source), the CSV (header, 1,270
+rows, 254 per Congress, checksum) and the disclaimer's wording: 571/571.
