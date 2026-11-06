@@ -27,6 +27,8 @@
 
 export const FAP_SCHEMA = 1 as const;
 export const FAP_ROOT = '/hgab/2027/foreign-assisted';
+/** Where the campaign posters live under the data host. */
+export const FAP_POSTER_DIR = 'hgab/2027/campaign';
 export const FAP_TITLE = 'Foreign-assisted projects';
 /** Paths under the data host (`dataUrl`), the same keys on R2. */
 export const FAP_DATA_PATH = 'hgab/2027/fap.json';
@@ -36,6 +38,16 @@ export const FAP_CSV_NAME = 'bettergov-house-bill-2027-foreign-assisted-projects
 export const FAP_VOL_IB_PATH = 'hgab/2027/pdf/hb10858-3r-vol-ib.pdf';
 /** Volume III of the NEP: the unprogrammed appropriations and the FY2025 releases from them (page 961). */
 export const FAP_NEP_VOL_III_PATH = 'hgab/2027/pdf/nep2027-vol-iii.pdf';
+
+/**
+ * The campaign poster (`npm run build:hgab-poster-fap`, published under hgab/2027/campaign/ with upload:hgab). `v` is
+ * each file's MD5 prefix, which the builder prints: the data host caches images for a day and link previews longer.
+ */
+export const FAP_POSTERS = [
+  { key: 'portrait', file: 'foreign-assisted-1080x1350.png', width: 1080, height: 1350, label: 'Feed, 4:5', v: 'b35e7c1e' },
+  { key: 'square', file: 'foreign-assisted-1080x1080.png', width: 1080, height: 1080, label: 'Square', v: '2510cbae' },
+  { key: 'og', file: 'foreign-assisted-1200x630.png', width: 1200, height: 630, label: 'Link preview', v: '4b58695b' },
+] as const;
 
 export type FapStatus = 'cut' | 'raised' | 'same' | 'new';
 

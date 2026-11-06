@@ -54,6 +54,25 @@ our 31st cut).
 
 - Deploys with the merge (Workers Builds). Re-run `build:hgab-fap` and the upload if the line-by-line dataset or the
   NEP extract changes.
-- No poster or share image. No "What's new" entry on `/docs`. No API endpoint.
+- No "What's new" entry on `/docs`. No API endpoint.
 - The FY2026 enacted standby (₱97.3B) is PBC's Senate-bill figure; the GAA's own unprogrammed annex was not read.
 - Jason's review of the copy.
+
+## Poster ("Cut Year After Year")
+
+`npm run build:hgab-poster-fap` (`scripts/build-hgab-poster-fap.ts`) renders three sizes into
+`data/hgab/2027/campaign/` with the campaign's type and paper: `foreign-assisted-1080x1350.png` (feed),
+`-1080x1080.png` (square) and `-1200x630.png` (link preview, used by the page's `og:image`). Every figure comes from
+`src/lib/hgab-fap.ts` and `fap.json`. The chart shows FY2021–FY2027: the NEP hatched, the enacted budget in ink and
+the House bill in red, actual obligations as a blue line, and the cut in percent above each year. Under it are the
+House bill's largest cuts, the departments, and the unprogrammed standby. The wall behind is every foreign-assisted
+line, FY2027 and then each enacted budget back to FY2020. The builder fails if a label clips, wraps or overlaps, or if
+the title's claims stop holding (every year cut; this year's cut below every enacted one).
+
+Renders are not byte-stable, so after a rebuild copy the printed `v=` hashes into `FAP_POSTERS` and upload:
+`upload:hgab -- --only=campaign/foreign-assisted-1080x1350.png,campaign/foreign-assisted-1080x1080.png,campaign/foreign-assisted-1200x630.png --skip-verify`.
+Uploaded 2026-11-06. BetterGov branding only: the figures are ours, not PBC's.
+
+FY2026 standby: ₱97.3B is the bills' figure (NEP, House and Senate, PBC's tracker). The enacted FY2026 unprogrammed
+total is ₱150.9B against ₱174.6B in the Senate bill, and the FY2027 NEP does not split it by purpose. The page and
+poster now say "in the bills", not "enacted".
