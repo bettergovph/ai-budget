@@ -21,8 +21,8 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { DEO_MEANING, asOfText } from '../lib/hgab-leaderboard';
 import {
-  LINE_CONTRACT_COLUMNS, METHOD_LABELS, STATUS_LABELS, contractorPath, lineBuiltBy, lineContractCells, lineContractorName,
-  type LineContract,
+  DPWH_LINK_NOTE, LINE_CONTRACT_COLUMNS, LINKED_YEARS, MATCH_NOTE, METHOD_LABELS, STATUS_LABELS, contractorPath, lineBuiltBy,
+  lineContractCells, lineContractorName, type LineContract,
 } from '../lib/hgab-contractors';
 import MpbContractors from '../components/MpbContractors';
 import DpwhContractLink from '../components/DpwhContractLink';
@@ -30,7 +30,7 @@ import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
   PLACED_LABELS, REPEAT_LABELS, budgetKey, districtTotals, filterLines, lineAmount, lineFlags, linesCsv, mapMarks,
   mpbCsvPath, onlyRepeats, repeatGroups,
-  officeShort, recordHref, shadeBreaks, shadeClass, sortLines,
+  lineSource, officeShort, shadeBreaks, shadeClass, sortLines,
   type MpbData, type MpbFilters, type MpbGroup, type MpbLevel, type MpbLine, type MpbSelection, type MpbSort, type MpbSummary,
   type RepeatMode, type Stage2027,
 } from '../lib/hgab-mpb-years';
@@ -57,6 +57,15 @@ function LineContractText({ l }: { l: MpbLine }) {
       · contract <DpwhContractLink id={c.contractId} />{c.status ? ` (${STATUS_LABELS[c.status].toLowerCase()})` : ''}
     </span>
   );
+}
+
+/** A line's title, linked to where the budget prints it (lineSource): proof the line exists. */
+function LineTitle({ l }: { l: MpbLine }) {
+  const s = lineSource(l);
+  if (!s) return <>{l.title}</>;
+  return s.external
+    ? <a href={s.href} target="_blank" rel="noopener noreferrer" title={`${s.label} (opens a new tab)`}>{l.title}</a>
+    : <Link to={s.href} title={s.label}>{l.title}</Link>;
 }
 
 const PAGE = 100;
@@ -544,11 +553,10 @@ function PickPanel({ data, pick, sel, mapLines, onClose, onList, onShow }: {
 }
 
 function PanelLine({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stage: Stage2027; onShow: (l: MpbLine) => void }) {
-  const href = recordHref(l);
   const flags = lineFlags(l, data.flagBits);
   return (
     <li>
-      <p className="hgab-mpbm-title">{href ? <Link to={href}>{l.title}</Link> : l.title}</p>
+      <p className="hgab-mpbm-title"><LineTitle l={l} /></p>
       <p className="hgab-mpbm-meta">
         <strong>{fullPeso(lineAmount(l, stage))}</strong>
         {l.office && <> · {officeShort(l.office)}</>}
@@ -632,6 +640,11 @@ function RepeatsSection({ data, lines, view, setView, onShow }: {
         Same title: the words of the title, setting aside spelling, “MPB”, “Bldg.”, “Brgy.”, phase numbers and GPS, at the same
         place. Same barangay: lines whose title names that barangay. Amounts add up across years, never the NEP and the House bill.
       </p>
+      <p className="hgab-mpbm-more">
+        Each title opens where it is printed: its record for 2027, the GAA browser for 2020–2026, the GAA records for
+        2015–2018, DBM’s page for 2019. {MATCH_NOTE} {DPWH_LINK_NOTE} Contracts are matched for {LINKED_YEARS[0]} to{' '}
+        {LINKED_YEARS[1]} only.
+      </p>
     </section>
   );
 }
@@ -643,6 +656,7 @@ function GroupRow({ data, g, stage, onShow, onList }: {
   onShow: (l: MpbLine) => void;
   onList?: () => void;
 }) {
+  const contracts = useContext(ContractsCtx);
   const [open, setOpen] = useState(false);
   const [all, setAll] = useState(false);
   const p = g.place >= 0 ? data.places[g.place] : null;
@@ -672,14 +686,24 @@ function GroupRow({ data, g, stage, onShow, onList }: {
       {open && (
         <div className="hgab-mpbm-group-body">
           <table className="hgab-mpbm-table">
+            <thead>
+              <tr>
+                <th scope="col">Budget</th>
+                <th scope="col">Project, where it is printed</th>
+                <th scope="col">DPWH office</th>
+                <th scope="col">DPWH contract</th>
+                <th scope="col" className="is-num">Amount</th>
+              </tr>
+            </thead>
             <tbody>
               {rows.map((l) => {
-                const href = recordHref(l);
+                const c = contracts?.get(l.id);
                 return (
                   <tr key={l.i}>
                     <td className="hgab-mpbm-yr">{yearLabel(l.fy, stage)}</td>
-                    <td>{href ? <Link to={href}>{l.title}</Link> : l.title}</td>
+                    <td><LineTitle l={l} /></td>
                     <td>{officeShort(l.office) ?? '—'}</td>
+                    <td title={c ? METHOD_LABELS[c.method] : undefined}>{c ? <DpwhContractLink id={c.contractId} /> : '—'}</td>
                     <td className="is-num">{fullPeso(lineAmount(l, stage))}</td>
                   </tr>
                 );
@@ -801,14 +825,13 @@ function ListRow({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stage:
   const contracts = useContext(ContractsCtx);
   const p = l.place >= 0 ? data.places[l.place] : null;
   const d = l.district >= 0 ? data.districts[l.district] : null;
-  const href = recordHref(l);
   const mapped = l.level !== 'none' && (l.pts || p);
   const flags = lineFlags(l, data.flagBits);
   return (
     <tr>
       <td className="hgab-mpbm-yr">{yearLabel(l.fy, stage)}{l.cls === 'house_only' && stage === 'house' && <span className="hgab-mpbm-tag">House bill only</span>}</td>
       <td>
-        <span className="hgab-mpbm-title">{href ? <Link to={href}>{l.title}</Link> : l.title}</span>
+        <span className="hgab-mpbm-title"><LineTitle l={l} /></span>
         {(l.rule === 'title' || flags.length > 0) && (
           <span className="hgab-mpbm-sub">
             {l.rule === 'title' && l.fy >= PAP_RULE_FROM && l.pap && <>Under “{l.pap}”. </>}

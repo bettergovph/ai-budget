@@ -17,7 +17,7 @@ the same years as totals; the MPB card links to the map.
 
 | File | What |
 | --- | --- |
-| `lines.json` | Every line (80,286), one array per line with dictionaries for places, offices, PAPs and legislative districts; FY2027-only fields last and trailing nulls dropped. About 10.9 MB, 1.7 MB gzipped |
+| `lines.json` | Every line (80,286), one array per line with dictionaries for places, offices, PAPs and legislative districts; FY2027-only fields next to last, then `gaa_page` (FY2019 only), trailing nulls dropped. Readers read columns by name, so a column added last changes nothing for them |
 | `summary.json` | Per budget: lines, pesos, the scope rule, how lines were placed, flags, the reconciliation with the multi-purpose chart; the builder's checks; the pinned source files with SHA-256 |
 | `districts.geojson` | The 254 legislative district outlines from the source's PSGC2LEG build, simplified to about 100 m |
 | `lines.csv` | Every line, every budget, UTF-8 with BOM (26 MB); the page also builds a CSV of the lines on screen |
@@ -35,7 +35,9 @@ publishes; every one of its 67 Operations headings equals the lines under it (by
 PAPs). One heading disagrees with the document's own "New Appropriations, by Program" table: 300200 (CONVERGENCE AND
 SPECIAL SUPPORT PROGRAM) prints ₱32,211,352,000, the table ₱30,311,352,000; the lines equal the table, the heading counts
 its own ₱1.9 billion group twice. The text has pages printed from DBM's web viewer: an indented code and a stray
-`eappro.dbm.gov.ph` line, both handled. The technical edition's DPWH total is ₱95.4 billion below the Volume I
+`eappro.dbm.gov.ph` line, both handled. Each line keeps the page its code is printed on (`gaa_page`, the CSV's
+`gaa_pdf_page`): the text ends every page with a form feed, and `2019:pages` checks each code is on its page. Checked
+once against the document itself (`pdftotext -layout` of A.pdf): all 21,653 lines' codes are on their page. The technical edition's DPWH total is ₱95.4 billion below the Volume I
 summary (₱549,390,514,000), recorded by the release; about the size of the reported FY2019 veto, not confirmed here.
 
 FY2017: DBM's technical file lists 3,165 more items whose titles name a multi-purpose building (the same title rule) at ₱0 (`AMT`, `NEW_SPENDING`
@@ -172,6 +174,23 @@ lines (30, then "Show all").
 - Amounts add across years; FY2027 counts at the stage chosen. The page CSV adds `same_title_lines`,
   `same_barangay_lines` and `same_title_key` for the lines written.
 - A repeated title can be phases of one building or repairs: the page says so, and calls nothing irregular.
+
+### Where each line is printed (proof it exists)
+
+Jason (2026-11-06): "link them as well to prove that they exist … see their contract id". Every title on the page (the
+Repeats groups, the list, the map's panel) links to where its budget prints it (`lineSource`):
+
+| Budget | Link | Holds |
+| --- | --- | --- |
+| FY2027 | `/hgab/2027/dpwh/p/<row>`, the record page | The NEP and House bill pages it is printed on |
+| FY2020–FY2026 | `/gaa/<fy>/18/18-001/18-001-<code>`, the project in the GAA browser | DBM's GAA extract: title, office, amount. Every map line is under the Office of the Secretary (agency 001); a few codes keep the extract's trailing spaces, so the id is URL-encoded |
+| FY2015–FY2018 | `/gaa/<fy>/records?scope=current_new_appropriations&view=records&department=…DPWH…&q=<code>` | The record in the GAA records, with DBM's file named. The records search matches `fpap_code` for this (src/lib/gaa-history-query.ts) |
+| FY2019 | DBM's technical GAA, `A.pdf#page=<gaa_page>` (a new tab) | The page the code is printed on |
+
+The Repeats groups add a "DPWH contract" column: the contract matched to the line (contractors/mpb-links.json,
+FY2020–FY2026), linked to DPWH's transparency portal (`DpwhContractLink`), with the match note. verify:hgab checks every
+link holds its line: the browser's project amount for amount (data/18/fpaps.json), the records by code in that
+department and scope amount for amount, the FY2019 page prints the code, the FY2027 record exists.
 
 ## Refresh
 
