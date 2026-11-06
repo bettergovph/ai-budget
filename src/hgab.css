@@ -1083,9 +1083,10 @@ p.hgab-review-tag { margin-bottom: 10px; }
  * The panel is position: fixed at the button (set inline by ProgramMenu), so
  * the sideways-scrolling sub-nav on phones never clips it. */
 .hgab-subnav-item { position: relative; display: inline-flex; }
-/* Twelve entries (Overview to About, Red Flags and Multi-purpose buildings shown again 2026-11-06): a closer gap than
-   the shared 26px, closer still up to 1366px so they fit one row at 1280px, and labels that never break onto two
-   lines. Narrower desktops scroll the row sideways, as phones do (site-header.css). */
+/* Thirteen entries (Overview to About; Red Flags and Multi-purpose buildings shown again 2026-11-06, Foreign-assisted
+   added): a closer gap than the shared 26px, closer still and a point smaller below 1400px so they fit one row down to
+   1280px, and labels that never break onto two lines. Narrower desktops scroll the row sideways, as phones do
+   (site-header.css). */
 @media (min-width: 721px) {
   .primary-subnav .view-tabs.section-tabs.hgab-subnav {
     gap: 16px;
@@ -1093,8 +1094,13 @@ p.hgab-review-tag { margin-bottom: 10px; }
     scrollbar-width: none;
   }
 }
-@media (min-width: 721px) and (max-width: 1366px) {
-  .primary-subnav .view-tabs.section-tabs.hgab-subnav { gap: 9px; }
+@media (min-width: 721px) and (max-width: 1500px) {
+  .primary-subnav .view-tabs.section-tabs.hgab-subnav { gap: 11px; }
+}
+@media (min-width: 721px) and (max-width: 1400px) {
+  .primary-subnav .view-tabs.section-tabs.hgab-subnav { gap: 7px; }
+  .primary-subnav .view-tabs.section-tabs.hgab-subnav > a,
+  .primary-subnav .view-tabs.section-tabs.hgab-subnav > .hgab-subnav-item > button { font-size: 13px !important; }
 }
 @media (min-width: 721px) {
   .primary-subnav .view-tabs.section-tabs.hgab-subnav::-webkit-scrollbar { display: none; }
