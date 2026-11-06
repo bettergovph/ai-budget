@@ -195,6 +195,7 @@ Jason (2026-11-06):
 - "I want a matrix of the MPBs per region and per year. I want the same for flood control as well. You can put it in
   their individual pages";
 - "For flood control we need it for multiple years that we have";
+- "we need a description how we grouped them, what fields and caveats as well";
 - "Let's use a light green to red tone for the grid colours".
 
 Each page has a "By region and year" table:
@@ -225,6 +226,36 @@ in the browser from `mpb-years/lines.json` (`linesMatrix`).
 **Flood control:** every budget we have line by line, FY2015 GAA to the 2027 House bill (14 columns). The matrix is in
 `summary.json` (`matrix`); `lines.json` keeps only the mapped budgets.
 
+### Multi-purpose buildings: About this data
+
+Jason (2026-11-06): "Let's do the same for MPBs". The page's "About this data" section (#about-data, `AboutThisData`,
+shared with flood control) has three parts:
+- **How we grouped them** (`mpbScope`, from the map's lines and summary): per budget, the budget lines by heading
+  (Local Program 2018–2021; BIP and SIPAG from 2022; BIP in 2027), then the lines under other headings whose titles name
+  a multi-purpose building. The checks are the chart by year for the budget lines from 2020, and the printed headings
+  in 2019. The last column is the items listed at ₱0 (2017: 3,165).
+- **Fields:** `MPB_CSV_FIELDS`, the map build's `CSV_COLUMNS` in order. It links the map's `lines.csv` (36.4 MB,
+  `mpbCsvPath`).
+- **Caveats:**
+  - the budget lines change with the structure;
+  - 2015–2017 are in by title only;
+  - title lines put the totals above the chart;
+  - the title rule;
+  - the ₱0 items;
+  - the 2019 edition;
+  - regions and No region;
+  - offices matched by name;
+  - 2027's candidates;
+  - allocations, not spending.
+
+verify:hgab checks:
+- the grouping's parts add up to the map's budget figures (budget lines = `pap_php`, titles = `title_only_php`);
+- the checks;
+- the CSV header against the fields;
+- plain words.
+
+No new data: it reads `mpb-years/`, already published.
+
 ### Flood control: how the lines are grouped
 
 `build:hgab-flood-compare` counts each budget by its own flood control codes:
@@ -236,6 +267,13 @@ in the browser from `mpb-years/lines.json` (`linesMatrix`).
 | FY2019 GAA | the technical GAA's text (`gaa2019.py`) | the same codes | the headings the document prints |
 | FY2020–FY2026 GAA | the site's extract | the chart's flood series: Flood Management Program, Local Program flood lines (2020–2021), BIP and SIPAG flood mitigation (2022–2025) | the chart by year |
 | 2027 NEP, House bill | the source workbench | the Flood Management Program | the chart by year |
+
+`summary.json` `scope` records each budget's source, parts (lines, pesos), check, and the lines with flood words in
+their titles under other codes (`FLOOD_WORDS`, not counted; ₱13–25B a year). The page's "About this data" section shows
+the grouping table, the CSV's fields (`FLOOD_CSV_FIELDS`, the build's `CSV_COLUMNS` in order) and the caveats.
+
+**`lines.csv`:** every line of every budget, 39,572 rows, about 16.5 MB. The page links it with
+`?v=<sha256[:12]>`, since the data host caches CSV for a day.
 
 **Placement before 2020:**
 - 2015–2019 offices are matched to today's offices by name, as on the multi-purpose map.
@@ -250,9 +288,15 @@ in the browser from `mpb-years/lines.json` (`linesMatrix`).
 
 It also checks:
 - flood control's columns run FY2015 GAA to the 2027 House bill, with 2015–2017 starred;
-- the shareable image's words: the title, disclaimer, source, address and notes, in plain words.
+- the shareable image's words: the title, disclaimer, source, address and notes, in plain words;
+- (About this data) for flood control:
+  - each grouping row's parts add up to the matrix's total;
+  - each row's check is named;
+  - the CSV's header matches the described fields, it has one row per line, and its amounts add up to the matrix
+    per budget;
+  - plain words.
 
-507/507.
+517/517.
 
-**Publish:** upload `flood-compare/` (`lines.json`, `summary.json`) before the code deploys. The summary only adds fields,
-so the live page keeps working.
+**Publish:** upload `flood-compare/` (`lines.json`, `lines.csv`, `summary.json`) before the code deploys. The summary only
+adds fields, so the live page keeps working.
