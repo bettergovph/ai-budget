@@ -59,7 +59,10 @@ Figures (2026-11-02 build of the map's lines):
 | House bill | 5,807 | ₱86,264,219,000 |
 | Change | +2,992 | +₱43,054,480,000 (+100%) |
 
-Below the figure: the totals by region (a line's region), with links to the interactive map and the budget by year.
+Below the figure:
+- the NEP vs House bill totals by region (a line's region);
+- the region-by-year matrix (see [By region and year](#by-region-and-year));
+- links to the interactive map and the budget by year.
 
 ## Code
 
@@ -121,7 +124,8 @@ The same figure with three maps, and the same dot scale, so the pages compare.
 
 verify:hgab checks that each map's colours are named.
 
-**Region table:** 2025, 2026, 2027 NEP and 2027 House bill; amounts, with lines below.
+**Below the figure:** the region-by-year matrix (FY2020 GAA to the 2027 House bill), which replaces the earlier
+four-column region table.
 
 **Disclaimers** (Jason, 2026-11-05: "I need a disclaimer"):
 - **On the figure** (page, `?shot=1`, PNG), both topics, since the figure travels without the page:
@@ -184,3 +188,71 @@ It also runs the shared checks per budget and per map.
 
 **Publish:** upload before the page deploys, with
 `npx tsx scripts/upload-hgab-to-r2.ts --only=flood-compare --skip-verify`.
+
+## By region and year
+
+Jason (2026-11-06):
+- "I want a matrix of the MPBs per region and per year. I want the same for flood control as well. You can put it in
+  their individual pages";
+- "For flood control we need it for multiple years that we have";
+- "Let's use a light green to red tone for the grid colours".
+
+Each page has a "By region and year" table:
+- **Rows:** the regions, north to south, then "No region"; the last row is "All regions".
+- **Columns:** the budgets, oldest first.
+- **Cells:** the amount (₱4.2B, ₱512M). The colour runs from light green through soft amber to red by the square root of
+  the cell's share of the largest cell (`heatColor`). Hover a cell for its line count. On phones the region column
+  stays fixed and shows the short name.
+- **A line's region** is the one its title or office places it in, the same as on the maps.
+
+**Download image (PNG)** beside the heading (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo,
+our disclaimer, that I can download as well"). `src/lib/mpb-matrix-image.ts` draws the same table on a white card,
+2560 × about 2030 px, loaded only when clicked:
+- the BetterGov logo (`bettergov-horizontal-primary.png`), a red top rule, the kicker and the title;
+- every cell in the page's colours, and a less-to-more colour key;
+- the notes, the disclaimer (`COMPARE_CARD_DISCLAIMER`), the source, the page address and the "as of" date.
+
+The words come from `matrixCopy`, which the page's table uses too. The region column fits its longest name.
+- Flood control: `bettergov-flood-control-by-region-2015-2027.png`.
+- Multi-purpose buildings: `bettergov-multi-purpose-buildings-by-region-2015-2027.png`.
+
+**Multi-purpose buildings:** every budget the map holds, FY2015 GAA to the 2027 House bill (14 columns). It's computed
+in the browser from `mpb-years/lines.json` (`linesMatrix`).
+- FY2015–FY2017 are starred (`note: title_only`): those budgets have no multi-purpose building line, so their lines
+  are counted by title.
+- Totals are the map's, title-only lines included.
+
+**Flood control:** every budget we have line by line, FY2015 GAA to the 2027 House bill (14 columns). The matrix is in
+`summary.json` (`matrix`); `lines.json` keeps only the mapped budgets.
+
+### Flood control: how the lines are grouped
+
+`build:hgab-flood-compare` counts each budget by its own flood control codes:
+
+| Budget | Source | Counted | Total checked against |
+| --- | --- | --- | --- |
+| FY2015–FY2017 GAA | GAA history release (CSV 2015, spreadsheets 2016–2017) | the older code set's flood families, 162… and 292…, named from their lines (maintenance and repair, river basins and master plans, local flood works and a disaster fund, foreign-assisted projects) | no published total |
+| FY2018 GAA | GAA history release (spreadsheet) | Flood Management Program (3201…), Local Program flood control and drainage (300106–300109) | no published total |
+| FY2019 GAA | the technical GAA's text (`gaa2019.py`) | the same codes | the headings the document prints |
+| FY2020–FY2026 GAA | the site's extract | the chart's flood series: Flood Management Program, Local Program flood lines (2020–2021), BIP and SIPAG flood mitigation (2022–2025) | the chart by year |
+| 2027 NEP, House bill | the source workbench | the Flood Management Program | the chart by year |
+
+**Placement before 2020:**
+- 2015–2019 offices are matched to today's offices by name, as on the multi-purpose map.
+- District qualifiers are dropped from titles for matching, and "Maguindanao" is read as its successor province.
+- The 2016, 2017 and 2019 files carry no region field. Their head-office lines that name no place stay under "No
+  region": ₱9.3B, ₱8.4B and ₱5.9B.
+
+**Checks:** verify:hgab checks both matrices. For each:
+- every column adds up to its total;
+- every total is the build's (flood control: the chart's from FY2020);
+- the mapped columns equal the drawn lines region by region.
+
+It also checks:
+- flood control's columns run FY2015 GAA to the 2027 House bill, with 2015–2017 starred;
+- the shareable image's words: the title, disclaimer, source, address and notes, in plain words.
+
+507/507.
+
+**Publish:** upload `flood-compare/` (`lines.json`, `summary.json`) before the code deploys. The summary only adds fields,
+so the live page keeps working.

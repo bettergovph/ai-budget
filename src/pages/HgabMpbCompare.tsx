@@ -15,13 +15,13 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
-import { HGAB_ROOT, REGION_LABELS, loadFloodCompare, loadMpbCompare, type HgabGeo } from '../lib/hgab';
+import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadFloodCompare, loadMpbCompare, type HgabGeo } from '../lib/hgab';
 import { HISTORY_ROOT, HISTORY_TITLE, listHref } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData } from '../lib/hgab-mpb-years';
 import {
-  BUDGET_LABELS, COMPARE_COLORS, COMPARE_TOPICS, compareByRegion, compareCopy, compareFigures, compareFrame, dotRadius,
-  drawCompareMap, inView, legendWidth, panelDots, pct, phpWords, placeDots, provincePaths, signed,
-  type ComparePanelCopy, type CompareCopy, type RegionRow, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
+  COMPARE_COLORS, COMPARE_TOPICS, compareByRegion, compareCopy, compareFigures, compareFrame, dotRadius,
+  drawCompareMap, heatColor, inView, legendWidth, matrixCopy, matrixLabel, panelDots, phpCell, pct, phpWords, placeDots, provincePaths, signed,
+  type ComparePanelCopy, type CompareCopy, type RegionRow, type RegionYearMatrix, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
 } from '../lib/mpb-compare';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
@@ -29,6 +29,7 @@ import '../hgab-mpb-compare.css';
 
 const n = (v: number) => v.toLocaleString('en-US');
 const LOGO = '/brand/bettergov-horizontal-white.png';
+const LOGO_ON_WHITE = '/brand/bettergov-horizontal-primary.png';
 
 const LOADERS: Record<CompareTopicKey, () => Promise<CompareInput>> = { mpb: loadMpbCompare, flood: loadFloodCompare };
 /** The DPWH project list, filtered to the Flood Management Program (as the chart by year links it). */
@@ -75,7 +76,8 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
       <main className="nep-main mpbc-main">
         <DownloadBar topic={topic} input={state} f={figures} />
         <CompareFigure topic={topic} input={state} f={figures} />
-        <RegionTable topic={topic} data={state.data} />
+        {key === 'mpb' && <RegionTable topic={topic} data={state.data} />}
+        <RegionYearTable topic={topic} matrix={state.matrix} builtAt={state.builtAt} />
         {key === 'flood' ? (
           <p className="mpbc-more">
             <Link to={FLOOD_LIST}>Every 2027 flood control line in the DPWH project list →</Link>{' · '}
@@ -265,42 +267,12 @@ function CompareMap({ data, geo, panel, stacked }: { data: MpbData; geo: HgabGeo
 // By region
 // ---------------------------------------------------------------------------
 
+const regionLabel = (region: RegionRow['region']) => (region ? `${REGION_LABELS[region].short} · ${REGION_LABELS[region].name}` : 'No region');
+
+/** The NEP vs House bill totals by region, with the change (multi-purpose buildings). */
 function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
   const rows = useMemo(() => compareByRegion(data, topic.budgets), [data, topic.budgets]);
-  const label = (region: RegionRow['region']) => (region ? `${REGION_LABELS[region].short} · ${REGION_LABELS[region].name}` : 'No region');
-  if (topic.budgets.length !== 2) {
-    // Flood control: each budget's amount, its lines below.
-    const last = topic.budgets[topic.budgets.length - 1];
-    return (
-      <section className="nep-section mpbc-section" aria-labelledby="mpbc-regions-h">
-        <h2 id="mpbc-regions-h" className="mpbc-h2">By region</h2>
-        <p className="mpbc-dek">A line’s region is the one its title or office places it in. Largest {BUDGET_LABELS[last]} amount first.</p>
-        <div className="mpbc-tablewrap">
-          <table className="mpbc-table">
-            <thead>
-              <tr>
-                <th scope="col">Region</th>
-                {topic.budgets.map((b) => <th key={b} scope="col" className="is-num">{BUDGET_LABELS[b]}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.region ?? 'none'}>
-                  <td>{label(r.region)}</td>
-                  {topic.budgets.map((b) => (
-                    <td key={b} className="is-num">
-                      {r.by[b].lines ? phpWords(r.by[b].php) : '—'}
-                      {r.by[b].lines > 0 && <span className="mpbc-sub">{n(r.by[b].lines)} {r.by[b].lines === 1 ? 'line' : 'lines'}</span>}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    );
-  }
+  const label = regionLabel;
   const [nepKey, houseKey] = topic.budgets;
   return (
     <section className="nep-section mpbc-section" aria-labelledby="mpbc-regions-h">
@@ -336,6 +308,94 @@ function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Every region in every budget (Jason, 2026-11-06: "I want a matrix of the MPBs per region and per year. I want the same
+ * for flood control as well"). Regions north to south, budgets oldest first; a cell goes from light green to red with
+ * its amount (heatColor), and each column adds up to the budget's total in the last row.
+ */
+function RegionYearTable({ topic, matrix, builtAt }: { topic: CompareTopic; matrix: RegionYearMatrix; builtAt: string }) {
+  const rows = useMemo(() => [...matrix.rows].sort((a, b) =>
+    (a.region ? REGION_ORDER.indexOf(a.region) : 99) - (b.region ? REGION_ORDER.indexOf(b.region) : 99)), [matrix.rows]);
+  const max = Math.max(...matrix.rows.flatMap((r) => r.cells.map((c) => c.php)));
+  const copy = useMemo(() => matrixCopy(topic, matrix, builtAt), [topic, matrix, builtAt]);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  // The shareable image (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo, our disclaimer").
+  const download = async () => {
+    setBusy(true); setFailed(null);
+    try {
+      const { renderMatrixImage } = await import('../lib/mpb-matrix-image');
+      const canvas = await renderMatrixImage({ matrix, copy, logoUrl: LOGO_ON_WHITE, scale: 2 });
+      const blob = await new Promise<Blob | null>((done) => canvas.toBlob(done, 'image/png'));
+      if (!blob) throw new Error('the browser could not make the image');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = topic.matrixImageName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      setFailed(String((e as Error)?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const heat = (php: number): CSSProperties | undefined => {
+    if (!php) return undefined;
+    const t = Math.sqrt(php / max);
+    return { background: heatColor(t), color: t > 0.72 ? '#fff' : undefined };
+  };
+  const cell = (c: { lines: number; php: number }, b: number, style?: CSSProperties) => (
+    <td key={b} className="is-num" style={style} title={c.lines ? `${n(c.lines)} ${c.lines === 1 ? 'line' : 'lines'}, ${phpWords(c.php)}` : 'No line'}>
+      {c.lines ? phpCell(c.php) : '—'}
+    </td>
+  );
+  return (
+    <section className="nep-section mpbc-section" id="by-region-and-year" aria-labelledby="mpbc-matrix-h">
+      <div className="mpbc-matrix-head">
+        <div>
+          <h2 id="mpbc-matrix-h" className="mpbc-h2">By region and year</h2>
+          <p className="mpbc-dek">{copy.dek} Hover a cell for its lines.</p>
+        </div>
+        <div className="mpbc-tools is-inline">
+          <button type="button" className="hgab-cta hgab-cta-primary" onClick={download} disabled={busy}>
+            {busy ? 'Drawing the image…' : 'Download image (PNG)'}
+          </button>
+          {failed && <span role="status">The image did not draw ({failed}).</span>}
+        </div>
+      </div>
+      <div className="mpbc-tablewrap">
+        <table className="mpbc-table mpbc-matrix">
+          <thead>
+            <tr>
+              <th scope="col">Region</th>
+              {matrix.budgets.map((b) => <th key={b.key} scope="col" className="is-num">{matrixLabel(b)}{b.note ? '*' : ''}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.region ?? 'none'}>
+                <th scope="row">
+                  {r.region ? <>{REGION_LABELS[r.region].short}<span className="mpbc-matrix-name"> · {REGION_LABELS[r.region].name}</span></> : 'No region'}
+                </th>
+                {r.cells.map((c, i) => cell(c, i, heat(c.php)))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">All regions</th>
+              {matrix.totals.map((c, i) => cell(c, i))}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p className="mpbc-more">
+        {copy.notes.join(' ')}
+      </p>
     </section>
   );
 }

@@ -11,8 +11,8 @@ import { COMPARE_CARD_DISCLAIMER, DISCLAIMER_FLOOD } from "../src/lib/hgab-discl
 import type { HistoryData } from "../src/lib/hgab-history";
 import { decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
 import {
-  COMPARE_TOPICS, COMPARE_VIEW, GAA_PANEL_COLOR, compareByRegion, compareCopy, compareFigures, foreignOnlyBudgets, inView, panelDots,
-  type BudgetKey, type CompareTopic, type FloodCompareSummary,
+  COMPARE_TOPICS, COMPARE_VIEW, GAA_PANEL_COLOR, matrixCopy, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
+  inView, linesMatrix, panelDots, type BudgetKey, type CompareTopic, type FloodCompareSummary, type RegionYearMatrix,
 } from "../src/lib/mpb-compare";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -20,6 +20,42 @@ interface Opts { out: string; words: (s: string) => number; readerCopyHits: (s: 
 
 const n = (v: number) => v.toLocaleString("en-US");
 const sentences = (s: string) => s.split(/(?<=[.!?])\s+/);
+
+/**
+ * The region-by-year matrix (Jason, 2026-11-06: "a matrix of the MPBs per region and per year … the same for flood
+ * control"): each budget's column adds up to its total, the totals are the build's (and the chart's), and the columns the
+ * page also maps equal the by-region figures from the drawn lines.
+ */
+function verifyMatrix(
+  check: Check, topic: CompareTopic, data: MpbData, m: RegionYearMatrix, total: (key: string) => { lines: number; php: number } | undefined,
+  o?: Opts, builtAt = "",
+): void {
+  // The shareable image's words (Jason, 2026-11-06: "a shareable version of that with our BetterGov logo, our disclaimer").
+  if (o) {
+    const mc = matrixCopy(topic, m, builtAt);
+    const words = [mc.kicker, mc.title, mc.dek, ...mc.notes, mc.disclaimer];
+    check(`matrix image: "${mc.title}", the disclaimer, the source and the address; ${mc.notes.length} notes, in plain words`,
+      mc.disclaimer === COMPARE_CARD_DISCLAIMER && mc.source[1].startsWith(topic.url) && /As of /.test(mc.source[1])
+        && mc.notes.some((x) => /not yet law/.test(x)) && mc.notes.some((x) => /not spending/.test(x))
+        && (!m.budgets.some((b) => b.note) || mc.notes.some((x) => x.startsWith("* ")))
+        && /\.png$/.test(topic.matrixImageName) && words.flatMap(o.readerCopyHits).length === 0,
+      words.flatMap(o.readerCopyHits).join(", "));
+  }
+  const sums = m.budgets.map((_, i) => m.rows.reduce((a, r) => ({ lines: a.lines + r.cells[i].lines, php: a.php + r.cells[i].php }), { lines: 0, php: 0 }));
+  check(`matrix: ${m.rows.length} regions × ${m.budgets.length} budgets (${m.budgets[0].key} to ${m.budgets[m.budgets.length - 1].key}); every column adds up to its total`,
+    m.rows.every((r) => r.cells.length === m.budgets.length)
+      && sums.every((s, i) => s.lines === m.totals[i].lines && s.php === m.totals[i].php));
+  const off = m.budgets.filter((b, i) => { const t = total(b.key); return !t || t.php !== m.totals[i].php || t.lines !== m.totals[i].lines; });
+  check(`matrix: every budget's total is the build's${topic.key === "flood" ? " and the flood control chart's" : ""}`, off.length === 0,
+    off.map((b) => b.key).join(", "));
+  const byRegion = compareByRegion(data, topic.budgets);
+  const mapped = topic.budgets.map((k) => m.budgets.findIndex((b) => b.key === k));
+  check(`matrix: its ${topic.budgets.join(", ")} columns equal the by-region figures of the mapped lines, region by region`,
+    mapped.every((i) => i >= 0) && byRegion.length > 0 && byRegion.every((r) => {
+      const row = m.rows.find((x) => x.region === r.region);
+      return !!row && topic.budgets.every((k, j) => row.cells[mapped[j]].php === r.by[k].php && row.cells[mapped[j]].lines === r.by[k].lines);
+    }));
+}
 
 /** The checks both pages share: totals, kinds, regions, dots and colours, plain words, the title. */
 function verifyTopic(
@@ -102,6 +138,10 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
     const data = decodeMpbLines(JSON.parse(readFileSync(files[0], "utf8")) as MpbLinesFile);
     const S = JSON.parse(readFileSync(files[1], "utf8")) as MpbSummary;
     verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, []);
+    const m = linesMatrix(data, S.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: "title_only" as const }) })));
+    verifyMatrix(check, COMPARE_TOPICS.mpb, data, m, (key) => S.budgets.find((x) => x.key === key), o, S.built_at);
+    check(`matrix: the budgets with no multi-purpose building line (${m.budgets.filter((b) => b.note).map((b) => b.fy).join(", ")}) are marked`,
+      m.budgets.filter((b) => b.note).every((b) => b.fy < 2018 && b.note === "title_only") && m.budgets.some((b) => b.note));
   }
   verifyFloodCompare(check, o);
 }
@@ -136,4 +176,15 @@ function verifyFloodCompare(check: Check, o: Opts): void {
       && sentences(DISCLAIMER_FLOOD.body).every((x) => o.words(x) <= 25) && o.readerCopyHits(DISCLAIMER_FLOOD.body).length === 0,
     sentences(DISCLAIMER_FLOOD.body).map((x) => o.words(x)).join(", "));
   verifyTopic(check, o, COMPARE_TOPICS.flood, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, foreignOnly);
+  // The matrix's totals: the chart's from FY2020; before, the build's own (FY2019's lines add up to its printed headings).
+  verifyMatrix(check, COMPARE_TOPICS.flood, data, floodMatrix(S), (key) => {
+    const i = S.matrix.budgets.findIndex((b) => b.key === key);
+    const php = col(key) >= 0 ? chart(key) : S.matrix.totals[i]?.[1];
+    return i < 0 || php == null || php !== S.matrix.totals[i][1] ? undefined : { lines: S.matrix.totals[i][0], php };
+  }, o, S.built_at);
+  const years = Array.from({ length: 12 }, (_, i) => `gaa-${2015 + i}`).concat("nep-2027", "house-2027");
+  check(`matrix: every budget we have, FY2015 GAA to the 2027 House bill; 2015 to 2017 marked as the older code set`,
+    S.matrix.budgets.map((b) => b.key).join() === years.join()
+      && S.matrix.budgets.every((b) => (b.note === "former_codes") === (b.stage === "gaa" && b.fy <= 2017)));
+
 }

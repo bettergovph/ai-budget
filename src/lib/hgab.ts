@@ -44,7 +44,9 @@ import {
   MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
-import { FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, foreignOnlyBudgets, type CompareInput, type FloodCompareSummary } from './mpb-compare';
+import {
+  FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, floodMatrix, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
+} from './mpb-compare';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -767,7 +769,9 @@ export function loadMpbCompare(): Promise<CompareInput> {
       getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
       loadHgabGeo(),
     ]);
-    return { data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: [] };
+    const data = decodeMpbLines(lines);
+    const budgets = summary.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: 'title_only' as const }) }));
+    return { data, builtAt: summary.built_at, geo, foreignOnly: [], matrix: linesMatrix(data, budgets) };
   });
 }
 
@@ -779,7 +783,10 @@ export function loadFloodCompare(): Promise<CompareInput> {
       getJson<FloodCompareSummary>(dataUrl(FLOOD_SUMMARY_PATH), 'Failed to load the flood control summary'),
       loadHgabGeo(),
     ]);
-    return { data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: foreignOnlyBudgets(summary) };
+    return {
+      data: decodeMpbLines(lines), builtAt: summary.built_at, geo, foreignOnly: foreignOnlyBudgets(summary),
+      matrix: floodMatrix(summary),
+    };
   });
 }
 

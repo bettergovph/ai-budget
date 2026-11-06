@@ -71,6 +71,9 @@ export interface CompareTopic {
   imageName: string;
   /** The legend's dot sizes (the radius scale is the same for every topic, so the pages compare). */
   sizes: number[];
+  /** The region-by-year matrix's own title and downloadable image (Jason, 2026-11-06: "a shareable version"). */
+  matrixTitle: string;
+  matrixImageName: string;
 }
 
 export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
@@ -80,6 +83,8 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     source: 'Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines', scope: '',
     url: 'budget.bettergov.ph/hgab/2027/multi-purpose/nep-vs-house-bill',
     imageName: 'bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png', sizes: [5e6, 25e6, 100e6],
+    matrixTitle: 'Multi-purpose buildings by region and year',
+    matrixImageName: 'bettergov-multi-purpose-buildings-by-region-2015-2027.png',
   },
   flood: {
     // Jason, 2026-11-05: "With our title 'Flood control projects are back'".
@@ -89,11 +94,119 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     scope: 'Flood control here is the DPWH Flood Management Program, with BIP and SIPAG flood mitigation in 2025, as on our budget-by-year chart.',
     url: 'budget.bettergov.ph/hgab/2027/flood-control',
     imageName: 'bettergov-flood-control-2025-2027.png', sizes: [10e6, 50e6, 250e6],
+    matrixTitle: 'Flood control by region and year',
+    matrixImageName: 'bettergov-flood-control-by-region-2015-2027.png',
   },
 };
 
-/** What a page draws from: the lines, when they were built, the province outlines, and the budgets paid for wholly with foreign loans or grants. */
-export interface CompareInput { data: MpbData; builtAt: string; geo: HgabGeo; foreignOnly: BudgetKey[] }
+/**
+ * What a page draws from: the lines, when they were built, the province outlines, the budgets paid for wholly with
+ * foreign loans or grants, and the region-by-year matrix.
+ */
+export interface CompareInput { data: MpbData; builtAt: string; geo: HgabGeo; foreignOnly: BudgetKey[]; matrix: RegionYearMatrix }
+
+// ---------------------------------------------------------------------------
+// The region-by-year matrix (Jason, 2026-11-06: "I want a matrix of the MPBs per region and per year. I want the same
+// for flood control as well")
+// ---------------------------------------------------------------------------
+
+/**
+ * A budget column. `note`: `title_only`, the budget has no line for the topic, so its lines are in by title (multi-purpose
+ * buildings, FY2015–FY2017); `former_codes`, the budget's older code set (flood control, FY2015–FY2017).
+ */
+export interface MatrixBudget { key: string; fy: number; stage: 'gaa' | 'nep' | 'house'; note?: 'title_only' | 'former_codes' }
+/** Each region's lines and amount in every budget (a region null: no region), and each budget's total. */
+export interface RegionYearMatrix {
+  budgets: MatrixBudget[];
+  rows: Array<{ region: RegionKey | null; cells: Tally[] }>;
+  totals: Tally[];
+}
+
+/** "2024", "2027 NEP", "2027 House bill". */
+export const matrixLabel = (b: MatrixBudget) => (b.stage === 'gaa' ? `${b.fy}` : `${b.fy} ${b.stage === 'nep' ? 'NEP' : 'House bill'}`);
+
+/** The matrix of a set of lines (multi-purpose buildings: the map's lines, every budget it holds). */
+export function linesMatrix(data: MpbData, budgets: readonly MatrixBudget[]): RegionYearMatrix {
+  const t = (): Tally => ({ lines: 0, php: 0 });
+  const by = new Map<RegionKey | null, Tally[]>();
+  const totals = budgets.map(t);
+  for (const l of data.lines) {
+    budgets.forEach((b, i) => {
+      if (l.fy !== b.fy) return;
+      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      if (v == null) return;
+      const cells = by.get(l.region) ?? budgets.map(t);
+      for (const c of [cells[i], totals[i]]) { c.lines++; c.php += v; }
+      by.set(l.region, cells);
+    });
+  }
+  return { budgets: [...budgets], rows: [...by].map(([region, cells]) => ({ region, cells })), totals };
+}
+
+/**
+ * A cell's colour at `t` (0–1, the square root of its share of the largest cell): light green through soft amber to red
+ * (Jason, 2026-11-06: "Let's use a light green to red tone for the grid colours"). Three stops, so the middle stays clear
+ * rather than a muddy brown.
+ */
+export const HEAT_STOPS: ReadonlyArray<[number, [number, number, number]]> = [[0, [223, 243, 224]], [0.5, [252, 226, 154]], [1, [214, 40, 40]]];
+export function heatColor(t: number): string {
+  const x = Math.min(1, Math.max(0, t));
+  const i = x <= HEAT_STOPS[1][0] ? 0 : 1;
+  const [[t0, c0], [t1, c1]] = [HEAT_STOPS[i], HEAT_STOPS[i + 1]];
+  const k = (x - t0) / (t1 - t0);
+  return `rgb(${c0.map((v, j) => Math.round(v + (c1[j] - v) * k)).join(', ')})`;
+}
+
+/** "₱4.2B", "₱512M", "₱0.4M": short enough for a cell. */
+export const phpCell = (v: number) => (v >= 1e9 ? `₱${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `₱${Math.round(v / 1e6)}M` : `₱${(v / 1e6).toFixed(1)}M`);
+
+/** The matrix's words: one builder for the page's table and its downloadable image, so they never differ. */
+export interface MatrixCopy {
+  kicker: string;
+  title: string;
+  dek: string;
+  /** The footnotes, in order: what the columns are, the starred columns, where lines sit, amounts. */
+  notes: string[];
+  disclaimer: string;
+  source: [string, string];
+}
+
+export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: string): MatrixCopy {
+  const first = m.budgets[0];
+  const marked = m.budgets.filter((b) => b.note);
+  const span = marked.length ? `${marked[0].fy} to ${marked[marked.length - 1].fy}` : '';
+  const what = topic.key === 'flood' ? 'flood control' : 'multi-purpose building';
+  return {
+    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill`,
+    title: topic.matrixTitle,
+    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill, by the region its title or office places it in. Cells run from light green (less) to red (more).`,
+    notes: [
+      'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.',
+      ...(marked.length === 0 ? [] : [marked[0].note === 'former_codes'
+        ? `* The ${span} budgets use an older code set; their flood control lines are its flood families.`
+        : `* The ${span} budgets have no multi-purpose building line, so their lines are counted by title.`]),
+      ...(topic.key === 'flood'
+        ? ['Head-office lines that name no place count in the region the budget lists them under, mostly Metro Manila, or under No region where the file lists none.']
+        : []),
+      'Amounts are allocations, not spending.',
+    ],
+    disclaimer: COMPARE_CARD_DISCLAIMER,
+    source: [
+      `Source: GAA ${first.fy}–2026 (DBM), NEP 2027 (DBM), House Bill 10858, third reading; DPWH ${what} lines`,
+      `${topic.url} · As of ${asOfDate(builtAt)}`,
+    ],
+  };
+}
+
+/** Flood control's matrix, as its build writes it (every GAA year from FY2015, more than the maps draw). */
+export function floodMatrix(s: FloodCompareSummary): RegionYearMatrix {
+  const tally = ([lines, php]: [number, number]): Tally => ({ lines, php });
+  return {
+    budgets: s.matrix.budgets,
+    rows: s.matrix.rows.map((r) => ({ region: r.region, cells: r.cells.map(tally) })),
+    totals: s.matrix.totals.map(tally),
+  };
+}
 
 export const FLOOD_LINES_PATH = 'hgab/2027/flood-compare/lines.json';
 export const FLOOD_SUMMARY_PATH = 'hgab/2027/flood-compare/summary.json';
@@ -114,6 +227,12 @@ export interface FloodCompareSummary {
     not_drawn: Tally;
     classes: Record<string, number>;
   }>;
+  /** Each region's [lines, pesos] in every budget, FY2015 GAA to the House bill, and each budget's total (= the chart from FY2020). */
+  matrix: {
+    budgets: MatrixBudget[];
+    rows: Array<{ region: RegionKey | null; cells: Array<[number, number]> }>;
+    totals: Array<[number, number]>;
+  };
   /** GAA head-office lines the title matcher cannot read: placed by the one province named, or at the listed region. */
   head_office: Record<string, { province_named: number; listed_region: number }>;
   /** FY2027 lines budgeted nationwide: counted, not on the map. */
