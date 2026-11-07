@@ -1,0 +1,127 @@
+[
+  {
+    "year": 2014,
+    "document_id": "c6c5d73f4b50626bbc7e348d",
+    "source_sha256": "5987754df51a301ac667633f4091664b42e34c42358a6a8e3094b5c95a40c68d",
+    "page": 3,
+    "row": 2,
+    "expected": {
+      "code": "Region IV - SOUTHERN TAGALOG AND PALAWAN",
+      "name": "",
+      "amount": "2,290,610"
+    },
+    "replacement": {
+      "code": "",
+      "name": "Region IV - SOUTHERN TAGALOG AND PALAWAN",
+      "amount": "2,290,610"
+    },
+    "reason": "Visually checked page 3: this is an unnumbered regional subtotal. The model placed its label in the code field. No numeric change."
+  },
+  {
+    "year": 2014,
+    "document_id": "c6c5d73f4b50626bbc7e348d",
+    "source_sha256": "5987754df51a301ac667633f4091664b42e34c42358a6a8e3094b5c95a40c68d",
+    "page": 6,
+    "row": 36,
+    "expected": {
+      "code": "Armed Forces of the Philippines",
+      "amount": "78,516,765"
+    },
+    "replacement": {
+      "code": "",
+      "name": "Armed Forces of the Philippines",
+      "amount": "78,516,765"
+    },
+    "reason": "Visually checked page 6: this is an unnumbered AFP subtotal above agencies G through J. No numeric change."
+  },
+  {
+    "year": 2017,
+    "document_id": "675d56b3286820b84d943ee3",
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "page": 2,
+    "row": 1,
+    "expected": {
+      "code": "A.",
+      "name": "Senate.",
+      "amount": null
+    },
+    "replacement": {
+      "code": "A.",
+      "name": "Senate.",
+      "amount": "4,191,450"
+    },
+    "reason": "Visual inspection: model shifted Congress amounts down by one row. Corrected directly from printed page, without calculating a balancing amount."
+  },
+  {
+    "year": 2017,
+    "document_id": "675d56b3286820b84d943ee3",
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "page": 2,
+    "row": 2,
+    "expected": {
+      "code": "B.",
+      "name": "Senate Electoral Tribunal.",
+      "amount": "4,191,450"
+    },
+    "replacement": {
+      "code": "B.",
+      "name": "Senate Electoral Tribunal.",
+      "amount": "257,987"
+    },
+    "reason": "Visual inspection: model shifted Congress amounts down by one row. Corrected directly from printed page, without calculating a balancing amount."
+  },
+  {
+    "year": 2017,
+    "document_id": "675d56b3286820b84d943ee3",
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "page": 2,
+    "row": 3,
+    "expected": {
+      "code": "C.",
+      "name": "Commission on Appointments.",
+      "amount": "257,987"
+    },
+    "replacement": {
+      "code": "C.",
+      "name": "Commission on Appointments.",
+      "amount": "673,111"
+    },
+    "reason": "Visual inspection: model shifted Congress amounts down by one row. Corrected directly from printed page, without calculating a balancing amount."
+  },
+  {
+    "year": 2017,
+    "document_id": "675d56b3286820b84d943ee3",
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "page": 2,
+    "row": 4,
+    "expected": {
+      "code": "D.",
+      "name": "House of Representatives.",
+      "amount": "673,111"
+    },
+    "replacement": {
+      "code": "D.",
+      "name": "House of Representatives.",
+      "amount": "9,683,369"
+    },
+    "reason": "Visual inspection: model shifted Congress amounts down by one row. Corrected directly from printed page, without calculating a balancing amount."
+  },
+  {
+    "year": 2017,
+    "document_id": "675d56b3286820b84d943ee3",
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "page": 2,
+    "row": 5,
+    "expected": {
+      "code": "E.",
+      "name": "House Electoral Tribunal.",
+      "amount": "9,683,369"
+    },
+    "replacement": {
+      "code": "E.",
+      "name": "House Electoral Tribunal.",
+      "amount": "169,709"
+    },
+    "reason": "Visual inspection: model shifted Congress amounts down by one row. Corrected directly from printed page, without calculating a balancing amount."
+  }
+]
