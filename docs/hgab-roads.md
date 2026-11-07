@@ -173,3 +173,52 @@ First run (extract of 2026-11-07):
 contract, any year, is an anchor: this road, this station, here. Two or more anchors on a road give its stations'
 direction and scale along the OSM road, so any line's stations on that road can be cut, with or without its own
 contract, in any year. The anchors' scatter against the fit is the check.
+
+## DPWH contracts as kilometre posts (2026-11-07)
+
+Jason: "you can do as recommended dpwh's own contracts as km posts". `draw.py` now draws a line in any budget,
+with or without a contract of its own, when DPWH contracts on the same road place its stations:
+
+- **Anchors.** 28,567 contracts in DPWH's list print stations in their description and carry a point; 20,834 anchor
+  (11,173 road names): those whose stations span at most 5 km (one point for stretches further apart cannot say which
+  it marks), read cleanly, and start past kilometre 1 (a local road's own stations restart at 0 for every road, so two
+  roads in one town could share a name and stations). An anchor sits at the middle of its stations. OpenStreetMap's
+  kilometre posts on the road join them.
+- **Per line**, stations past kilometre 1: the anchors whose road name reads like the line's (token sort ratio ≥ 90;
+  "Daang Maharlika" = "Maharlika Highway") and whose stations lie within 20 km of the line's, in one place (within
+  45 km of their middle) and within reach of the line's mark (25 km for a barangay … 250 km for a region). The OSM road
+  most of them lie on (within 250 m), found by name, else the national road under them. A robust fit of road position
+  against station: every pair of anchors 300 m of station apart proposes one; the one most anchors agree with within
+  300 m wins; its scale must be 0.8–1.25 m of road per metre of station. The line's own ranges are cut from it, each on
+  its own (so titles with stretches kilometres apart draw too), never more than 5 km outside the anchors. A line with
+  its own point keeps the cut only within 1 km of that point; else it is drawn as before (`stations` or `centred`).
+- **Placement.** A line its build placed only at its office's area, its region or nowhere, once anchored, sits at the
+  middle of its stretch, with that stretch's district and region (`placeByStations`, "Its stations on the road"). A
+  2015 Central Office line listed under NCR, Calapan South Rd K0126–K0140, now sits in Oriental Mindoro's 2nd District.
+  Lines placed by their title's place keep it; the drawn road shows beside.
+
+| Budget | With stations | Drawn | anchored | OSM posts | centred | Anchor residual, median / 90th pct |
+| --- | --- | --- | --- | --- | --- | --- |
+| gaa-2015 | 1,824 | 243 | 243 | 0 | 0 | 57 m / 125 m |
+| gaa-2016 | 2,041 | 337 | 337 | 0 | 0 | 60 m / 114 m |
+| gaa-2017 | 2,402 | 406 | 406 | 0 | 0 | 60 m / 128 m |
+| gaa-2018 | 2,561 | 329 | 329 | 0 | 0 | 56 m / 127 m |
+| gaa-2019 | 1,925 | 139 | 139 | 0 | 0 | 56 m / 112 m |
+| gaa-2020 | 2,707 | 729 | 521 | 13 | 195 | 66 m / 128 m |
+| gaa-2021 | 3,979 | 974 | 790 | 28 | 156 | 66 m / 127 m |
+| gaa-2022 | 3,620 | 1,158 | 679 | 39 | 440 | 73 m / 129 m |
+| gaa-2023 | 3,611 | 1,270 | 698 | 55 | 517 | 65 m / 126 m |
+| gaa-2024 | 3,641 | 1,241 | 686 | 34 | 521 | 68 m / 140 m |
+| gaa-2025 | 3,701 | 1,507 | 645 | 55 | 807 | 56 m / 132 m |
+| gaa-2026 | 8,108 | 856 | 626 | 3 | 227 | 64 m / 135 m |
+| nep-2027 | 2,733 | 324 | 305 | 0 | 19 | 60 m / 122 m |
+| house-2027 | 3,448 | 377 | 354 | 1 | 22 | 54 m / 121 m |
+
+9,890 lines drawn in all (3,971 before). The fit's residuals (how far the anchors it kept sit from it) are 54–73 m at the
+median and 112–140 m at the 90th percentile. `draw-summary.json` records why a line was not anchored
+(`not_anchored:*`): mostly too few anchors on its road near its stations (`few_candidates`), then anchors not in one
+place, not on the road found, no fit, or stations outside the anchors.
+
+**Next, if wanted:** a contract's detail (`/projects/<id>` through api.dpwh.bettergov.ph) holds a point per component,
+each with its own stations; those would anchor the many contracts whose stretches span more than 5 km. That is a detail
+fetch of about 28,500 contracts (docs/dpwh-contracts.md: Jason asked for list data only in November).

@@ -56,6 +56,8 @@ from build import (  # noqa: E402  the multi-purpose map's build: GPS screens, G
     TEXT_YEAR, UACS_REGION, region_key, repair_text, sha256, tidy_label, wider_gps, write_json,
 )
 import gaa2019  # noqa: E402
+sys.path.insert(0, str(HERE))
+from stations import MAX_RANGE_M, SECTION_ID, length_of, stations  # noqa: E402,F401  shared with draw.py
 from upstream import COMMIT, FILES, REPO  # noqa: E402
 
 GAA_YEARS = list(range(2015, 2027))
@@ -90,12 +92,6 @@ DRAINAGE_2027 = re.compile(r'^Construction/ Upgrading/ Rehabilitation of Drainag
 # Road words in a title: the tally of lines left out, under other codes.
 ROAD_WORDS = re.compile(r'\b(?:road|roads|rd|highway|hi-?way|bridge|bridges|br\.|bypass|by-pass|flyover|interchange|'
                         r'underpass|expressway|viaduct|causeway|carriageway)\b', re.IGNORECASE)
-
-# Stations: "K0029+690 - K0031+087", "K0379 + (-400) - K0379 + (-200)", "Sta. 1600+564.9 - Sta. 1601+020".
-_KM = r'(\d{1,4})\s*\+\s*\(?\s*(-?\d{1,4}(?:\.\d+)?)\s*\)?'
-STATIONS = re.compile(r'\b(?:K|Sta\.?\s*)\s*' + _KM + r'\s*(?:-|–|—|to)\s*(?:K|Sta\.?)?\s*' + _KM, re.IGNORECASE)
-SECTION_ID = re.compile(r'\b([SB]\d{5}[A-Z]{2})\b')
-MAX_RANGE_M = 30_000   # one station range longer than this is read but marked for review
 
 LEVELS = ['contract', 'gps', 'barangay', 'municipality', 'city', 'province', 'deo', 'region', 'none']
 BASES = [None, 'contract', 'title', 'gps', 'deo']
@@ -147,24 +143,6 @@ def part_of(fy: int, code: str) -> str | None:
     if fy <= FORMER_TO:
         return 'former' if code.startswith(PARTS[-1][2]) else None
     return next((k for k, _, prefixes in PARTS[:-1] if code.startswith(prefixes)), None)
-
-
-def stations(title: str) -> tuple[list[list[int]], bool]:
-    """Every station range printed in a title, in metres [[from, to], …], and whether one reads oddly."""
-    out, review = [], False
-    for m in STATIONS.finditer(title or ''):
-        a_km, a_m, b_km, b_m = m.groups()
-        a, b = int(a_km) * 1000 + float(a_m), int(b_km) * 1000 + float(b_m)
-        if abs(float(a_m)) > 999 or abs(float(b_m)) > 999 or b < a or b - a > MAX_RANGE_M:
-            review = True
-        pair = [round(a), round(b)]
-        if pair not in out:
-            out.append(pair)
-    return out, review
-
-
-def length_of(ranges: list[list[int]]) -> int | None:
-    return sum(abs(b - a) for a, b in ranges) if ranges else None
 
 
 def fail(msg: str):

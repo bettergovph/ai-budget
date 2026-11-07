@@ -52,7 +52,7 @@ import {
   linesDistrictMatrix, mpbScope, partyMatrix, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
 } from './mpb-compare';
 import {
-  ROADS_DRAW_SUMMARY_PATH, ROADS_SUMMARY_PATH, decodeRoadGeom, decodeRoadLines, roadsGeomPath, roadsLinesPath,
+  ROADS_DRAW_SUMMARY_PATH, ROADS_SUMMARY_PATH, decodeRoadGeom, decodeRoadLines, placeByStations, roadsGeomPath, roadsLinesPath,
   type RoadsData, type RoadsDrawSummary, type RoadsGeomFile, type RoadsLinesFile, type RoadsSummary,
 } from './hgab-roads';
 
@@ -869,7 +869,10 @@ export function loadRoadsBudget(key: string): Promise<{ data: RoadsData; geom: R
       getJson<RoadsLinesFile>(dataUrl(roadsLinesPath(key)), `Failed to load the ${key} road lines`),
       getJson<RoadsGeomFile>(dataUrl(roadsGeomPath(key)), `Failed to load the ${key} drawn roads`).catch(() => null),
     ]);
-    return { data: decodeRoadLines(lines), geom: geom ? decodeRoadGeom(geom) : new Map() };
+    const data = decodeRoadLines(lines);
+    const drawn = geom ? decodeRoadGeom(geom) : new Map();
+    placeByStations(data, drawn);
+    return { data, geom: drawn };
   });
 }
 

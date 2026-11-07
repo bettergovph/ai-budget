@@ -23,7 +23,9 @@ export const ROADS_CSV_NAME = 'bettergov-dpwh-roads-and-bridges-2015-2027.csv';
 export const roadsCsvPath = (s: Pick<RoadsSummary, 'outputs'>) => `${ROADS_CSV_PATH}?v=${s.outputs['lines.csv'].sha256.slice(0, 12)}`;
 
 export type RoadPart = 'drainage' | 'national' | 'bridges' | 'access' | 'road_fund' | 'bip' | 'sipag' | 'local' | 'ppp' | 'former';
-export type RoadLevel = 'contract' | 'gps' | 'barangay' | 'municipality' | 'city' | 'province' | 'deo' | 'region' | 'none';
+/** `stations`: the page's own, for a line its build placed only at its office's area, its region or nowhere, whose stations
+ * were drawn by DPWH contracts on the same road (draw.py `anchored`): it sits at the middle of its stretch. */
+export type RoadLevel = 'contract' | 'stations' | 'gps' | 'barangay' | 'municipality' | 'city' | 'province' | 'deo' | 'region' | 'none';
 export type RoadFlag =
   | 'gps_not_drawn' | 'gps_district_differs' | 'office_elsewhere' | 'maguindanao_successor' | 'text_repaired'
   | 'gps_wider_reader' | 'contract_region_differs' | 'stations_review' | 'several_offices' | 'stretch_differs';
@@ -44,6 +46,7 @@ export const PART_SHORT: Record<RoadPart, string> = {
 
 export const LEVEL_TEXT: Record<RoadLevel, string> = {
   contract: 'DPWH contract’s point',
+  stations: 'Its stations on the road',
   gps: 'GPS in the title',
   barangay: 'Barangay named in the title',
   municipality: 'Town named in the title',
@@ -114,13 +117,18 @@ export interface RoadsLinesFile {
 }
 
 export interface RoadsGeomFile {
-  schema: 1;
+  schema: 1 | 2;
   budget: string;
   license: string;
   attribution: string;
-  /** [line id, how, confidence, stretches] */
-  rows: Array<[string, 'stations' | 'centred', 'named' | 'class', Array<Array<[number, number]>>]>;
+  /**
+   * [line id, how, confidence, stretches]. How: `anchored` (its stations, from DPWH contracts on the same road used as
+   * kilometre posts), `stations` (from OpenStreetMap's kilometre posts), `centred` (its length, centred on its own point).
+   */
+  rows: Array<[string, RoadDrawHow, 'named' | 'class', Array<Array<[number, number]>>, ([number, number] | null)?, (string | null)?, (RegionKey | null)?]>;
 }
+
+export type RoadDrawHow = 'anchored' | 'stations' | 'centred';
 
 export interface RoadPlace { key: string; level: RoadLevel; label: string; lng: number; lat: number }
 
@@ -156,7 +164,7 @@ export interface RoadLine {
   search: string;
 }
 
-export interface RoadsData { budget: RoadsLinesFile['budget']; lines: RoadLine[] }
+export interface RoadsData { budget: RoadsLinesFile['budget']; lines: RoadLine[]; districts: Map<string, string> }
 
 export function decodeRoadLines(f: RoadsLinesFile): RoadsData {
   const c = Object.fromEntries(f.cols.map((k, i) => [k, i])) as Record<string, number>;
@@ -208,12 +216,36 @@ export function decodeRoadLines(f: RoadsLinesFile): RoadsData {
       search: [title, p?.label, officeName, contract, contractor, d?.[1]].filter(Boolean).join(' ').toLowerCase(),
     };
   });
-  return { budget: f.budget, lines };
+  return { budget: f.budget, lines, districts: new Map(f.districts.map(([id, label]) => [id, label])) };
+}
+
+/** Lines placed only at their office's area, their region or nowhere move to the middle of their stretch when DPWH
+ * contracts on the same road placed their stations (`anchored`), with that stretch's district and region. */
+export function placeByStations(data: RoadsData, geom: ReturnType<typeof decodeRoadGeom>): void {
+  for (const l of data.lines) {
+    const g = geom.get(l.id);
+    if (!g || g.how !== 'anchored' || !g.middle || !['deo', 'region', 'none'].includes(l.level)) continue;
+    l.level = 'stations';
+    l.at = g.middle;
+    l.place = null;
+    if (g.region) l.region = g.region;
+    if (g.district) l.district = { id: g.district, label: data.districts.get(g.district) ?? g.district };
+  }
 }
 
 /** Each drawn line's stretches, by line id. */
-export function decodeRoadGeom(f: RoadsGeomFile): Map<string, { how: 'stations' | 'centred'; conf: 'named' | 'class'; coords: Array<Array<[number, number]>> }> {
-  return new Map(f.rows.map(([id, how, conf, coords]) => [id, { how, conf, coords }]));
+export interface RoadGeom {
+  how: RoadDrawHow;
+  conf: 'named' | 'class';
+  coords: Array<Array<[number, number]>>;
+  /** The middle of the longest stretch, its legislative district and region (schema 2). */
+  middle: [number, number] | null;
+  district: string | null;
+  region: RegionKey | null;
+}
+export function decodeRoadGeom(f: RoadsGeomFile): Map<string, RoadGeom> {
+  return new Map(f.rows.map(([id, how, conf, coords, middle, district, region]) =>
+    [id, { how, conf, coords, middle: middle ?? null, district: district ?? null, region: region ?? null }]));
 }
 
 /** Where the budget prints the line: as the multi-purpose map links its lines (lineSource). */

@@ -40,7 +40,7 @@
 .hgab-roads-sort select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
 
 .hgab-roads-lvl { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
-.hgab-roads-lvl.is-contract, .hgab-roads-lvl.is-gps { color: #0b4fd9; }
+.hgab-roads-lvl.is-contract, .hgab-roads-lvl.is-gps, .hgab-roads-lvl.is-stations { color: #0b4fd9; }
 .hgab-roads-lvl.is-none { color: var(--ink-3, #6b7385); }
 .hgab-roads-flag { color: #8a5a00; }
 .hgab-mpbm-table tr.is-current td { background: var(--paper-2, #f7f8fa); font-weight: 600; }

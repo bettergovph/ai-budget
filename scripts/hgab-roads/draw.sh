@@ -3,7 +3,8 @@
 # `npm run build:hgab-roads`. Downloads the Geofabrik Philippines extract once (about 600 MB, checksum checked) and
 # reads its roads and kilometre posts once (about 20 minutes).
 #   OSM_DIR  where the extract and its roads/posts tables live (default: /tmp/hgab-roads-osm)
-#   LINES    the roads build's outputs, read and written beside (default: data/hgab/2027/roads)
+#   LINES          the roads build's outputs, read and written beside (default: data/hgab/2027/roads)
+#   CONTRACTS_DIR  DPWH's contract list, whose stations and points are the kilometre posts (default: data/dpwh-contracts)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
@@ -25,4 +26,6 @@ if [ ! -s "$OSM_DIR/out/roads.parquet" ] || [ "$OSM_DIR/philippines-latest.osm.p
   "$py" -I "$here/osm_extract.py" "$OSM_DIR/philippines-latest.osm.pbf" "$OSM_DIR/out"
 fi
 echo "== draw"
-"$py" -I "$here/draw.py" --osm="$OSM_DIR/out" --pbf="$OSM_DIR/philippines-latest.osm.pbf" --lines="$LINES"
+cd "$root"
+"$py" -I "$here/draw.py" --osm="$OSM_DIR/out" --pbf="$OSM_DIR/philippines-latest.osm.pbf" --lines="$LINES" \
+  --contracts="${CONTRACTS_DIR:-$root/data/dpwh-contracts}" --districts="$root/data/hgab/2027/mpb-years/districts.geojson"

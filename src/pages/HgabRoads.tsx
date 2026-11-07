@@ -45,6 +45,11 @@ type Geom = Awaited<ReturnType<typeof loadRoadsBudget>>['geom'];
 type Loaded = { lines: RoadLine[]; geom: Geom };
 
 const PAGE = 100;
+const DRAWN_HOW = {
+  anchored: 'at its stations, placed by DPWH contracts on the same road used as kilometre posts',
+  stations: 'at its stations, from kilometre posts on OpenStreetMap',
+  centred: 'at its length, centred on its point (where along the road is approximate)',
+} as const;
 const GAA_YEARS = ROADS_YEARS.filter((y) => y < 2027);
 const PARTS: RoadPart[] = ['national', 'drainage', 'bridges', 'access', 'road_fund', 'bip', 'sipag', 'local', 'ppp', 'former'];
 const yearLabel = (fy: number, stage: Stage2027) => (fy < 2027 ? String(fy) : stage === 'house' ? '2027 House bill' : '2027 NEP');
@@ -139,7 +144,7 @@ function Roads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawSummar
     type: 'FeatureCollection',
     features: lines.filter((l) => l.at).map((l): Feature => ({
       type: 'Feature',
-      properties: { uid: l.uid, kind: l.level === 'contract' || l.level === 'gps' ? 'site' : l.level === 'deo' || l.level === 'region' ? 'area' : 'place' },
+      properties: { uid: l.uid, kind: l.level === 'contract' || l.level === 'gps' || l.level === 'stations' ? 'site' : l.level === 'deo' || l.level === 'region' ? 'area' : 'place' },
       geometry: { type: 'Point', coordinates: l.at! },
     })),
   }), [lines]);
@@ -198,7 +203,8 @@ function Roads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawSummar
           <>
             A line is one project as a budget lists it, so a road funded over several years has a line in each. A blue dot is the
             point of the DPWH contract matched to the line, or GPS in its title; a ring is the place the title names, at its
-            centre. Red lines follow the road on OpenStreetMap and are approximate. Amounts are allocations, not spending.{' '}
+            centre. Red lines follow the road on OpenStreetMap, placed at their stations by DPWH’s own contracts on the same
+            road. Amounts are allocations, not spending.{' '}
             {asOfText({ built_at: summary.built_at })}.
           </>
         }
@@ -338,7 +344,7 @@ function MapKey() {
       <li><i className="is-place" aria-hidden="true" /> Place the title names (its centre)</li>
       <li><i className="is-area" aria-hidden="true" /> DPWH office’s area or the region</li>
       <li><i className="is-line" aria-hidden="true" /> Drawn along the road the title names</li>
-      <li><i className="is-dash" aria-hidden="true" /> Drawn along the national road at the point (less sure)</li>
+      <li><i className="is-dash" aria-hidden="true" /> Drawn along the national road there (less sure of the road)</li>
     </ul>
   );
 }
@@ -385,7 +391,7 @@ function PickedCard({ l, geom, stage, onClose }: { l: RoadLine; geom: { how: str
       <p className="hgab-mpbm-meta">
         Placed by: {LEVEL_TEXT[l.level]}{l.place && l.level !== 'contract' && l.level !== 'gps' ? ` (${l.place.label})` : ''}
         {l.district && <> · {l.district.label}</>}
-        {geom && <> · Drawn {geom.how === 'stations' ? 'at its stations, from kilometre posts on the map' : 'at its length, centred on the point'}{geom.conf === 'class' ? ', on the national road at the point' : ''}</>}
+        {geom && <> · Drawn {DRAWN_HOW[geom.how as keyof typeof DRAWN_HOW]}{geom.conf === 'class' ? ', on the national road there' : ''}</>}
       </p>
       <p className="hgab-mpbm-meta"><LineMeta l={l} /></p>
     </article>
@@ -538,7 +544,7 @@ function AboutRoads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawS
         'Where a line sits, first that works: the point of the DPWH contract we matched to it (2020 to 2026), GPS in its title, the place its title names, its DPWH office’s area, its region.',
         'Contracts are matched by title, office and amount, so check the contract. Their points come from DPWH’s own list.',
         'Length comes from the stations a title prints, such as K0029+690 to K0031+087. A title without stations has no length.',
-        'Red lines follow the road on OpenStreetMap from the contract’s point. Where along the road is approximate, except where kilometre posts on the map agree with the point.',
+        'Red lines follow the road on OpenStreetMap. Most are placed at their own stations: DPWH contracts on the same road, each printing its stations and carrying a point, serve as kilometre posts. The rest are their length centred on the line’s own point, so where along the road is approximate.',
         'Every check the build runs passed: the BIP, SIPAG and Local Program parts equal the multi-purpose page’s chart, and 2020 to 2026 each part equals DPWH’s budget extract to the peso.',
       ]} />
       <p className="hgab-mpbm-more">
