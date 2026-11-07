@@ -1784,3 +1784,12 @@ a.hgab-dsb-o-go:hover { background: var(--paper-2); }
   text-decoration: none;
 }
 .hgab-ds-chip-link:hover { text-decoration: underline; }
+
+/* As of, and changes to the page */
+.hgab-dx-asof { margin: 0 0 12px; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-mute); }
+.hgab-dx-asof a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.hgab-dx-changes { max-width: 900px; margin: 24px 0 8px; scroll-margin-top: calc(var(--hgab-masthead-h, 0px) + 16px); }
+.hgab-dx-changes h2 { margin: 0 0 6px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.hgab-dx-changes ul { margin: 0; padding: 0; list-style: none; }
+.hgab-dx-changes li { font-family: var(--font-body); font-size: 12.5px; line-height: 1.55; color: var(--ink-3); }
+.hgab-dx-changes time { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-2, var(--ink-3)); margin-right: 6px; }

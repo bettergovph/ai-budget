@@ -937,6 +937,16 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>7 November 2026</h3>
+<ul>
+  <li><b>Correction, Districts.</b> On the <a href="${SITE}/hgab/2027/districts">Districts</a> cards and region
+      table, the 2027 NEP figure now counts named projects only, like the House bill figure beside it; it had
+      shown the whole office's NEP listing. The change shown was always on the same projects and is unchanged,
+      as is the API (<code>headline.fy2027_nep_php</code> is still the whole office;
+      <code>fy2027_vs_proposal</code> is the like-for-like pair). The page now shows an "As of" date and a
+      list of changes.</li>
+</ul>
+
 <h3>4 November 2026</h3>
 <ul>
   <li><b>API docs.</b> The House bill <a href="#hgab-files">data files</a> that have no endpoint (the whole
