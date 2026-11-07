@@ -18,7 +18,7 @@ import { loadHgabFap } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { billions, bn, fullPeso } from '../lib/hgab-history-view';
 import {
-  BESF_EDITIONS, FAP_CSV_NAME, FAP_CSV_PATH, FAP_DEPT_NAMES, FAP_DEPT_SERIES, FAP_NEP_VOL_III_PATH, FAP_SERIES, FAP_STAGE_LABELS,
+  BESF_EDITIONS, FAP_CSV_NAME, FAP_POSTERS, FAP_POSTER_DIR, FAP_CSV_PATH, FAP_DEPT_NAMES, FAP_DEPT_SERIES, FAP_NEP_VOL_III_PATH, FAP_SERIES, FAP_STAGE_LABELS,
   FAP_TITLE, FAP_VOL_IB_PATH, PBC_FAP_SECTION, UNPROGRAMMED, UNPROGRAMMED_RELEASES_2025_PHP, cutShare, fapExplorerHref,
   type FapData, type FapProject, type FapStageKey, type FapYear,
 } from '../lib/hgab-fap';
@@ -444,10 +444,11 @@ export default function HgabFap() {
               </p>
             </div>
             <div className="hgab-fa-card">
-              <h3>FY2026: {bn(support2026.php)} standby; FY2027: {bn(support2027.php)}</h3>
+              <h3>FY2026: {bn(support2026.php)} standby in the bills; FY2027: {bn(support2027.php)}</h3>
               <p>
-                In FY2026 the enacted budget cut the programmed amount from {bn(y2026.proposed!.total)} to {bn(y2026.program!.total)} and kept {bn(support2026.php)} on standby, with a
-                further {bn(UNPROGRAMMED.counterpart_2026_house_php)} the House created for the counterpart.
+                In FY2026 the enacted budget cut the programmed amount from {bn(y2026.proposed!.total)} to {bn(y2026.program!.total)}. The NEP, the House bill and the
+                Senate bill each kept {bn(support2026.php)} on standby, and the House added {bn(UNPROGRAMMED.counterpart_2026_house_php)} for the counterpart. The
+                enacted unprogrammed total, {bn(UNPROGRAMMED.totals.find((t) => t.fy === 2026)!.php)}, is smaller than the bills’; the FY2027 NEP does not split it by purpose.
               </p>
               <p>
                 For FY2027 the NEP programmed {bn(T.all.nep_php)} and brought the standby down to {bn(support2027.php)}. The House cut {bn(cut)} from the programmed lines
@@ -540,6 +541,15 @@ export default function HgabFap() {
               The counterpart cut of {bn(gopCut)} is the only part that frees budget. Which lines did it pay for?
             </li>
           </ol>
+          <p className="hgab-fa-asof">
+            Share the poster:{' '}
+            {FAP_POSTERS.map((x, i) => (
+              <span key={x.key}>
+                {i > 0 && ' · '}
+                <a href={`${dataUrl(`${FAP_POSTER_DIR}/${x.file}`)}?v=${x.v}`} target="_blank" rel="noopener noreferrer">{x.label}</a>
+              </span>
+            ))}
+          </p>
         </section>
 
         <DisclaimerNotice compact />
