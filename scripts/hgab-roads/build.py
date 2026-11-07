@@ -1,0 +1,916 @@
+#!/usr/bin/env python3
+"""Every road and bridge line in the FY2015 to FY2026 GAA, the 2027 NEP and the House bill, placed for the roads map
+(docs/hgab-roads.md). Jason (2026-11-07): "how do we do the same for road, highway, and similar projects … start work
+the same way we did for MPBs"; scope "all roads and bridges"; placement "Contract coordinates first, then title then the
+others".
+
+Which lines (part_of):
+  - FY2018 to FY2026 GAA, capital outlays under the road and bridge codes (PARTS): national roads 3101…/3102… (less
+    the drainage codes), drainage along national roads 310110–310112, bridges 3103…, access roads 300201–300204, the
+    Special Road Fund 300214, BIP roads (BIP_CODES.roads), SIPAG roads (SIPAG_CODES.roads), the Local Program's roads
+    and bridges 300110–300119. FY2019 from the technical GAA's text, its headings reconciled;
+  - FY2015 to FY2017: the older code set's National Roads and Bridges program, its project families 1650030, 1650040
+    and 1650050 (1650020, regional support, design and equipment, is left out). A few drainage and revetment works
+    printed under it stay in: the program, not the work, decides;
+  - 2027 NEP and House bill: the Asset Preservation, Network Development and Bridge programs, and BIP access and
+    coastal roads.
+Lines with road words in their titles under other codes are not counted; they are tallied per budget (ROAD_WORDS).
+
+Where each line goes, first that works:
+  1. the DPWH contract matched to the line (FY2020–FY2026, data/dpwh-contracts/gaa-2020-2026/links.parquet): the
+     contract's point in DPWH's list, when it lies in the Philippines and on land;
+  2. GPS printed in the title (as the multi-purpose map reads it);
+  3. the place the title names (the multi-purpose map's reading; 2027: the source's location lens);
+  4. the DPWH office: the district it serves, or all of them; 5. the region. A line budgeted nationwide is counted,
+     not drawn.
+Stations printed in the title (K0029+690 – K0031+087, Sta. 1600+564.9 – …) give the line's length; DPWH road and
+bridge section IDs (S01859LZ, B03085LZ) are kept. The map's lines along OpenStreetMap roads are a separate step
+(draw.py), which reads lines-<budget>.json.
+
+Usage: build.py --upstream=<dir> --lens=<checkout> --shapes=<dir> [--data=data] [--history=data/gaa-history]
+                [--contracts=data/dpwh-contracts] [--out=data/hgab/2027/roads]
+
+Outputs:
+  lines-<budget>.json  one per budget, the multi-purpose map's format (dictionaries + `cols`/`rows`), with the road
+                       columns (contract, stations, length_m, sections)
+  lines.csv            every line, every budget (UTF-8 with BOM; CSV_COLUMNS)
+  summary.json         per budget: lines, pesos, the parts, the placement census, lengths; the region and district
+                       matrices; the scope and its checks
+"""
+from __future__ import annotations
+
+import argparse, csv, io, json, re, subprocess, sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+import duckdb
+from shapely.geometry import Point, shape
+from shapely.ops import unary_union
+from shapely.strtree import STRtree
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / 'hgab-mpb-years'))
+from build import (  # noqa: E402  the multi-purpose map's build: GPS screens, GAA text readers, labels
+    CLASSES, DISTRICT_QUALIFIER, HISTORY_YEARS, LAND_TOLERANCE, PAP_IN_TITLE, PH_LAT, PH_LNG, PSGC_REGION, TEXT_2019,
+    TEXT_YEAR, UACS_REGION, region_key, repair_text, sha256, tidy_label, wider_gps, write_json,
+)
+import gaa2019  # noqa: E402
+from upstream import COMMIT, FILES, REPO  # noqa: E402
+
+GAA_YEARS = list(range(2015, 2027))
+SITE_FROM = 2020                      # the site's GAA extract (data/18); before it, the GAA history release
+FORMER_TO = 2017                      # FY2015–FY2017: the older code set
+CONTRACTS_FROM, CONTRACTS_TO = 2020, 2026
+
+BIP_ROADS = ('300221', '300222', '300223', '300224', '300236', '300239')    # src/lib/hgab-history.ts BIP_CODES.roads
+SIPAG_ROADS = ('300215', '300216', '300217', '300218', '300233', '300243')  # SIPAG_CODES.roads
+DRAINAGE = ('310110', '310111', '310112')
+# (key, label, prefixes): the order matters, drainage before the national roads that hold its codes.
+PARTS = [
+    ('drainage', 'Drainage along national roads', DRAINAGE),
+    ('national', 'National roads: maintenance, rehabilitation, widening, bypasses and new roads', ('3101', '3102')),
+    ('bridges', 'Bridges', ('3103',)),
+    ('access', 'Access roads to airports, seaports, tourism, trade and industry', ('300201', '300202', '300203', '300204')),
+    ('road_fund', 'Special Road Fund (motor vehicle user’s charge)', ('300214',)),
+    ('bip', 'BIP roads and bridges', BIP_ROADS),
+    ('sipag', 'SIPAG roads and bridges', SIPAG_ROADS),
+    # The chart's LOCAL_ROADS (src/lib/hgab-history.ts), so the part adds up to it.
+    ('local', 'Local Program roads and bridges', ('300111', '300112', '300113', '300114', '300116', '300117', '300118', '300119')),
+    # One line a year listing toll expressways (CALAX, TPLEX, NLEX–SLEX Connector …): right-of-way and support.
+    ('ppp', 'Public–private partnership expressways: right-of-way and support', ('300110',)),
+    ('former', 'National Roads and Bridges program, former codes (1650030, 1650040, 1650050)', ('1650030', '1650040', '1650050')),
+]
+PART_LABEL = {k: label for k, label, _ in PARTS}
+# FY2027: our projects.parquet by program, and the BIP road PAPs.
+PROGRAM_PART = {'Asset Preservation Program': 'national', 'Network Development Program': 'national', 'Bridge Program': 'bridges'}
+BIP_2027 = re.compile(r'^BIP - (Access Roads|Coastal Roads)')
+PPP_2027 = re.compile(r'^Public-Private Partnership Strategic Support Fund')
+DRAINAGE_2027 = re.compile(r'^Construction/ Upgrading/ Rehabilitation of Drainage along National Roads')
+# Road words in a title: the tally of lines left out, under other codes.
+ROAD_WORDS = re.compile(r'\b(?:road|roads|rd|highway|hi-?way|bridge|bridges|br\.|bypass|by-pass|flyover|interchange|'
+                        r'underpass|expressway|viaduct|causeway|carriageway)\b', re.IGNORECASE)
+
+# Stations: "K0029+690 - K0031+087", "K0379 + (-400) - K0379 + (-200)", "Sta. 1600+564.9 - Sta. 1601+020".
+_KM = r'(\d{1,4})\s*\+\s*\(?\s*(-?\d{1,4}(?:\.\d+)?)\s*\)?'
+STATIONS = re.compile(r'\b(?:K|Sta\.?\s*)\s*' + _KM + r'\s*(?:-|–|—|to)\s*(?:K|Sta\.?)?\s*' + _KM, re.IGNORECASE)
+SECTION_ID = re.compile(r'\b([SB]\d{5}[A-Z]{2})\b')
+MAX_RANGE_M = 30_000   # one station range longer than this is read but marked for review
+
+LEVELS = ['contract', 'gps', 'barangay', 'municipality', 'city', 'province', 'deo', 'region', 'none']
+BASES = [None, 'contract', 'title', 'gps', 'deo']
+FLAGS = {  # bit -> meaning (lines-<budget>.json `flag_bits`)
+    'gps_not_drawn': 1,              # a GPS pair or contract point outside the Philippines or at sea: not used
+    'gps_district_differs': 2,       # the point lies in another legislative district than the title's place
+    'office_elsewhere': 4,           # the title's place lies outside the DPWH office's area
+    'maguindanao_successor': 8,      # "Maguindanao" read as the successor province holding the named town
+    'text_repaired': 16,             # garbled characters in the published text repaired
+    'gps_wider_reader': 32,          # GPS read by the wider reader
+    'contract_region_differs': 64,   # the contract's point lies in another region than the line's DPWH office
+    'stations_review': 128,          # a station range reads oddly: metres past 999, longer than MAX_RANGE_M, or reversed
+    'several_offices': 512,          # the GAA splits the line over several DPWH offices: placed under the largest
+    'stretch_differs': 256,          # 2027, in both documents at the same amount, but the House bill lists another
+                                     # stretch of the road (the lens's scope_review)
+}
+SOURCES = {
+    'history': 'DBM technical GAA {kind}, from the GAA history release',
+    'text': 'DBM technical GAA for DPWH, read from the document’s text',
+    'site': 'DBM GAA extract on this site',
+    'nep': 'NEP 2027 (DBM), as the source workbench reads it',
+    'house': 'House Bill 10858, third reading, as the source workbench reads it',
+}
+FY2027 = [{'key': 'nep-2027', 'fy': 2027, 'stage': 'nep'}, {'key': 'house-2027', 'fy': 2027, 'stage': 'house'}]
+BUDGETS = [*({'key': f'gaa-{fy}', 'fy': fy, 'stage': 'gaa', **({'note': 'former_codes'} if fy <= FORMER_TO else {})}
+             for fy in GAA_YEARS), *FY2027]
+REGION_IN_TITLE = re.compile(r'\b(?:Region\s+(?:IV-?[AB]|X{0,1}(?:IX|IV|V?I{0,3}))\b|NCR|CAR|BARMM|CARAGA|MIMAROPA|'
+                             r'CALABARZON|SOCCSKSARGEN)', re.I)
+# A regional office's region, from its name ("Regional Office X - Proper"), when the budget gives no region code
+# (FY2016–FY2017 files): src/lib/office-matrix.ts reads offices the same way.
+RO = re.compile(r'Regional Office\s+(NCR|CAR|NIR|MIMAROPA|BARMM|IV-?A|IV-?B|XIII|XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)\b'
+                r'|^(NCR|CAR|NIR|MIMAROPA|BARMM)\s+Regional Office', re.I)
+
+
+def ro_region(label: str | None) -> str | None:
+    m = RO.search(label or '')
+    if not m:
+        return None
+    r = (m.group(1) or m.group(2)).upper()
+    return 'IV-A' if r in ('IV-A', 'IVA') else 'MIMAROPA' if r in ('IV-B', 'IVB') else r
+
+
+BUCKET_CLASS = {'insertions': 'house_only', 'deletions': 'nep_only', 'unchanged': 'paired', 'increased': 'paired',
+                'reduced': 'paired', 'scope_review': 'paired'}
+
+
+def part_of(fy: int, code: str) -> str | None:
+    """A GAA line's part, or None when its code is not a road or bridge code in its year's code set."""
+    if fy <= FORMER_TO:
+        return 'former' if code.startswith(PARTS[-1][2]) else None
+    return next((k for k, _, prefixes in PARTS[:-1] if code.startswith(prefixes)), None)
+
+
+def stations(title: str) -> tuple[list[list[int]], bool]:
+    """Every station range printed in a title, in metres [[from, to], …], and whether one reads oddly."""
+    out, review = [], False
+    for m in STATIONS.finditer(title or ''):
+        a_km, a_m, b_km, b_m = m.groups()
+        a, b = int(a_km) * 1000 + float(a_m), int(b_km) * 1000 + float(b_m)
+        if abs(float(a_m)) > 999 or abs(float(b_m)) > 999 or b < a or b - a > MAX_RANGE_M:
+            review = True
+        pair = [round(a), round(b)]
+        if pair not in out:
+            out.append(pair)
+    return out, review
+
+
+def length_of(ranges: list[list[int]]) -> int | None:
+    return sum(abs(b - a) for a, b in ranges) if ranges else None
+
+
+def fail(msg: str):
+    raise SystemExit(f'build-hgab-roads: {msg}')
+
+
+def ensure(cond, msg: str):
+    if not cond:
+        fail(msg)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--upstream', required=True)
+    ap.add_argument('--lens', required=True)
+    ap.add_argument('--shapes', required=True)
+    ap.add_argument('--data', default='data')
+    ap.add_argument('--out', default='data/hgab/2027/roads')
+    ap.add_argument('--contracts', default='data/dpwh-contracts')
+    ap.add_argument('--cache', default='/tmp/hgab-mpb-years-cache')
+    ap.add_argument('--history', default='data/gaa-history')
+    args = ap.parse_args()
+    hist_dir = Path(args.history)
+    up, lens_dir, shapes, data, out, cache = (Path(args.upstream), Path(args.lens), Path(args.shapes), Path(args.data),
+                                              Path(args.out), Path(args.cache))
+    data_contracts = Path(args.contracts)
+    out.mkdir(parents=True, exist_ok=True)
+    log = lambda s: print(s, flush=True)
+
+    # ------------------------------------------------------------------ upstream code, imported as published
+    sys.path[:0] = [str(up / 'analysis/web'), str(up / 'master_list/scripts'), str(up / 'gps-analysis'),
+                    str(up / 'analysis/builders')]
+    import buildMpbPsgcApproxOverlay as approx  # noqa: E402
+    from locations import SCORE_METHOD, Matcher, normalize  # noqa: E402
+    from normalize_labels import apply_place_spellings  # noqa: E402
+    from readable_titles import TITLE_CLEAN_METHOD, readable_title  # noqa: E402
+    from scan_gps_inventory import analyze_text  # noqa: E402
+
+    catalog = [json.loads(s) for s in (up / 'PSGC2LEG/data/psgc_locations.jsonl').read_text().splitlines()]
+    psgc = {r['code']: r for r in catalog}
+    matcher = Matcher(catalog)
+    leg_assign = {}
+    for s in (up / 'PSGC2LEG/data/psgc_leg_assignments.jsonl').read_text().splitlines():
+        r = json.loads(s)
+        leg_assign[r['psgc_code']] = r
+
+    # ------------------------------------------------------------------ legislative districts and their outlines
+    dist_index = json.loads((data / 'hgab/2027/districts.json').read_text())
+    our_districts = {d['id']: d for d in dist_index['districts']}
+    offices = dist_index['offices']
+    dmap = json.loads((up / 'analysis/data/congress_district_map_2027.json').read_text())
+    psgc_leg_to_district = {}
+    district_geom = {}
+    for f in dmap['features']:
+        p = f['properties']
+        ensure(p['district_id'] in our_districts, f"district map id {p['district_id']} is not one of our districts")
+        psgc_leg_to_district[p['psgc_leg_id']] = p['district_id']
+        district_geom[p['district_id']] = shape(f['geometry'])
+    ensure(set(district_geom) == set(our_districts), 'district outlines do not cover our 254 districts')
+    dist_ids = sorted(district_geom)
+    tree = STRtree([district_geom[d] for d in dist_ids])
+
+    def on_land(lng, lat):
+        return len(tree.query(Point(lng, lat), predicate='dwithin', distance=LAND_TOLERANCE)) > 0
+
+    def gps_district(points):
+        hits = set()
+        for lng, lat in points:
+            for i in tree.query(Point(lng, lat), predicate='within'):
+                hits.add(dist_ids[i])
+        return next(iter(hits)) if len(hits) == 1 else None
+
+    # ------------------------------------------------------------------ centroids: the multi-purpose map's cache
+    pick = lambda d, *names: next((shapes / d / n for n in names if (shapes / d / n).exists()), shapes / d / names[0])
+    muni_shp = pick('Municities', 'Municities.shp.shp', 'PH_Adm3_MuniCities.shp.shp')
+    bgy_shp = pick('BgySubMuns', 'PH_Adm4_BgySubMuns.shp.shp')
+    centroid_cache = cache / f"centroids-{sha256(bgy_shp)[:12]}-{sha256(muni_shp)[:12]}.json"
+    ensure(centroid_cache.exists(), f'{centroid_cache} not found: run `npm run build:hgab-mpb-years` once (it writes it)')
+    centroids = json.loads(centroid_cache.read_text())
+    district_anchor = {d: g.representative_point() for d, g in district_geom.items()}
+
+    def union_anchor(ids):
+        p = unary_union([district_geom[d] for d in ids]).representative_point()
+        return float(p.x), float(p.y)
+
+    # ------------------------------------------------------------------ the place dictionary (as the multi-purpose map's)
+    places: dict[str, dict] = {}
+
+    def psgc_label(code):
+        anc = matcher.ancestry(code)
+        parts = [psgc[anc[lvl]]['name'] for lvl in ('barangay', 'sub_municipality', 'municipality', 'city', 'province')
+                 if lvl in anc]
+        return ', '.join(parts) or psgc[code]['name']
+
+    def leg_district_of(code):
+        anc = matcher.ancestry(code)
+        cands = ([anc['barangay']] if 'barangay' in anc else []) + [anc[l] for l in ('sub_municipality', 'municipality', 'city')
+                                                                    if l in anc]
+        for c in cands:
+            a = leg_assign.get(c)
+            if a and a.get('leg_id'):
+                return psgc_leg_to_district.get(a['leg_id'])
+        return None
+
+    province_districts = defaultdict(set)
+    for code, a in leg_assign.items():
+        if a.get('leg_id') and a.get('parent_province_code'):
+            province_districts[a['parent_province_code']].add(psgc_leg_to_district.get(a['leg_id']))
+
+    def district_of_place(code, level):
+        if level == 'province':
+            ds = {d for d in province_districts.get(code, set()) if d}
+            return next(iter(ds)) if len(ds) == 1 else None
+        return leg_district_of(code)
+
+    def psgc_place(code, level, anchor):
+        key = f'psgc:{code}'
+        if key not in places:
+            anc = matcher.ancestry(code)
+            places[key] = {
+                'key': key, 'level': level, 'label': psgc_label(code),
+                'lng': round(anchor['lng'], 6), 'lat': round(anchor['lat'], 6),
+                'region': PSGC_REGION.get(code[:2]),
+                'province': psgc[anc['province']]['name'] if 'province' in anc else None,
+                'district_ids': [d for d in [district_of_place(code, level)] if d],
+            }
+        return key
+
+    def district_place(district_id):
+        key = f'district:{district_id}'
+        if key not in places:
+            d, pt = our_districts[district_id], district_anchor[district_id]
+            places[key] = {'key': key, 'level': 'deo', 'label': d['label'], 'lng': round(pt.x, 6), 'lat': round(pt.y, 6),
+                           'region': region_key(d['region']), 'province': None, 'district_ids': [district_id]}
+        return key
+
+    def office_group_place(name, ids):
+        ids = sorted(ids)
+        key = 'offices:' + '+'.join(ids)
+        if key not in places:
+            lng, lat = union_anchor(ids)
+            regions = {region_key(our_districts[d]['region']) for d in ids}
+            places[key] = {'key': key, 'level': 'deo', 'label': name, 'lng': round(lng, 6), 'lat': round(lat, 6),
+                           'region': next(iter(regions)) if len(regions) == 1 else None, 'province': None,
+                           'district_ids': ids}
+        return key
+
+    by_region = defaultdict(list)
+    for d in dist_ids:
+        by_region[region_key(our_districts[d]['region'])].append(d)
+
+    def region_place(rk):
+        key = f'region:{rk}'
+        if key not in places:
+            lng, lat = union_anchor(by_region[rk])
+            places[key] = {'key': key, 'level': 'region', 'label': rk, 'lng': round(lng, 6), 'lat': round(lat, 6),
+                           'region': rk, 'province': None, 'district_ids': []}
+        return key
+
+    def town_of(code):
+        anc = matcher.ancestry(code)
+        return next((anc[k] for k in ('municipality', 'city', 'sub_municipality') if k in anc), None)
+
+    def place_for(code, level):
+        """Upstream resolve_centroid() for barangays, towns and cities (a barangay with no 2023 outline falls back to
+        its town), the 2023 outline for provinces; a town with no outline falls back to its province."""
+        anc = matcher.ancestry(code)
+        if level == 'province':
+            c = centroids.get(code) or centroids.get(approx.modernize(code))
+            return psgc_place(code, 'province', c) if c else None
+        q_code, q_level = (anc.get('city', code), 'city') if level == 'sub_municipality' else (code, level)
+        hit, reason = approx.resolve_centroid({'level': q_level, 'psgc_code': q_code,
+                                               'municipality_code': town_of(code) if level == 'barangay' else None},
+                                              centroids)
+        if hit:
+            if reason == 'direct':
+                return psgc_place(q_code, q_level, hit)
+            drawn = hit['psgc_code']
+            lvl = psgc[drawn]['level']
+            return psgc_place(drawn, 'city' if lvl == 'sub_municipality' else lvl, hit)
+        if 'province' in anc:
+            return place_for(anc['province'], 'province')
+        return None
+
+    # ------------------------------------------------------------------ region of a point (the contract check)
+    def region_of_point(lng, lat):
+        for i in tree.query(Point(lng, lat), predicate='within'):
+            return region_key(our_districts[dist_ids[i]]['region'])
+        return None
+
+    def screen(found):
+        """Points kept (in the Philippines, on land) and whether any was dropped."""
+        pts, dropped = [], False
+        for lng, lat in found:
+            if PH_LNG[0] < lng < PH_LNG[1] and PH_LAT[0] < lat < PH_LAT[1] and on_land(lng, lat):
+                if [round(lng, 6), round(lat, 6)] not in pts:
+                    pts.append([round(lng, 6), round(lat, 6)])
+            else:
+                dropped = True
+        return pts, dropped
+
+    def title_gps(text_published, text_clean):
+        g = analyze_text(text_published)
+        found = [(p.get('longitude'), p.get('latitude')) for p in (g or {}).get('points', [])
+                 if p.get('longitude') is not None and p.get('latitude') is not None]
+        wider = False
+        if not found:
+            found = wider_gps(text_clean)
+            wider = bool(found)
+        return found, wider
+
+    # ------------------------------------------------------------------ the lens and our 2027 lines
+    lens_path = lens_dir / 'analysis/data/location_district_index_2027.json'
+    comp_path = lens_dir / 'analysis/data/comparison_projects_2027.json'
+    lens = json.loads(lens_path.read_text())
+    ensure(sha256(comp_path) == lens['input_provenance']['comparison']['sha256'],
+           'the location lens was built from another comparison_projects_2027.json than the one beside it')
+    lens_commit = subprocess.run(['git', '-C', str(lens_dir), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+    site = json.loads((data / 'hgab/2027/locations.json').read_text())
+    ensure(site['lens_commit'] == lens_commit,
+           f"locations.json was built from the lens at {site['lens_commit'][:7]}, --lens holds {lens_commit[:7] or '?'}")
+    site_lines = {l['id']: l for l in site['lines']}
+    comp = {r['id']: r for r in json.loads(comp_path.read_text())['projects']}
+    bucket = {}
+    for card in lens['cards'] + lens['region_cards']:
+        for b, ids in card['row_ids'].items():
+            for rid in ids:
+                ensure(rid not in bucket, f'lens row {rid} on two cards')
+                bucket[rid] = b
+    group_districts = {card['id'].removeprefix('location:deo:'): [x['id'] for x in card['districts']]
+                       for card in lens['cards'] if card.get('location_tier') == 'deo'}
+
+    con = duckdb.connect()
+    projects = data / 'hgab/2027/dpwh/projects.parquet'
+    ours = []
+    for row in con.execute(f"""SELECT id, title, nep_php, hgab3_php, program, pap, office, region, nep_page, hgab3_page
+                               FROM read_parquet('{projects}') ORDER BY id""").fetchall():
+        program, pap = row[4], row[5]
+        part = ('drainage' if program == 'Asset Preservation Program' and DRAINAGE_2027.match(pap or '')
+                else PROGRAM_PART.get(program) or ('bip' if program == 'Convergence and Special Support Program'
+                                                   and BIP_2027.match(pap or '') else None)
+                or ('ppp' if program == 'Local Program' and PPP_2027.match(pap or '') else None))
+        if part:
+            ours.append((*row, part))
+    log(f'FY2027: {len(ours):,} road and bridge lines in our projects.parquet')
+
+    lines = []
+    census = Counter()
+    for rid, title_pub, nep, house, program, pap, office, region, nep_page, house_page, part in ours:
+        c = comp.get(rid)
+        ensure(c is not None, f'{rid} is not in the lens comparison')
+        ensure(c['title'] == title_pub and (c.get('nep') or {}).get('amount_php') == nep
+               and (c.get('third') or {}).get('amount_php') == house and c['pap'] == pap,
+               f'{rid}: our projects.parquet differs from the comparison the lens was built on')
+        cls = BUCKET_CLASS.get(bucket.get(rid))
+        ensure(cls, f'{rid}: lens bucket {bucket.get(rid)}')
+        res = lens['row_resolution'][rid]
+        sl = site_lines.get(rid)
+        ensure(sl is not None and sl['basis'] == res['basis'] and sl['target'] == res['target_id'],
+               f'{rid}: the district pages place it elsewhere')
+        flags = FLAGS['office_elsewhere'] if 'office_location_mismatch' in lens['row_flags'].get(rid, []) else 0
+        flags |= FLAGS['stretch_differs'] if bucket[rid] == 'scope_review' else 0
+        found, wider = title_gps(title_pub, title_pub)
+        pts, dropped = screen(found)
+        flags |= (FLAGS['gps_wider_reader'] if wider else 0) | (FLAGS['gps_not_drawn'] if dropped else 0)
+        rp = lens['row_psgc'].get(rid)
+        place_key = place_for(str(rp['psgc_code']).zfill(10), rp['level']) if rp and rp.get('psgc_code') else None
+        level = 'gps' if pts else (places[place_key]['level'] if place_key else None)
+        basis_map = {'title_psgc': 'title', 'deo_to_leg': 'deo'}
+        district = res['target_id'] if res['basis'] in basis_map else None
+        gd = gps_district(pts) if pts else None
+        if district and gd and gd != district:
+            flags |= FLAGS['gps_district_differs']
+        if level is None:
+            if res['basis'] in basis_map:
+                place_key, level = district_place(district), 'deo'
+            elif res['basis'] == 'deo':
+                ids = group_districts.get(res['target_id'])
+                ensure(ids, f'{rid}: office group {res["target_id"]} has no districts')
+                office_label = (c.get('third') or {}).get('office') or (c.get('nep') or {}).get('office') or ''
+                place_key, level = office_group_place(f'DPWH {office_label}'.strip(), ids), 'deo'
+            elif res['basis'] == 'region' and res['target_id'] == 'Nationwide':
+                level = 'none'
+            elif res['basis'] == 'region':
+                rk = region_key(res['target_id'])
+                ensure(rk, f'{rid}: region {res["target_id"]} unknown')
+                place_key, level = region_place(rk), 'region'
+            else:
+                level = 'none'
+        ranges, review = stations(title_pub)
+        flags |= FLAGS['stations_review'] if review else 0
+        census[level] += 1
+        lines.append({
+            'id': rid, 'fy': 2027, 'code': None, 'gaa_php': None, 'title': readable_title(title_pub)['title_clean'],
+            'office': office, 'pap': pap, 'part': part, 'level': level, 'place': place_key, 'pts': pts or None,
+            'district': district, 'basis': basis_map.get(res['basis']), 'flags': flags, 'nep_php': nep,
+            'house_php': house, 'class': cls,
+            'region': (places[place_key]['region'] if place_key else None) or region_key(region),
+            'nep_page': nep_page, 'house_page': house_page, 'contract': None, 'stations': ranges or None,
+            'length_m': length_of(ranges), 'sections': SECTION_ID.findall(title_pub) or None,
+        })
+    log('FY2027 placed: ' + ' '.join(f'{k}={census.get(k, 0)}' for k in LEVELS))
+
+    # ------------------------------------------------------------------ GAA FY2015–FY2026
+    site_years = [y for y in GAA_YEARS if y >= SITE_FROM]
+    fp = str(data / '18/fpaps/*/*.parquet')
+    ou = str(data / '18/operating_units/*/*.parquet')
+    years = ', '.join(str(y) for y in site_years)
+    con.sql(f"""CREATE TABLE f AS SELECT id, code, description, CAST(year AS INTEGER) fy,
+               CAST(ROUND(amount * 1000) AS BIGINT) php FROM read_parquet('{fp}', hive_partitioning = true)
+               WHERE CAST(year AS INTEGER) IN ({years})""")
+    con.sql(f"""CREATE TABLE o AS SELECT fpap_id, code ou_code, description ou_name, CAST(year AS INTEGER) fy,
+               CAST(ROUND(amount * 1000) AS BIGINT) php FROM read_parquet('{ou}', hive_partitioning = true)
+               WHERE amount > 0 AND CAST(year AS INTEGER) IN ({years})""")
+    paps = {(fy, code[:6]): tidy_label(d) for fy, code, d in con.sql(
+        "SELECT fy, code, description FROM f WHERE code LIKE '______000000000'").fetchall()}
+    full = str(data / '18/full_extract.csv')
+    con.sql(f"""CREATE TABLE reg AS SELECT DISTINCT CAST(year AS INTEGER) fy, prexc_fpap_id code, operunit ou_code, uacs_reg_id reg
+               FROM read_csv('{full}', all_varchar = true, header = true)
+               WHERE CAST(amt AS DOUBLE) > 0 AND prexc_fpap_id LIKE '3%' AND CAST(year AS INTEGER) IN ({years})""")
+    leaf = "f.php > 0 AND f.code NOT LIKE '%\\_%' ESCAPE '\\' AND length(f.code) = 15"
+    # A line split over several operating units (a bridge on an office boundary): their sum, under the largest office.
+    gaa_rows = [{'fy': fy, 'code': code, 'desc': desc, 'php': php, 'ou': ou_name, 'ou_php': ou_php, 'reg': reg,
+                 'source': 'site', 'offices': n_ou}
+                for fy, code, desc, php, ou_name, ou_php, reg, n_ou in con.sql(f"""
+                      WITH lo AS (SELECT f.fy, f.code, f.description, f.php, o.ou_code, o.ou_name, o.php ou_php
+                                  FROM f LEFT JOIN o ON o.fpap_id = f.id AND o.fy = f.fy WHERE {leaf}),
+                           lr AS (SELECT lo.*, (SELECT any_value(r.reg) FROM reg r WHERE r.fy = lo.fy AND r.code = lo.code
+                                                AND r.ou_code = lo.ou_code) reg FROM lo)
+                      SELECT fy, code, description, php, arg_max(ou_name, ou_php), SUM(ou_php), arg_max(reg, ou_php),
+                             count(DISTINCT ou_code)
+                      FROM lr GROUP BY fy, code, description, php ORDER BY fy, code""").fetchall()]
+    hist_years = [y for y in GAA_YEARS if y in HISTORY_YEARS]
+    hist_files = ', '.join(f"'{hist_dir / f'parquet/gaa-{fy}.parquet'}'" for fy in hist_years)
+    for fy, code, desc, php, ou_name, reg, n_ou in con.sql(f"""SELECT fy, fpap_code, any_value(fpap_dsc), SUM(amount),
+               arg_max(operunit_dsc, amount), arg_max(region_code, amount), count(DISTINCT operunit_dsc)
+               FROM read_parquet([{hist_files}], union_by_name = true)
+               WHERE department_id = '18' GROUP BY 1, 2 HAVING SUM(amount) > 0 ORDER BY 1, 2""").fetchall():
+        gaa_rows.append({'fy': fy, 'code': code, 'desc': desc, 'php': php, 'ou': ou_name, 'ou_php': php, 'reg': reg,
+                         'source': 'history', 'offices': n_ou})
+    t19 = gaa2019.parse(str(hist_dir / TEXT_2019))
+    ensure(t19['department_total'] == sum(x['php'] for x in t19['lines']),
+           'FY2019: the parsed DPWH lines do not add up to the document\'s total')
+    for x in t19['lines']:
+        gaa_rows.append({'fy': TEXT_YEAR, 'code': x['code'], 'desc': x['title'], 'php': x['php'], 'ou': x['office'],
+                         'ou_php': x['php'], 'reg': None, 'reg_label': x['region'], 'source': 'text', 'offices': 1,
+                         'page': x['page']})
+    paps.update({(TEXT_YEAR, k): tidy_label(v) for k, v in t19.get('pap_titles', {}).items()})
+    # Independent of the rows above: each modern part's total straight from the extract (the check below).
+    extract_parts = defaultdict(int)
+    for fy, code, php in con.sql(f"""SELECT CAST(year AS INTEGER), prexc_fpap_id, SUM(CAST(ROUND(CAST(amt AS DOUBLE) * 1000) AS BIGINT))
+               FROM read_csv('{full}', all_varchar = true, header = true) WHERE uacs_exp_cd = '6'
+               AND CAST(year AS INTEGER) IN ({years}) GROUP BY 1, 2 HAVING SUM(CAST(amt AS DOUBLE)) > 0""").fetchall():
+        p = part_of(fy, code)
+        if p:
+            extract_parts[(fy, p)] += php
+    titled_elsewhere = Counter()
+    in_scope = []
+    for r in gaa_rows:
+        r['part'] = part_of(r['fy'], r['code'])
+        if r['part']:
+            in_scope.append(r)
+        elif ROAD_WORDS.search(r['desc'] or ''):
+            titled_elsewhere[(r['fy'], 'lines')] += 1
+            titled_elsewhere[(r['fy'], 'php')] += r['php']
+    gaa_rows = in_scope
+    for pap in sorted({r['code'][:6] for r in gaa_rows if r['fy'] == TEXT_YEAR}):
+        rc = t19['recon'].get(pap)
+        ensure(rc and rc['ok'], f'FY2019 {pap}: the lines do not add up to the heading the document prints ({rc})')
+
+    # The matched contracts' points (FY2020–FY2026).
+    links = data_contracts / 'gaa-2020-2026/links.parquet'
+    contracts_file = data_contracts / 'contracts.parquet'
+    contract = {lid: (cid, method, lat, lng) for lid, cid, method, lat, lng in con.sql(f"""
+        SELECT k.line_id, k.contract_id, k.method, c.latitude, c.longitude FROM read_parquet('{links}') k
+        LEFT JOIN read_parquet('{contracts_file}') c ON c.contractId = k.contract_id""").fetchall()}
+    log(f'contracts: {len(contract):,} FY{CONTRACTS_FROM}–FY{CONTRACTS_TO} lines linked to a DPWH contract')
+
+    label_office = {}
+    label_any = {}
+    for oid, o in offices.items():
+        for y in o['years']:
+            if y['stage'] == 'gaa' and y['matched_label']:
+                for lab in y['matched_label'].split(' + '):
+                    label_office[(y['fy'], lab)] = oid
+                    label_any.setdefault(lab, oid)
+    magui = {'1908700000': [], '1908800000': []}  # Maguindanao del Norte, del Sur (RA 11550)
+    for r in catalog:
+        if r['level'] in ('municipality', 'city') and r['parent_code'] in magui:
+            magui[r['parent_code']].append(normalize(r['name']))
+
+    def maguindanao_successor(title):
+        if not re.search(r'\bMaguindanao\b(?!\s+del\b)', title):
+            return None
+        words = f' {normalize(title)} '
+        hits = [code for code, towns in magui.items() if any(f' {t} ' in words for t in towns)]
+        return hits[0] if len(hits) == 1 else None
+
+    def head_office_province(title):
+        provs = {c for h in matcher.find(apply_place_spellings(title)) for c in h['codes'] if psgc[c]['level'] == 'province'}
+        return next(iter(provs)) if len(provs) == 1 else None
+
+    def title_region_named(title):
+        hits = {region_key(m.group(0)) for m in REGION_IN_TITLE.finditer(title)} - {None}
+        return hits.pop() if len(hits) == 1 else None
+
+    gaa_census = Counter()
+    contract_census = Counter()
+    seen = set()
+    for row in gaa_rows:
+        fy, code, desc, php, ou_name, ou_php, reg = (row['fy'], row['code'], row['desc'], row['php'], row['ou'],
+                                                      row['ou_php'], row['reg'])
+        lid = f'gaa:{fy}:{code}'
+        ensure(lid not in seen, f'{lid} twice')
+        seen.add(lid)
+        ensure(ou_name is not None and ou_php == php, f'{lid}: operating unit amount {ou_php} != line amount {php}')
+        title, repairs = repair_text(desc)
+        title = readable_title(title)['title_clean']
+        prog = PAP_IN_TITLE.match(title)
+        if prog:
+            title = title[prog.end():]
+        flags = (FLAGS['text_repaired'] if repairs else 0) | (FLAGS['several_offices'] if row['offices'] > 1 else 0)
+        office_id = label_office.get((fy, ou_name)) or (label_any.get(ou_name) if fy < SITE_FROM else None)
+        office = offices.get(office_id) if office_id else None
+        is_deo = 'District Engineering Office' in ou_name
+        is_co = ou_name == 'Central Office'
+        office_region = (region_key(office['region']) if office
+                         else (UACS_REGION.get(reg) or ro_region(ou_name)) if not is_co else None)
+        region_hint = matcher.region_code({'NCR': 'NCR', 'CAR': 'CAR', 'BARMM': 'BARMM', 'NIR': 'NIR', 'MIMAROPA': 'MIMAROPA',
+                                           'XIII': 'Region XIII'}.get(office_region, f'Region {office_region}')) if office_region else None
+        office_hint = matcher.province_code(apply_place_spellings(ou_name)) if is_deo else None
+
+        # 1. the matched contract's point
+        ct = contract.get(lid)
+        cpts = []
+        if ct:
+            contract_census[(fy, 'linked')] += 1
+            if ct[2] is not None and ct[3] is not None and (ct[2], ct[3]) != (0, 0):
+                cpts, dropped = screen([(float(ct[3]), float(ct[2]))])
+                if dropped:
+                    flags |= FLAGS['gps_not_drawn']
+            if cpts:
+                contract_census[(fy, 'point')] += 1
+                pr = region_of_point(*cpts[0])
+                if office_region and pr and pr != office_region:
+                    flags |= FLAGS['contract_region_differs']
+
+        # 2. GPS in the title
+        found, wider = title_gps(desc, title)
+        pts, dropped = screen(found)
+        flags |= (FLAGS['gps_wider_reader'] if wider else 0) | (FLAGS['gps_not_drawn'] if dropped else 0)
+
+        # 3. the place the title names
+        match_title = DISTRICT_QUALIFIER.sub('', title) if fy < SITE_FROM else title
+        succ = maguindanao_successor(title)
+        if succ:
+            match_title = re.sub(r'\bMaguindanao\b(?!\s+del\b)', psgc[succ]['name'], match_title)
+            flags |= FLAGS['maguindanao_successor']
+        m = matcher.match(match_title, (), region_hint, office_hint)
+        locs = m['locations'] if m['status'] in ('name_matched', 'multiple_locations', 'province_only') else []
+        place_code, place_level = None, None
+        if len(locs) == 1:
+            place_code, place_level = locs[0]['psgc_code'], locs[0]['level']
+        elif len(locs) > 1:
+            specific = [l for l in locs if l['level'] != 'province']
+            towns = {town_of(l['psgc_code']) for l in specific}
+            provs = {l['ancestry'].get('province', {}).get('code') for l in specific}
+            if len(specific) == 1:
+                place_code, place_level = specific[0]['psgc_code'], specific[0]['level']
+            elif specific and len(towns) == 1 and None not in towns:
+                place_code = towns.pop()
+                place_level = psgc[place_code]['level']
+            elif specific and len(provs) == 1 and None not in provs:
+                place_code, place_level = provs.pop(), 'province'
+        if place_level == 'special_geographic_area':
+            place_code = place_level = None
+        if is_co and place_code is None and not pts and not cpts:
+            place_code = head_office_province(match_title)
+            if place_code:
+                place_level = 'province'
+        title_region = PSGC_REGION.get(place_code[:2]) if place_code else None
+
+        # 4. the office, 5. the region
+        place_key = place_for(place_code, place_level) if place_code else None
+        level = 'contract' if cpts else 'gps' if pts else (places[place_key]['level'] if place_key else None)
+        if level is None:
+            dids = office['district_ids'] if office else []
+            # a head-office line: the region the budget lists it under (FY2019: the document's region heading)
+            listed = (UACS_REGION.get(reg) or region_key(row.get('reg_label'))) if is_co else None
+            if len(dids) == 1:
+                place_key, level = district_place(dids[0]), 'deo'
+            elif len(dids) > 1:
+                place_key, level = office_group_place(f"DPWH {office['name']}", dids), 'deo'
+            elif office_hint and place_for(office_hint, 'province'):
+                # an office the crosswalk does not know (an older name): the province it is named for
+                place_key, level = place_for(office_hint, 'province'), 'deo'
+            elif office_region or title_region_named(title) or listed:
+                place_key, level = region_place(office_region or title_region_named(title) or listed), 'region'
+            else:
+                level = 'none'
+
+        # legislative district: the contract's point, else the title's place, else its GPS, else the office's one district
+        district, basis = None, None
+        cd = gps_district(cpts) if cpts else None
+        if cd:
+            district, basis = cd, 'contract'
+        td = district_of_place(place_code, place_level) if place_code else None
+        if district is None and td:
+            district, basis = td, 'title'
+        gd = gps_district(pts) if pts else None
+        if district is None and gd:
+            district, basis = gd, 'gps'
+        if (cd or gd) and td and (cd or gd) != td:
+            flags |= FLAGS['gps_district_differs']
+        if district is None and office and len(office['district_ids']) == 1:
+            district, basis = office['district_ids'][0], 'deo'
+        title_prov = matcher.ancestry(place_code).get('province') if place_code else None
+        if office_hint and title_prov and title_prov != office_hint:
+            flags |= FLAGS['office_elsewhere']
+
+        ranges, review = stations(desc)
+        flags |= FLAGS['stations_review'] if review else 0
+        gaa_census[(fy, level)] += 1
+        pap = (paps.get((fy, code[:6])) or (paps.get((SITE_FROM, code[:6])) if fy > FORMER_TO else None)
+               or PART_LABEL[row['part']])
+        point_region = region_of_point(*(cpts or pts)[0]) if (cpts or pts) else None
+        lines.append({
+            'id': lid, 'fy': fy, 'code': code, 'gaa_php': php, 'title': title,
+            'title_published': desc if title != desc else None, 'office': ou_name, 'pap': pap, 'part': row['part'],
+            'level': level, 'place': place_key, 'pts': cpts or pts or None,
+            'district': district, 'basis': basis, 'flags': flags, 'nep_php': None, 'house_php': None, 'class': None,
+            'region': (point_region if cpts else None) or title_region or office_region
+                      or (places[place_key]['region'] if place_key else None),
+            'nep_page': None, 'house_page': None, 'gaa_page': row.get('page'),
+            'contract': ct[0] if ct else None, 'stations': ranges or None, 'length_m': length_of(ranges),
+            'sections': SECTION_ID.findall(desc) or None,
+        })
+    for fy in GAA_YEARS:
+        log(f'FY{fy} GAA placed: ' + ' '.join(f'{k}={gaa_census.get((fy, k), 0)}' for k in LEVELS)
+            + (f"  (contracts: {contract_census[(fy, 'linked')]:,} linked, {contract_census[(fy, 'point')]:,} with a point)"
+               if fy >= CONTRACTS_FROM else ''))
+
+    # FY2027: titles with road words outside the scope (not counted)
+    scope_ids = {l['id'] for l in lines if l['fy'] == 2027}
+    for rid, title_pub, nep, house in con.execute(f"SELECT id, title, nep_php, hgab3_php FROM read_parquet('{projects}')").fetchall():
+        if rid not in scope_ids and ROAD_WORDS.search(title_pub or ''):
+            for stage, v in (('nep', nep), ('house', house)):
+                if v is not None:
+                    titled_elsewhere[(2027, stage, 'lines')] += 1
+                    titled_elsewhere[(2027, stage, 'php')] += v
+
+    # ------------------------------------------------------------------ budgets and checks
+    history = json.loads((data / 'hgab/2027/history.json').read_text())
+    col = {c['key']: i for i, c in enumerate(history['columns'])}
+    series = {s['key']: s for s in history['series']}
+    chart_part = {  # our part -> the multi-purpose page's chart: (series, part or None for the whole series)
+        'bip': ('bip', 'roads'), 'sipag': ('sipag', 'roads'), 'local': ('local_roads', None)}
+    checks = []
+
+    def check(key, ok, detail):
+        checks.append({'key': key, 'ok': bool(ok), 'detail': detail})
+        ensure(ok, f'check {key} failed: {detail}')
+
+    amount = lambda l, b: l['gaa_php'] if b['stage'] == 'gaa' else (l['nep_php'] if b['stage'] == 'nep' else l['house_php'])
+    budgets = []
+    for b in BUDGETS:
+        sel = [l for l in lines if l['fy'] == b['fy'] and amount(l, b) is not None]
+        php = sum(amount(l, b) for l in sel)
+        parts = Counter()
+        for l in sel:
+            parts[(l['part'], 'lines')] += 1
+            parts[(l['part'], 'php')] += amount(l, b)
+        for p, (sk, pk) in chart_part.items():
+            if b['key'] not in col:
+                continue
+            s = series[sk]
+            want = (next(x for x in s['parts'] if x['key'] == pk)['php'][col[b['key']]] if pk else s['php'][col[b['key']]])
+            if want is None:
+                continue
+            check(f'chart:{b["key"]}:{p}', parts[(p, 'php')] == want,
+                  f"{b['key']} {PART_LABEL[p]}: the lines add up to ₱{parts[(p, 'php')]:,}; the chart says ₱{want:,}")
+        if b['stage'] == 'gaa' and b['fy'] >= SITE_FROM:
+            for p, _, _ in PARTS[:-1]:
+                check(f'extract:{b["key"]}:{p}', parts[(p, 'php')] == extract_parts[(b['fy'], p)],
+                      f"{b['key']} {PART_LABEL[p]}: ₱{parts[(p, 'php')]:,} = the extract's capital outlays under its codes")
+        lv = Counter(l['level'] for l in sel)
+        with_len = [l for l in sel if l['length_m']]
+        out_key = (b['fy'], 'lines') if b['stage'] == 'gaa' else (2027, b['stage'], 'lines')
+        budgets.append({
+            **b, 'lines': len(sel), 'php': php,
+            'source': SOURCES['site' if b['fy'] >= SITE_FROM and b['stage'] == 'gaa' else 'text' if b['fy'] == TEXT_YEAR
+                              else 'history' if b['stage'] == 'gaa' else b['stage']].format(
+                                  kind='CSV' if b['fy'] == 2015 else 'spreadsheet'),
+            'parts': [{'key': k, 'label': label, 'lines': parts[(k, 'lines')], 'php': parts[(k, 'php')]}
+                      for k, label, _ in PARTS if parts[(k, 'lines')]],
+            'levels': {k: lv.get(k, 0) for k in LEVELS},
+            'contracts': {'linked': sum(1 for l in sel if l['contract']), 'placed': lv.get('contract', 0)},
+            'stations': {'lines': len(with_len), 'length_m': sum(l['length_m'] for l in with_len),
+                         'review': sum(1 for l in sel if l['flags'] & FLAGS['stations_review'])},
+            'classes': dict(Counter(l['class'] for l in sel if l['class'])),
+            'road_titled_elsewhere': {'lines': titled_elsewhere[out_key], 'php': titled_elsewhere[out_key[:-1] + ('php',)]},
+        })
+        log(f"  {b['key']:<11} {len(sel):>6,} lines  ₱{php:>17,}  " + ' '.join(f'{k}={lv.get(k, 0)}' for k in LEVELS)
+            + f"  stations={len(with_len):,}")
+    for l in lines:
+        ensure(l['level'] in LEVELS, f"{l['id']}: no placement")
+        ensure((l['level'] in ('contract', 'gps')) == bool(l['pts']) or (l['level'] not in ('contract', 'gps') and l['pts'] is None),
+               f"{l['id']}: point placement without points or the reverse")
+        ensure(l['level'] in ('contract', 'gps', 'none') or l['place'] in places, f"{l['id']}: placed nowhere")
+    check('placement:every-line-once', sum(census.values()) + sum(gaa_census.values()) == len(lines) == len(ours) + len(gaa_rows),
+          f'{len(lines):,} lines, each placed once')
+    placed_by_contract = sum(1 for l in lines if l['level'] == 'contract')
+    check('contracts:first', placed_by_contract == sum(v for (fy, k), v in contract_census.items() if k == 'point'),
+          f'{placed_by_contract:,} lines placed by their DPWH contract’s point: every linked line whose contract has a usable point')
+    heads19 = sorted({l['code'][:6] for l in lines if l['fy'] == TEXT_YEAR})
+    check('2019:headings', all(t19['recon'].get(p, {}).get('ok') for p in heads19),
+          f'FY2019: each of the {len(heads19)} road and bridge headings the technical GAA prints equals the lines under it')
+    for p in places.values():
+        ensure(p['lng'] is not None, f"place {p['key']} has no anchor")
+
+    # ------------------------------------------------------------------ the matrices: each region / district, every budget
+    matrix_rows = defaultdict(lambda: [[0, 0] for _ in BUDGETS])
+    district_rows = defaultdict(lambda: [[0, 0] for _ in BUDGETS])
+    matrix_totals = [[0, 0] for _ in BUDGETS]
+    for l in lines:
+        for i, b in enumerate(BUDGETS):
+            v = amount(l, b) if l['fy'] == b['fy'] else None
+            if v is None:
+                continue
+            for cell in (matrix_rows[l['region']][i], district_rows[l['district']][i], matrix_totals[i]):
+                cell[0] += 1
+                cell[1] += v
+    for i, b in enumerate(budgets):
+        ensure(matrix_totals[i] == [b['lines'], b['php']], f"matrix {b['key']} differs from the budget's lines")
+
+    # ------------------------------------------------------------------ every line as CSV (every budget)
+    level_words = {'contract': 'DPWH contract’s point', 'gps': 'GPS in the title', 'barangay': 'barangay named in the title',
+                   'municipality': 'municipality named in the title', 'city': 'city named in the title',
+                   'province': 'province named in the title', 'deo': 'DPWH office', 'region': 'region',
+                   'none': 'not placed (no place, office or region given; 2027: budgeted nationwide)'}
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator='\n')
+    w.writerow(CSV_COLUMNS)
+    for l in sorted(lines, key=lambda l: (l['fy'], l['code'] or l['id'])):
+        pl = places.get(l['place']) if l['place'] else None
+        pt = l['pts'][0] if l['pts'] else ((pl['lng'], pl['lat']) if pl else ('', ''))
+        w.writerow([
+            l['fy'], 'GAA' if l['fy'] < 2027 else 'NEP and House bill', l['code'] or l['id'], l['code'] or '', l['title'],
+            l.get('title_published') or '', PART_LABEL[l['part']], l['pap'], l['office'] or '',
+            l['gaa_php'] if l['gaa_php'] is not None else '', l['nep_php'] if l['nep_php'] is not None else '',
+            l['house_php'] if l['house_php'] is not None else '',
+            {'house_only': 'house_bill_only', 'nep_only': 'nep_only', 'paired': 'in_both'}.get(l['class'], ''),
+            l['region'] or '', level_words[l['level']], pl['label'] if pl else '',
+            pl['key'].removeprefix('psgc:') if pl and pl['key'].startswith('psgc:') else '', pt[0], pt[1],
+            our_districts[l['district']]['label'] if l['district'] else '', l['district'] or '', l['basis'] or '',
+            l['contract'] or '', ';'.join(f'{a}-{b}' for a, b in l['stations'] or []), l['length_m'] or '',
+            ';'.join(l['sections'] or []), ';'.join(k for k, bit in FLAGS.items() if l['flags'] & bit),
+            l['gaa_page'] or '' if l['fy'] < 2027 else '', l['nep_page'] or '', l['house_page'] or '',
+        ])
+    (out / 'lines.csv').write_bytes(('﻿' + buf.getvalue()).encode('utf-8'))
+
+    # ------------------------------------------------------------------ one file per budget (the multi-purpose map's format)
+    built_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    district_ix = {d: i for i, d in enumerate(dist_ids)}
+    cols = ['id', 'fy', 'title', 'office', 'pap', 'part', 'level', 'place', 'district', 'basis', 'region', 'flags',
+            'gaa_php', 'pts', 'contract', 'stations', 'length_m', 'sections', 'nep_php', 'house_php', 'class',
+            'gaa_page', 'nep_page', 'house_page']
+    nx = lambda d, k: -1 if k is None else d[k]
+    part_keys = [k for k, _, _ in PARTS]
+    outputs = {}
+    for b in BUDGETS:
+        sel = [l for l in lines if l['fy'] == b['fy'] and amount(l, b) is not None]
+        used = {l['place'] for l in sel if l['place']}
+        place_list = sorted((p for p in places.values() if p['key'] in used), key=lambda p: p['key'])
+        place_ix = {p['key']: i for i, p in enumerate(place_list)}
+        office_list = sorted({l['office'] for l in sel if l['office']})
+        office_ix = {o: i for i, o in enumerate(office_list)}
+        pap_list = sorted({l['pap'] for l in sel})
+        pap_ix = {p: i for i, p in enumerate(pap_list)}
+        region_list = sorted({l['region'] for l in sel if l['region']} | {p['region'] for p in place_list if p['region']})
+        region_ix = {r: i for i, r in enumerate(region_list)}
+
+        def row_of(l):
+            r = [l['code'] if l['fy'] < 2027 else l['id'], l['fy'], l['title'], nx(office_ix, l['office']),
+                 pap_ix[l['pap']], part_keys.index(l['part']), LEVELS.index(l['level']), nx(place_ix, l['place']),
+                 nx(district_ix, l['district']), BASES.index(l['basis']), nx(region_ix, l['region']), l['flags'],
+                 l['gaa_php'], l['pts'], l['contract'], l['stations'], l['length_m'], l['sections'], l['nep_php'],
+                 l['house_php'], CLASSES.index(l['class']) if l['class'] else None, l['gaa_page'] if l['fy'] < 2027 else None,
+                 l['nep_page'], l['house_page']]
+            while r and r[-1] is None:
+                r.pop()
+            return r
+        name = f"lines-{b['key']}.json"
+        write_json(out / name, {
+            'schema': 1, 'built_at': built_at, 'source_commit': COMMIT, 'budget': b,
+            'levels': LEVELS, 'bases': BASES, 'parts': part_keys, 'classes': CLASSES, 'flag_bits': FLAGS,
+            'regions': region_list,
+            'districts': [[d, our_districts[d]['label'], nx(region_ix, region_key(our_districts[d]['region']))] for d in dist_ids],
+            'offices': office_list, 'paps': pap_list,
+            'place_cols': ['key', 'level', 'label', 'lng', 'lat', 'region', 'districts'],
+            'places': [[p['key'].removeprefix('psgc:'), LEVELS.index(p['level']), p['label'], p['lng'], p['lat'],
+                        nx(region_ix, p['region']), [district_ix[d] for d in p['district_ids']]] for p in place_list],
+            'cols': cols, 'rows': [row_of(l) for l in sel],
+        })
+        outputs[name] = {'sha256': sha256(out / name), 'bytes': (out / name).stat().st_size}
+    outputs['lines.csv'] = {'sha256': sha256(out / 'lines.csv'), 'bytes': (out / 'lines.csv').stat().st_size}
+
+    summary = {
+        'schema': 1, 'built_at': built_at,
+        'source': {'repo': f'https://github.com/{REPO}', 'commit': COMMIT, 'files': {f: sha256(up / f) for f in FILES},
+                   'lens': {'commit': lens_commit, 'built_at': lens['built_at'], 'sha256': sha256(lens_path)},
+                   'methods': {'title_place': SCORE_METHOD, 'title_cleanup': TITLE_CLEAN_METHOD,
+                               'centroids': 'buildMpbPsgcApproxOverlay.resolve_centroid'}},
+        'inputs': {**{f: {'path': str(data / f), 'sha256': sha256(data / f)}
+                      for f in ('hgab/2027/dpwh/projects.parquet', 'hgab/2027/districts.json', 'hgab/2027/locations.json',
+                                'hgab/2027/history.json', '18/full_extract.csv')},
+                   'contract_links': {'path': str(links), 'sha256': sha256(links)},
+                   'contracts': {'path': str(contracts_file), 'sha256': sha256(contracts_file)}},
+        'parts': [{'key': k, 'label': label, 'codes': list(prefixes)} for k, label, prefixes in PARTS],
+        'fy2027_scope': {'programs': PROGRAM_PART, 'bip_paps': BIP_2027.pattern, 'drainage_paps': DRAINAGE_2027.pattern,
+                     'ppp_paps': PPP_2027.pattern},
+        'road_words': ROAD_WORDS.pattern,
+        'budgets': budgets,
+        'matrix': {'budgets': BUDGETS,
+                   'rows': [{'region': r, 'cells': cells}
+                            for r, cells in sorted(matrix_rows.items(), key=lambda x: (x[0] is None, x[0] or ''))],
+                   'totals': matrix_totals},
+        'district_matrix': {'rows': [{'district': d, 'cells': cells}
+                                     for d, cells in sorted(district_rows.items(), key=lambda x: (x[0] is None, x[0] or ''))]},
+        'totals': {'lines': len(lines), 'places': len(places),
+                   'flags': {k: sum(1 for l in lines if l['flags'] & bit) for k, bit in FLAGS.items()}},
+        'checks': checks,
+        'outputs': outputs,
+    }
+    write_json(out / 'summary.json', summary, indent=1)
+    for f in sorted(outputs) + ['summary.json']:
+        log(f'  wrote {out / f}  {(out / f).stat().st_size / 1e6:.2f} MB')
+
+
+# lines.csv: one row per line and budget year.
+CSV_COLUMNS = ['fiscal_year', 'document', 'line_id', 'uacs_code', 'title', 'title_as_published', 'part', 'pap',
+               'dpwh_office', 'gaa_php', 'nep_php', 'house_bill_php', 'fy2027_comparison', 'region', 'placed_by', 'place',
+               'place_psgc', 'longitude', 'latitude', 'legislative_district', 'legislative_district_id', 'district_from',
+               'dpwh_contract', 'stations_m', 'length_m', 'dpwh_section_ids', 'flags', 'gaa_pdf_page', 'nep_pdf_page',
+               'house_bill_pdf_page']
+
+
+if __name__ == '__main__':
+    main()

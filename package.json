@@ -39,6 +39,7 @@
     "sync:hgab-auto-reviews": "tsx scripts/hgab-review/sync-auto-reviews.ts",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:hgab-flood-compare": "bash scripts/hgab-flood-compare/run.sh",
+    "build:hgab-roads": "bash scripts/hgab-roads/run.sh",
     "build:hgab-congress-seats": "tsx scripts/build-hgab-congress-seats.ts",
     "build:hgab-contractors": "bash scripts/dpwh-contracts/run.sh",
     "build:hgab-mpb-boards": "tsx scripts/build-hgab-mpb-boards.ts",
