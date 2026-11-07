@@ -1,0 +1,26 @@
+[
+  {
+    "document_id": "8e892904740df8ecfe3c8ee8",
+    "source_sha256": "9d5ecd1ed63e82c8242e044be96dd64236b2d1fd0f0009932c8a31aa5338fa4f",
+    "agency": "Comprehensive Agrarian Reform Program",
+    "reason": "Name read from the printed title or authorization paragraph. HTML omits the usual Roman-numeral heading."
+  },
+  {
+    "document_id": "1e903c5dc569d6dc4d90516a",
+    "source_sha256": "6f0271444247266528793485b70f5bef280be8cb9e242f408c73fe22d61e3e05",
+    "agency": "Contingent Fund",
+    "reason": "Name read from the printed title or authorization paragraph. HTML omits the usual Roman-numeral heading."
+  },
+  {
+    "document_id": "3ce368692ad873e1533507bc",
+    "source_sha256": "0767b4e0d418859b194011a1a32aa08ce02967aab4f44a0303d2d4e6a95fdd34",
+    "agency": "DECS - Basic Education Facilities",
+    "reason": "Name read from the printed title or authorization paragraph. HTML omits the usual Roman-numeral heading."
+  },
+  {
+    "document_id": "51d75678a89ddeb1bff17569",
+    "source_sha256": "c9d3dd3042bcf3b5f02721852f142a48063688b8eb3fa429206cacdec81c547c",
+    "agency": "General Fund Adjustments",
+    "reason": "Name read from the printed title or authorization paragraph. HTML omits the usual Roman-numeral heading."
+  }
+]

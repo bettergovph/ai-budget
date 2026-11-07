@@ -48,6 +48,7 @@ To serve data from `public/data` instead, leave `VITE_DATA_BASE_URL` unset. In t
 | `npm run dump:sql` | Export the SQLite database as D1-compatible SQL |
 | `npm run upload:r2 -- --all` | Upload generated JSON and Parquet assets to R2 |
 | `npm run build:gaa-series` | Build `data/gaa-explorer/series.json`, the FY2000–2026 national and per-department series the `/gaa` and `/d/:id` trend charts read, from the GAA Explorer manifest; `-- --upload` publishes it to R2 (see [docs/gaa-explorer.md](docs/gaa-explorer.md)) |
+| `scripts/hf/publish.py <dataset>` | Stage a dataset for Hugging Face (`bettergovph/*`) with its card and manifest, as a dry run; `--upload` publishes it (see [docs/hf-datasets.md](docs/hf-datasets.md)) |
 | `npm run build:citizen-reports` | Retake the `/citizen-reports` card screenshots (headless Chromium) into `public/screenshots/`; the sites are listed in `src/lib/citizen-reports.ts` |
 | `hearings` sync | Hearing transcripts are published by the [transcriptions pipeline](../transcriptions): `sync_to_site.py` uploads `hearings/<videoId>/` files to R2 and upserts `hearings` rows into D1. Served at `/hearings` (grid) and `/hearings/:videoId` (interactive transcript + summary). |
 
