@@ -61,6 +61,7 @@ CLUSTER_M = 45_000                       # anchors used together lie within this
 ON_ROAD_M = 250                          # an anchor counts when it lies this close to the OSM road
 FIT_TOL_M = 300                          # an anchor agrees with a fit within this
 SCALE_MIN, SCALE_MAX = 0.8, 1.25         # metres of road per metre of station
+MAX_CANDIDATES = 8                       # a contract with more stretches than this gives no candidates
 EXTRAPOLATE_M = 5000                     # a cut no further than this outside the anchors' stations
 # Stations from kilometre zero of a national road; a local road's own stations (Sta. 0+183) start at 0 for every road,
 # so two roads in one town could share a name and stations: neither anchors nor is anchored below this.
@@ -127,29 +128,38 @@ def sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def robust_fit(pairs: list[tuple[float, float]]):
-    """(station m, road position m) pairs → (slope, intercept, inliers, median residual) or None. Every pair of anchors
-    at least 300 m of station apart proposes a fit; the one most pairs agree with (within FIT_TOL_M) wins."""
+def robust_fit(pairs: list[tuple]):
+    """(station m, road position m[, source, candidate]) pairs → (slope, intercept, inliers, median residual) or None.
+    Every pair of anchors from two sources at least 300 m of station apart proposes a fit; the one most sources agree
+    with (within FIT_TOL_M) wins. A source (a contract) counts once: a contract with stretches far apart gives one
+    candidate per stretch (`candidate` true), and only the one on the fit can agree. A fit that leans on candidates needs
+    three sources."""
+    pairs = [(p[0], p[1], p[2] if len(p) > 2 else i, p[3] if len(p) > 3 else False) for i, p in enumerate(pairs)]
     best = None
     n = len(pairs)
     for i in range(n):
         for j in range(i + 1, n):
-            (k1, s1), (k2, s2) = pairs[i], pairs[j]
-            if abs(k2 - k1) < 300:
+            (k1, s1, c1, _), (k2, s2, c2, _) = pairs[i], pairs[j]
+            if c1 == c2 or abs(k2 - k1) < 300:
                 continue
             slope = (s2 - s1) / (k2 - k1)
             if not SCALE_MIN <= abs(slope) <= SCALE_MAX:
                 continue
             icpt = s1 - slope * k1
-            res = [abs(s - (icpt + slope * k)) for k, s in pairs]
-            inl = [x for x, r in zip(pairs, res) if r <= FIT_TOL_M]
-            key = (len(inl), -sum(r for r in res if r <= FIT_TOL_M))
+            agree = {}
+            for k, s, c, cand in pairs:
+                r = abs(s - (icpt + slope * k))
+                if r <= FIT_TOL_M and (c not in agree or r < agree[c][0]):
+                    agree[c] = (r, (k, s, c, cand))
+            key = (len(agree), -sum(r for r, _ in agree.values()))
             if best is None or key > best[0]:
-                best = (key, inl)
+                best = (key, [x for _, x in agree.values()])
     if not best or len(best[1]) < 2:
         return None
     inl = best[1]
-    ks, ss = np.array([k for k, _ in inl]), np.array([s for _, s in inl])
+    if any(x[3] for x in inl) and len(inl) < 3:
+        return None
+    ks, ss = np.array([x[0] for x in inl]), np.array([x[1] for x in inl])
     slope, icpt = np.polyfit(ks, ss, 1) if len(inl) > 2 else ((ss[1] - ss[0]) / (ks[1] - ks[0]), None)
     if icpt is None:
         icpt = ss[0] - slope * ks[0]
@@ -201,26 +211,33 @@ def main():
 
     # ------------------------------------------------------------------ anchors: DPWH contracts with stations and a point
     anchors: dict[str, list] = defaultdict(list)
-    n_contracts = n_used = 0
+    n_contracts = n_used = n_multi = 0
     contracts_file = contracts_dir / 'contracts.parquet'
     for cid, desc, lat, lng, year in con.execute(f"""SELECT contractId, description, latitude, longitude, infraYear
             FROM read_parquet('{contracts_file}') WHERE latitude IS NOT NULL AND latitude <> 0
             AND latitude BETWEEN 4 AND 22 AND longitude BETWEEN 112 AND 127""").fetchall():
-        ranges, review = stations(desc or '')
+        ranges, review = stations(desc or '', reversed_ok=True)
         if not ranges:
             continue
         n_contracts += 1
         lo, hi = min(min(r) for r in ranges), max(max(r) for r in ranges)
-        if review or hi - lo > ANCHOR_MAX_SPAN_M or lo < ANCHOR_MIN_STATION_M:
+        if review or lo < ANCHOR_MIN_STATION_M or len(ranges) > MAX_CANDIDATES:
             continue
         rn = road_names(desc)
         if not rn:
             continue
-        n_used += 1
-        anchor = ((lo + hi) / 2, float(lng), float(lat), cid, year)
+        # One anchor at the middle of its stations; a contract whose stretches lie further apart, one candidate per
+        # stretch (its one point marks one of them; the fit finds which).
+        if hi - lo <= ANCHOR_MAX_SPAN_M:
+            these = [((lo + hi) / 2, float(lng), float(lat), cid, year, False)]
+            n_used += 1
+        else:
+            these = [((min(r) + max(r)) / 2, float(lng), float(lat), cid, year, True) for r in ranges]
+            n_multi += 1
         for n in rn:
-            anchors[n].append(anchor)
-    log(f'anchors: {n_contracts:,} contracts print stations and carry a point; {n_used:,} anchor ({len(anchors):,} road names)')
+            anchors[n].extend(these)
+    log(f'anchors: {n_contracts:,} contracts print stations and carry a point; {n_used:,} anchor at their stations, '
+        f'{n_multi:,} give a candidate per stretch ({len(anchors):,} road names)')
 
     merged_cache: dict[tuple, list] = {}
     anchor_names = list(anchors)
@@ -278,7 +295,7 @@ def main():
                 if lo - ANCHOR_REACH_M <= an[0] <= hi + ANCHOR_REACH_M:
                     cands[(an[3], an[0])] = an
         cands = list(cands.values())
-        if len(cands) < 2:
+        if len({c[3] for c in cands}) < 2:
             return None, 'few_candidates'
         mx, my = np.median([c[1] for c in cands]), np.median([c[2] for c in cands])
         mid_m = transform(to_m, Point(mx, my))
@@ -286,7 +303,7 @@ def main():
         if mark is not None and reach:
             mark_m = transform(to_m, mark)
             near = [c for c in near if transform(to_m, Point(c[1], c[2])).distance(mark_m) <= reach]
-        if len(near) < 2:
+        if len({c[3] for c in near}) < 2:
             return None, 'few_in_one_place'
         # The OSM road: tried at the anchors nearest the line's stations; the road piece most anchors lie on wins.
         near.sort(key=lambda c: min(abs(c[0] - lo), abs(c[0] - hi)))
@@ -299,21 +316,21 @@ def main():
                 continue
             line = road_piece(way, q, conf_w == 'named', pts[:8])
             lm = transform(to_m, line)
-            on = [(c2[0], lm.project(qm)) for c2, qm in zip(near, pts_m) if lm.distance(qm) <= ON_ROAD_M]
+            on = [(c2[0], lm.project(qm), c2[3], c2[5]) for c2, qm in zip(near, pts_m) if lm.distance(qm) <= ON_ROAD_M]
             if best_piece is None or len(on) > len(best_piece[3]):
                 best_piece = (line, lm, conf_w, on)
         if best_piece is None:
             return None, 'no_road'
         line, lm, conf, pairs = best_piece
         for j in post_tree.query(line.buffer(0.0006)):
-            pairs.append((posts[j][1] * 1000, lm.project(transform(to_m, posts[j][0]))))
-        if len(pairs) < 2:
+            pairs.append((posts[j][1] * 1000, lm.project(transform(to_m, posts[j][0])), f'osm:{j}', False))
+        if len({x[2] for x in pairs}) < 2:
             return None, 'few_on_the_road'
         fit = robust_fit(pairs)
         if not fit:
             return None, 'no_fit'
         slope, icpt, inl, med = fit
-        ks = [k for k, _ in inl]
+        ks = [x[0] for x in inl]
         if lo < min(ks) - EXTRAPOLATE_M or hi > max(ks) + EXTRAPOLATE_M:
             return None, 'outside_anchors'
         segs = []
@@ -422,13 +439,14 @@ def main():
                 'downloaded': datetime.fromtimestamp(pbf.stat().st_mtime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'source': 'https://download.geofabrik.de/asia/philippines-latest.osm.pbf', 'license': 'ODbL-1.0',
                 'attribution': '© OpenStreetMap contributors', 'ways': len(rows), 'kilometre_posts': len(posts)},
-        'anchors': {'contracts_with_stations_and_point': n_contracts, 'anchors': n_used, 'road_names': len(anchors),
+        'anchors': {'contracts_with_stations_and_point': n_contracts, 'anchors': n_used, 'candidate_contracts': n_multi,
+                    'road_names': len(anchors),
                     'source': str(contracts_file), 'sha256': sha256(contracts_file)},
         'rules': {'name_min': NAME_MIN, 'class_max_m': CLASS_MAX_M, 'stations_max_m': STATIONS_MAX_M,
                   'scatter_slack_m': SCATTER_SLACK_M, 'simplify_m': SIMPLIFY_M, 'anchor_max_span_m': ANCHOR_MAX_SPAN_M,
                   'anchor_reach_m': ANCHOR_REACH_M, 'cluster_m': CLUSTER_M, 'on_road_m': ON_ROAD_M, 'fit_tol_m': FIT_TOL_M,
                   'scale': [SCALE_MIN, SCALE_MAX], 'extrapolate_m': EXTRAPOLATE_M, 'own_point_m': OWN_POINT_M,
-                  'anchor_min_station_m': ANCHOR_MIN_STATION_M, 'name_alike': NAME_ALIKE,
+                  'anchor_min_station_m': ANCHOR_MIN_STATION_M, 'name_alike': NAME_ALIKE, 'max_candidates': MAX_CANDIDATES,
                   'mark_reach_m': MARK_REACH_M},
         'budgets': draw_summary,
     }, indent=1) + '\n')

@@ -14,14 +14,14 @@ SECTION_ID = re.compile(r'\b([SB]\d{5}[A-Z]{2})\b')
 MAX_RANGE_M = 30_000   # one station range longer than this is read but marked for review
 
 
-def stations(text: str) -> tuple[list[list[int]], bool]:
+def stations(text: str, reversed_ok: bool = False) -> tuple[list[list[int]], bool]:
     """Every station range in a text, in metres [[from, to], …], and whether one reads oddly (metres past 999,
-    reversed, or longer than MAX_RANGE_M)."""
+    longer than MAX_RANGE_M, or, unless `reversed_ok`, reversed: a stretch printed from its far end)."""
     out, review = [], False
     for m in STATIONS.finditer(text or ''):
         a_km, a_m, b_km, b_m = m.groups()
         a, b = int(a_km) * 1000 + float(a_m), int(b_km) * 1000 + float(b_m)
-        if abs(float(a_m)) > 999 or abs(float(b_m)) > 999 or b < a or b - a > MAX_RANGE_M:
+        if abs(float(a_m)) > 999 or abs(float(b_m)) > 999 or abs(b - a) > MAX_RANGE_M or (b < a and not reversed_ok):
             review = True
         pair = [round(a), round(b)]
         if pair not in out:

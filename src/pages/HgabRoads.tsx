@@ -541,7 +541,7 @@ function AboutRoads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawS
       <h2 id="roads-about-h" className="hgab-mpbm-h2">About this data</h2>
       <Caveats items={[
         'Which lines: DPWH capital outlays under each budget’s road and bridge codes, in the parts above. 2015 to 2017 use an older set of codes, read as one program. 2027 counts the Asset Preservation, Network Development and Bridge programs, and BIP access and coastal roads.',
-        'Where a line sits, first that works: the point of the DPWH contract we matched to it (2020 to 2026), GPS in its title, the place its title names, its DPWH office’s area, its region.',
+        'Where a line sits, first that works: the point of the DPWH contract we matched to it (2020 to 2026); its stations, placed by DPWH contracts on the same road; GPS in its title; the place its title names; its DPWH office’s area; its region.',
         'Contracts are matched by title, office and amount, so check the contract. Their points come from DPWH’s own list.',
         'Length comes from the stations a title prints, such as K0029+690 to K0031+087. A title without stations has no length.',
         'Red lines follow the road on OpenStreetMap. Most are placed at their own stations: DPWH contracts on the same road, each printing its stations and carrying a point, serve as kilometre posts. The rest are their length centred on the line’s own point, so where along the road is approximate.',

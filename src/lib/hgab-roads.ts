@@ -23,8 +23,8 @@ export const ROADS_CSV_NAME = 'bettergov-dpwh-roads-and-bridges-2015-2027.csv';
 export const roadsCsvPath = (s: Pick<RoadsSummary, 'outputs'>) => `${ROADS_CSV_PATH}?v=${s.outputs['lines.csv'].sha256.slice(0, 12)}`;
 
 export type RoadPart = 'drainage' | 'national' | 'bridges' | 'access' | 'road_fund' | 'bip' | 'sipag' | 'local' | 'ppp' | 'former';
-/** `stations`: the page's own, for a line its build placed only at its office's area, its region or nowhere, whose stations
- * were drawn by DPWH contracts on the same road (draw.py `anchored`): it sits at the middle of its stretch. */
+/** `stations`: the page's own, for a line whose stations DPWH contracts on the same road placed (draw.py `anchored`): it sits at
+ * the middle of its stretch, ahead of the place its title names (Jason, 2026-11-07: the contracts come first). */
 export type RoadLevel = 'contract' | 'stations' | 'gps' | 'barangay' | 'municipality' | 'city' | 'province' | 'deo' | 'region' | 'none';
 export type RoadFlag =
   | 'gps_not_drawn' | 'gps_district_differs' | 'office_elsewhere' | 'maguindanao_successor' | 'text_repaired'
@@ -219,12 +219,17 @@ export function decodeRoadLines(f: RoadsLinesFile): RoadsData {
   return { budget: f.budget, lines, districts: new Map(f.districts.map(([id, label]) => [id, label])) };
 }
 
-/** Lines placed only at their office's area, their region or nowhere move to the middle of their stretch when DPWH
- * contracts on the same road placed their stations (`anchored`), with that stretch's district and region. */
+/**
+ * Where a line sits, first that works (Jason, 2026-11-07: "Contract coordinates first, then title then the others", then
+ * the drawn stations before the title's place): its own DPWH contract's point; its stations, placed by DPWH contracts on
+ * the same road (`anchored`: the middle of its stretch, with that stretch's district and region); GPS in its title; the
+ * place its title names; its office's area; its region. The build places by the rest; this moves anchored lines.
+ */
+export const BEFORE_STATIONS: ReadonlySet<RoadLevel> = new Set(['contract', 'gps']);
 export function placeByStations(data: RoadsData, geom: ReturnType<typeof decodeRoadGeom>): void {
   for (const l of data.lines) {
     const g = geom.get(l.id);
-    if (!g || g.how !== 'anchored' || !g.middle || !['deo', 'region', 'none'].includes(l.level)) continue;
+    if (!g || g.how !== 'anchored' || !g.middle || BEFORE_STATIONS.has(l.level)) continue;
     l.level = 'stations';
     l.at = g.middle;
     l.place = null;
