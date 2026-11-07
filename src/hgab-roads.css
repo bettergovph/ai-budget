@@ -1,17 +1,6 @@
 /* /hgab/2027/roads: the roads and bridges page. The list, tables and filters use the multi-purpose map's styles
    (hgab-mpb-years.css); these are the page's own pieces. */
 
-.hgab-roads-budgets { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
-.hgab-roads-budgets button {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 74px; padding: 6px 10px;
-  border: 1px solid var(--rule); border-radius: 4px; background: var(--paper, #fff); color: var(--ink); cursor: pointer;
-  font: inherit; font-size: 13px; font-weight: 600; text-align: left;
-}
-.hgab-roads-budgets button small { font-size: 11px; font-weight: 500; color: var(--ink-3, #6b7385); font-variant-numeric: tabular-nums; }
-.hgab-roads-budgets button[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: #fff; }
-.hgab-roads-budgets button[aria-pressed='true'] small { color: rgba(255, 255, 255, 0.78); }
-.hgab-roads-budgets button:hover:not([aria-pressed='true']) { border-color: var(--ink-3, #6b7385); }
-
 .hgab-roads-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; margin-bottom: 14px; }
 .hgab-roads-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
 .hgab-roads-filters .hgab-mpbm-search { flex: 1 1 280px; }

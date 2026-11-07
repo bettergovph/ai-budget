@@ -126,6 +126,9 @@ export interface RoadPlace { key: string; level: RoadLevel; label: string; lng: 
 
 export interface RoadLine {
   i: number;
+  /** The budget the line is in (`gaa-2025`, `house-2027`), and an id unique across budgets (`<budget>:<i>`). */
+  budget: string;
+  uid: string;
   /** `gaa:<fy>:<UACS code>` for the enacted budgets, the comparison row id for 2027. */
   id: string;
   fy: number;
@@ -178,6 +181,8 @@ export function decodeRoadLines(f: RoadsLinesFile): RoadsData {
     const d = district != null && district >= 0 ? f.districts[district] : null;
     return {
       i,
+      budget: f.budget.key,
+      uid: `${f.budget.key}:${i}`,
       id: fy < 2027 ? `gaa:${fy}:${raw}` : raw,
       fy,
       code: fy < 2027 ? raw : null,
@@ -214,6 +219,11 @@ export function decodeRoadGeom(f: RoadsGeomFile): Map<string, { how: 'stations' 
 /** Where the budget prints the line: as the multi-purpose map links its lines (lineSource). */
 export const roadSource = (l: RoadLine): LineSource | null => lineSource(l);
 
+/** Every year the page offers; 2027 is the NEP or the House bill, never both. */
+export const ROADS_YEARS = Array.from({ length: 13 }, (_, k) => 2015 + k);
+export type Stage2027 = 'house' | 'nep';
+export const roadsBudgetKey = (fy: number, stage: Stage2027) => (fy < 2027 ? `gaa-${fy}` : `${stage}-2027`);
+
 export const budgetLabel = (b: { fy: number; stage: string }) =>
   b.stage === 'gaa' ? `${b.fy} GAA` : b.stage === 'nep' ? '2027 NEP' : '2027 House bill';
 
@@ -233,10 +243,11 @@ export function stationText([a, b]: [number, number]): string {
 export interface RoadFilters { q: string; part: RoadPart | ''; region: RegionKey | ''; length: boolean; drawn: boolean }
 export type RoadSort = 'amount' | 'length' | 'title';
 
+/** `drawn`: the uids of the lines drawn along a road. */
 export function filterRoads(lines: readonly RoadLine[], f: RoadFilters, drawn: ReadonlySet<string> | null): RoadLine[] {
   const words = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return lines.filter((l) => (!f.part || l.part === f.part) && (!f.region || l.region === f.region)
-    && (!f.length || l.lengthM != null) && (!f.drawn || (drawn?.has(l.id) ?? false))
+    && (!f.length || l.lengthM != null) && (!f.drawn || (drawn?.has(l.uid) ?? false))
     && words.every((w) => l.search.includes(w)));
 }
 

@@ -36,16 +36,16 @@ const PICK_LAYERS = [LYR.dots, LYR.rings, LYR.area, LYR.lines, LYR.linesClass];
 export interface RoadsMapFocus { lng: number; lat: number; zoom: number; seq: number; bounds?: [[number, number], [number, number]] }
 
 export default function RoadsMap({ marks, lines, picked, focus, fitKey, onPick, onError }: {
-  /** One Point per placed line: properties `i` (line index), `kind` ('site' | 'place' | 'area'). */
+  /** One Point per placed line: properties `uid` (the line), `kind` ('site' | 'place' | 'area'). */
   marks: FeatureCollection;
-  /** Drawn stretches: properties `i`, `conf` ('named' | 'class'). */
+  /** Drawn stretches: properties `uid`, `conf` ('named' | 'class'). */
   lines: FeatureCollection;
   /** The picked line: its mark and its stretches, outlined. */
   picked: FeatureCollection;
   focus: RoadsMapFocus | null;
   /** Refit to the marks when this changes (a new budget, region or search). */
   fitKey: string;
-  onPick: (i: number | null) => void;
+  onPick: (uid: string | null) => void;
   onError?: (message: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -119,7 +119,7 @@ export default function RoadsMap({ marks, lines, picked, focus, fitKey, onPick, 
       const hits: MapGeoJSONFeature[] = m.queryRenderedFeatures(box8, { layers: PICK_LAYERS });
       const order = (f: MapGeoJSONFeature) => PICK_LAYERS.indexOf(f.layer.id as (typeof PICK_LAYERS)[number]);
       const hit = hits.sort((a, b) => order(a) - order(b))[0];
-      handlers.current.onPick(hit ? Number(hit.properties.i) : null);
+      handlers.current.onPick(hit ? String(hit.properties.uid) : null);
     });
     map.current = m;
     const ro = new ResizeObserver(() => m.resize());
