@@ -48,6 +48,12 @@ This file is for anyone who works on this repository, human or AI agent. It cove
 
   If you download anything, say so.
 - Rebuild download bundles **after** committing, so each `manifest.json` names a real commit.
+- **Never change a published figure silently. Log it on the page.** When a fix, rebuild or new rule changes a figure readers have already seen:
+  - **Changes to this page:** add a dated entry to the page's "Changes to this page" list, newest first. Say what changed, with one before-and-after example in pesos, and whether the total or change shown moved.
+  - **As of:** the page's "As of" line gives when its data was built, what it compares, and "Updated <date>", linking to that list. It reads the latest entry, so adding the entry updates it.
+  - **What's new:** add the same correction to the "What's new" changelog on `/docs` (`src/worker/docs.ts`), and say whether the API or the data files changed.
+  - The pattern is `PAGE_CHANGES`, `AsOf` and `PageChanges` in `src/pages/HgabDistricts.tsx` (styles in `src/hgab-districts.css`). A page that has neither gets both with its first correction. Lift them into a shared component the second time a page needs them.
+  - New pages, and figures that are only added, need no entry; "What's new" covers those.
 
 ### Where data lives
 
@@ -157,6 +163,7 @@ The House bill is HB 10858 at second and third reading, compared with the NEP. S
   - One card per shared office (#59).
   - Menu names "District Engineering Offices" and "Legislative Districts" (#64).
   - "Lone" and "Shared" wording (#61).
+  - **2027 NEP figures, corrected 2026-11-07.** District cards and the region table set the NEP's whole-office listing beside the House bill's named projects, so the two figures did not subtract to the change shown (Abra ₱730.2M → now ₱689.5M, beside ₱839.5M). Both 2027 figures now count named projects (`fy2027.nep_php`). The page has an "As of" line and a "Changes to this page" list. The API `headline.fy2027_nep_php` is still the whole office; `fy2027_vs_proposal` is the like-for-like pair.
 - **Leaderboards and share images.**
   - `/hgab/2027/leaderboard`: 17 office boards (#12).
   - Whole-bill boards (#35/#36, #37; one direction per board).
@@ -223,6 +230,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Shared-office cards showing each district's own amount | worktree `placements`, branch `hgab-shared-amounts` | Built; awaiting a PR decision |
 | Disclaimer and Terms of Service pages | branch `site-legal` (local WIP commit) | Waiting on the licence choice |
 | "Publish the documents" and "We demand answers" poster builders | worktree `hgab-programs`, untracked | The first is published; the second is not approved |
+| Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
