@@ -51,6 +51,10 @@ import {
   FLOOD_CSV_FIELDS, FLOOD_CSV_NAME, FLOOD_CSV_PATH, FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, floodDistrictMatrix, floodMatrix,
   linesDistrictMatrix, mpbScope, partyMatrix, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
 } from './mpb-compare';
+import {
+  ROADS_DRAW_SUMMARY_PATH, ROADS_SUMMARY_PATH, decodeRoadGeom, decodeRoadLines, roadsGeomPath, roadsLinesPath,
+  type RoadsData, type RoadsDrawSummary, type RoadsGeomFile, type RoadsLinesFile, type RoadsSummary,
+} from './hgab-roads';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -844,6 +848,28 @@ export function loadMpbYears(): Promise<{
       }
     }
     return { data, summary, districts, contracts };
+  });
+}
+
+/** The roads page's totals, and the drawing step's (null before `npm run draw:hgab-roads` has run). */
+export function loadRoadsSummary(): Promise<{ summary: RoadsSummary; draw: RoadsDrawSummary | null }> {
+  return cached('roads-summary', async () => {
+    const [summary, draw] = await Promise.all([
+      getJson<RoadsSummary>(dataUrl(ROADS_SUMMARY_PATH), 'Failed to load the roads summary'),
+      getJson<RoadsDrawSummary>(dataUrl(ROADS_DRAW_SUMMARY_PATH), 'Failed to load the roads drawing summary').catch(() => null),
+    ]);
+    return { summary, draw };
+  });
+}
+
+/** One budget's road and bridge lines, and those drawn along OpenStreetMap roads (empty when there are none). */
+export function loadRoadsBudget(key: string): Promise<{ data: RoadsData; geom: ReturnType<typeof decodeRoadGeom> }> {
+  return cached(`roads:${key}`, async () => {
+    const [lines, geom] = await Promise.all([
+      getJson<RoadsLinesFile>(dataUrl(roadsLinesPath(key)), `Failed to load the ${key} road lines`),
+      getJson<RoadsGeomFile>(dataUrl(roadsGeomPath(key)), `Failed to load the ${key} drawn roads`).catch(() => null),
+    ]);
+    return { data: decodeRoadLines(lines), geom: geom ? decodeRoadGeom(geom) : new Map() };
   });
 }
 

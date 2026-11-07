@@ -563,7 +563,7 @@ export interface LineSource { href: string; external: boolean; label: string }
  *   - FY2015–FY2018: its record in the GAA records, found by its code (DBM's spreadsheet, the file named);
  *   - FY2019: its page of DBM's technical GAA (the build checks the code is printed on it).
  */
-export function lineSource(l: MpbLine): LineSource | null {
+export function lineSource(l: Pick<MpbLine, 'fy' | 'id' | 'code' | 'gaaPage'>): LineSource | null {
   if (l.fy === 2027) return { href: `/hgab/2027/dpwh/p/${encodeURIComponent(l.id)}`, external: false, label: 'Its record: the NEP and House bill pages' };
   if (!l.code) return null;
   // The id as the browser keys it (a few codes carry the extract's trailing spaces, so it is encoded).

@@ -463,7 +463,7 @@ def main():
             'district': district, 'basis': basis_map.get(res['basis']), 'flags': flags, 'nep_php': nep,
             'house_php': house, 'class': cls,
             'region': (places[place_key]['region'] if place_key else None) or region_key(region),
-            'nep_page': nep_page, 'house_page': house_page, 'contract': None, 'stations': ranges or None,
+            'nep_page': nep_page, 'house_page': house_page, 'contract': None, 'contractor': None, 'stations': ranges or None,
             'length_m': length_of(ranges), 'sections': SECTION_ID.findall(title_pub) or None,
         })
     log('FY2027 placed: ' + ' '.join(f'{k}={census.get(k, 0)}' for k in LEVELS))
@@ -538,8 +538,8 @@ def main():
     # The matched contracts' points (FY2020–FY2026).
     links = data_contracts / 'gaa-2020-2026/links.parquet'
     contracts_file = data_contracts / 'contracts.parquet'
-    contract = {lid: (cid, method, lat, lng) for lid, cid, method, lat, lng in con.sql(f"""
-        SELECT k.line_id, k.contract_id, k.method, c.latitude, c.longitude FROM read_parquet('{links}') k
+    contract = {lid: (cid, method, lat, lng, who) for lid, cid, method, lat, lng, who in con.sql(f"""
+        SELECT k.line_id, k.contract_id, k.method, c.latitude, c.longitude, k.contractor_names FROM read_parquet('{links}') k
         LEFT JOIN read_parquet('{contracts_file}') c ON c.contractId = k.contract_id""").fetchall()}
     log(f'contracts: {len(contract):,} FY{CONTRACTS_FROM}–FY{CONTRACTS_TO} lines linked to a DPWH contract')
 
@@ -699,7 +699,8 @@ def main():
             'region': (point_region if cpts else None) or title_region or office_region
                       or (places[place_key]['region'] if place_key else None),
             'nep_page': None, 'house_page': None, 'gaa_page': row.get('page'),
-            'contract': ct[0] if ct else None, 'stations': ranges or None, 'length_m': length_of(ranges),
+            'contract': ct[0] if ct else None, 'contractor': ct[4] if ct else None,
+            'stations': ranges or None, 'length_m': length_of(ranges),
             'sections': SECTION_ID.findall(desc) or None,
         })
     for fy in GAA_YEARS:
@@ -820,7 +821,7 @@ def main():
             l['region'] or '', level_words[l['level']], pl['label'] if pl else '',
             pl['key'].removeprefix('psgc:') if pl and pl['key'].startswith('psgc:') else '', pt[0], pt[1],
             our_districts[l['district']]['label'] if l['district'] else '', l['district'] or '', l['basis'] or '',
-            l['contract'] or '', ';'.join(f'{a}-{b}' for a, b in l['stations'] or []), l['length_m'] or '',
+            l['contract'] or '', l['contractor'] or '', ';'.join(f'{a}-{b}' for a, b in l['stations'] or []), l['length_m'] or '',
             ';'.join(l['sections'] or []), ';'.join(k for k, bit in FLAGS.items() if l['flags'] & bit),
             l['gaa_page'] or '' if l['fy'] < 2027 else '', l['nep_page'] or '', l['house_page'] or '',
         ])
@@ -830,7 +831,7 @@ def main():
     built_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     district_ix = {d: i for i, d in enumerate(dist_ids)}
     cols = ['id', 'fy', 'title', 'office', 'pap', 'part', 'level', 'place', 'district', 'basis', 'region', 'flags',
-            'gaa_php', 'pts', 'contract', 'stations', 'length_m', 'sections', 'nep_php', 'house_php', 'class',
+            'gaa_php', 'pts', 'contract', 'contractor', 'stations', 'length_m', 'sections', 'nep_php', 'house_php', 'class',
             'gaa_page', 'nep_page', 'house_page']
     nx = lambda d, k: -1 if k is None else d[k]
     part_keys = [k for k, _, _ in PARTS]
@@ -851,7 +852,7 @@ def main():
             r = [l['code'] if l['fy'] < 2027 else l['id'], l['fy'], l['title'], nx(office_ix, l['office']),
                  pap_ix[l['pap']], part_keys.index(l['part']), LEVELS.index(l['level']), nx(place_ix, l['place']),
                  nx(district_ix, l['district']), BASES.index(l['basis']), nx(region_ix, l['region']), l['flags'],
-                 l['gaa_php'], l['pts'], l['contract'], l['stations'], l['length_m'], l['sections'], l['nep_php'],
+                 l['gaa_php'], l['pts'], l['contract'], l['contractor'], l['stations'], l['length_m'], l['sections'], l['nep_php'],
                  l['house_php'], CLASSES.index(l['class']) if l['class'] else None, l['gaa_page'] if l['fy'] < 2027 else None,
                  l['nep_page'], l['house_page']]
             while r and r[-1] is None:
@@ -908,7 +909,7 @@ def main():
 CSV_COLUMNS = ['fiscal_year', 'document', 'line_id', 'uacs_code', 'title', 'title_as_published', 'part', 'pap',
                'dpwh_office', 'gaa_php', 'nep_php', 'house_bill_php', 'fy2027_comparison', 'region', 'placed_by', 'place',
                'place_psgc', 'longitude', 'latitude', 'legislative_district', 'legislative_district_id', 'district_from',
-               'dpwh_contract', 'stations_m', 'length_m', 'dpwh_section_ids', 'flags', 'gaa_pdf_page', 'nep_pdf_page',
+               'dpwh_contract', 'contractor', 'stations_m', 'length_m', 'dpwh_section_ids', 'flags', 'gaa_pdf_page', 'nep_pdf_page',
                'house_bill_pdf_page']
 
 
