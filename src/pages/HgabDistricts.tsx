@@ -263,7 +263,7 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
               <th className="num">Districts</th>
               <th className="num">Offices</th>
               <th className="num" title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</th>
-              <th className="num" title={`${FISCAL_STAGE_LONG.nep} Whole office.`}>2027 NEP</th>
+              <th className="num" title={`${FISCAL_STAGE_LONG.nep} Named projects only, like the House bill column.`}>2027 NEP</th>
               <th className="num" title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</th>
               <th className="num" title="House bill minus the NEP, for the same named projects in both">Change, same projects</th>
               <th><span className="visually-hidden">Open the list</span></th>
@@ -296,7 +296,7 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
                   <td className="num">{cards.length.toLocaleString()}</td>
                   <td className="num">{t.offices.toLocaleString()}</td>
                   {money(t.gaa2026_php)}
-                  {money(t.nep2027_php)}
+                  {money(t.nep2027_projects_php)}
                   {money(t.hgab3_php)}
                   {change(t.delta_php, t.compared_nep_php)}
                   <td className="hgab-dx-rt-go">
@@ -314,7 +314,7 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
               <td className="num">{total.districts.toLocaleString()}</td>
               <td className="num">{total.offices.toLocaleString()}</td>
               {money(total.gaa2026_php)}
-              {money(total.nep2027_php)}
+              {money(total.nep2027_projects_php)}
               {money(total.hgab3_php)}
               {change(total.delta_php, total.compared_nep_php)}
               <td className="hgab-dx-rt-go"><Link to={districtListHref()}>See all →</Link></td>
@@ -323,9 +323,9 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
         </table>
       </div>
       <p className="nep-hier-note">
-        The NEP is the budget the President submits to Congress each August. Its column is the whole office;
-        the House bill column counts named projects only. The change compares the same named projects in
-        both, so it is not the gap between those two columns. Money under
+        The NEP is the budget the President submits to Congress each August. The 2026 enacted column is the
+        whole office; the 2027 NEP and House bill columns count named projects only, so they can be compared.
+        The change is the House bill minus the NEP for offices listed in both. Money under
         the Central Office and regional offices is in no row. Hover a figure for the exact pesos.
       </p>
     </>
@@ -792,8 +792,8 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
 
             <p className="hgab-dx-note">
               Card figures are the office’s totals as each document publishes them. The 2020–2026 figures are the
-              enacted budgets (GAA) for the whole office. The 2027 NEP figure is the whole office’s listing. The
-              2027 House bill figure, and the change beside it, cover named projects only. The three sit side by side; they are never added. A shared
+              enacted budgets (GAA) for the whole office. The 2027 NEP and House bill figures, and the change beside
+              them, cover named projects only, so the two 2027 figures can be compared. They are never added. A shared
               office has one card for all the districts it serves. A region’s totals add each office serving it once, so a shared office is not counted twice. A card’s “Projects” link opens
               every DPWH project recorded under that office.
             </p>
@@ -918,8 +918,9 @@ function DistrictsDetails({ index }: { index: HgabDistrictIndex }) {
         <li>
           Regions: each district sits under the region label the crosswalk gives it (<code>card.region</code>),
           normalised with <code>regionKeyOf</code>; labels that do not normalise go to “Other”. Region totals sum
-          the 2026 GAA, FY2027 NEP and FY2027 House bill (3R) slots of the distinct offices on the region’s cards; the
-          change column sums the offices’ <code>fy2027</code> blocks (compared population). Districts served only
+          the 2026 GAA and FY2027 House bill (3R) slots of the distinct offices on the region’s cards; the FY2027
+          NEP column and the change column sum the offices’ <code>fy2027</code> blocks (named projects, the House
+          bill’s basis), not the whole-office NEP slot. Districts served only
           by the BARMM regional grouping keep the crosswalk’s DPWH region (IX, X or XII).
         </li>
         <li>

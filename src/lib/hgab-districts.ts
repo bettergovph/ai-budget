@@ -625,6 +625,12 @@ export interface RegionTotals {
   gaa2026_php: number | null;
   /** Sum of those offices' 2027 proposal (NEP) listings, whole office; null when none has one. */
   nep2027_php: number | null;
+  /**
+   * Sum of those offices' 2027 proposal (NEP) named projects, the House bill's
+   * basis (`fy2027.nep_php`); null when none has one. The figure to show beside
+   * `hgab3_php`: the whole-office listing is not comparable with it.
+   */
+  nep2027_projects_php: number | null;
   /** Sum of those offices' 2027 House bill figures (named projects only); null when none has one. */
   hgab3_php: number | null;
   /**
@@ -651,6 +657,7 @@ export function regionTotals(cards: readonly DistrictCard[], index: HgabDistrict
   let h3: number | null = null;
   let delta: number | null = null;
   let cnep: number | null = null;
+  let pnep: number | null = null;
   for (const o of offices.values()) {
     const g = yearAmount(o, 2026, 'gaa');
     if (g != null) gaa = (gaa ?? 0) + g;
@@ -659,13 +666,14 @@ export function regionTotals(cards: readonly DistrictCard[], index: HgabDistrict
     const h = yearAmount(o, 2027, 'hgab3');
     if (h != null) h3 = (h3 ?? 0) + h;
     const f = o.fy2027;
+    if (f && f.nep_php != null) pnep = (pnep ?? 0) + f.nep_php;
     if (f && f.nep_php != null && f.hgab3_php != null) {
       delta = (delta ?? 0) + (f.hgab3_php - f.nep_php);
       cnep = (cnep ?? 0) + f.nep_php;
     }
   }
   return {
-    districts: cards.length, offices: offices.size, gaa2026_php: gaa, nep2027_php: nep, hgab3_php: h3,
+    districts: cards.length, offices: offices.size, gaa2026_php: gaa, nep2027_php: nep, nep2027_projects_php: pnep, hgab3_php: h3,
     delta_php: delta, compared_nep_php: cnep,
   };
 }

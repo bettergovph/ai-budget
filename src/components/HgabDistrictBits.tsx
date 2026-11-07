@@ -903,8 +903,8 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
                   <dl className="hgab-dc-figures">
                     <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</dt><dd><Figure v={h.fy2026_gaa_php} /></dd></div>
                     <div>
-                      <dt title={`${FISCAL_STAGE_LONG.nep} Whole office; not the figure the 2027 tab compares.`}>2027 NEP</dt>
-                      <dd><Figure v={h.fy2027_nep_php} /></dd>
+                      <dt title={`${FISCAL_STAGE_LONG.nep} Named projects only, like the House bill figure.`}>2027 NEP</dt>
+                      <dd><Figure v={fy27.nep_php} /></dd>
                     </div>
                     <div>
                       <dt title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</dt>
@@ -992,7 +992,6 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
   const n = cards.length;
   const filtered = matched.length > 0 && matched.length < n;
   const gaa2026 = officesSum(offices, 2026, 'gaa');
-  const nep2027 = officesSum(offices, 2027, 'nep');
   const hgab2027 = officesSum(offices, 2027, 'hgab3');
 
   return (
@@ -1098,8 +1097,8 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
                 <dl className="hgab-dc-figures">
                   <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office${many ? 's' : ''}.`}>2026 enacted</dt><dd><Figure v={gaa2026} /></dd></div>
                   <div>
-                    <dt title={`${FISCAL_STAGE_LONG.nep} Whole office${many ? 's' : ''}; not the figure the 2027 tab compares.`}>2027 NEP</dt>
-                    <dd><Figure v={nep2027} /></dd>
+                    <dt title={`${FISCAL_STAGE_LONG.nep} Named projects only, like the House bill figure.`}>2027 NEP</dt>
+                    <dd><Figure v={fy27.nep_php} /></dd>
                   </div>
                   <div>
                     <dt title={`${FISCAL_STAGE_LONG.hgab3} Named projects only.`}>2027 House bill</dt>
