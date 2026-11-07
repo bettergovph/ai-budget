@@ -138,6 +138,7 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
       />
 
       <main className="nep-main">
+        <AsOf index={index} />
         <div className="hgab-dx-kpis">
           <KpiStrip
             items={[
@@ -211,6 +212,7 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
         </section>
 
         <DisclaimerNotice compact offices />
+        <PageChanges />
         <Provenance />
         <DistrictsDetails index={index} />
       </main>
@@ -740,6 +742,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               </p>
             </div>
 
+            <AsOf index={index} />
             <p className="hgab-dx-lede">
               The NEP is the budget the President submits to Congress each August. A 2027 project “not in
               the NEP” is an {term('insertion candidate')}. One “in the NEP only” is a {term('deletion candidate')}.
@@ -799,6 +802,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
             </p>
 
             <DisclaimerNotice compact offices />
+            <PageChanges />
             <Provenance />
             <DistrictsDetails index={index} />
           </div>
@@ -884,6 +888,56 @@ function UnitCard({ unit, index, level }: { unit: ListUnit; index: HgabDistrictI
 // ---------------------------------------------------------------------------
 // Shared foot of both views
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// As of, and changes to these pages
+// ---------------------------------------------------------------------------
+
+/** Corrections and other changes to the Districts pages, newest first. Add one when a figure changes. */
+const PAGE_CHANGES: readonly { date: string; text: string }[] = [
+  {
+    date: '2026-11-07',
+    text:
+      'Corrected: the 2027 NEP figure on each card and in the region table now counts named projects only, like ' +
+      'the House bill figure beside it. It had shown the whole office’s NEP listing, so the two 2027 figures did ' +
+      'not subtract to the change shown. Abra read ₱730.2M beside ₱839.5M; it now reads ₱689.5M beside ₱839.5M, ' +
+      'a change of +₱150.0M. The change itself always compared the same projects and is unchanged.',
+  },
+];
+const CHANGES_ID = 'changes';
+
+function longDate(iso: string): string {
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00+08:00` : iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/** "As of …": when the figures were built, what they compare, and the latest change to the page. */
+function AsOf({ index }: { index: HgabDistrictIndex }) {
+  const built = index.built_at ? longDate(index.built_at) : '';
+  const latest = PAGE_CHANGES[0];
+  return (
+    <p className="hgab-dx-asof">
+      {built && <>As of {built} · </>}House Bill 10858 at third reading, against the FY2027 NEP
+      {latest && <> · <a href={`#${CHANGES_ID}`}>Updated {longDate(latest.date)}</a></>}
+    </p>
+  );
+}
+
+function PageChanges() {
+  if (!PAGE_CHANGES.length) return null;
+  return (
+    <section className="hgab-dx-changes" id={CHANGES_ID} aria-labelledby={`${CHANGES_ID}-title`}>
+      <h2 id={`${CHANGES_ID}-title`}>Changes to this page</h2>
+      <ul>
+        {PAGE_CHANGES.map((c) => (
+          <li key={c.date + c.text.slice(0, 20)}>
+            <time dateTime={c.date}>{longDate(c.date)}</time> {c.text}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function Provenance() {
   return (
