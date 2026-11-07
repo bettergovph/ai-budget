@@ -4,20 +4,26 @@
     /tmp/hf-venv/bin/python scripts/hf/publish.py gaa-2000-2026             # stage + dry run
     /tmp/hf-venv/bin/python scripts/hf/publish.py gaa-2000-2026 --upload    # publish, tag, check
 
-Staging goes to /tmp/hf-<dataset>/ (or --out); DATA_DIR overrides the data/ directory. Nothing is uploaded without --upload. Uploading reads only
-HUGGINGFACE_ACCESS_TOKEN from ~/.bettergov/.env. See docs/hf-datasets.md.
+Staging goes to /tmp/hf-<dataset>/ (or --out); DATA_DIR overrides the data/ directory. Nothing is
+uploaded without --upload. Uploading reads only HUGGINGFACE_ACCESS_TOKEN from ~/.bettergov/.env.
+See docs/hf-datasets.md.
 """
 import argparse
 import datetime as dt
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 HERE = Path(__file__).resolve().parent
@@ -57,6 +63,63 @@ def commit_of(path):
 
 def fail(msg):
     sys.exit(f"CHECK FAILED: {msg}")
+
+
+def column_type(values):
+    """Arrow type for one column of plain JSON values; None when it has to be stored as JSON text."""
+    seen = {type(v) for v in values if v is not None}
+    if not seen:
+        return pa.string()
+    if seen == {str}:
+        return pa.string()
+    if seen == {bool}:
+        return pa.bool_()
+    if seen == {int}:
+        if any(abs(v) >= 2 ** 63 for v in values if v is not None):
+            return None
+        return pa.int64()
+    if seen <= {int, float}:
+        return pa.float64()
+    if seen == {list}:
+        items = {type(x) for v in values if v for x in v}
+        if items <= {str}:
+            return pa.list_(pa.string())
+        if items == {int}:
+            return pa.list_(pa.int64())
+    return None
+
+
+def write_table(rows, out, rel):
+    """Rows of JSON values as Parquet. Columns of objects or mixed lists become JSON text."""
+    names = list(dict.fromkeys(k for r in rows for k in r))
+    arrays = []
+    for name in names:
+        values = [r.get(name) for r in rows]
+        t = column_type(values)
+        if t is None:
+            t = pa.string()
+            values = [None if v is None else json.dumps(v, ensure_ascii=False) for v in values]
+        arrays.append(pa.array(values, type=t))
+    path = out / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_arrays(arrays, names=names), path, compression="zstd")
+    return rel
+
+
+def remote_sha256(url):
+    """SHA-256 of a public file, or None when the host doesn't serve it."""
+    # The data host's bot rules refuse urllib's default user agent.
+    req = urllib.request.Request(url, headers={"User-Agent": "bettergov-hf-publish/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            h = hashlib.sha256()
+            for chunk in iter(lambda: r.read(1 << 20), b""):
+                h.update(chunk)
+            return h.hexdigest()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
 
 
 # ---------------------------------------------------------------------------------------------- gaa-2000-2026
@@ -192,8 +255,150 @@ def card_gaa_history(f, coverage, con, master):
         unavailable_urls=f["unavailable_urls"], pipeline_repo=PIPELINE_REPO, year=dt.date.today().year)
 
 
+# ------------------------------------------------------------------------------------ house-budget-hearings-2027
+
+HEARINGS_HOST = "https://budget-assets.bettergov.ph/hearings"
+HEARING_FILES = ["meta.json", "transcript.json", "sections.json", "brief.json"]
+
+
+def stage_hearings(out, args):
+    src = Path(args.src or DATA / "hearings").resolve()
+    vids = sorted(d.name for d in src.iterdir() if d.is_dir())
+
+    # Publish what the site serves: every file must equal its public copy on the data host.
+    local = [(v, f) for v in vids for f in HEARING_FILES if (src / v / f).exists()]
+    with ThreadPoolExecutor(8) as pool:
+        remote = list(pool.map(lambda vf: remote_sha256(f"{HEARINGS_HOST}/{vf[0]}/{vf[1]}"), local))
+    stale = [f"{v}/{f}" for (v, f), r in zip(local, remote) if r is not None and sha256(src / v / f) != r]
+    if stale:
+        fail(f"{len(stale)} hearing files differ from the site's copies: {stale[:8]}")
+    # A file the site never published (a record held back, say) stays out of the dataset too.
+    published = {vf for vf, r in zip(local, remote) if r is not None}
+    held_back = sorted(f"{v}/{f}" for v, f in set(local) - published)
+    for f in held_back:
+        print(f"  not on the site, left out: {f}")
+
+    hearings, segments, speakers, sections, topics = [], [], [], [], []
+    exchanges, figures, actions, briefs = [], [], [], []
+    files = []
+    for v in vids:
+        d = src / v
+        load = lambda name: json.loads((d / name).read_text()) if (v, name) in published else None
+        meta, tr, rec, brief = (load(f) for f in HEARING_FILES)
+        for f in HEARING_FILES:
+            if (v, f) in published:
+                files.append(copy(d / f, out, f"raw/{v}/{f}"))
+        segs = tr["segments"]
+        for i, g in enumerate(segs):
+            segments.append({"video_id": v, "seq": i, "start_ms": int(g["startMs"]), "end_ms": int(g["endMs"]),
+                             "start": g.get("startTimeText"), "chunk": g.get("chunk"),
+                             "speaker_label": g.get("speaker"), "speaker_name": g.get("speaker_name"),
+                             "text": g.get("text")})
+        if rec:
+            for sp in rec.get("speakers") or []:
+                speakers.append({"video_id": v, **sp})
+            for sec in rec["sections"]:
+                n = sec["index"]
+                sections.append({"video_id": v, "section": n,
+                                 **{k: sec.get(k) for k in ["start_seconds", "end_seconds", "start", "end", "kind",
+                                                            "title", "summary", "participants", "topics"]}})
+                exchanges += [{"video_id": v, "section": n, **e} for e in sec.get("exchanges") or []]
+                figures += [{"video_id": v, "section": n, **e} for e in sec.get("figures") or []]
+                actions += [{"video_id": v, "section": n, **e} for e in sec.get("actions") or []]
+            for i, t in enumerate(rec.get("topics") or []):
+                topics.append({"video_id": v, "topic_no": i, **t})
+        if brief:
+            briefs.append({"video_id": v, **{k: val for k, val in brief.items() if k not in ("videoId", "slug")}})
+        ext = (rec or {}).get("extraction") or {}
+        hearings.append({
+            "video_id": v,
+            "url": meta.get("url"),
+            "title": meta.get("title"),
+            "agenda": meta.get("description"),
+            "channel": meta.get("channelTitle"),
+            "published_at": (meta.get("publishedTime") or "")[:10] or None,
+            "duration_seconds": int(meta.get("lengthSeconds") or 0) or None,
+            "fiscal_year": 2027,
+            "agency": ((brief or {}).get("agency") or (rec or {}).get("agency")
+                       or next(iter(re.findall(r"\(([^()]+)\)\s*$", meta.get("title") or "")), None)),
+            "phase": (brief or {}).get("phase"),
+            "overview": (rec or {}).get("overview"),
+            "transcript_engine": (tr.get("engine") or {}).get("text"),
+            "speaker_engine": (tr.get("engine") or {}).get("speakers"),
+            "transcript_generated_at": tr.get("generated_at"),
+            "segments": len(segs),
+            "segments_named": sum(1 for g in segs if g.get("speaker_name")),
+            "record_model": (rec or {}).get("model"),
+            "record_method": ext.get("method"),
+            "record_generated_at": (rec or {}).get("generated_at"),
+            "sections": len((rec or {}).get("sections") or []),
+            "topics": len((rec or {}).get("topics") or []),
+            "has_brief": brief is not None,
+        })
+
+    # `amount` is the model's reading of `amount_text`, which is as transcribed. A garbled transcript gives
+    # readings past int64 ("5,000,000,005 billion"); those are blanked here and kept in raw/ and topics.
+    over = [f for f in figures if isinstance(f.get("amount"), int) and f["amount"] >= 2 ** 63]
+    for f in over:
+        f["amount"] = None
+    parsed = [f["amount"] for f in figures if isinstance(f.get("amount"), int)]
+
+    tables = {"hearings": hearings, "segments": segments, "speakers": speakers, "sections": sections,
+              "topics": topics, "exchanges": exchanges, "figures": figures, "actions": actions, "briefs": briefs}
+    counts = {name: len(rows) for name, rows in tables.items()}
+    table_files = [write_table(rows, out, f"{name}.parquet") for name, rows in tables.items()]
+    for name, rel in zip(tables, table_files):
+        if pq.read_metadata(out / rel).num_rows != counts[name]:
+            fail(f"{rel} row count")
+    dates = sorted(h["published_at"] for h in hearings if h["published_at"])
+    facts = {
+        "hearings": len(hearings),
+        "hours": round(sum(h["duration_seconds"] or 0 for h in hearings) / 3600, 1),
+        "first": dates[0], "last": dates[-1],
+        "rows": counts,
+        "briefs_date_differs": sum(1 for b in briefs
+                                   if b.get("hearing_date") != next(h["published_at"] for h in hearings
+                                                                    if h["video_id"] == b["video_id"])),
+        "record_models": sorted({h["record_model"] for h in hearings if h["record_model"]}),
+        "transcript_engines": sorted({h["transcript_engine"] for h in hearings if h["transcript_engine"]}),
+        "held_back": held_back,
+        "figures_with_amount": len(parsed) + len(over),
+        "figures_amount_blanked": len(over),
+        "figures_amount_over_100t": sum(1 for a in parsed if a > 10 ** 14),
+    }
+    return {
+        "title": "House Committee on Appropriations: FY2027 budget hearings, transcripts and records",
+        "files": table_files + files,
+        "facts": facts,
+        "card": card_hearings(facts, hearings),
+        "pipeline": {"scripts": "the transcriptions pipeline (scrape.py, transcribe.py, record.py, sync_to_site.py; "
+                                "not public yet); this script reads the files it published to the site",
+                     "transcriptions_commit": commit_of(Path.home() / "projects" / "transcriptions"),
+                     "docs": "docs/budget-hearings.md", "commit": commit_of(ROOT)},
+    }
+
+
+def card_hearings(f, hearings):
+    rows = "\n".join(
+        f"| {h['published_at'] or '—'} | [{h['video_id']}]({h['url']}) | {h['agency'] or '—'} | "
+        f"{(h['duration_seconds'] or 0) / 3600:.1f} h | {h['segments']:,} | {h['sections']} | {h['topics']} | "
+        f"{'yes' if h['has_brief'] else '—'} |"
+        for h in sorted(hearings, key=lambda h: (h["published_at"] or "", h["video_id"])))
+    r = {k: f"{n:,}" for k, n in f["rows"].items()}
+    tmpl = (HERE / "cards" / "house-budget-hearings-2027.md").read_text()
+    return tmpl.format(hearing_rows=rows, hearings=f["hearings"], hours=f["hours"], first=f["first"],
+                       last=f["last"], briefs_date_differs=f["briefs_date_differs"],
+                       record_models=", ".join(f["record_models"]), year=dt.date.today().year,
+                       figures_with_amount=f"{f['figures_with_amount']:,}",
+                       figures_amount_blanked=f["figures_amount_blanked"],
+                       figures_implausible=f["figures_amount_over_100t"] + f["figures_amount_blanked"],
+                       held_back=len(f["held_back"]),
+                       pipeline_repo=PIPELINE_REPO, **{f"n_{k}": v for k, v in r.items()})
+
+
 DATASETS = {
     "gaa-2000-2026": stage_gaa_history,
+    "house-budget-hearings-2027": stage_hearings,
 }
 
 

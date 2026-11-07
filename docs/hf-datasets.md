@@ -5,6 +5,7 @@ We publish our datasets under the [bettergovph](https://huggingface.co/bettergov
 | Repo | Contents | Built from |
 | --- | --- | --- |
 | [bettergovph/gaa-2000-2026](https://huggingface.co/datasets/bettergovph/gaa-2000-2026) | The GAA FY2000–2026 baseline (5,432,425 rows), coverage, the trend-chart series, the source-document list, quality reports | `data/gaa-history` ([docs/gaa-history.md](gaa-history.md)), `data/gaa-explorer/series.json` |
+| [bettergovph/house-budget-hearings-2027](https://huggingface.co/datasets/bettergovph/house-budget-hearings-2027) | The FY2027 House Committee on Appropriations hearings: machine transcripts, sections, topic records, figures, actions, speakers, briefs. Only files the site serves are included, checked by SHA-256 | `data/hearings` (published by the transcriptions pipeline, [docs/budget-hearings.md](budget-hearings.md)) |
 
 The older `bettergovph/gaa` (the FY2020–2026 extract) and `bettergovph/nep-2027` (the raw NEP CSV) repos are left as they are. New repos are named for the years they cover.
 
