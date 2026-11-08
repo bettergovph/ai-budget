@@ -3,7 +3,7 @@ import { SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
 import {
   BETTERGOV_TERMS_URL, CODE_LICENCE, CONTACT_EMAIL, CONTENT_LICENCE, DATA_LICENCE, DISCLAIMER_PAGE, ISSUES_URL,
-  LEGAL_EFFECTIVE, type Licence,
+  LEGAL_EFFECTIVE, TERMS_CHANGES, type Licence,
 } from '../lib/site-legal';
 
 /**
@@ -37,13 +37,14 @@ export default function TermsOfService() {
         <SectionHead
           eyebrow={`Effective ${LEGAL_EFFECTIVE}`}
           headline="Using and sharing BetterGov Budget, its data and its posters"
-          dek="Please read these terms carefully. They are an agreement between you and BetterGov.ph. They follow BetterGov.ph’s own Terms of Service, adapted to this site."
+          dek="Please read these terms carefully. They are an agreement between you, the People’s Budget Coalition and BetterGov.ph. They follow BetterGov.ph’s own Terms of Service, adapted to this site."
         />
 
         <H id="acceptance">1. Acceptance of these terms</H>
         <p style={pStyle}>
           These Terms of Service, and the <Link to={DISCLAIMER_PAGE}>Disclaimer</Link>, which is part of them, are an
-          agreement between you and BetterGov.ph (“we”, “us”) about your use of BetterGov Budget at
+          agreement between you and the People’s Budget Coalition and BetterGov.ph (together, “we”, “us”) about your
+          use of BetterGov Budget at
           budget.bettergov.ph: its pages, data downloads, API, MCP server, posters and share images (together, “the
           site”).
         </p>
@@ -60,8 +61,8 @@ export default function TermsOfService() {
 
         <H id="about">2. About this site</H>
         <p style={pStyle}>
-          BetterGov Budget is run by BetterGov.ph. It is not an official government website, and BetterGov.ph is not a
-          government agency. We are not affiliated with, endorsed by or acting for any government agency, Congress,
+          BetterGov Budget is a project of the People’s Budget Coalition and BetterGov.ph. It is not an official
+          government website, and neither the People’s Budget Coalition nor BetterGov.ph is a government agency. We are not affiliated with, endorsed by or acting for any government agency, Congress,
           political party or official. Nothing on the site is an official government record. A mention of an agency,
           official, party or organisation does not mean that it endorses the site.
         </p>
@@ -139,10 +140,10 @@ export default function TermsOfService() {
             or violence, or to make false or defamatory statements about anyone;
           </li>
           <li>
-            suggest that BetterGov.ph endorses you, your views, a candidate, a party or a product, or pretend to be
-            BetterGov.ph;
+            suggest that the People’s Budget Coalition or BetterGov.ph endorses you, your views, a candidate, a party
+            or a product, or pretend to be either of them;
           </li>
-          <li>use the BetterGov.ph name or logo without our written permission;</li>
+          <li>use the People’s Budget Coalition’s or BetterGov.ph’s name or logo without our written permission;</li>
           <li>
             disrupt, overload or attack the site, the API or the MCP server, get around any limits on them, or try to
             reach parts of them that are not public;
@@ -153,7 +154,7 @@ export default function TermsOfService() {
 
         <H id="licences">8. Content and licences</H>
         <p style={pStyle}>
-          Unless otherwise noted, the text, charts, posters and share images BetterGov.ph publishes on this site are
+          Unless otherwise noted, the text, charts, posters and share images we publish on this site are
           licensed under <L l={CONTENT_LICENCE} />. The data downloads (CSV and JSON), the API and the MCP server are
           licensed under <L l={DATA_LICENCE} />. The source code is released under the <L l={CODE_LICENCE} />.
         </p>
@@ -161,13 +162,14 @@ export default function TermsOfService() {
           Under {CONTENT_LICENCE.name}, you may copy and share the content unchanged, for non-commercial purposes, if
           you give appropriate credit and link to the licence. Sharing an adapted version needs separate permission.
           Under {DATA_LICENCE.name}, you may use and adapt the data for any purpose if you give appropriate credit.
-          Credit “BetterGov.PH” and link to the page or dataset you used. Datasets we publish elsewhere, such as on
+          Credit “People’s Budget Coalition × BetterGov.PH” and link to the page or dataset you used. Datasets we publish elsewhere, such as on
           Hugging Face, carry the licence stated there.
         </p>
         <p style={pStyle}>
-          No licence covers the BetterGov.ph name or logo. Government documents we republish remain public records.
-          Third-party material, such as the People’s Budget Coalition’s tracker and representatives’ photos, keeps its
-          original terms; check them before reuse.
+          No licence covers the People’s Budget Coalition’s or BetterGov.ph’s names or logos. Government documents we
+          republish remain public records. The People’s Budget Coalition’s own trackers and reports keep the terms it
+          publishes with them. Third-party material, such as representatives’ photos, keeps its original terms; check
+          them before reuse.
         </p>
 
         <H id="sharing">9. Sharing posters and figures</H>
@@ -180,7 +182,7 @@ export default function TermsOfService() {
         <H id="api">10. The API and the MCP server</H>
         <p style={pStyle}>
           The API (<a href="/docs">documentation</a>) and the MCP server are free and read-only. Keep the disclaimers
-          each House bill result carries, show them to the people who use what you build, and credit BetterGov.PH. We
+          each House bill result carries, show them to the people who use what you build, and credit People’s Budget Coalition × BetterGov.PH. We
           may limit traffic that disrupts the service. The service, its endpoints and its data may change or stop
           without notice.
         </p>
@@ -188,7 +190,7 @@ export default function TermsOfService() {
         <H id="letters">11. Letters to representatives</H>
         <p style={pStyle}>
           The letters are templates. You decide whether to send one, and you send it in your own name. You are
-          responsible for what you send. BetterGov.ph does not send, receive or store letters.
+          responsible for what you send. We do not send, receive or store letters.
         </p>
 
         <H id="corrections">12. Corrections, content concerns and takedown requests</H>
@@ -207,8 +209,8 @@ export default function TermsOfService() {
 
         <H id="third-parties">13. Links and third-party content</H>
         <p style={pStyle}>
-          The site links to and quotes other sites and documents, such as government portals, the People’s Budget
-          Coalition, YouTube and Wikimedia Commons. We do not control them, and we are not responsible for their content,
+          The site links to and quotes other sites and documents, such as government portals, YouTube and Wikimedia
+          Commons. We do not control them, and we are not responsible for their content,
           availability or practices.
         </p>
 
@@ -256,7 +258,8 @@ export default function TermsOfService() {
 
         <H id="indemnity">17. Indemnity</H>
         <p style={pStyle}>
-          You agree to indemnify and hold harmless BetterGov.ph, its volunteers, contributors and partners against any
+          You agree to indemnify and hold harmless the People’s Budget Coalition and BetterGov.ph, their members,
+          volunteers, contributors and partners against any
           claim, liability, damages, loss, cost or expense, including reasonable attorney’s fees, that arises from your
           use or misuse of the site, your breach of these terms, or anything you publish, share or send using material
           from the site, including any statement you make about any person.
@@ -292,6 +295,11 @@ export default function TermsOfService() {
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. They follow{' '}
           <a href={BETTERGOV_TERMS_URL} target="_blank" rel="noopener">BetterGov.ph’s Terms of Service</a>.
         </p>
+
+        <H id="versions">Versions of these terms</H>
+        <ul style={pStyle}>
+          {TERMS_CHANGES.map((c) => <li key={c.version}>{c.version}: {c.change}</li>)}
+        </ul>
       </main>
 
       <SiteFooter />

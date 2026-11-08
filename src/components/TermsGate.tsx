@@ -22,7 +22,7 @@ import '../terms-gate.css';
 const POINTS: readonly { lead: string; body: string }[] = [
   {
     lead: 'Not a government website.',
-    body: 'BetterGov.ph is independent. We are not part of, and do not speak for, any government agency, Congress, party or official.',
+    body: 'The People’s Budget Coalition and BetterGov.ph are independent. We are not part of, and do not speak for, any government agency, Congress, party or official.',
   },
   {
     lead: 'Check before you rely on it.',
@@ -140,7 +140,8 @@ function TermsModal({ onAccept }: { onAccept: () => void }) {
           An independent reading of the national budget
         </h2>
         <p id="tg-intro" className="tg-intro">
-          BetterGov Budget is run by BetterGov.ph. To use it, you must accept these terms.
+          BetterGov Budget is a project of the People’s Budget Coalition and BetterGov.ph. To use it, you must accept
+          these terms.
         </p>
         <Points />
         <ReviewInvite />
