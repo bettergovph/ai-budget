@@ -1,6 +1,7 @@
 // Run against an already-started preview. No production writes.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { acceptTerms } from '../lib/accept-terms.mjs';
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || 'playwright-core'
 );
@@ -12,6 +13,7 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await acceptTerms(page);
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 await mkdir('data/gaa-explorer-checks', { recursive: true });
