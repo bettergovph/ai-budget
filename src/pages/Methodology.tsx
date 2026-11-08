@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
+import { CLAUDE_MODELS, GPT_MODELS } from '../lib/site-legal';
 
 export default function Methodology() {
   return (
@@ -83,8 +84,8 @@ export default function Methodology() {
 
         <h3 style={hStyle}>AI-assisted compilation</h3>
         <p style={pStyle}>
-          Aggregation, schema parsing, and editorial commentary were produced with help from Claude (Anthropic) — Opus 4.7, Opus 5, and Fable 5 —
-          under human review. Always verify against the official GAA before citing.
+          Aggregation, schema parsing, and editorial commentary were produced with help from Claude (Anthropic) — {CLAUDE_MODELS} — and{' '}
+          {GPT_MODELS} (OpenAI), under human review. Always verify against the official GAA before citing.
         </p>
 
         <p className="note-block" style={{ marginTop: 32 }}>
