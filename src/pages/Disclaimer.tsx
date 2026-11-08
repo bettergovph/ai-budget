@@ -52,27 +52,33 @@ export default function Disclaimer() {
         <p style={pStyle}>
           The figures come from published documents: the General Appropriations Acts and the National Expenditure
           Program from the Department of Budget and Management, the House budget bill (House Bill No. 10858) and the
-          project lists published with it, and the People’s Budget Coalition’s FY 2026 tracker. Each page names its
-          sources. Check them before you cite a figure.
+          project lists published with it, DPWH’s published contract list, published election results, and the
+          People’s Budget Coalition’s FY 2026 tracker. Each page names its sources. Check them before you cite a
+          figure. Where our figures differ from an official document, the official document governs.
         </p>
         <p style={pStyle}>The amounts are allocations: what a budget sets aside. They are not what was spent.</p>
 
-        <h3 style={hStyle}>Compiled with AI, reviewed by people</h3>
+        <h3 style={hStyle}>AI-assisted, reviewed by people</h3>
         <p style={pStyle}>
           The figures, breakdowns and commentary were parsed, aggregated and drafted with Claude (Anthropic), under
           human review. They may contain errors, misclassifications or out-of-date figures. Verify them against the
           official documents before you cite them.
         </p>
 
-        <h3 style={hStyle}>Insertions and other changes</h3>
+        <h3 style={hStyle}>No accusations of wrongdoing</h3>
+        <p style={pStyle}>
+          Nothing on this site accuses any person, office, party, contractor or official of a crime, an irregularity,
+          corruption or any other wrongdoing, and nothing on it should be read or shared that way.
+        </p>
         <p style={pStyle}>
           An insertion is a project in the House bill with no matching line in the President’s budget, the National
           Expenditure Program (NEP). Insertions are not illegal: Congress may amend the President’s budget. An
           insertion does not mean corruption.
         </p>
         <p style={pStyle}>
-          We find insertions, deletions and changed amounts by comparing two published documents. Each one is a
-          candidate for review, not a finding of wrongdoing by any office or official.
+          We find insertions, deletions and changed amounts by comparing two published documents. Red flags, rankings,
+          totals, and links between budget lines and contracts come from the same kind of reading. Each one is a
+          question to ask and a candidate for review, not a finding of wrongdoing by any office or official.
         </p>
 
         <h3 style={hStyle}>Projects and representatives</h3>
@@ -81,6 +87,12 @@ export default function Disclaimer() {
           beside an office’s figures, it is because that office serves the representative’s district. The documents
           do not say who asked for any project. Nothing on this site says that a representative requested, sponsored
           or controlled a project.
+        </p>
+
+        <h3 style={hStyle}>Our reading, in good faith</h3>
+        <p style={pStyle}>
+          Headlines, notes and commentary are our reading of public documents, written in good faith and in the public
+          interest. They describe what the documents show, not anyone’s intentions or conduct.
         </p>
 
         <h3 style={hStyle}>The House bill section’s disclaimers, in full</h3>
