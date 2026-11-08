@@ -4,6 +4,7 @@ import { pageMeta } from './lib/seo';
 import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 import { FAP_ROOT } from './lib/hgab-fap';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
+import TermsGate from './components/TermsGate';
 
 const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
@@ -164,6 +165,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      {/* The first-visit agreement: after the page, so its bar on the legal pages settles below the footer. */}
+      <TermsGate />
     </BrowserRouter>
   );
 }
