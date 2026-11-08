@@ -5,7 +5,9 @@ import {
   DEO_RESTRICTIONS_LINK_TEXT, DEO_RESTRICTIONS_PATH, DISCLAIMERS_PATH, DISCLAIMER_NO_ALLEGATIONS, DISCLAIMER_OFFICES,
   type Disclaimer as SectionDisclaimer,
 } from '../lib/hgab-disclaimers';
-import { ABOUT_URL, CONTACT_EMAIL, ISSUES_URL, LEGAL_EFFECTIVE, TERMS_PAGE } from '../lib/site-legal';
+import {
+  ABOUT_URL, CLAUDE_MODELS, CONTACT_EMAIL, GPT_MODELS, ISSUES_URL, LEGAL_EFFECTIVE, TERMS_PAGE,
+} from '../lib/site-legal';
 
 /**
  * /disclaimer — what the site is and is not, for everyone who cites or shares it: the sources,
@@ -45,7 +47,7 @@ export default function Disclaimer() {
         <SectionHead
           eyebrow="Read this before you cite or share"
           headline="An independent analysis, not an official government record"
-          dek="BetterGov Budget is run by BetterGov.ph. It reads the published budget documents and explains them in plain words. It is not a government website, and it does not speak for any agency, Congress or official."
+          dek="BetterGov Budget is a project of the People’s Budget Coalition and BetterGov.ph. It reads the published budget documents and explains them in plain words. It is not a government website, and it does not speak for any agency, Congress or official."
         />
 
         <h3 style={hStyle}>Where the figures come from</h3>
@@ -60,8 +62,8 @@ export default function Disclaimer() {
 
         <h3 style={hStyle}>AI-assisted, reviewed by people</h3>
         <p style={pStyle}>
-          The figures, breakdowns and commentary were parsed, aggregated and drafted with Claude (Anthropic), under
-          human review. They may contain errors, misclassifications or out-of-date figures. Verify them against the
+          The figures, breakdowns and commentary were parsed, aggregated and drafted with Claude (Anthropic;{' '}
+          {CLAUDE_MODELS}) and {GPT_MODELS} (OpenAI), under human review. They may contain errors, misclassifications or out-of-date figures. Verify them against the
           official documents before you cite them.
         </p>
 
@@ -112,8 +114,8 @@ export default function Disclaimer() {
         <h3 style={hStyle}>Posters, share images and letters</h3>
         <p style={pStyle}>
           Our posters and share images carry their own disclaimer, date and credit. Share them whole, without cropping
-          any of these out. The letters to representatives are templates for you to send in your own name.
-          BetterGov.ph does not send them.
+          any of these out. The letters to representatives are templates for you to send in your own name. We do not
+          send them.
         </p>
         <p style={pStyle}>
           Representatives’ photos are from the House of Representatives, in the public domain, via Wikimedia Commons.

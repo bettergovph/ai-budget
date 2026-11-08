@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { DISCLAIMER_PAGE, TERMS_PAGE } from '../lib/site-legal';
+import { CLAUDE_MODELS, DISCLAIMER_PAGE, GPT_MODELS, REPO_URL, TERMS_PAGE } from '../lib/site-legal';
 
 interface SiteFooterProps {
   source?: string;
@@ -27,7 +27,7 @@ export default function SiteFooter({ source }: SiteFooterProps = {}) {
           <a href="https://www.anthropic.com/claude" target="_blank" rel="noopener">
             Claude
           </a>{' '}
-          (Opus&nbsp;4.7, Opus&nbsp;5, and Fable&nbsp;5) with human oversight. The dataset and its interpretations may contain errors, mis-classifications,
+          ({CLAUDE_MODELS}) and {GPT_MODELS}, with human oversight. The dataset and its interpretations may contain errors, mis-classifications,
           or stale figures — always verify against the official GAA before citing.{' '}
           <Link to={DISCLAIMER_PAGE}>Read the full disclaimer</Link>.
         </p>
@@ -68,11 +68,12 @@ export default function SiteFooter({ source }: SiteFooterProps = {}) {
           </li>
         </ul>
         <p className="sf-credit">
-          Site by <a href="https://about.bettergov.ph" target="_blank" rel="noopener">BetterGov</a>
+          Site by People’s Budget Coalition ×{' '}
+          <a href="https://about.bettergov.ph" target="_blank" rel="noopener">BetterGov</a>
           {' · '}
           Source code{' '}
-          <a href="https://github.com/jasontorres/ai-budget/" target="_blank" rel="noopener">
-            github.com/jasontorres/ai-budget ↗
+          <a href={REPO_URL} target="_blank" rel="noopener">
+            github.com/bettergovph/ai-budget ↗
           </a>
         </p>
       </div>

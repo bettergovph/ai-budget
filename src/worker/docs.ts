@@ -941,8 +941,9 @@ noted where a feature has them; the rest are pages and <a href="#hgab-files">dat
 <ul>
   <li><b>Terms of Service and Disclaimer.</b> <a href="${SITE}/terms-of-service">/terms-of-service</a> and
       <a href="${SITE}/disclaimer">/disclaimer</a>. On their first visit, and again when the terms change, readers
-      accept them before using the site. The terms cover the API and the MCP server too: keep the disclaimers each
-      result carries, and credit BetterGov.PH. The API and the data files did not change.</li>
+      accept them before using the site. The terms are an agreement with the People's Budget Coalition and
+      BetterGov.ph, and they cover the API and the MCP server too: keep the disclaimers each result carries, and
+      credit People's Budget Coalition × BetterGov.PH. The API and the data files did not change.</li>
 </ul>
 
 <h3>7 November 2026</h3>
