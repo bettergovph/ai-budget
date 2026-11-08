@@ -22,7 +22,7 @@ This file is for anyone who works on this repository, human or AI agent. It cove
 
 ### Git, branches and PRs
 
-- **Several agent sessions work in parallel**, each in its own git worktree: `~/.paseo/worktrees/241ehmra/*` and `/tmp/wt-*` on the dev VM. Some worktrees are shared, and another session may switch their branch under you. Before committing, run `git branch --show-current`, `git status` and `git log origin/main..HEAD`. Never commit files you didn't write; untracked posters and scripts from other sessions are common. To build a PR cleanly, use a scratch worktree: `git worktree add /tmp/wt-<name> -b <branch> origin/main`, then symlink `data` and `node_modules` into it.
+- **Several agent sessions work in parallel**, each in its own git worktree: `~/.paseo/worktrees/241ehmra/*` and `/tmp/wt-*` on the dev VM. Some worktrees are shared, and another session may switch their branch under you. Before committing, run `git branch --show-current`, `git status` and `git log origin/main..HEAD`. Never commit files you didn't write; untracked posters and scripts from other sessions are common. To build a PR cleanly, use a scratch worktree: `git worktree add /tmp/wt-<name> -b <branch> origin/main`, then symlink `data` and `node_modules` into it. To preview it with `vite`, also symlink `public/data` to `~/projects/ai-reports/data` and `.wrangler` to `~/projects/ai-reports/.wrangler` (the local D1). Without them the NEP 2027 and department pages fail ("Assets are being served from the local public/data tree…", HTTP 500 from `/api`).
 - **Never use a bare `git stash`.** The stash stack is shared by every worktree.
 - **No stacked PRs.** PR #35 merged into #34's branch 18 s after #34 merged, so it never reached main and had to be re-landed as #36. Branch every PR from main, or retarget it to main before merging.
 - **Check `gh pr view <n> --json state` before pushing more commits to a PR branch.** Commits pushed after a merge are lost (#43 → re-sent as #45).
@@ -95,6 +95,15 @@ This file is for anyone who works on this repository, human or AI agent. It cove
 - Headings are factual, with the number in them.
 - Bylines and credits name only who the source names publicly.
 - Party data: compare a party's seats and budget **on the same offices**. Credit Dynasties / Open Halalan. Say that members switch parties.
+
+### Terms of Service and the first-visit agreement
+
+- `/terms-of-service` and `/disclaimer` (`src/pages/TermsOfService.tsx`, `Disclaimer.tsx`) are the site's legal text. Their paths, effective date and licences live in `src/lib/site-legal.ts`.
+- **Every page of the app sits behind an agreement** (`src/components/TermsGate.tsx`) until the reader ticks "I have read and agree" and selects "I agree". Escape and clicks outside don't dismiss it. "I do not agree" closes the site: the tab closes if the browser allows it, otherwise the page goes blank. On the two legal pages it is a bar under the page instead, so they can be read first. Accepting in one tab closes it in the others.
+- The acceptance is kept in the reader's browser only (localStorage `bettergov-budget:terms`: the version and the time). Nothing is sent to the server, and the Privacy section says so.
+- **Bump `TERMS_VERSION` with any material change to either page.** Everyone is asked again on their next visit. Keep the modal's short points (`POINTS` in `TermsGate.tsx`) in step with the pages. The modal ends with "Be a citizen budget reviewer" (AI-assisted and reviewed by people; Discord, report an error, email); the maintainer wants AI mentioned there, not among the points.
+- **Scripts that open the site in a browser must accept the terms first:** `await acceptTerms(page)` from `scripts/lib/accept-terms.mjs`, before the first `goto`. Otherwise the modal covers screenshots and blocks clicks. Pages built with `setContent` (the posters) are not affected.
+- Pages outside the app don't show it: `/docs`, the API, the MCP server and the static pages on R2 (such as "We are not ignorant" and the campaign gallery). The terms still cover them.
 
 ### Images and posters
 
@@ -207,7 +216,7 @@ Cards for budget analyses on other sites, with screenshots (`npm run build:citiz
   - Dynasties (`~/projects/dynasty`, dynasties.bettergov.ph; party and election data and the province outlines)
   - bills.juris.ph (House members)
 
-## In progress (snapshot 2026-11-07)
+## In progress (snapshot 2026-11-08)
 
 Re-check before relying on any of this: `gh pr list`, plus `git worktree list` and `git status` in each worktree.
 
@@ -228,13 +237,14 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Poster builders: line by line, parties, receipts, reviewer | `ordinary-hyena`, untracked `scripts/build-hgab-poster-*.ts` | Posters published; scripts never committed |
 | MPB and flood control tables by DEO (`office-matrix.ts`) | worktree `mpb-nep-house`, branch `hgab-deo-tables` | Built; needs a `flood-compare/summary.json` upload + PR |
 | Shared-office cards showing each district's own amount | worktree `placements`, branch `hgab-shared-amounts` | Built; awaiting a PR decision |
-| Disclaimer and Terms of Service pages | branch `site-legal` (local WIP commit) | Waiting on the licence choice |
+| Disclaimer, Terms of Service and the first-visit agreement | branch `site-terms-gate` (worktree `/tmp/wt-terms`, preview :5142); carries `site-legal`'s draft | PR open; waiting on the maintainer's review, the licence choice and a lawyer's read |
 | "Publish the documents" and "We demand answers" poster builders | worktree `hgab-programs`, untracked | The first is published; the second is not approved |
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
 - the licence for content, data and code;
+- a Philippine lawyer's review of the Terms of Service and the Disclaimer, and the legal name of the BetterGov.ph entity that is party to them;
 - when the line-by-line review ends (it lifts the banner);
 - whether budget vs statistics becomes a page;
 - copy for parties whose seats are all in shared offices ("These 0 lines…").

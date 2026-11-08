@@ -937,6 +937,14 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>8 November 2026</h3>
+<ul>
+  <li><b>Terms of Service and Disclaimer.</b> <a href="${SITE}/terms-of-service">/terms-of-service</a> and
+      <a href="${SITE}/disclaimer">/disclaimer</a>. On their first visit, and again when the terms change, readers
+      accept them before using the site. The terms cover the API and the MCP server too: keep the disclaimers each
+      result carries, and credit BetterGov.PH. The API and the data files did not change.</li>
+</ul>
+
 <h3>7 November 2026</h3>
 <ul>
   <li><b>Correction, Districts.</b> On the <a href="${SITE}/hgab/2027/districts">Districts</a> cards and region
