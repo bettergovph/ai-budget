@@ -1,0 +1,137 @@
+/* The first-visit agreement (components/TermsGate.tsx): a modal on every page, a bar under the legal pages. */
+
+.tg-modal[open] {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(17, 21, 28, 0.35);
+  overflow: hidden;
+}
+.tg-modal::backdrop {
+  background: rgba(17, 21, 28, 0.66);
+  backdrop-filter: blur(3px);
+}
+
+.tg-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 26px 28px 8px;
+  /* A shadow at the bottom edge while there is more to read (it scrolls away at the end). */
+  background:
+    linear-gradient(transparent, var(--paper) 70%) center bottom / 100% 36px no-repeat local,
+    radial-gradient(farthest-side at 50% 100%, rgba(17, 21, 28, 0.16), transparent) center bottom / 100% 12px no-repeat scroll,
+    var(--paper);
+}
+.tg-eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-hero);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.tg-title {
+  margin: 0 0 8px;
+  font-family: var(--font-hero);
+  font-weight: 700;
+  font-size: 23px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.tg-title:focus { outline: none; }
+.tg-intro { margin: 0 0 12px; font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
+
+.tg-points { margin: 0; padding: 0; list-style: none; }
+.tg-points li {
+  padding: 9px 0;
+  border-top: 1px solid var(--rule-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.tg-points strong { color: var(--ink); }
+
+.tg-invite {
+  margin: 6px 0 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  background: var(--accent-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.tg-invite p { margin: 0; }
+.tg-invite-title { margin: 0 0 4px; font-family: var(--font-hero); font-size: 15px; font-weight: 700; color: var(--ink); }
+.tg-invite-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px !important; }
+.tg-invite-actions a { font-weight: 600; color: var(--accent); }
+
+.tg-form {
+  padding: 14px 28px 18px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper-2);
+}
+.tg-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tg-check input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent); cursor: pointer; }
+.tg-check a { color: var(--accent); }
+.tg-error { margin: 8px 0 0 28px; font-size: 13px; color: var(--negative); }
+
+.tg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.tg-btn {
+  flex: 1 1 160px;
+  padding: 10px 16px;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tg-btn.is-primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.tg-btn:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.tg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tg-fine { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-3); }
+
+/* On /terms-of-service and /disclaimer: stays at the bottom of the screen and settles after the footer. */
+.tg-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  border-top: 2px solid var(--accent);
+  background: var(--paper-2);
+  box-shadow: 0 -8px 24px rgba(17, 21, 28, 0.12);
+}
+.tg-bar-inner { max-width: 760px; margin: 0 auto; }
+.tg-bar-lead { margin: 0; padding: 14px 28px 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.tg-bar-lead strong { color: var(--ink); }
+.tg-bar .tg-form { border-top: 0; background: none; padding-top: 10px; }
+
+@media (max-width: 560px) {
+  .tg-body { padding: 20px 18px 6px; }
+  .tg-title { font-size: 20px; }
+  .tg-points li { padding: 8px 0; font-size: 13px; }
+  .tg-form { padding: 12px 18px 14px; }
+  .tg-check { font-size: 13.5px; }
+  .tg-actions { margin-top: 12px; }
+  .tg-btn { flex-basis: 110px; padding: 9px 10px; font-size: 14px; }
+  .tg-fine { font-size: 11.5px; }
+  .tg-bar-lead { padding: 12px 18px 0; }
+  .tg-bar .tg-fine { display: none; }
+}

@@ -154,6 +154,8 @@ const STATIC_SITEMAP_PATHS = [
   "/methodology",
   "/docs",
   "/glossary",
+  "/disclaimer",
+  "/terms-of-service",
   "/hearings",
   CITIZEN_REPORTS_ROOT,
   // FY2027 House bill section: the overview (its landing page), the two
