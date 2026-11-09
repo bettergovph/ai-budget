@@ -21,9 +21,23 @@ const TABLES = {
   '04026757fab016161553': { name: 'census2024_age', fix: { Sex: ['0'] } },
   a37b2e8af4d42c3d0fbc: { name: 'census2024_pop', fix: {} },
   // Province, HUC and region rows only (PSGC codes ending 00000); municipalities are not needed.
-  '05c931eaecec498f9756': { name: 'census2024_density', fix: { Parameter: ['2', '3'] }, pick: { 'Geographic Location': (x) => /00000$/.test(x.code) } },
+  '05c931eaecec498f9756': { name: 'census2024_density', fix: { Parameter: ['0', '1', '2', '3'] }, pick: { 'Geographic Location': (x) => /00000$/.test(x.code) } },
   '85c06b8cbf6e6cdee6f6': { name: 'gdp_level', fix: { 'Type of Valuation': ['0'] } },
   ac785073d7e6bc1755ae: { name: 'gdp_pc', fix: { 'Type of Valuation': ['0'] } },
+  // Indicators section (docs/indicators.md)
+  '4879ea33985e005d7fa3': { name: 'census2024_urban', fix: { Parameter: ['0', '1'] }, pick: { 'Geographic Location': (x) => /00000$/.test(x.code) } },
+  '77a4ff24e6268c085b93': { name: 'poverty_gap', fix: {} },
+  d10aa08e70c9bcded2e1: { name: 'fies2023', fix: { Indicators: ['0', '1', '2'] } },
+  fabaea8f7623a6f4c3f3: { name: 'gva_construction', fix: {} },
+  '03d9c56cef9097f704c9': { name: 'agri_value', fix: { 'Type of Valuation': ['0'] } },
+  c22ae91fc7712bbf0d5f: { name: 'palay_area', fix: { 'Ecosystem/Croptype': ['0', '1', '2'], Period: ['6'] }, pick: { Year: (x) => +x.label >= 2018 && +x.label <= 2025 } },
+  '9b78cb1fa95ae59f78d4': { name: 'palay_production', fix: { 'Ecosystem/Croptype': ['0', '1', '2'], Period: ['6'] }, pick: { Year: (x) => +x.label >= 2018 && +x.label <= 2025 } },
+  // Province and HUC rows end in 00000; Isabela City is listed at town level (0990101000).
+  '74997dc368c9d0077414': { name: 'deaths2024', fix: { Place: ['0'] }, pick: { Geolocation: (x) => /00000$/.test(x.code) || x.code === '0990101000' } },
+  '46e61ae5c727a748eff9': { name: 'births2024', fix: {} },
+  '3a2606e3166dc9715615': { name: 'nta', fix: {} },
+  // Not used: BIR collections (0a58945026dd4156fb1b) are by revenue district, which merges provinces
+  // ("Apayao and Kalinga") and books big companies to the Large Taxpayers Service, not a place.
 };
 for (const [id, t] of Object.entries(TABLES)) {
   const { data: meta } = await get('/datasets/' + id);

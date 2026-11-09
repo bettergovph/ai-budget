@@ -9,40 +9,7 @@ mkdirSync(OUT, { recursive: true });
 const readJson = (p) => JSON.parse(readFileSync(p, 'utf8'));
 const raw = (name) => readJson(`${RAW}/${name}.json`);
 
-// ---------- names ----------
-function clean(label) {
-  let s = label.replace(/^\.+/, '').replace(/\(not a province\)/i, '').trim();
-  for (let i = 0; i < 8; i++) s = s.replace(/[\s,]+(r\d+|[0-9a-z]{1,2}\/\**|\d*\*+)$/i, '').trim();
-  return s;
-}
-function key(label) {
-  let s = clean(label).toLowerCase().replace(/ñ/g, 'n').replace(/\s+/g, ' ').trim();
-  const alias = { 'mt. province': 'mountain province', 'north cotabato': 'cotabato', 'city of sta. rosa': 'city:santa rosa' };
-  if (alias[s]) return alias[s];
-  if (s.startsWith('city of ')) return 'city:' + s.slice(8);
-  if (s.endsWith(' city')) return 'city:' + s.slice(0, -5);
-  return s;
-}
-
-// Highly urbanized cities and the province they sit in (PSA poverty estimates include them in that province).
-const CITY_TO_PROVINCE = {
-  'city:baguio': 'benguet', 'city:angeles': 'pampanga', 'city:olongapo': 'zambales', 'city:lucena': 'quezon',
-  'city:puerto princesa': 'palawan', 'city:iloilo': 'iloilo', 'city:bacolod': 'negros occidental',
-  'city:cebu': 'cebu', 'city:lapu-lapu': 'cebu', 'city:mandaue': 'cebu', 'city:tacloban': 'leyte',
-  'city:zamboanga': 'zamboanga del sur', 'city:iligan': 'lanao del norte', 'city:cagayan de oro': 'misamis oriental',
-  'city:davao': 'davao del sur', 'city:general santos': 'south cotabato', 'city:butuan': 'agusan del norte',
-  // component cities that are their own legislative districts
-  'city:antipolo': 'rizal', 'city:binan': 'laguna', 'city:calamba': 'laguna', 'city:santa rosa': 'laguna',
-  'city:san jose del monte': 'bulacan',
-  // Metro Manila, by the four districts PSA publishes poverty for
-  'city:manila': 'ncr1',
-  'city:mandaluyong': 'ncr2', 'city:marikina': 'ncr2', 'city:pasig': 'ncr2', 'city:quezon': 'ncr2', 'city:san juan': 'ncr2',
-  'city:caloocan': 'ncr3', 'city:malabon': 'ncr3', 'city:navotas': 'ncr3', 'city:valenzuela': 'ncr3',
-  'city:las pinas': 'ncr4', 'city:makati': 'ncr4', 'city:muntinlupa': 'ncr4', 'city:paranaque': 'ncr4',
-  'city:pasay': 'ncr4', 'city:taguig': 'ncr4', 'pateros': 'ncr4',
-  'maguindanao del norte': 'maguindanao', 'maguindanao del sur': 'maguindanao',
-};
-const unitOf = (k) => CITY_TO_PROVINCE[k] ?? k;
+import { clean, key, unitOf, mapGeography } from './geo.mjs';
 
 // ---------- areas: the province outlines, merged to the poverty-statistics geography ----------
 const geo = readJson(`${DATA}/hgab/2027/geo/provinces.json`);
@@ -59,110 +26,224 @@ for (const f of geo.provinces) {
 // Sulu was in BARMM until the 2024 Supreme Court ruling; DPWH did not build there for most of the period.
 for (const a of areas.values()) a.barmm_period = a.region === 'BARMM' || a.unit === 'sulu';
 
-// ---------- PSA: poverty ----------
-const pov = raw('poverty_pop');
-const povCode = new Map(); // poverty geo code -> unit
-for (const v of pov.values.Geolocation) {
-  const depth = (v.label.match(/^\.*/)[0].length);
-  if (depth !== 4) continue; // provinces and NCR districts only (regions are depth 2, Maguindanao split depth 6)
-  const name = clean(v.label);
-  const m = name.match(/^(\d)(st|nd|rd|th) District$/);
-  const u = m ? 'ncr' + m[1] : unitOf(key(name));
-  povCode.set(v.code, u);
+// ---------- PSA tables: generic readers ----------
+// Every reader maps the table's geography with mapGeography() (region and national rows skipped, HUCs folded
+// into their province, NCR cities into the four districts) and records a check in psaChecks.
+const areaKeys = new Set(areas.keys());
+const psaChecks = [];
+function readTable(name) {
+  const t = raw(name);
+  const dims = Object.keys(t.values);
+  const labelOf = Object.fromEntries(dims.map((d) => [d, new Map(t.values[d].map((v) => [v.code, v.label]))]));
+  return { t, dims, labelOf };
 }
-const YEARS = Object.fromEntries(pov.values.Year.map((y) => [y.code, y.label]));
-const PARAM = { 1: 'incidence', 2: 'cv' };
-for (const r of pov.rows) {
-  const [g, p, y] = r.codes;
-  const u = povCode.get(g);
-  if (!u || !PARAM[p]) continue;
-  const a = areas.get(u);
-  if (!a) { if (r.value != null && p === '1' && y === '2') console.warn('poverty area not on map:', u); continue; }
-  a[`poverty_${PARAM[p]}_${YEARS[y]}`] = r.value;
+// where: { dim: label | (label) => bool } on the non-geography dimensions
+function matches(T, r, where) {
+  return Object.entries(where).every(([d, want]) => {
+    const l = T.labelOf[d].get(r.codes[T.dims.indexOf(d)]);
+    return typeof want === 'function' ? want(l) : l === want;
+  });
 }
+const isNationalLabel = (l) => /^philippines/i.test(clean(l));
+const isRegionLabel = (l) => !isNationalLabel(l) && !/^(total|others?|tax|foreign|island|luzon|visayas|mindanao)/i.test(clean(l));
 
-// ---------- PSA: census 2024 population, land area and age ----------
-function foldByUnit(table, geoDim, valueOf) {
-  // HUC and province rows → unit; region rows (code ending 00000000) skipped.
+/** Sum of a quantity per area. Checks the placed total against the national row (or the regions' sum). */
+function additive(name, geoDim, where, { only, minShare = 0.97, label = name, against = 'national', check = true } = {}) {
+  const T = readTable(name);
+  const gi = T.dims.indexOf(geoDim);
+  const present = new Set(T.t.rows.map((r) => r.codes[gi]));
+  const { byCode, unmatched, skipped } = mapGeography(T.t.values[geoDim], areaKeys, { only: (v) => present.has(v.code) && (!only || only(v)) });
+  const skippedCodes = new Set(T.t.values[geoDim].filter((v) => skipped.includes(clean(v.label))).map((v) => v.code));
   const out = new Map();
-  for (const v of table.values[geoDim]) {
-    if (/^\d{2}00000000$/.test(v.code) || v.code === '0000000000') continue;
-    const k = key(v.label);
-    const u = unitOf(k);
-    if (!areas.has(u)) { if (k !== 'special geographic area') console.warn(table.id, 'no area for', v.label); continue; }
-    out.set(v.code, u);
+  let placed = 0, national = null, regions = 0;
+  for (const r of T.t.rows) {
+    if (r.value == null || !matches(T, r, where)) continue;
+    const code = r.codes[gi], l = T.labelOf[geoDim].get(code);
+    const u = byCode.get(code);
+    if (u) { out.set(u, (out.get(u) ?? 0) + r.value); placed += r.value; continue; }
+    if (skippedCodes.has(code) && isNationalLabel(l)) national = (national ?? 0) + r.value;
+    else if (skippedCodes.has(code) && isRegionLabel(l) && /^\.{0,2}[^.]/.test(l)) regions += r.value;
   }
+  const total = against === 'regions' ? regions || null : national ?? (regions || null);
+  const share = total ? placed / total : null;
+  out.total = total;
+  out.nationalRow = national;
+  psaChecks.push({ table: name, measure: label, kind: 'additive', areas: out.size, placed, total, total_from: against === 'regions' || national == null ? 'sum of regions' : 'national row', share, unmatched });
+  if (check && share != null && (share < minShare || share > 1.0005)) throw new Error(`${name} ${label}: placed ${placed} of ${total} (${(100 * share).toFixed(2)}%)`);
   return out;
 }
-const pop = raw('census2024_pop');
-const popGeo = foldByUnit(pop, 'Geographic Location');
-for (const r of pop.rows) {
-  const u = popGeo.get(r.codes[0]);
-  if (!u || r.codes[1] !== '0') continue;
-  const a = areas.get(u);
-  a.population_2024 = (a.population_2024 ?? 0) + r.value;
+
+/** A published rate per area: exactly one row per area (a combined row wins over its parts, e.g. Maguindanao). */
+function direct(name, geoDim, where, { label = name } = {}) {
+  const T = readTable(name);
+  const gi = T.dims.indexOf(geoDim);
+  const present = new Set(T.t.rows.map((r) => r.codes[gi]));
+  const { byCode, unmatched } = mapGeography(T.t.values[geoDim], areaKeys, { only: (v) => present.has(v.code) });
+  const out = new Map(), exact = new Set();
+  for (const r of T.t.rows) {
+    if (!matches(T, r, where)) continue;
+    const code = r.codes[gi], u = byCode.get(code);
+    if (!u) { if (isNationalLabel(T.labelOf[geoDim].get(code))) out.national = r.value; continue; }
+    const isExact = key(T.labelOf[geoDim].get(code)) === u || /^ncr\d$/.test(u);
+    if (out.has(u)) {
+      if (exact.has(u) && !isExact) continue;
+      if (isExact && exact.has(u)) throw new Error(`${name} ${label}: two rows for ${u}`);
+      if (!isExact) throw new Error(`${name} ${label}: ${u} has several rows and none is the area itself`);
+    }
+    out.set(u, r.value);
+    if (isExact) exact.add(u);
+  }
+  psaChecks.push({ table: name, measure: label, kind: 'direct', areas: out.size, unmatched });
+  return out;
 }
-const den = raw('census2024_density');
-const denGeo = foldByUnit(den, 'Geographic Location');
-for (const r of den.rows) {
-  const u = denGeo.get(r.codes[0]);
-  if (!u || r.codes[1] !== '3') continue;
-  const a = areas.get(u);
-  a.land_km2 = (a.land_km2 ?? 0) + r.value;
+// The Philippines as a whole, for the "Philippines" line beside each indicator: PSA's national row for a
+// published rate, the national total (or the regions' sum) for a quantity.
+const national = {};
+const put = (field, m, f = (v) => v) => {
+  for (const [u, v] of m) areas.get(u)[field] = v == null ? null : f(v);
+  const n = m.national ?? m.total;
+  if (n != null) national[field] = f(n);
+};
+
+// ---------- poverty (rates published per area) ----------
+for (const y of ['2018', '2021', '2023']) {
+  put(`poverty_incidence_${y}`, direct('poverty_pop', 'Geolocation', { Parameters: 'Poverty Incidence among Population (%)', Year: y }, { label: `incidence ${y}` }));
+  put(`poverty_cv_${y}`, direct('poverty_pop', 'Geolocation', { Parameters: 'Coefficient of Variation', Year: y }, { label: `cv ${y}` }));
 }
-const age = raw('census2024_age');
-const ageGeo = foldByUnit(age, 'Geographic Location');
-const AGE = Object.fromEntries(age.values['Age Group'].map((x) => [x.code, x.label]));
-for (const r of age.rows) {
-  const [ag, g] = r.codes;
-  const u = ageGeo.get(g);
-  if (!u) continue;
-  const a = (areas.get(u).age ??= {});
-  a[AGE[ag]] = (a[AGE[ag]] ?? 0) + r.value;
-}
-for (const a of areas.values()) {
-  if (!a.age) continue;
-  const g = a.age, all = g['All Ages'];
-  const sum = (...ks) => ks.reduce((s, k) => s + g[k], 0);
-  const young = sum('Under 5', '5 - 9', '10 - 14');
-  const old65 = sum('65 - 69', '70 - 74', '75 - 79', '80 - 84', '85 and over');
-  const old60 = old65 + g['60 - 64'];
-  a.pct_under15 = (100 * young) / all;
-  a.pct_60plus = (100 * old60) / all;
-  a.pct_65plus = (100 * old65) / all;
-  a.dependency_ratio = (100 * (young + old65)) / (all - young - old65);
-  delete a.age;
+for (const [field, ind] of [['income_gap_2023', 'Income Gap (%)'], ['poverty_gap_2023', 'Poverty Gap (%)'], ['poverty_severity_2023', 'Severity of Poverty']]) {
+  put(field, direct('poverty_gap', 'Region and Provinces', { Indicator: ind, Year: '2023' }, { label: field }));
 }
 
-// ---------- PSA: GDP per person, 2023 current prices ----------
-const gdp = raw('gdp_level'), gdppc = raw('gdp_pc');
-const gdpGeo = new Map();
-for (const v of gdp.values.Geolocation) {
-  if (!v.label.startsWith('..')) continue;
-  const u = unitOf(key(v.label));
-  if (areas.has(u)) gdpGeo.set(v.code, u); else console.warn('gdp: no area for', v.label);
+// ---------- 2024 census: population, land, earlier censuses, urban, age ----------
+put('population_2024', additive('census2024_pop', 'Geographic Location', { Parameter: 'Total Population' }, { label: 'population 2024' }));
+const DEN = { '2015 Population': 'population_2015', '2020 Population': 'population_2020', '***Land Area (square kilometers)  a1/ a2/': 'land_km2' };
+// The national land area is the official round 300,000 km²; provinces' own areas add up to the regions' 322,139.
+for (const [param, field] of Object.entries(DEN)) {
+  const m = additive('census2024_density', 'Geographic Location', { Parameter: param }, { label: field, against: field === 'land_km2' ? 'regions' : 'national' });
+  put(field, m);
+  if (field === 'land_km2') national.land_km2 = m.nationalRow; // the official figure, so national density matches PSA's
 }
-const GY = Object.fromEntries(gdp.values.Year.map((y) => [y.code, y.label]));
-const pcBy = new Map(gdppc.rows.map((r) => [r.codes[0] + '|' + r.codes[2], r.value]));
-const gdpAcc = new Map();
-for (const r of gdp.rows) {
-  const u = gdpGeo.get(r.codes[0]);
-  if (!u || GY[r.codes[2]] !== '2023') continue;
-  const pc = pcBy.get(r.codes[0] + '|' + r.codes[2]);
-  const acc = gdpAcc.get(u) ?? { gdp: 0, people: 0 };
-  acc.gdp += r.value; acc.people += r.value / pc; // people = GDP ÷ GDP per person, so GDP's unit cancels out
-  gdpAcc.set(u, acc);
+put('urban_population_2024', additive('census2024_urban', 'Geographic Location', { Parameter: 'Urban Population' }, { label: 'urban population 2024' }));
+// PSA's 2024 age table is inconsistent in a few regions: the provinces' rows for some age groups add up to
+// more than the region's row (verified against PSA's own API on 2026-11-07). Shares that use those age
+// groups are left out for the provinces of those regions; ageIssues records which.
+const age = readTable('census2024_age');
+const ageGroups = age.t.values['Age Group'].map((v) => v.label);
+const ageBy = Object.fromEntries(ageGroups.map((g) => [g, additive('census2024_age', 'Geographic Location', { 'Age Group': g, Sex: 'Both Sexes' }, { label: `age ${g}`, check: false })]));
+const ageIssues = [];
+{
+  const geoVals = age.t.values['Geographic Location'];
+  const { byCode } = mapGeography(geoVals, areaKeys);
+  const val = new Map(age.t.rows.filter((r) => age.labelOf.Sex.get(r.codes[2]) === 'Both Sexes').map((r) => [r.codes[0] + '|' + r.codes[1], r.value]));
+  for (const g of ageGroups) {
+    const gc = age.t.values['Age Group'].find((v) => v.label === g).code;
+    let region = null, units = [], sum = 0;
+    const flush = () => {
+      if (region && Math.abs(sum - val.get(gc + '|' + region.code)) > 0.5) ageIssues.push({ age_group: g, region: clean(region.label), region_total: val.get(gc + '|' + region.code), provinces_total: sum, areas: [...new Set(units)] });
+    };
+    for (const v of geoVals) {
+      if (/^\.\.[^.]/.test(v.label)) { flush(); region = v; units = []; sum = 0; continue; }
+      if (!region || !byCode.has(v.code)) continue;
+      sum += val.get(gc + '|' + v.code) ?? 0; units.push(byCode.get(v.code));
+    }
+    flush();
+  }
 }
-for (const [u, acc] of gdpAcc) areas.get(u).gdp_per_person_2023 = acc.gdp / acc.people;
+const badAgeGroups = (unit) => new Set(ageIssues.filter((i) => i.areas.includes(unit)).map((i) => i.age_group));
+const OLD_GROUPS = ['60 - 64', '65 - 69', '70 - 74', '75 - 79', '80 - 84', '85 and over'];
+for (const a of areas.values()) {
+  const g = (k) => ageBy[k].get(a.unit) ?? 0;
+  const all = g('All Ages');
+  if (!all) continue;
+  const bad = badAgeGroups(a.unit);
+  const young = g('Under 5') + g('5 - 9') + g('10 - 14');
+  const old65 = g('65 - 69') + g('70 - 74') + g('75 - 79') + g('80 - 84') + g('85 and over');
+  a.pct_under15 = ['Under 5', '5 - 9', '10 - 14', 'All Ages'].some((k) => bad.has(k)) ? null : (100 * young) / all;
+  const oldOk = !OLD_GROUPS.concat('All Ages').some((k) => bad.has(k));
+  // Counts (household population), so regions can be added up exactly. Null where PSA's rows are inconsistent.
+  a.hh_population_2024 = bad.has('All Ages') ? null : all;
+  a.age_under15_2024 = a.pct_under15 == null ? null : young;
+  a.age_60plus_2024 = oldOk ? old65 + g('60 - 64') : null;
+  a.age_65plus_2024 = oldOk ? old65 : null;
+  a.age_15_64_2024 = oldOk && a.pct_under15 != null ? all - young - old65 : null;
+  a.pct_60plus = oldOk ? (100 * (old65 + g('60 - 64'))) / all : null;
+  a.pct_65plus = oldOk ? (100 * old65) / all : null;
+  a.dependency_ratio = oldOk && a.pct_under15 != null ? (100 * (young + old65)) / (all - young - old65) : null;
+  if (bad.size) a.age_note = `PSA's 2024 table counts more people aged ${[...bad].join(' and ')} in this region's provinces than in the region itself`;
+}
+{
+  const n = (k) => ageBy[k].total;
+  const all = n('All Ages'), young = n('Under 5') + n('5 - 9') + n('10 - 14');
+  const old65 = n('65 - 69') + n('70 - 74') + n('75 - 79') + n('80 - 84') + n('85 and over');
+  Object.assign(national, { pct_under15: (100 * young) / all, pct_60plus: (100 * (old65 + n('60 - 64'))) / all, pct_65plus: (100 * old65) / all, dependency_ratio: (100 * (young + old65)) / (all - young - old65) });
+  Object.assign(national, { hh_population_2024: all, age_under15_2024: young, age_60plus_2024: old65 + n('60 - 64'), age_65plus_2024: old65, age_15_64_2024: all - young - old65 });
+}
+
+// ---------- 2023 FIES: average family income (families in thousands, income in thousand pesos) ----------
+{
+  const fam = additive('fies2023', 'Region, Province, and HUC', { Indicators: 'Number of Families  (In thousands)' }, { label: 'families 2023' });
+  const T = readTable('fies2023');
+  const { byCode } = mapGeography(T.t.values['Region, Province, and HUC'], areaKeys);
+  const famByCode = new Map(), incomeTotal = new Map();
+  for (const r of T.t.rows) if (T.labelOf.Indicators.get(r.codes[1]).startsWith('Number of Families')) famByCode.set(r.codes[0], r.value);
+  for (const r of T.t.rows) {
+    if (!T.labelOf.Indicators.get(r.codes[1]).startsWith('Average Income')) continue;
+    const u = byCode.get(r.codes[0]);
+    if (u) incomeTotal.set(u, (incomeTotal.get(u) ?? 0) + famByCode.get(r.codes[0]) * r.value);
+  }
+  for (const [u, f] of fam) { areas.get(u).families_2023 = f * 1000; areas.get(u).avg_family_income_2023 = (1000 * incomeTotal.get(u)) / f; }
+  national.families_2023 = fam.total * 1000;
+  national.avg_family_income_2023 = 1000 * T.t.rows.find((r) => isNationalLabel(T.labelOf['Region, Province, and HUC'].get(r.codes[0])) && T.labelOf.Indicators.get(r.codes[1]).startsWith('Average Income')).value;
+}
+
+// ---------- GDP (thousand pesos) and GDP per person; construction's share ----------
+{
+  const T = readTable('gdp_level'), P = readTable('gdp_pc');
+  const pcBy = new Map(P.t.rows.map((r) => [r.codes[0] + '|' + r.codes[2], r.value]));
+  for (const year of ['2023', '2025']) {
+    const gdp = additive('gdp_level', 'Geolocation', { Year: year }, { label: `GDP ${year}` });
+    // people = GDP ÷ GDP per person, so a province and its HUCs combine correctly
+    const people = new Map();
+    const { byCode } = mapGeography(T.t.values.Geolocation, areaKeys);
+    for (const r of T.t.rows) {
+      if (T.labelOf.Year.get(r.codes[2]) !== year) continue;
+      const u = byCode.get(r.codes[0]);
+      if (u) people.set(u, (people.get(u) ?? 0) + r.value / pcBy.get(r.codes[0] + '|' + r.codes[2]));
+    }
+    for (const [u, g] of gdp) { areas.get(u)[`gdp_${year}`] = g * 1000; areas.get(u)[`gdp_per_person_${year}`] = g / people.get(u); }
+    national[`gdp_${year}`] = gdp.total * 1000;
+    national[`gdp_per_person_${year}`] = gdp.total / [...people.values()].reduce((s, x) => s + x, 0);
+  }
+  put('construction_gva_2023', additive('gva_construction', 'Provinces', { Year: '2023' }, { label: 'construction GVA 2023' }), (v) => v * 1000);
+}
+
+// ---------- farms: value of production (million pesos), palay (hectares, tonnes) ----------
+put('agri_value_2025', additive('agri_value', 'Province', { 'Type of Valuation': 'Current Prices', Subsector: 'Agriculture and Fisheries', Year: '2025' }, { label: 'agri value 2025' }), (v) => v * 1e6);
+for (const [field, eco] of [['palay_area_irrigated_2025', 'Irrigated Palay'], ['palay_area_rainfed_2025', 'Rainfed Palay'], ['palay_area_2025', 'Palay']]) {
+  put(field, additive('palay_area', 'Geolocation', { 'Ecosystem/Croptype': eco, Year: '2025', Period: 'Annual' }, { label: field }));
+}
+put('palay_production_2025', additive('palay_production', 'Geolocation', { 'Ecosystem/Croptype': 'Palay', Year: '2025', Period: 'Annual' }, { label: 'palay production 2025' }));
+
+// ---------- 2024 registered births and deaths, by usual residence ----------
+put('births_2024', additive('births2024', 'Geolocation', { 'Birth Weights': 'Total' }, { label: 'births 2024' }));
+for (const [field, type] of [['deaths_2024', 'Total Deaths'], ['maternal_deaths_2024', 'Maternal Deaths'], ['infant_deaths_2024', 'Infant Deaths']]) {
+  put(field, additive('deaths2024', 'Geolocation', { 'Type of Death': type, Place: 'Place of Usual Residence' }, { label: field, minShare: 0.95 }));
+}
+
+// ---------- National Tax Allotment to provincial governments, 2024 (pesos, though the title says millions) ----------
+put('nta_province_2024', additive('nta', 'Province', { Year: '2024' }, { label: 'NTA 2024', minShare: 0.8 }));
 
 // ---------- DEO → area, from the legislative-district crosswalk ----------
 const districts = readJson(`${DATA}/hgab/2027/districts.json`);
 const distById = new Map(districts.districts.map((d) => [d.id, d]));
 const officeArea = new Map(); // office name key → Map(unit → weight)
 const cityPop = new Map(); // city key → 2024 population, to split offices that serve several areas
-for (const v of pop.values['Geographic Location']) {
-  const row = pop.rows.find((r) => r.codes[0] === v.code && r.codes[1] === '0');
-  if (row) cityPop.set(key(v.label), row.value);
+{
+  const pop = raw('census2024_pop');
+  for (const v of pop.values['Geographic Location']) {
+    const row = pop.rows.find((r) => r.codes[0] === v.code && r.codes[1] === '0');
+    if (row) cityPop.set(key(v.label), row.value);
+  }
 }
 const officeKey = (s) => s.toLowerCase().replace(/ñ/g, 'n').replace(/district engineering office/g, 'deo').replace(/\s+/g, ' ').trim();
 for (const o of Object.values(districts.offices)) {
@@ -254,6 +335,23 @@ for (const o of Object.values(districts.offices)) {
   }
 }
 
+// ---------- FY2027 DPWH projects placed in one legislative district (the House bill pages' location lens) ----------
+// locations.json `districts[].all` holds the NEP and House bill amounts of the lines the lens places in that
+// district (by the title's place, or a lone DEO). Lines it leaves on a shared office or a region are not here.
+const locations = readJson(`${DATA}/hgab/2027/locations.json`);
+const placed2027 = { nep_php: 0, house_php: 0, unmapped_districts: [] };
+for (const a of areas.values()) Object.assign(a, { dpwh_nep_2027_placed: 0, dpwh_house_2027_placed: 0 });
+for (const d of locations.districts) {
+  const j = distById.get(d.district)?.jurisdiction;
+  const u = j ? unitOf(key(j)) : null;
+  if (!u || !areas.has(u)) { placed2027.unmapped_districts.push(d.district); continue; }
+  areas.get(u).dpwh_nep_2027_placed += d.all.nep_php;
+  areas.get(u).dpwh_house_2027_placed += d.all.house_php;
+  placed2027.nep_php += d.all.nep_php; placed2027.house_php += d.all.house_php;
+}
+if (placed2027.unmapped_districts.length) throw new Error('locations.json districts with no area: ' + placed2027.unmapped_districts.join(', '));
+placed2027.lens_totals = locations.totals;
+
 // ---------- per person ----------
 const rows = [...areas.values()].filter((a) => a.population_2024);
 for (const a of rows) {
@@ -272,13 +370,17 @@ for (const a of rows) {
 const meta = {
   built_at: new Date().toISOString(),
   areas: rows.length,
-  psa_tables: ['poverty_pop', 'census2024_pop', 'census2024_density', 'census2024_age', 'gdp_level', 'gdp_pc'].map((n) => { const t = raw(n); return { name: n, id: t.id, title: t.title, source: t.source, release: t.release, sourceUpdated: t.sourceUpdated }; }),
+  psa_tables: [...new Set(psaChecks.map((c) => c.table).concat('gdp_pc'))].map((n) => { const t = raw(n); return { name: n, id: t.id, title: t.title, source: t.source, release: t.release, sourceUpdated: t.sourceUpdated, retrieved: t.retrieved }; }),
+  psa_checks: psaChecks,
+  age_issues: ageIssues,
+  national: { ...national, dpwh_contracts_2018_2025: totalPhp, dpwh_nep_2027_placed: placed2027.nep_php, dpwh_house_2027_placed: placed2027.house_php, dpwh_nep_2027: [...areas.values()].reduce((s, a) => s + a.dpwh_nep_2027, 0), dpwh_house_2027: [...areas.values()].reduce((s, a) => s + a.dpwh_house_2027, 0) },
   contracts: { years: '2018–2025 (infraYear)', rows: contractRows, total_php: totalPhp, placed_rows: tally, placed_php: tallyPhp },
   gaa_by_office: { total_php: gaaAll, placed_php: gaaPlaced },
+  placed_2027: placed2027,
   missing: rows.filter((a) => a.poverty_incidence_2023 == null || a.gdp_per_person_2023 == null || a.pct_60plus == null).map((a) => a.unit),
 };
 writeFileSync(`${OUT}/areas.json`, JSON.stringify({ meta, rows }, null, 1));
-const cols = Object.keys(rows[0]).filter((k) => k !== 'psgc');
+const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => k !== 'psgc');
 const csv = [cols.join(',')].concat(rows.map((a) => cols.map((c) => { const v = a[c]; return v == null ? '' : typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : typeof v === 'number' ? +v.toFixed(4) : v; }).join(',')));
 writeFileSync(`${OUT}/areas.csv`, csv.join('\n') + '\n');
 console.log(JSON.stringify(meta, null, 1));
