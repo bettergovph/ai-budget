@@ -6,6 +6,7 @@
  * that the page's own explanations follow the copy rules; and that the posters' addresses carry their MD5.
  */
 import type { DuckDBConnection } from "@duckdb/node-api";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -107,6 +108,31 @@ export async function verifyRedFlags(c: DuckDBConnection, check: Check, o: Opts)
     const ix = readJson<{ unprogrammed: number }>(idxPath);
     check("unprogrammed appropriations: the explorer's exact amount, the same in both documents, and PBC's ₱112.0B rounds it",
       ix.unprogrammed === U.exact && U.nep === U.house && U.change === 0 && near(U.house, U.exact), `${ix.unprogrammed} vs ${U.exact}`);
+  }
+
+  // TUPAD: DOLE's special provision sets its exact amount, in both documents. The amounts must be on the pages the note
+  // links (pdftotext, one page each), PBC's NEP figure must round the NEP's, and the note's "₱0.1 billion higher" must hold.
+  for (const l of RED_FLAG_LINES.filter((x) => x.provision)) {
+    const pv = l.provision!;
+    const peso = (n: number) => `₱${n.toLocaleString("en-US")}`;
+    check(`${l.short}: the note quotes the special provision's amounts`, !!l.note && l.note.includes(peso(pv.nep.php)) && l.note.includes(peso(pv.house.php)));
+    check(`${l.short}: PBC's NEP figure is the NEP's provision, rounded; its House figure is ₱0.1 billion above the House bill's`,
+      near(l.nep, pv.nep.php) && Math.round((l.house - pv.house.php) / 1e8) === 1,
+      `PBC ${B(l.nep)} → ${B(l.house)}, provision ${B(pv.nep.php)} → ${B(pv.house.php)}`);
+    let pdftotext = true;
+    try { execFileSync("pdftotext", ["-v"], { stdio: "ignore" }); } catch { pdftotext = false; }
+    const pages = [pv.nep, pv.house].map((r) => ({ r, path: resolve(o.out, "pdf", `${r.doc}.pdf`) }));
+    if (!pdftotext || !pages.every((x) => existsSync(x.path))) {
+      process.stdout.write(`  · skipped: ${l.short}'s provision pages (pdftotext or the PDFs are missing)
+`);
+      continue;
+    }
+    const off = pages.filter(({ r, path }) => {
+      const text = execFileSync("pdftotext", ["-layout", "-f", String(r.pdfPage), "-l", String(r.pdfPage), path, "-"], { encoding: "utf8" });
+      return !text.includes(r.php.toLocaleString("en-US")) || !new RegExp(`\\b${r.page}\\b`).test(text);
+    });
+    check(`${l.short}: each provision amount and its page number are on the PDF page the note links`, off.length === 0,
+      off.map(({ r }) => `${r.doc} p.${r.pdfPage}`).join(", "));
   }
 
   // DPWH: each line is one or more programs of our DPWH project pages, whose exact amounts and project counts the

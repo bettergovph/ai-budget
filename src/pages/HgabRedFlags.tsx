@@ -18,6 +18,7 @@ import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabDetails, HgabHeader, HgabHero } from '../components/HgabBits';
 import { pageMeta } from '../lib/seo';
 import { LINES_UNDER_REVIEW } from '../lib/hgab-explorer';
+import { pdfUrl } from '../lib/hgab';
 import {
   DPWH_PROJECTS, PBC_REPORT, RED_FLAGS_ROOT, RED_FLAGS_TITLE, RED_FLAG_GROUPS, RED_FLAG_LINES, RED_FLAG_TOTALS,
   RED_FLAG_UNPROGRAMMED, TRILLION, UNPROGRAMMED_HREF, billHref, isDpwhLine, linesOf, pbcBillions, pbcBillionsWords,
@@ -39,8 +40,12 @@ const MATCHED = RED_FLAG_LINES.filter((l) => l.bill.kind === 'line' || l.bill.ki
 const CHANGE_ONLY = RED_FLAG_LINES.filter((l) => l.bill.kind === 'change');
 const DPWH_LINES = RED_FLAG_LINES.filter(isDpwhLine);
 const LOCAL = RED_FLAG_LINES.find((l) => l.key === 'dpwh-local')!;
-/** The exact amounts behind a line, from the explorer or the DPWH project pages. */
-const exactOf = (l: RedFlagLine) => (l.bill.kind === 'pbc' ? null : l.bill.ref);
+/** The exact amounts behind a line: its special provision (TUPAD), else the explorer or the DPWH project pages. */
+const exactOf = (l: RedFlagLine) =>
+  l.provision ? { nep: l.provision.nep.php, house: l.provision.house.php } : l.bill.kind === 'pbc' ? null : l.bill.ref;
+/** Which of PBC's 2027 figures the exact amounts bear out. */
+const matchesOf = (l: RedFlagLine) => (l.provision ? 'The NEP figure' : l.bill.kind === 'change' ? 'The change' : 'All three figures');
+const TUPAD = RED_FLAG_LINES.find((l) => l.provision)!;
 
 /** The notes under the table, in table order. */
 const NOTED = RED_FLAG_LINES.filter((l) => l.note);
@@ -151,8 +156,9 @@ export default function HgabRedFlags() {
         title={RED_FLAGS_TITLE}
         dek={
           <>
-            The People’s Budget Coalition follows a fixed set of budget lines it calls red flags. In the House bill
-            they add up to {pbcBillionsWords(T.all.house)}, {pbcBillionsWords(T.all.change)} more than in the NEP.
+            The People’s Budget Coalition flags a fixed set of budget lines by default, because budgets like them have
+            faced risks in the past. In the House bill they add up to {pbcBillionsWords(T.all.house)},{' '}
+            {pbcBillionsWords(T.all.change)} more than in the NEP.
           </>
         }
         note={
@@ -182,22 +188,22 @@ export default function HgabRedFlags() {
         </section>
 
         <section className="nep-section hgab-rf-section" aria-labelledby="rf-why">
-          <h2 id="rf-why" className="hgab-rf-h2">Why PBC flags these lines</h2>
+          <h2 id="rf-why" className="hgab-rf-h2">Why these lines are red flags</h2>
           <p className="hgab-rf-dek">
-            A red flag marks a line worth a closer look, and the documents behind it. It is not a finding that
-            anything is wrong.
+            PBC flags them by default, because budgets like these have faced risks in the past. A red flag is a reason
+            to look closer and ask for the documents, not a finding that anything is wrong.
           </p>
           <ul className="hgab-rf-reasons">
             <li>
-              <b>Politicians can shape them.</b> Who receives aid, and which roads and buildings get built, can be
-              decided through a politician’s referral or district by district.
+              <b>They have faced risks before.</b> Aid, lump sums and local projects like these have been exposed to
+              political influence in past budgets.
             </li>
             <li>
               <b>Congress has raised them before.</b> In 2026 it more than doubled the patronage-risk group, from{' '}
               {pbcBillionsWords(PATRONAGE.nep2026)} proposed to {pbcBillionsWords(PATRONAGE.gaa2026)} enacted.
             </li>
             <li>
-              <b>Their documents should be public.</b> PBC asks that these budgets come with project lists, allocation
+              <b>Documents make them checkable.</b> PBC asks that these budgets come with project lists, allocation
               rules or documents the public can see before any of it is released.
             </li>
           </ul>
@@ -256,6 +262,19 @@ export default function HgabRedFlags() {
             {NOTED.map((l) => (
               <li key={l.key} id={`rf-note-${noteNo(l)}`}>
                 <b>{l.short}.</b> {l.note}
+                {l.provision && (
+                  <>
+                    {' '}See the provision in the{' '}
+                    <a href={pdfUrl(l.provision.nep.doc, l.provision.nep.pdfPage)} target="_blank" rel="noopener noreferrer">
+                      NEP, page {l.provision.nep.page}
+                    </a>
+                    , and in the{' '}
+                    <a href={pdfUrl(l.provision.house.doc, l.provision.house.pdfPage)} target="_blank" rel="noopener noreferrer">
+                      House bill, page {l.provision.house.page}
+                    </a>
+                    .
+                  </>
+                )}
               </li>
             ))}
           </ol>
@@ -283,8 +302,10 @@ export default function HgabRedFlags() {
               <strong>How we checked PBC’s figures.</strong> For {MATCHED.length} lines, PBC’s 2027 NEP, House bill and
               change figures are the exact amounts below, rounded to ₱0.1 billion:{' '}
               {MATCHED.length - DPWH_LINES.length} from the line-by-line explorer and the {DPWH_LINES.length} DPWH lines
-              from our DPWH project pages, by program. For {CHANGE_ONLY.map((l) => l.short).join(' and ')} only the change
-              matches, for the reasons in the notes; confidential funds are PBC’s own count. The 2026 figures are PBC’s.
+              from our DPWH project pages, by program. {TUPAD.short}’s exact amounts are in DOLE’s special provisions:
+              PBC’s NEP figure is the provision’s, and its House figure is ₱0.1 billion higher (note {noteNo(TUPAD)}). For{' '}
+              {CHANGE_ONLY.filter((l) => !l.provision).map((l) => l.short).join(' and ')} only the change matches;
+              confidential funds are PBC’s own count. The 2026 figures are PBC’s.
               verify:hgab checks all of this whenever the data is rebuilt.
               {LINES_UNDER_REVIEW && ' Our line-by-line reading of the bill is still under citizen review.'}
             </p>
@@ -307,7 +328,7 @@ export default function HgabRedFlags() {
                         <td><Link to={billHref(l)!}>{l.short}</Link></td>
                         <td className="num">{peso(x.nep)}</td>
                         <td className="num">{peso(x.house)}</td>
-                        <td>{l.bill.kind === 'change' ? 'The change' : 'All three figures'}</td>
+                        <td>{matchesOf(l)}</td>
                       </tr>
                     );
                   })}

@@ -12,8 +12,11 @@
  * own, worked out before rounding, so it can differ by ₱0.1 billion from House bill minus NEP; and a group's lines can
  * miss its subtotal by as much.
  *
- * Each line's `why` says, in plain words, why PBC watches it and what the record shows. Every claim is PBC's (its
- * sections 2.3, 2.7, 2.8 and 5.1 to 6.5) or a count from our own data; none says anything is wrong. `bill` is where the
+ * Each line's `why` says, in plain words, what the line is and what its record shows. Every claim is PBC's (its
+ * sections 2.3, 2.7, 2.8 and 5.1 to 6.5) or a count from our own data; none says anything is wrong. A reviewer
+ * (2026-11-09) asked us not to be too forceful: these budgets have faced risks in the past, so they are red flags by
+ * default. So the reasons stay with the record (what was proposed, enacted and added) and leave out who might steer a
+ * line. `bill` is where the
  * line's figures stand in our own reading of the House bill: one line in the line-by-line explorer
  * (data/hgab/2027/explorer/d/), one or more DPWH programs in our DPWH project pages (dpwh/projects.parquet), a change
  * that matches though PBC's level is its own, or PBC's own figure. The page links each line's name there. verify:hgab
@@ -105,6 +108,14 @@ export interface DpwhRef {
   projects: number;
 }
 
+/** A page of a source PDF (data/hgab/2027/pdf/<doc>.pdf) that prints an amount: the PDF page and the page number shown on it. */
+export interface PageRef {
+  php: number;
+  doc: string;
+  pdfPage: number;
+  page: number;
+}
+
 export interface RedFlagLine extends RedFlagFigures {
   key: string;
   group: RedFlagGroupKey;
@@ -117,6 +128,8 @@ export interface RedFlagLine extends RedFlagFigures {
   bill: BillCheck;
   /** PBC's footnote for the line's figures, in plain words. */
   note?: string;
+  /** Where the bill's special provisions set the line's exact amount (TUPAD), in the NEP and the House bill. */
+  provision?: { nep: PageRef; house: PageRef };
 }
 
 export const RED_FLAG_GROUPS: readonly RedFlagGroup[] = [
@@ -124,7 +137,7 @@ export const RED_FLAG_GROUPS: readonly RedFlagGroup[] = [
     key: 'patronage',
     name: 'Programs at high risk of political patronage',
     short: 'Patronage risk',
-    plain: 'Aid whose recipients can be identified through politicians, confidential and intelligence funds, and lump sums for local governments.',
+    plain: 'Aid programs, confidential and intelligence funds, and lump sums for local governments.',
     why: 'In 2026 Congress more than doubled this group, from ₱88.3 billion proposed to ₱219.4 billion enacted.',
     nep2026: b(88.3), gaa2026: b(219.4), nep: b(140.1), house: b(209.6), change: b(69.5),
   },
@@ -133,14 +146,14 @@ export const RED_FLAG_GROUPS: readonly RedFlagGroup[] = [
     name: 'Political offices',
     short: 'Political offices',
     plain: 'The budgets of the Office of the President, the Office of the Vice President and Congress.',
-    why: 'These are the budgets the people who write the budget write for themselves, the most exposed to political reward and punishment.',
+    why: 'Congress sets these budgets, its own included, so PBC watches them at every stage.',
     nep2026: b(54.6), gaa2026: b(67.5), nep: b(37.9), house: b(42.9), change: b(5.0),
   },
   {
     key: 'infrastructure',
     name: 'Infrastructure requiring project-level disclosure',
     short: 'Infrastructure',
-    plain: 'Public works whose projects are chosen district by district, or where insertions have gathered: DPWH, farm-to-market roads, irrigation, health facilities and school buildings.',
+    plain: 'Public works chosen project by project, often district by district: DPWH, farm-to-market roads, irrigation, health facilities and school buildings.',
     why: 'PBC asks that none of it be released without its project documents posted for the public.',
     nep2026: b(885.0), gaa2026: b(692.1), nep: b(686.0), house: b(695.2), change: b(9.2),
   },
@@ -151,7 +164,7 @@ export const RED_FLAG_UNPROGRAMMED = {
   name: 'Unprogrammed appropriations',
   short: 'Unprogrammed',
   plain: 'Standby budget, released only if extra revenue or new loans come in. The House bill keeps the NEP’s amount.',
-  why: 'Congress has used it to hold programs moved out of the main budget to make room for insertions.',
+  why: 'In past budgets it has held programs moved out of the main budget.',
   nep2026: b(250.0), gaa2026: b(150.9), nep: b(112.0), house: b(112.0), change: 0,
   /** The exact amount, the same in the NEP and the House bill (the explorer's index.json `unprogrammed`). */
   exact: 111_984_494_000,
@@ -183,27 +196,38 @@ const DPWH_REF = {
   local: { programs: ['Local Program', 'National Building Program'], nep: 14_616_645_000, house: 14_058_913_000, projects: 211 },
 } as const satisfies Record<string, DpwhRef>;
 
+/** Why only TUPAD's change matches the explorer: it is a part of a line. */
+const TUPAD_PART = 'TUPAD is part of DOLE’s Livelihood and Emergency Employment line; PBC applies that line’s change to its NEP figure.';
+/**
+ * DOLE's special provision no. 1 sets TUPAD's amount, with the Government Internship Program's stipends (a reviewer,
+ * 2026-11-09: "the exact amounts can be found in the Special Provisions"). PBC's NEP figure is it to the peso; PBC's
+ * House figure adds the whole line's change (₱4,749,570,000) instead of the provision's (₱4,636,570,000).
+ */
 const TUPAD_NOTE =
-  'TUPAD is part of DOLE’s “Livelihood and Emergency Employment” line. PBC applies that line’s change to its own NEP figure for TUPAD.';
+  'DOLE’s special provisions set TUPAD’s amount, with the Government Internship Program’s: ₱14,246,077,000 in the NEP and ₱18,882,647,000 in the House bill. PBC’s House figure adds the whole line’s change to the NEP amount, so it is ₱0.1 billion higher.';
 
 export const RED_FLAG_LINES: readonly RedFlagLine[] = [
   // Programs at high risk of political patronage
   {
     key: 'aics', group: 'patronage', name: 'DSWD Protective Services (AICS)', short: 'AICS (DSWD)',
-    why: 'Cash aid for people in crisis. Politicians can refer who receives it, and Congress has raised it in each of the last seven budgets.',
+    why: 'Cash aid for people in crisis. Congress has raised it in each of the last seven budgets.',
     nep2026: b(27.0), gaa2026: b(63.9), nep: b(33.3), house: b(58.1), change: b(24.8),
     bill: { kind: 'line', ref: { dept: 'department-of-social-welfare-and-development', scope: { label: '^Protective Services for Individuals and Families in Difficult Circumstances$' }, q: 'Protective Services for Individuals', nep: 33_284_583_000, house: 58_090_583_000 } },
   },
   {
     key: 'tupad', group: 'patronage', name: 'DOLE TUPAD', short: 'TUPAD (DOLE)',
-    why: 'Short-term emergency jobs. Workers can be identified through politicians, and Congress has raised the line in each of the last seven budgets.',
+    why: 'Tulong Panghanapbuhay sa Ating Disadvantaged/Displaced Workers: short-term emergency jobs, inside DOLE’s larger Livelihood and Emergency Employment line. Congress has raised it in each of the last seven budgets.',
     nep2026: b(12.1), gaa2026: b(22.4), nep: b(14.2), house: b(19.0), change: b(4.7),
-    bill: { kind: 'change', ref: { dept: 'department-of-labor-and-employment', scope: { label: '^Livelihood and Emergency Employment$' }, q: 'Livelihood and Emergency Employment', nep: 16_701_891_000, house: 21_451_461_000 }, why: TUPAD_NOTE },
+    bill: { kind: 'change', ref: { dept: 'department-of-labor-and-employment', scope: { label: '^Livelihood and Emergency Employment$' }, q: 'Livelihood and Emergency Employment', nep: 16_701_891_000, house: 21_451_461_000 }, why: TUPAD_PART },
     note: TUPAD_NOTE,
+    provision: {
+      nep: { php: 14_246_077_000, doc: 'nep2027-vol-iia', pdfPage: 561, page: 553 },
+      house: { php: 18_882_647_000, doc: 'hb10858-3r-vol-ia', pdfPage: 1235, page: 1225 },
+    },
   },
   {
     key: 'map', group: 'patronage', name: 'DOH Medical Assistance Program (MAP, formerly MAIFIP)', short: 'MAP, formerly MAIFIP (DOH)',
-    why: 'Help with hospital bills, paid through guarantee letters that can come with a politician’s endorsement. Congress has raised it every year since it became a line.',
+    why: 'Help with hospital bills, given through guarantee letters. Congress has raised it every year since it became a line.',
     nep2026: b(24.2), gaa2026: b(51.6), nep: b(24.2), house: b(48.2), change: b(24.0),
     bill: { kind: 'line', ref: { dept: 'department-of-health', scope: { label: '^Medical Assistance Program \\(MAP\\)$' }, q: 'Medical Assistance Program', nep: 24_238_078_000, house: 48_203_854_000 } },
   },
@@ -221,20 +245,20 @@ export const RED_FLAG_LINES: readonly RedFlagLine[] = [
   },
   {
     key: 'cif', group: 'patronage', name: 'Confidential and intelligence funds · all agencies', short: 'Confidential funds (CIF)',
-    why: 'Funds whose use is not reported in public detail. They sit inside many agencies’ budgets; PBC adds them up.',
+    why: 'Confidential and intelligence funds, spread across many agencies’ budgets; PBC adds them up.',
     nep2026: b(10.8), gaa2026: b(11.8), nep: b(10.8), house: b(10.9), change: b(0.1),
     bill: { kind: 'pbc', why: 'PBC’s own tally of confidential and intelligence funds across agencies; the House change (₱140 million) is from the budget amendments subcommittee’s livestream.' },
     note: 'PBC’s own tally across agencies. The House change is from the budget amendments subcommittee’s livestream. The Office of the President’s share is also in its own budget, so the total counts it twice (historically about ₱4.5 billion).',
   },
   {
     key: 'fa-lgus', group: 'patronage', name: 'Financial Assistance to LGUs', short: 'Financial Assistance to LGUs',
-    why: 'Lump sums for local governments, with no published allocation formula. Congress raised it in five straight budgets, and the NEP now starts from that level.',
+    why: 'Assistance to local governments as a lump sum. Congress raised it in five straight budgets, and the NEP now starts from that level.',
     nep2026: b(5.0), gaa2026: b(37.5), nep: b(37.5), house: b(41.6), change: b(4.1),
     bill: { kind: 'line', ref: { dept: 'allocations-to-local-government-units', scope: { label: '^Financial Assistance to Local Government Units$' }, q: 'Financial Assistance to Local Government Units', nep: 37_492_578_000, house: 41_583_978_000 } },
   },
   {
     key: 'ntf-elcac', group: 'patronage', name: 'NTF-ELCAC support to barangays', short: 'NTF-ELCAC barangays',
-    why: 'Support for barangays under the anti-insurgency task force, as one line with no list of barangays in the bill.',
+    why: 'Support for barangays under the anti-insurgency task force, as one line for all barangays.',
     nep2026: b(8.1), gaa2026: b(8.1), nep: b(9.7), house: b(9.7), change: 0,
     bill: { kind: 'line', ref: { dept: 'allocations-to-local-government-units', scope: { label: '^Support to the Barangay Development Program' }, q: 'Barangay Development Program', nep: 9_740_000_000, house: 9_740_000_000 } },
   },
@@ -253,13 +277,13 @@ export const RED_FLAG_LINES: readonly RedFlagLine[] = [
   },
   {
     key: 'ovp', group: 'political', name: 'Office of the Vice President', short: 'Office of the Vice President',
-    why: 'Congress cut it from ₱2.4 billion to ₱1.9 billion in 2024, and from ₱2.0 billion to ₱0.7 billion in 2025. PBC flags budgets that track an office’s political standing.',
+    why: 'Congress cut it from ₱2.4 billion to ₱1.9 billion in 2024, and from ₱2.0 billion to ₱0.7 billion in 2025.',
     nep2026: b(0.9), gaa2026: b(0.9), nep: b(0.8), house: b(0.8), change: 0,
     bill: { kind: 'line', ref: { dept: 'office-of-the-vice-president', scope: 'department', nep: 785_204_000, house: 785_204_000 } },
   },
   {
     key: 'congress', group: 'political', name: 'Congress', short: 'Congress',
-    why: 'The budget Congress writes for itself. Congress has added to its own budget in each of the last seven years; the House bill adds ₱5.0 billion to the House of Representatives.',
+    why: 'The budget Congress sets for itself. It has added to its own budget in each of the last seven years; the House bill adds ₱5.0 billion to the House of Representatives.',
     nep2026: b(26.4), gaa2026: b(38.6), nep: b(27.0), house: b(32.0), change: b(5.0),
     bill: { kind: 'line', ref: { dept: 'congress-of-the-philippines', scope: 'department', nep: 27_023_408_000, house: 32_023_408_000 } },
   },
@@ -319,7 +343,7 @@ export const RED_FLAG_LINES: readonly RedFlagLine[] = [
   },
   {
     key: 'dpwh-flood', group: 'infrastructure', name: 'DPWH Flood Management Program', short: 'DPWH flood management',
-    why: 'Flood control, at the center of the 2025 scandal. Congress cut it to ₱4.8 billion in 2026; the NEP brings back ₱103.5 billion.',
+    why: 'Flood control. Congress cut it to ₱4.8 billion in 2026, after the 2025 flood control investigations; the NEP brings back ₱103.5 billion.',
     nep2026: b(250.8), gaa2026: b(4.8), nep: b(103.5), house: b(96.1), change: b(-7.3),
     bill: { kind: 'dpwh', ref: DPWH_REF.flood },
   },

@@ -130,9 +130,10 @@ export const DISCLAIMER_RED_FLAGS: Disclaimer = {
   title: 'Red flags.',
   body:
     'The red-flag basket and its figures are the People’s Budget Coalition’s, as it publishes them; we checked them ' +
-    'against our own reading of the House bill. A red flag marks a budget line that calls for scrutiny and documents. ' +
-    'It does not establish irregularity or wrongdoing by any office or official, and should not be represented as such. ' +
-    'Amounts are allocations in the documents, not spending.',
+    'against our own reading of the House bill. PBC flags these lines by default, because budgets like them have faced ' +
+    'risks in the past. A red flag calls for a closer look and the documents behind a line. It does not establish ' +
+    'irregularity or wrongdoing by any office or official, and should not be represented as such. Amounts are ' +
+    'allocations in the documents, not spending.',
 };
 
 /**
