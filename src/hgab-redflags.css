@@ -98,12 +98,29 @@
 .hgab-rf-key li > span:last-child { font-family: var(--font-mono); font-size: 12px; }
 .hgab-rf-swatch { display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px; }
 
+/* --- why PBC flags them ------------------------------------------------------- */
+
+.hgab-rf-reasons { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); max-width: 90ch; }
+.hgab-rf-reasons li + li { margin-top: 6px; }
+.hgab-rf-reasons b { color: var(--ink); }
+
 /* --- the table --------------------------------------------------------------- */
 
-.hgab-rf-table { min-width: 760px; }
+.hgab-rf-table { min-width: 880px; }
 .hgab-rf-table thead th { position: static; }
-.hgab-rf-name { color: var(--ink); max-width: 46ch; }
+/* Two header rows: the years over their columns. */
+.hgab-rf-table thead th.hgab-rf-yr { text-align: center; border-bottom: 1px solid var(--rule-soft); padding-bottom: 4px; }
+.hgab-rf-table thead tr + tr th { padding-top: 4px; }
+/* A line's figures sit level with its name, above the reason. */
+.hgab-rf-table tbody td { vertical-align: top; }
+.hgab-rf-name { color: var(--ink); min-width: 340px; max-width: 64ch; }
+.hgab-rf-name > a { color: var(--ink); font-weight: 600; text-decoration: none; border-bottom: 1px solid var(--rule); }
+.hgab-rf-name > a:hover { color: var(--accent-deep); border-color: var(--accent-deep); }
+.hgab-rf-nolink { font-weight: 600; }
 .hgab-rf-name sup a { margin-left: 2px; font-size: 10px; color: var(--accent-deep); text-decoration: none; }
+.hgab-rf-why { display: block; margin-top: 4px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3); }
+.hgab-rf-2026 { color: var(--ink-3); }
+.hgab-rf-2027 { border-left: 1px solid var(--rule-soft); }
 .hgab-rf-house { font-weight: 600; color: var(--ink); }
 .hgab-rf-new {
   margin-left: 8px;
@@ -155,9 +172,6 @@
 .hgab-rf-subtotal td { font-weight: 600; color: var(--ink-2); background: var(--paper-2); }
 .hgab-rf-total td { font-weight: 700; color: var(--ink); background: var(--paper-3); border-top: 1px solid var(--rule); }
 .hgab-rf-total.is-all td { font-size: 14px; background: #fdecec; border-top: 2px solid var(--rf-patronage); }
-.hgab-rf-chk { font-size: 12.5px; color: var(--accent-deep); white-space: nowrap; }
-.hgab-rf-chk.is-match::before { content: '✓ '; color: var(--positive); font-weight: 700; }
-.hgab-rf-chk.is-pbc { color: var(--ink-mute); }
 .hgab-rf-notes { margin: 12px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--ink-2); max-width: 100ch; }
 .hgab-rf-notes li + li { margin-top: 4px; }
 .hgab-rf-notes li:target { background: var(--accent-soft); }
@@ -172,6 +186,38 @@
 .hgab-rf-exact thead th { position: static; }
 .hgab-rf-exact a { color: var(--accent-deep); }
 .hgab-rf-notice { margin-top: 40px; }
+
+/* Phones: no sideways scrolling. Each row stacks: the name and its reason across the screen, then the figures with
+   their labels, 2026 on one line and 2027 on the next. */
+@media (max-width: 720px) {
+  .hgab-rf-table { min-width: 0; }
+  .hgab-rf-table thead { display: none; }
+  .hgab-rf-table tbody, .hgab-rf-table tbody tr { display: block; }
+  .hgab-rf-table tbody tr:not(.hgab-rf-group) {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    column-gap: 8px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .hgab-rf-table tbody td { display: block; padding: 0; border: 0; }
+  .hgab-rf-table tbody td:first-child { grid-column: 1 / -1; min-width: 0; max-width: none; margin-bottom: 6px; }
+  .hgab-rf-table tbody td[data-label] { padding-top: 4px; text-align: left; }
+  .hgab-rf-table tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .hgab-rf-table td.hgab-rf-2026 { grid-column: span 3; }
+  .hgab-rf-table td.hgab-rf-2027, .hgab-rf-table td.hgab-rf-2027 ~ td { grid-column: span 2; }
+  .hgab-rf-2027 { border-left: 0; }
+  .hgab-rf-group th { display: block; padding: 16px 2px 8px; }
+  .hgab-rf-group-in { position: static; max-width: none; }
+}
 
 @media (max-width: 640px) {
   .hgab-rf-bars-grid { column-gap: 8px; }
