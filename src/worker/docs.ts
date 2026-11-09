@@ -937,6 +937,33 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>9 November 2026</h3>
+<ul>
+  <li><b>Where the 2027 budget is now.</b> The <a href="${SITE}/2027/overview">NEP overview</a>, where the site
+      opens, now leads with the current stage: the House has approved its version, House Bill No. 10858, on third
+      reading, and the Senate is next, with a link to the <a href="${SITE}/hgab/2027/overview">House bill</a>.
+      The API and the data files did not change.</li>
+</ul>
+
+<h3>8 November 2026</h3>
+<ul>
+  <li><b>Terms of Service and Disclaimer.</b> <a href="${SITE}/terms-of-service">/terms-of-service</a> and
+      <a href="${SITE}/disclaimer">/disclaimer</a>. On their first visit, and again when the terms change, readers
+      accept them before using the site. The terms are an agreement with the People's Budget Coalition and
+      BetterGov.ph, and they cover the API and the MCP server too: keep the disclaimers each result carries, and
+      credit People's Budget Coalition × BetterGov.PH. The API and the data files did not change.</li>
+</ul>
+
+<h3>7 November 2026</h3>
+<ul>
+  <li><b>Correction, Districts.</b> On the <a href="${SITE}/hgab/2027/districts">Districts</a> cards and region
+      table, the 2027 NEP figure now counts named projects only, like the House bill figure beside it; it had
+      shown the whole office's NEP listing. The change shown was always on the same projects and is unchanged,
+      as is the API (<code>headline.fy2027_nep_php</code> is still the whole office;
+      <code>fy2027_vs_proposal</code> is the like-for-like pair). The page now shows an "As of" date and a
+      list of changes.</li>
+</ul>
+
 <h3>4 November 2026</h3>
 <ul>
   <li><b>API docs.</b> The House bill <a href="#hgab-files">data files</a> that have no endpoint (the whole

@@ -4,6 +4,7 @@ import { pageMeta } from './lib/seo';
 import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 import { FAP_ROOT } from './lib/hgab-fap';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
+import TermsGate from './components/TermsGate';
 
 const National = lazy(() => import('./pages/National'));
 const GaaYear = lazy(() => import('./pages/GaaYear'));
@@ -16,6 +17,8 @@ const Indicators = lazy(() => import('./pages/Indicators'));
 const IndicatorDetail = lazy(() => import('./pages/IndicatorDetail'));
 const IndicatorPlace = lazy(() => import('./pages/IndicatorPlace'));
 const BudgetByRegion = lazy(() => import('./pages/BudgetByRegion'));
+const Disclaimer = lazy(() => import('./pages/Disclaimer'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Nep2027Story = lazy(() => import('./pages/Nep2027Story'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
@@ -100,6 +103,9 @@ export default function App() {
           <Route path="/indicators/places/:area" element={<IndicatorPlace />} />
           <Route path="/indicators/budget-by-region" element={<BudgetByRegion />} />
           <Route path="/indicators/:id" element={<IndicatorDetail />} />
+          {/* Site-wide: what the figures are and are not, and the terms (src/lib/site-legal.ts). */}
+          <Route path="/disclaimer" element={<Disclaimer />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />
           <Route path="/d/:deptId/overview" element={<Portal />} />
@@ -167,6 +173,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      {/* The first-visit agreement: after the page, so its bar on the legal pages settles below the footer. */}
+      <TermsGate />
     </BrowserRouter>
   );
 }

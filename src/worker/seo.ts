@@ -155,6 +155,8 @@ const STATIC_SITEMAP_PATHS = [
   "/methodology",
   "/docs",
   "/glossary",
+  "/disclaimer",
+  "/terms-of-service",
   "/hearings",
   CITIZEN_REPORTS_ROOT,
   // Indicators: the index and every indicator (the 87 area pages are linked from them).

@@ -51,6 +51,7 @@ To serve data from `public/data` instead, leave `VITE_DATA_BASE_URL` unset. In t
 | `npm run fetch:psa` | Save the PSA tables the Indicators section uses from [statistics.bettergov.ph](https://statistics.bettergov.ph) into `data/stats-psa/raw/` |
 | `npm run build:indicators` | Build `data/indicators/` (one row per province or Metro Manila district, 24 indicators); `-- --upload` puts it on R2 under `indicators/` (see [docs/indicators.md](docs/indicators.md)) |
 | `npm run verify:indicators` | Independent checks on the Indicators data, recomputed from PSA's raw rows; `-- --live` also compares R2 |
+| `scripts/hf/publish.py <dataset>` | Stage a dataset for Hugging Face (`bettergovph/*`) with its card and manifest, as a dry run; `--upload` publishes it (see [docs/hf-datasets.md](docs/hf-datasets.md)) |
 | `npm run build:citizen-reports` | Retake the `/citizen-reports` card screenshots (headless Chromium) into `public/screenshots/`; the sites are listed in `src/lib/citizen-reports.ts` |
 | `hearings` sync | Hearing transcripts are published by the [transcriptions pipeline](../transcriptions): `sync_to_site.py` uploads `hearings/<videoId>/` files to R2 and upserts `hearings` rows into D1. Served at `/hearings` (grid) and `/hearings/:videoId` (interactive transcript + summary). |
 

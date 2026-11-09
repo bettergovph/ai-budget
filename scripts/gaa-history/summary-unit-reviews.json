@@ -1,0 +1,37 @@
+{
+  "2014": {
+    "source_sha256": "5987754df51a301ac667633f4091664b42e34c42358a6a8e3094b5c95a40c68d",
+    "multiplier": 1000,
+    "page": 1,
+    "printed_label": "Amount, In Thousand Pesos",
+    "method": "visual inspection of source page"
+  },
+  "2017": {
+    "source_sha256": "738157bd64923b0ececf7d61215063f6df16194cc9a66204e84634c189e2350d",
+    "multiplier": 1000,
+    "page": 2,
+    "printed_label": "Amount, In Thousand Pesos",
+    "method": "visual inspection of source page"
+  },
+  "2019": {
+    "source_sha256": "eb461e2b154768a7a52ccc3426866eebb4b6e33c8034d1efadff0062a145c775",
+    "multiplier": 1000,
+    "page": 2,
+    "printed_label": "Amount, In thousand pesos",
+    "method": "visual inspection of source page"
+  },
+  "2016": {
+    "source_sha256": "983503b775b7ea94a4e6e210d31bd5d273130e121f2d2f8f23439916d213d17a",
+    "multiplier": 1000,
+    "page": 1,
+    "printed_label": "Amount, In Thousand Pesos",
+    "method": "Source page 1 text/OCR unit; supplement values visually checked on pages 8 and 10"
+  },
+  "2015": {
+    "source_sha256": "f2ab6e323be7439688a95d2291353ba86288429504e897cc77ab376dc190c3e4",
+    "multiplier": 1000,
+    "page": 1,
+    "printed_label": "Amount, In Thousand Pesos",
+    "method": "Source page 1 text/OCR unit; UF and national totals visually checked on page 11"
+  }
+}

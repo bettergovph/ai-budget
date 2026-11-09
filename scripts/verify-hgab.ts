@@ -721,7 +721,7 @@ async function main(): Promise<void> {
   verifyMpbBoards(check, { out: OUT, words, readerCopyHits });
   await verifyParties(c, check, { out: OUT, words, readerCopyHits });
   await verifyLocations(overview, c);
-  verifyRedFlags(check, { out: OUT, words, readerCopyHits });
+  await verifyRedFlags(c, check, { out: OUT, words, readerCopyHits });
   await verifyFap(c, check, { out: OUT, data: resolve(GAA, ".."), words, readerCopyHits });
 
   if (D1_MODE === "local") await verifyD1(overview, c);

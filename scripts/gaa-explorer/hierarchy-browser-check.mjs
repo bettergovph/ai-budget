@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { acceptTerms } from '../lib/accept-terms.mjs';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
 const base = process.env.GAA_EXPLORER_URL;
 if (!base) throw new Error('Set GAA_EXPLORER_URL');
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await acceptTerms(page);
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 const go = path => page.goto(new URL(path, base).href);
