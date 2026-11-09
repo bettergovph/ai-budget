@@ -144,6 +144,7 @@ Newest work is listed last within each area. PR numbers are on [bettergovph/ai-b
 ### FY2027 NEP microsite (`/2027`)
 
 - The NEP measured line by line against the FY2026 GAA. Docs: `docs/nep-2027-import.md`; commands `import:nep2027`, `verify:nep2027`, `upload:nep2027`.
+- `/` lands on the NEP overview, so its hero opens with a notice: where the 2027 budget is now (the House bill, HB 10858, approved on third reading; the Senate next) and a button to the House bill (2026-11-09). The stages live in `src/lib/budget-stage.ts`, shared with the House bill section's timeline (`HgabStageStrip`). **When the budget moves on, move `current` there and rewrite the notice's words** (`StageNotice` in `src/pages/Nep2027Story.tsx`).
 
 ### Budget hearings (`/hearings`)
 
