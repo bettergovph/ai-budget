@@ -20,6 +20,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNo
 import { Link, useLocation } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import * as fmt from '../lib/format';
+import { BUDGET_2027_STAGES, type StageState } from '../lib/budget-stage';
 import {
   BRIDGE_LABELS, BRIDGE_ORDER, DATASET_ORDER, DATA_BASE_OVERRIDE, HGAB_ROOT, STAGE_LABELS,
   datasetPath, traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
@@ -743,23 +744,16 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
 
 /**
  * Where the House bill sits in the budget cycle, as a timeline: NEP → House
- * hearings → House bill → Senate → bicameral → GAA. One track runs through a
- * marker per stage: solid up to the current stage, dashed after it. Stages
- * that happened carry their month; later ones say what comes next, never an
- * invented date. Horizontal on wide screens, vertical on phones.
+ * hearings → House bill → Senate → bicameral → GAA (src/lib/budget-stage.ts,
+ * shared with the NEP overview's hero notice). One track runs through a
+ * marker per stage: solid up to the current stage, dashed after it.
+ * Horizontal on wide screens, vertical on phones.
  */
-type StageState = 'done' | 'current' | 'future';
 const STAGE_STATE_TEXT: Record<StageState, string> = { done: 'Done', current: 'Current stage', future: 'Not yet' };
 
 export function HgabStageStrip() {
-  const stages: Array<{ name: string; when: string; meta: string; to?: string; state: StageState }> = [
-    { name: 'NEP', when: 'Aug 2026', meta: 'Submitted by the President to Congress', to: '/2027', state: 'done' },
-    { name: 'House hearings', when: 'Aug–Sep 2026', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
-    { name: 'House bill', when: 'Now', meta: 'HB 10858, voted on at 2nd and 3rd reading', state: 'current' },
-    { name: 'Senate', when: 'Next', meta: 'Its own committee, then a floor vote', state: 'future' },
-    { name: 'Bicameral', when: 'Then', meta: 'Both chambers settle on one text', state: 'future' },
-    { name: 'Enacted budget (GAA)', when: 'Last', meta: 'Signed into law; FY2020–2026 so far', to: '/gaa', state: 'future' },
-  ];
+  // The current stage is this section, so it is not a link here.
+  const stages = BUDGET_2027_STAGES.map((s) => (s.state === 'current' ? { ...s, to: undefined } : s));
   return (
     <section className="hgab-timeline" aria-labelledby="hgab-timeline-title">
       <p className="hgab-timeline-kicker" id="hgab-timeline-title">Where the 2027 budget is now</p>

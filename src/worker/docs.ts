@@ -937,6 +937,14 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>9 November 2026</h3>
+<ul>
+  <li><b>Where the 2027 budget is now.</b> The <a href="${SITE}/2027/overview">NEP overview</a>, where the site
+      opens, now leads with the current stage: the House has approved its version, House Bill No. 10858, on third
+      reading, and the Senate is next, with a link to the <a href="${SITE}/hgab/2027/overview">House bill</a>.
+      The API and the data files did not change.</li>
+</ul>
+
 <h3>8 November 2026</h3>
 <ul>
   <li><b>Terms of Service and Disclaimer.</b> <a href="${SITE}/terms-of-service">/terms-of-service</a> and

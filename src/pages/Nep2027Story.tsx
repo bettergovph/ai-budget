@@ -13,6 +13,7 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
+import { BUDGET_2027_STAGES } from '../lib/budget-stage';
 import { NepError, NepHeader, NepLoading } from '../components/Nep2027Bits';
 import * as fmt from '../lib/format';
 import {
@@ -88,20 +89,23 @@ export default function Nep2027Story() {
       <main ref={rootRef} className="story">
         {/* ---- Hero: the navy band ---- */}
         <section className="story-band story-hero">
-          <div className="story-hero-inner">
-            <p className="story-kicker">Republic of the Philippines · Fiscal Year {NEP_YEAR}</p>
-            <h1 className="story-hero-title">The National Expenditure Program 2027</h1>
-            <p className="story-hero-aka">Also known as the President’s Budget.</p>
-            <p className="story-hero-sub">
-              {fmt.shortPhp(amount, 'T')} proposed · {items.toLocaleString()} line items ·{' '}
-              {idx.departments.length} spending groups · measured against the FY{BASE_YEAR} GAA
-            </p>
-            <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
+          <div className="story-hero-inner has-notice">
+            <StageNotice />
+            <div className="story-hero-main">
+              <p className="story-kicker">Republic of the Philippines · Fiscal Year {NEP_YEAR}</p>
+              <h1 className="story-hero-title">The National Expenditure Program 2027</h1>
+              <p className="story-hero-aka">Also known as the President’s Budget.</p>
+              <p className="story-hero-sub">
+                {fmt.shortPhp(amount, 'T')} proposed · {items.toLocaleString()} line items ·{' '}
+                {idx.departments.length} spending groups · measured against the FY{BASE_YEAR} GAA
+              </p>
+              <span className="story-scroll-cue" aria-hidden="true">Scroll ↓</span>
+            </div>
           </div>
         </section>
 
         {/* ---- 01 ---- */}
-        <section className="story-chapter story-reveal">
+        <section id="nep-story-start" className="story-chapter story-reveal">
           <p className="story-ch-num">01 · The proposal</p>
           <h2 className="story-h">A proposal, not yet a law.</h2>
           <p className="story-lede">
@@ -287,5 +291,60 @@ export default function Nep2027Story() {
       </main>
       <SiteFooter source={`SOURCE: NATIONAL EXPENDITURE PROGRAM · FY ${NEP_YEAR} · VS FY ${BASE_YEAR} GAA`} />
     </>
+  );
+}
+
+/**
+ * The hero's notice: the NEP is where the 2027 budget started, and the House bill is where it is now, so readers go on
+ * to the House bill (Jason, 2026-11-09: "put on the landing page the current state we are so they visit the house
+ * version instead of the NEP"; then "smaller … compact … a proper notice … a proper timeline and animate it"). The
+ * timeline reads src/lib/budget-stage.ts, shared with the House bill section's timeline; the words name the current
+ * stage, so rewrite them when it moves. On load the line fills up to the current stage, each stage appearing as the
+ * line reaches it, and the current one pulses (no motion under prefers-reduced-motion).
+ */
+const STAGE_STATE_TEXT = { done: 'done', current: 'current stage', future: 'not yet' } as const;
+
+function StageNotice() {
+  const n = BUDGET_2027_STAGES.length;
+  const current = BUDGET_2027_STAGES.findIndex((st) => st.state === 'current');
+  // When each stage appears: done stages as the fill reaches them, later ones just after it stops.
+  const delay = (i: number) => (i <= current ? 200 + (current ? i / current : 0) * 1100 : 1350 + (i - current) * 120);
+  return (
+    <aside className="story-notice" aria-labelledby="story-notice-title">
+      <div className="story-notice-text">
+        <p className="story-notice-tag">
+          <span className="story-notice-icon" aria-hidden="true">i</span>
+          Notice · Where the 2027 budget is now
+        </p>
+        <h2 id="story-notice-title" className="story-notice-title">
+          The House has approved its version of the 2027 budget.
+        </h2>
+        <p className="story-notice-body">
+          House Bill No. 10858 was approved on third reading, and the Senate is next. You are reading the NEP, where
+          the budget started.
+        </p>
+      </div>
+      <Link className="story-notice-cta" to="/hgab/2027/overview">
+        Go to the House bill <span aria-hidden="true">→</span>
+      </Link>
+      <div className="story-tl" style={{ '--n': n, '--i': current } as React.CSSProperties}>
+        <span className="story-tl-track" aria-hidden="true"><span className="story-tl-fill" /></span>
+        <ol aria-label="Stages of the 2027 budget">
+          {BUDGET_2027_STAGES.map((st, i) => (
+            <li
+              key={st.name}
+              className={`is-${st.state}`}
+              style={{ '--delay': `${delay(i)}ms` } as React.CSSProperties}
+              aria-current={st.state === 'current' ? 'step' : undefined}
+            >
+              <span className="story-tl-dot" aria-hidden="true" />
+              <span className="story-tl-name">{st.short}</span>
+              <span className="story-tl-when">{st.when}</span>
+              <span className="visually-hidden">, {STAGE_STATE_TEXT[st.state]}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </aside>
   );
 }
