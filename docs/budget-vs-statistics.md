@@ -1,6 +1,6 @@
 # Budget vs PSA statistics (exploratory)
 
-Status: **exploratory, started 2026-11-07.** Nothing here is on the site, and the figures have not been reviewed. Don't publish them, or quote them as findings, until the maintainer has reviewed the method.
+Status: **exploratory, started 2026-11-07.** The figures have not been reviewed. Don't publish them, or quote them as findings, until the maintainer has reviewed the method. The same data now feeds the [Indicators section](indicators.md), which shows the statistics and budget per person without the correlations.
 
 The question: does the budget go where the needs are? This work compares budget per person in each province with PSA statistics: poverty, age structure, GDP per person, population and land area.
 
@@ -50,6 +50,8 @@ Province outlines come from `data/hgab/2027/geo/provinces.json`, the same file t
 
 BARMM provinces and Sulu are **excluded from every DPWH comparison**. DPWH barely builds there (BARMM has its own public works ministry, and Sulu was in BARMM until 2024). Keeping them in would make poorer areas look under-served for a reason that has nothing to do with targeting.
 
+Place names are matched in `scripts/stats-psa/geo.mjs`, shared with the Indicators build; every PSA quantity is checked against PSA's national or regional total (`meta.psa_checks` in `areas.json`).
+
 ## Run
 
 ```bash
@@ -74,7 +76,7 @@ These cover 81 areas.
 - **Size drives budget per person, not poverty.** Small, sparse provinces get far more per person. The rank correlation between contracts per person and population is −0.69. Contracts correlate weakly with 2018 poverty (ρ 0.26), and the link disappears once population and land are controlled for (ρ −0.02).
 - **Per poor person, poorer areas get much less.** The poorest fifth of areas (29–48% poverty) holds 26.9% of the poor and 11.8% of the people. It received 14.4% of the 2018–2025 contract budget: ₱61.6k per person against ₱37.4k in the least-poor fifth, but ₱183k per poor person against ₱1.2M.
 - **The FY2027 House additions don't follow poverty** (ρ −0.11, not significant). The poorest fifth received 14.7% of them.
-- **The share aged 60+ tracks budget per person** (ρ ≈ 0.35). This is probably confounded: small island and northern provinces are both older and better funded per person. Areas with more children are also poorer (ρ 0.78 with the share under 15), so age and poverty can't be read separately.
+- **The share aged 60+ tracks budget per person** (ρ ≈ 0.35, 65 areas; the 16 provinces of Bicol, Northern Mindanao and Davao are left out because PSA's 2024 age table is inconsistent there, see [indicators.md](indicators.md)). This is probably confounded: small island and northern provinces are both older and better funded per person. Areas with more children are also poorer (ρ 0.78 with the share under 15), so age and poverty can't be read separately.
 
 Caveats:
 
