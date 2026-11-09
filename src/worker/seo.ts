@@ -28,6 +28,7 @@ import { CONTRACTORS_ROOT } from "../lib/hgab-contractors";
 import { PARTIES_ROOT } from "../lib/hgab-parties";
 import { PARTY_DATA_ROOT } from "../lib/hgab-congress-seats";
 import { CITIZEN_REPORTS_ROOT } from "../lib/citizen-reports";
+import { INDICATORS, INDICATORS_ROOT } from "../lib/indicators";
 import { RED_FLAGS_ROOT } from "../lib/hgab-redflags";
 
 const CANONICAL_HOST = "https://budget.bettergov.ph";
@@ -156,6 +157,10 @@ const STATIC_SITEMAP_PATHS = [
   "/glossary",
   "/hearings",
   CITIZEN_REPORTS_ROOT,
+  // Indicators: the index and every indicator (the 87 area pages are linked from them).
+  INDICATORS_ROOT,
+  `${INDICATORS_ROOT}/budget-by-region`,
+  ...INDICATORS.map((d) => `${INDICATORS_ROOT}/${d.id}`),
   // FY2027 House bill section: the overview (its landing page), the two
   // static pages and the four dataset hubs. Record pages are too many (≈19k)
   // to list; the hubs link to them. The Explainer (/intro) is hidden for now.

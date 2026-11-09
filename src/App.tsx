@@ -12,6 +12,10 @@ const Methodology = lazy(() => import('./pages/Methodology'));
 const Learn = lazy(() => import('./pages/Learn'));
 const Glossary = lazy(() => import('./pages/Glossary'));
 const CitizenReports = lazy(() => import('./pages/CitizenReports'));
+const Indicators = lazy(() => import('./pages/Indicators'));
+const IndicatorDetail = lazy(() => import('./pages/IndicatorDetail'));
+const IndicatorPlace = lazy(() => import('./pages/IndicatorPlace'));
+const BudgetByRegion = lazy(() => import('./pages/BudgetByRegion'));
 const Explore = lazy(() => import('./pages/Explore'));
 const Nep2027Story = lazy(() => import('./pages/Nep2027Story'));
 const Nep2027Department = lazy(() => import('./pages/Nep2027Department'));
@@ -92,6 +96,10 @@ export default function App() {
           <Route path="/learn" element={<Learn />} />
           <Route path="/glossary" element={<Glossary />} />
           <Route path="/citizen-reports" element={<CitizenReports />} />
+          <Route path="/indicators" element={<Indicators />} />
+          <Route path="/indicators/places/:area" element={<IndicatorPlace />} />
+          <Route path="/indicators/budget-by-region" element={<BudgetByRegion />} />
+          <Route path="/indicators/:id" element={<IndicatorDetail />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/d/:deptId" element={<Portal />} />
           <Route path="/d/:deptId/overview" element={<Portal />} />
