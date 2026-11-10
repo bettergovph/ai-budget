@@ -396,9 +396,161 @@ def card_hearings(f, hearings):
                        pipeline_repo=PIPELINE_REPO, **{f"n_{k}": v for k, v in r.items()})
 
 
+# ---------------------------------------------------------------------------------------------- philgeps-v2
+
+PHILGEPS_REPO = "https://github.com/csiiiv/philgeps_data_v2"
+PHILGEPS_DRIVE = "https://drive.google.com/drive/folders/1Km2gqIfaY_9ZotjvePFZVSMEuxud6WWA"
+PHILGEPS_ROWS = 18_515_260
+# Names of private individuals: the government staff who posted each notice, and each supplier's
+# contact person. Left out of the public release (Jason, 2026-11-10).
+PHILGEPS_WITHHELD = ["created_by", "awardee_contact_person"]
+
+
+def stage_philgeps(out, args):
+    src = Path(args.src or "/data/downloads/philgeps-v2").resolve()
+    files = {"normalized": src / "normalized" / "philgeps_normalized.parquet",
+             "cleaned": src / "cleaned" / "philgeps_cleaned.parquet"}
+    catalog_path = Path(args.catalog or "/tmp/philgeps-v2-docs/source_catalog.json")
+    catalog = json.loads(catalog_path.read_text())
+    source_sha = {k: sha256(v) for k, v in files.items()}
+    for k, v in files.items():
+        if pq.read_metadata(v).num_rows != PHILGEPS_ROWS:
+            fail(f"{v.name}: expected {PHILGEPS_ROWS:,} rows")
+
+    con = duckdb.connect()
+    # This host shares its memory with other services; cap DuckDB and let it spill to the staging disk.
+    con.execute(f"SET temp_directory = '{out}/.duckdb-tmp'")
+    con.execute("SET memory_limit = '4GB'")
+    con.execute("SET threads = 4")
+    # Rewrite each layer without the withheld columns, then prove every other value and the row order are
+    # unchanged: an order-sensitive fingerprint (row position + every kept column) must match the source's.
+    rewritten = {"normalized": "philgeps-2000-2025.parquet", "cleaned": "philgeps-2000-2025-typed.parquet"}
+    for key, name in rewritten.items():
+        dst = out / name
+        excl = ", ".join(PHILGEPS_WITHHELD)
+        con.execute(f"COPY (SELECT * EXCLUDE ({excl}) FROM read_parquet('{files[key]}')) TO '{dst}' "
+                    "(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 100000)")
+        a = con.execute(f"SELECT count(*), bit_xor(hash(t)) FROM (SELECT * EXCLUDE ({excl}) FROM "
+                        f"read_parquet('{files[key]}', file_row_number = true)) t").fetchone()
+        b = con.execute(f"SELECT count(*), bit_xor(hash(t)) FROM (SELECT * FROM "
+                        f"read_parquet('{dst}', file_row_number = true)) t").fetchone()
+        if a != b:
+            fail(f"{name}: rows/fingerprint {b} != source {a}")
+        kept = [(f.name, str(f.type)) for f in pq.read_schema(files[key]) if f.name not in PHILGEPS_WITHHELD]
+        if kept != [(f.name, str(f.type)) for f in pq.read_schema(dst)]:
+            fail(f"{name}: column names or types changed")
+        print(f"  {name}: {a[0]:,} rows, every kept value and the row order match {files[key].name}")
+    shutil.rmtree(out / ".duckdb-tmp", ignore_errors=True)
+
+    norm = out / rewritten["normalized"]
+    typed = out / rewritten["cleaned"]
+    withheld_counts = {c: con.execute(f"SELECT count({c}), count(DISTINCT {c}) FROM read_parquet('{files['cleaned']}')")
+                       .fetchone() for c in PHILGEPS_WITHHELD}
+    per_file = dict(con.execute(f"SELECT _source_file_id, count(*) FROM read_parquet('{norm}') GROUP BY 1").fetchall())
+
+    # The source-file table: one row per export, keyed by the `_source_file_id` on every row.
+    sources = []
+    for f in catalog["source_files"]:
+        sheet = (f.get("sheets") or [{}])[0]
+        sources.append({
+            "source_file_id": f["source_file_id"],
+            "file_name": f.get("title"),
+            "period": f.get("normalized_file_name", "").rsplit(".", 1)[0] or None,
+            "format": f.get("format"),
+            "size_bytes": f.get("size_bytes"),
+            "sha256": f.get("sha256"),
+            "schema_id": sheet.get("schema_id"),
+            "header_present": sheet.get("header_present"),
+            "rows": per_file.get(f["source_file_id"], 0),
+            "urls": [u["url"] for u in f.get("urls") or []],
+        })
+    if sum(r["rows"] for r in sources) != PHILGEPS_ROWS or len(per_file) != len(sources):
+        fail("source catalog does not account for every row")
+    out_files = [rewritten["normalized"], rewritten["cleaned"], write_table(sources, out, "sources.parquet"),
+                 copy(catalog_path, out, "source-catalog.json")]
+
+    layouts = con.execute(f"SELECT _source_schema_id, count(DISTINCT _source_file_id), count(*) FROM "
+                          f"read_parquet('{norm}') GROUP BY 1 ORDER BY 3 DESC").fetchall()
+    flags = con.execute(f"SELECT issue, count(*) FROM (SELECT unnest(_cleaning_issues) AS issue FROM "
+                        f"read_parquet('{typed}')) GROUP BY 1 ORDER BY 2 DESC").fetchall()
+    flagged = con.execute(f"SELECT count(*) FROM read_parquet('{typed}') WHERE _cleaning_issue_count > 0").fetchone()[0]
+    span = con.execute(f"SELECT min(bid_published_date)::DATE, max(bid_published_date)::DATE, "
+                       f"min(award_date)::DATE, max(award_date)::DATE FROM read_parquet('{typed}')").fetchone()
+    # Counted in the typed layer: the normalized layer keeps blanks and "NULL" literals as published strings.
+    nonnull = dict(con.execute("SELECT * FROM (UNPIVOT (SELECT count(COLUMNS(*)) FROM read_parquet('" + str(typed) +
+                               "')) ON COLUMNS(*) INTO NAME col VALUE n)").fetchall())
+    typed_types = {f.name: str(f.type) for f in pq.read_schema(typed)}
+    norm_types = {f.name: str(f.type) for f in pq.read_schema(norm)}
+    facts = {
+        "rows": PHILGEPS_ROWS,
+        "source_files": len(sources),
+        "periods": [sources and min(r["period"] for r in sources), max(r["period"] for r in sources)],
+        "bid_published": [str(span[0]), str(span[1])],
+        "award_date": [str(span[2]), str(span[3])],
+        "drive_sha256": {files[k].name: v for k, v in source_sha.items()},
+        "withheld": {c: {"rows": n, "distinct": d} for c, (n, d) in withheld_counts.items()},
+        "rows_flagged": flagged,
+    }
+    card = card_philgeps(facts, layouts, flags, nonnull, norm_types, typed_types, rewritten)
+    return {
+        "title": "PhilGEPS procurement notices and awards, 2000–2025 (v2)",
+        "files": out_files,
+        "facts": facts,
+        "card": card,
+        "pipeline": {"source": PHILGEPS_REPO, "source_commit": args.source_commit, "drive": PHILGEPS_DRIVE,
+                     "this_step": "scripts/hf/publish.py philgeps-v2 (drops the withheld columns, renames)",
+                     "commit": commit_of(ROOT)},
+    }
+
+
+PHILGEPS_EXTRA = {
+    "_source_file_id": "The export the row came from; joins `sources.source_file_id` (SHA-256 of the file).",
+    "_source_sheet": "Worksheet in that export (null for CSV).",
+    "_source_row_number": "Row in that export, as a spreadsheet shows it.",
+    "_source_schema_id": "Which of the four export layouts the row was read with.",
+    "_extra_values": "Unexpected trailing values on the row (none in this release).",
+    "procuring_entity_name_key": "Upper-case comparison key for grouping names; entities are not merged.",
+    "client_agency_key": "Upper-case comparison key for `client_agency`.",
+    "awardee_organization_name_key": "Upper-case comparison key for `awardee_organization_name`.",
+    "_replacement_character_columns": "Columns on the row that contain U+FFFD (encoding damage, kept as is).",
+    "_cleaning_issues": "Findings for review on this row, not corrections: see the flags table.",
+    "_cleaning_issue_count": "Number of findings on the row.",
+}
+
+
+def card_philgeps(f, layouts, flags, nonnull, norm_types, typed_types, names):
+    aliases = json.loads(Path("/tmp/philgeps-v2-docs/schema_registry.json").read_text())["column_aliases"]
+    headers = {}
+    for h, c in aliases.items():
+        headers.setdefault(c, []).append(h)
+    rows = []
+    for col in typed_types:
+        desc = PHILGEPS_EXTRA.get(col) or ("PhilGEPS: " + ", ".join(f"“{h}”" for h in sorted(headers.get(col, [])))
+                                            if headers.get(col) else "")
+        n = nonnull.get(col)
+        rows.append(f"| `{col}` | {'✓' if col in norm_types else '—'} | `{typed_types[col]}` | "
+                    f"{'' if n is None else f'{n:,}'} | {desc} |")
+    layout_rows = "\n".join(f"| `{s}` | {nf} | {n:,} |" for s, nf, n in layouts)
+    flag_rows = "\n".join(f"| `{k}` | {n:,} |" for k, n in flags)
+    w = f["withheld"]
+    tmpl = (HERE / "cards" / "philgeps-v2.md").read_text()
+    return tmpl.format(
+        rows=f"{f['rows']:,}", source_files=f["source_files"], first_period=f["periods"][0],
+        last_period=f["periods"][1], bid_first=f["bid_published"][0], bid_last=f["bid_published"][1],
+        award_first=f["award_date"][0], award_last=f["award_date"][1], layout_rows=layout_rows,
+        flag_rows=flag_rows, rows_flagged=f"{f['rows_flagged']:,}", column_rows="\n".join(rows),
+        created_by_rows=f"{w['created_by']['rows']:,}", created_by_people=f"{w['created_by']['distinct']:,}",
+        contact_rows=f"{w['awardee_contact_person']['rows']:,}",
+        contact_people=f"{w['awardee_contact_person']['distinct']:,}",
+        normalized=names["normalized"], typed=names["cleaned"], philgeps_repo=PHILGEPS_REPO,
+        drive=PHILGEPS_DRIVE, year=dt.date.today().year, n_norm_cols=len(norm_types),
+        n_typed_cols=len(typed_types))
+
+
 DATASETS = {
     "gaa-2000-2026": stage_gaa_history,
     "house-budget-hearings-2027": stage_hearings,
+    "philgeps-v2": stage_philgeps,
 }
 
 
@@ -465,6 +617,8 @@ def main():
     ap.add_argument("--src", help="override the source directory")
     ap.add_argument("--upload", action="store_true", help="publish the staged folder")
     ap.add_argument("--tag", help="tag the upload, e.g. 2026-11-07")
+    ap.add_argument("--catalog", help="philgeps-v2: csiiiv's DATA_NORMALIZATION/artifacts/source_catalog.json")
+    ap.add_argument("--source-commit", help="philgeps-v2: the csiiiv/philgeps_data_v2 commit the catalog is from")
     args = ap.parse_args()
 
     out = Path(args.out or f"/tmp/hf-{args.dataset}")
