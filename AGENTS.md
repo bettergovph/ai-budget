@@ -271,7 +271,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Disclaimer, Terms of Service and the first-visit agreement | #78 merged 2026-11-08. Follow-up branch `site-terms-pbc` (worktree `/tmp/wt-terms`, preview :5142): PBC as a party, footer credit, models, repo URL | PR open; the licence choice and a lawyer's read are still open |
 | "Publish the documents" and "We demand answers" poster builders | worktree `hgab-programs`, untracked | The first is published; the second is not approved |
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
-| Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5143 | Committed 2026-11-12, not pushed; `documents/` on R2; open: where submitted reviews go, nav link |
+| Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5143 | PR #82 open 2026-11-12; `documents/` on R2; open: where submitted reviews go, nav link |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
