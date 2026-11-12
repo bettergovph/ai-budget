@@ -2,7 +2,15 @@
 
 Data for the planned **Review** button on each DPWH project of the FY2027 House bill: the project's supporting documents (Senate-provided files and DPWH Transparency "Proposal" files) and the research site's review flags, tied to our project rows.
 
-`npm run build:hgab-documents -- --fetch` → `data/hgab/2027/documents/` (checked by `npm run verify:hgab`, section "documents/"). Contract: `src/lib/hgab-documents.ts`. Nothing is uploaded to R2 or loaded into D1 yet.
+`npm run build:hgab-documents -- --fetch` → `data/hgab/2027/documents/` (checked by `npm run verify:hgab`, section "documents/"). Contract: `src/lib/hgab-documents.ts`.
+
+Published to R2 on 2026-11-12: `projects.parquet`, `files.parquet`, `review.json`, `detail/` and `manifest.json`. `sources/` (263 MB of third-party snapshots) is not uploaded. Re-upload with:
+
+```
+npm run upload:hgab -- --only=documents/projects.parquet,documents/files.parquet,documents/review.json,documents/detail,documents/manifest.json --skip-verify
+```
+
+R2 caches Parquet for a day and isn't purged, so link it with `?v=<md5>` from `manifest.json` `outputs`. JSON is cached for 5 minutes.
 
 ## Sources
 
@@ -57,3 +65,15 @@ A hand check of 30 tracker and 10 POW-title folders against their POWs (text or 
 - The coverage file's own folder ties are wrong about 1.5% of the time where the R4A tracker lets us check (8 of 536). Expect about 60 wrong ties nationwide. The Review form is a good place to collect "these documents belong to another project".
 - 112 rows have a Proposal record in our pairing that the research site doesn't count; we don't attach them.
 - Having a file doesn't verify what's in it.
+
+## The project reviewer (`/hgab/2027/review`)
+
+A workspace for volunteers, with its own full-height layout (a slim bar, no site masthead). Code: `src/pages/HgabReview.tsx`, logic `src/lib/hgab-review.ts` (pure; `npm run test:hgab-review`), styles `src/hgab-review.css`.
+
+- **Data.** `review.json` (2.9 MB, about 490 KB gzipped) has every project as one positional row: ids, title, office, region, program, amount, flag indexes, a bitmask of the 5 key documents found, and a file count. Offices carry the legislative districts they serve (from `districts.json`; the build fails if a DEO resolves to none). `detail/NN.json` (500 bill rows each, about 55 KB gzipped) has each project's files, flags with evidence and notes. The page loads it when a project opens.
+- **The funnel.** An ordered list of steps (flag kept or left out, region, office, program, how many key documents, minimum budget, search, reviewed by me). Each step shows the projects and budget left and how many it dropped. Every option shows how many of the current projects it would keep. Steps are in the URL (`s=` repeated), with `p=` (open project) and `sort=`, so funnels can be shared. "Start from" presets are in `PRESETS`.
+- **Missing-document flags** in the funnel are ours, computed with our links. Hover shows the research site's own count.
+- **Words.** Flag labels and evidence are the research site's, with "HGAB" shown as "House bill" (`readerText`). A DPWH office always appears with the districts it serves.
+- **Documents** show inline at 1600 px and wider, and over the page below that. Both PDF hosts allow framing. Each file says where it came from and how it was matched; tracker matches are marked weaker.
+- **Reviews** stay in the browser (`localStorage` key `hgab-review:v1`) and download as CSV or JSON from "My reviews". **Submissions need a backend decision** (for example a D1 table behind the Worker).
+- Not in the section's sub-nav or the sitemap yet.
