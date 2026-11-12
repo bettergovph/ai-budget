@@ -81,7 +81,7 @@ They are different things, and the team's integration spec says so: `detector_ru
 - `house-bill-only-our-comparison`, "In the House bill only (our comparison)": 6,192 lines. Four House-only rows are outside the research site's 15,979.
 - `nep-match-sources-disagree`, "Sources disagree on the NEP match": 862 lines. 753 are ours but not theirs; 109 are theirs, but our comparison pairs them with an NEP line (47 with the same amount, 37 on different stretches of the same road, 14 raised, 11 cut). These are the lines a person should settle first. They have a "Start from" preset.
 
-Both suggest RF-024 and appear in each project's Red flags tab under "From our comparison". The manifest's `reviewer.nep_comparison` and `verify:hgab` keep the counts.
+Both suggest RF-024 and appear on each project's Overview under "From our comparison". The manifest's `reviewer.nep_comparison` and `verify:hgab` keep the counts.
 
 22 of the 44 checks have no detector yet. Volunteers check them by hand, and the Team checklist filter shows them as "No red flag points here yet": RF-004 No watershed or drainage master plan; RF-005 Edited geotagged photos; RF-006 Not complete set of plans; RF-007 No identified water source; RF-008 No identified purpose; RF-011 Repeated awards to the same contractor; RF-012 Repeated awards despite poor performance; RF-013 Unsubstantiated pumping capacity; RF-014 Inconsistent or unsupported project quantities; RF-015 Unclear discharge or outfall arrangement; RF-019 Unclear physical scope and capacity; RF-020 Unrealistic construction duration; RF-026 Conflicting document dates; RF-027 Project plans are not signed and sealed; RF-028 At least one of the professionals who signed and sealed the plans are not in the database of PRC; RF-030 Apparent multi-phased project might have issues; RF-031 Unjustified embankment boulder-fill quantities; RF-032 Unsubstantiated quarry sources and hauling  costs; RF-036 Conflicting document dates; RF-037 Uncommon pay item; RF-042 Master Plan; RF-043 Feasibility Study. RF-042 and RF-043 still appear on a project when a Master Plan or Feasibility Study is among its files.
 
@@ -95,9 +95,9 @@ Other ways checks come in:
 
 For each project:
 
-1. **Documents on file** (RF-033): for each of the 5 key documents, its availability, in the workbook's vocabulary, and whether the file we matched is for this project.
-2. **The checklist**, in groups: suggested by this project's red flags, the documents on file, other checks for this kind of project (collapsed), and not yet due (collapsed). Each check shows:
-   - its lead role, what to check, the team's notes, the minimum evidence and the **safeguard**;
+1. **Documents on file** (RF-033): not asked. Each of the 5 key documents' availability is filled in from what we detected (`available` when found, else `unknown`), so it doesn't count as an edit; `matches_project` stays in the payload.
+2. **The checklist**, in groups: the checks this project's red flags suggest come first, without a heading; then the documents on file, other checks for this kind of project (collapsed), and not yet due (collapsed). A suggested check has no status label until a volunteer starts it. Each check shows:
+   - its lead role, what to check, the minimum evidence and the **safeguard**;
    - then the volunteer's answers: does it apply now, what you found (facts only), evidence, and the outcome.
 3. **Evidence** is one of the project's files or any link. Each piece records:
    - page, table or cell;

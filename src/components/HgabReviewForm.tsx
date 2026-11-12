@@ -1,21 +1,21 @@
 /**
  * The review form in the project reviewer (`/hgab/2027/review`): the team's red-flag checklist (RF-001…RF-044) for one
- * project, with the documents on file, evidence per check and the case details. It edits a `CaseReview`
+ * project, with evidence per check and the case details. It edits a `CaseReview`
  * (src/lib/hgab-redflags-team.ts), the payload a future API will accept; for now the page keeps it in the browser.
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { NAMED_TYPES, type DetailFile, type ReviewDetail, type ReviewIndexFlag } from '../lib/hgab-documents';
+import { type DetailFile, type ReviewDetail, type ReviewIndexFlag } from '../lib/hgab-documents';
 import { readerText } from '../lib/hgab-review';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
-  CHECKLIST_GROUP_LABEL, MAPPING_STATUS, READY_STAGE, REGISTRY, STAGE_GATED, VOLUNTEER_OUTCOMES, VOLUNTEER_STAGES,
+  CHECKLIST_GROUP_LABEL, READY_STAGE, REGISTRY, STAGE_GATED, VOLUNTEER_OUTCOMES, VOLUNTEER_STAGES,
   checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, validateCaseReview, vocab,
   vocabLabel, type CaseReview, type CategoryKey, type ChecklistGroup, type ChecklistItem, type EvidenceItem, type FlagCheck,
 } from '../lib/hgab-redflags-team';
 
 const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 const now = () => new Date().toISOString();
-const STATUS_LABEL = { not_started: 'Not started', ai_candidate: 'AI candidate', under_human_review: 'In review', human_outcome: '' } as const;
+const STATUS_LABEL = { not_started: 'Not started', ai_candidate: '', under_human_review: 'In review', human_outcome: '' } as const;
 
 function Select({ value, onChange, options, label, className = '' }: {
   value: string; onChange: (v: string) => void; options: { code: string; label: string }[]; label: string; className?: string;
@@ -99,9 +99,11 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
       <button type="button" className="rf-card-head" onClick={onToggle} aria-expanded={open}>
         <span className="rf-id">{f.id}</span>
         <span className="rf-title">{f.title}</span>
-        <span className={`rf-status is-${status === 'human_outcome' ? check.human_outcome : status}`}>
-          {status === 'human_outcome' ? vocabLabel('human_outcome', check.human_outcome) : STATUS_LABEL[status]}
-        </span>
+        {(status === 'human_outcome' || STATUS_LABEL[status]) && (
+          <span className={`rf-status is-${status === 'human_outcome' ? check.human_outcome : status}`}>
+            {status === 'human_outcome' ? vocabLabel('human_outcome', check.human_outcome) : STATUS_LABEL[status]}
+          </span>
+        )}
       </button>
       {(item.detectors.length > 0 || item.documents.length > 0) && (
         <p className="rf-why">
@@ -115,11 +117,6 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
           <p className="rf-lead">Lead: <b>{f.lead_skill}</b>{f.support_skills.length > 0 && <> · with {f.support_skills.join(', ')}</>}</p>
           <h5>What to check</h5>
           <p>{f.instructions}</p>
-          {(f.investigate || f.continuation) && (
-            <details className="rf-more"><summary>The team’s notes</summary>
-              {[f.investigate, f.continuation].filter(Boolean).map((t) => <p key={t}>{t}</p>)}
-            </details>
-          )}
           <h5>Minimum evidence</h5>
           <ul className="rf-chips">{f.minimum_evidence.map((m) => <li key={m}>{m}</li>)}</ul>
           <p className="rf-safeguard"><b>Safeguard.</b> {f.safeguard}{STAGE_GATED[f.id] && <> {STAGE_GATED[f.id]}</>}</p>
@@ -186,7 +183,6 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
   const errors = issues.filter((i) => i.level === 'error');
   const [tried, setTried] = useState(false);
   const groups = (['suggested', 'documents', 'category', 'later'] as ChecklistGroup[]).map((g) => ({ g, items: items.filter((x) => x.group === g) })).filter((x) => x.items.length);
-  const filesOf = (t: string) => files.filter((f) => f[2] === t);
   const done = review.flags.filter((f) => f.human_outcome !== 'not_reviewed').length;
 
   return (
@@ -198,40 +194,16 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
         </p>
       </div>
 
-      <section className="rf-sec">
-        <h4>Documents on file <small>RF-033 Incomplete documents</small></h4>
-        <table className="rf-docs">
-          <thead><tr><th scope="col">Document</th><th scope="col">Available?</th><th scope="col">For this project?</th></tr></thead>
-          <tbody>
-            {NAMED_TYPES.map((t) => {
-              const d = review.documents.find((x) => x.named_type === t)!;
-              const setDoc = (patch: Partial<typeof d>) => set({ documents: review.documents.map((x) => (x.named_type === t ? { ...x, ...patch } : x)) });
-              const n = filesOf(t).length;
-              return (
-                <tr key={t}>
-                  <th scope="row">{t}<small>{n ? `${n} ${n === 1 ? 'file' : 'files'}` : 'no file found'}</small></th>
-                  <td><Select label={`${t}: availability`} value={d.availability} onChange={(v) => setDoc({ availability: v })} options={vocab('document_availability')} /></td>
-                  <td>
-                    <Select label={`${t}: is it for this project?`} value={d.matches_project} onChange={(v) => setDoc({ matches_project: v as typeof d.matches_project })}
-                      options={[{ code: 'unknown', label: 'Not checked' }, { code: 'yes', label: 'Yes' }, { code: 'no', label: 'No, another project' }]} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <p className="rv-hint">“Not yet due” and “Not required” are not defects: some documents come later in the budget cycle.</p>
-      </section>
-
       {groups.map(({ g, items: its }) => (
         <section key={g} className="rf-sec">
-          <h4>
-            {CHECKLIST_GROUP_LABEL[g]} <small>{its.length}</small>
-            {(g === 'category' || g === 'later') && (
-              <button type="button" className="rf-toggle" onClick={() => setShowAll((s) => ({ ...s, [g]: !s[g] }))}>{showAll[g] ? 'Hide' : 'Show'}</button>
-            )}
-          </h4>
-          {g === 'suggested' && <p className="rv-hint">A red flag makes these AI candidates, not findings. {MAPPING_STATUS}.</p>}
+          {g !== 'suggested' && (
+            <h4>
+              {CHECKLIST_GROUP_LABEL[g]} <small>{its.length}</small>
+              {(g === 'category' || g === 'later') && (
+                <button type="button" className="rf-toggle" onClick={() => setShowAll((s) => ({ ...s, [g]: !s[g] }))}>{showAll[g] ? 'Hide' : 'Show'}</button>
+              )}
+            </h4>
+          )}
           {showAll[g] && (
             <ul className="rf-cards">
               {its.map((it) => (

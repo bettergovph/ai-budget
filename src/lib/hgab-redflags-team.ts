@@ -364,8 +364,9 @@ export function emptyEvidence(id: string): EvidenceItem {
 /** Whether a check has anything a volunteer entered. */
 export const flagCheckTouched = (f: FlagCheck) =>
   f.applicability !== 'not_assessed' || f.human_outcome !== 'not_reviewed' || !!f.observed_discrepancy.trim() || f.evidence.length > 0;
+/** Document availability is filled in from what we detected, so it doesn't count as the volunteer's. */
 export const caseTouched = (r: CaseReview) =>
-  r.flags.some(flagCheckTouched) || r.documents.some((d) => d.availability !== 'unknown' || d.matches_project !== 'unknown')
+  r.flags.some(flagCheckTouched) || r.documents.some((d) => d.matches_project !== 'unknown')
   || !!r.notes.trim() || !!r.next_action.trim() || r.risk_priority !== 'not_prioritized' || r.case_stage !== 'not_started';
 
 /** The team's flag status: an AI candidate until a person looks, then under review, then an outcome. */

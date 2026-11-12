@@ -57,7 +57,6 @@ function officeLine(o: ReviewProject['office'], max: number): string {
   return `${o.districts.slice(0, max).join(' · ')}${more > 0 ? ` +${more}` : ''} [${shortOffice(o.name)}]`;
 }
 const isPdf = (f: DetailFile) => /\.pdf$/i.test(f[4]) || /\.pdf(\?|$)/i.test(f[5]);
-const fileSize = (b: number | null) => (b == null ? '' : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
 // --- My reviews (in this browser until reviews can be sent) ------------------------------------------------------
 
@@ -78,7 +77,7 @@ function readProfile(): Reviewer {
 /** A fresh review for a project, for this volunteer. */
 function caseFor(p: ReviewProject, ix: ReviewIndex, reviewer: Reviewer, pap?: string | null): CaseReview {
   const n = new Date().toISOString();
-  return newCaseReview({
+  const c = newCaseReview({
     caseId: newId(), reviewer, dataBuiltAt: ix.built_at, now: n,
     project: {
       hgab_id: p.hgabId, project_id: p.projectId, budget_source_version: BUDGET_SOURCE_VERSION, title: p.title, office: p.office.name,
@@ -86,6 +85,8 @@ function caseFor(p: ReviewProject, ix: ReviewIndex, reviewer: Reviewer, pap?: st
       detector_rule_ids: p.flags.map((i) => ix.flags[i].code),
     },
   });
+  // Whether each key document is on file is what we detected, not something a volunteer sets.
+  return { ...c, documents: c.documents.map((d, i) => (hasDoc(p.docs, i) ? { ...d, availability: 'available' } : d)) };
 }
 function useCases() {
   const [cases, setCases] = useState<Record<string, CaseReview>>(() => readJsonStore(STORE_CASES, {}));
@@ -506,25 +507,6 @@ function FlagList({ detail, index }: { detail: ReviewDetail; index: ReviewIndex 
   );
 }
 
-function FileButton({ f, on, onOpen }: { f: DetailFile; on: boolean; onOpen: () => void }) {
-  const [source, method, , sourceType, name, url, bytes, archived] = f;
-  return (
-    <li className={`rv-file ${on ? 'is-on' : ''}`}>
-      <button type="button" onClick={onOpen} title={isPdf(f) ? 'Show it here' : 'Open it'}>
-        <span className="rv-file-name">{name}</span>
-        <span className="rv-file-meta">
-          <span className={`rv-src is-${source}`}>{SOURCE_LABEL[source]}</span>
-          {sourceType && sourceType !== f[2] && <span>{sourceType}</span>}
-          {archived && <span className="rv-tag">earlier copy</span>}
-          {bytes != null && <span>{fileSize(bytes)}</span>}
-        </span>
-        <span className={`rv-file-how ${LINK_WEAK.has(method) ? 'is-weak' : ''}`}>{LINK_LABEL[method]}</span>
-      </button>
-      <a href={url} target="_blank" rel="noopener noreferrer" className="rv-file-open" aria-label={`Open ${name} in a new tab`}>↗</a>
-    </li>
-  );
-}
-
 /** The project's files in viewing order: the five key types, then the rest; current copies before earlier ones. */
 function viewOrder(files: readonly DetailFile[]): DetailFile[] {
   const rank = (t: string) => { const i = (NAMED_TYPES as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
@@ -581,8 +563,9 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
   );
 }
 
-function Viewer({ files, file, onPick, onClose, inline }: {
+function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
   files: readonly DetailFile[];
+  keyTypes: number;
   file: DetailFile | null;
   onPick: (f: DetailFile) => void;
   onClose: () => void;
@@ -590,11 +573,13 @@ function Viewer({ files, file, onPick, onClose, inline }: {
 }) {
   const body = (
     <div className="rv-viewer">
+      <p className="rv-viewer-count">{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</p>
       <DocSwitcher files={files} file={file} onPick={onPick} />
       {file && (
         <div className="rv-viewer-bar">
           <span className={`rv-src is-${file[0]}`}>{SOURCE_LABEL[file[0]]}</span>
           <span className="rv-viewer-name" title={file[4]}>{file[4]}</span>
+          <span className={`rv-file-how ${LINK_WEAK.has(file[1]) ? 'is-weak' : ''}`}>{LINK_LABEL[file[1]]}</span>
           <a href={file[5]} target="_blank" rel="noopener noreferrer">Open in a new tab</a>
           <button type="button" onClick={onClose} aria-label="Close the document">×</button>
         </div>
@@ -635,8 +620,8 @@ function CasePanel({ project, detail, index, mine, profile, onSave }: {
   );
 }
 
-type PaneTab = 'overview' | 'documents' | 'flags' | 'review';
-const PANE_TABS: readonly PaneTab[] = ['overview', 'documents', 'flags', 'review'];
+type PaneTab = 'overview' | 'review';
+const PANE_TABS: readonly PaneTab[] = ['overview', 'review'];
 const paneTab = (v: string | null): PaneTab => (PANE_TABS as readonly string[]).includes(v ?? '') ? (v as PaneTab) : 'overview';
 
 /** Width of the project beside the document viewer, kept in this browser; the divider between them sets it. */
@@ -745,14 +730,11 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
     return () => window.removeEventListener('keydown', on);
   }, [detail]);
   const o = project.office;
-  const filesByType = (t: string) => (detail?.files ?? []).filter((f) => f[2] === t);
   // Our own NEP comparison on this project (review.json), beside the research site's flags in the detail shard.
   const ourFlags = project.flags.map((i) => index.flags[i]).filter((f) => f.source === 'bettergov' && !f.computed);
   const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
   const tabs: { key: PaneTab; label: string; count?: string }[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'documents', label: 'Documents', count: detail ? String(detail.files.length) : undefined },
-    { key: 'flags', label: 'Red flags', count: detail ? String(detail.flags.length + ourFlags.length) : undefined },
     { key: 'review', label: 'Review', count: mine ? (mine.case_stage === 'in_independent_review' ? '✓' : String(outcomes)) : undefined },
   ];
   const tabId = (t: PaneTab) => `rv-tab-${t}`;
@@ -810,35 +792,7 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                 ))}
               </ul>
               {detail && detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
-              <div className="rv-next">
-                <button type="button" className="rv-btn" onClick={() => onTab('documents')}>Read the documents</button>
-                <button type="button" className="rv-btn" onClick={() => onTab('flags')}>See the red flags</button>
-                <button type="button" className="rv-btn is-primary" onClick={() => onTab('review')}>Start the review</button>
-              </div>
-              <DisclaimerNotice compact className="rv-disclaimer" />
-            </>
-          ))}
-          {!detail && !error && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
-          {detail && (
-            <>
-              {panel('documents', (
-                <>
-                  <h3 className="rv-h">{detail.files.length} {detail.files.length === 1 ? 'file' : 'files'} · {docCount(project.docs)} of 5 key types found</h3>
-                  {!detail.files.length && <p className="rv-muted">We found no files for this project.</p>}
-                  {[...NAMED_TYPES, 'Other'].map((t) => {
-                    const fs = filesByType(t);
-                    if (!fs.length) return null;
-                    return (
-                      <div key={t} className="rv-filegroup">
-                        <h4>{t === 'Other' ? 'Other files' : t} <small>{fs.length}</small></h4>
-                        <ul>{fs.map((f) => <FileButton key={f[5]} f={f} on={open?.[5] === f[5]} onOpen={() => setOpen(f)} />)}</ul>
-                      </div>
-                    );
-                  })}
-                  <p className="rv-hint">A file being here doesn’t confirm what it says. Our matches can be wrong; say so in your review.</p>
-                </>
-              ))}
-              {panel('flags', (
+              {detail && (
                 <>
                   <h3 className="rv-h">{detail.flags.length} red {detail.flags.length === 1 ? 'flag' : 'flags'} from research.bettergov.ph</h3>
                   <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
@@ -850,14 +804,22 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                     </div>
                   )}
                 </>
-              ))}
-              {panel('review', <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
+              )}
+              <div className="rv-next">
+                {!inlineViewer && detail && detail.files.length > 0 && (
+                  <button type="button" className="rv-btn" onClick={() => setOpen(viewOrder(detail.files)[0])}>Read the documents</button>
+                )}
+                <button type="button" className="rv-btn is-primary" onClick={() => onTab('review')}>Start the review</button>
+              </div>
+              <DisclaimerNotice compact className="rv-disclaimer" />
             </>
-          )}
+          ))}
+          {!detail && !error && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
+          {detail && panel('review', <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {detail && (inlineViewer || open) && <Viewer files={detail.files} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
+      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -974,7 +936,7 @@ export default function HgabReview() {
       if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
       if (e.key === 'j' && next) { e.preventDefault(); next(); }
       if (e.key === 'k' && prev) { e.preventDefault(); prev(); }
-      // 1–4 switch the project's tabs.
+      // 1 and 2 switch the project's tabs.
       const k = PANE_TABS[Number(e.key) - 1];
       if (k && selectedId) { e.preventDefault(); setTab(k); }
     };
