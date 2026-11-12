@@ -189,3 +189,83 @@ export interface DocumentFile {
   archived: boolean;
   link_method: LinkMethod;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The reviewer's files: documents/review.json (every row, compact, for the funnel) and documents/detail/<NN>.json
+// (each row's files and flag evidence, loaded when a project is opened). Built by build:hgab-documents.
+// ---------------------------------------------------------------------------------------------------------------------
+
+export const REVIEW_INDEX_PATH = `${DOCUMENTS_DIR}/review.json`;
+/** Rows per detail shard, by bill row (`seq`): shard NN holds seq NN*500 … NN*500+499. */
+export const DETAIL_SHARD_ROWS = 500;
+export const detailShardPath = (seq: number) => `${DOCUMENTS_DIR}/detail/${String(Math.floor(seq / DETAIL_SHARD_ROWS)).padStart(2, "0")}.json`;
+
+/** How the funnel groups flags. Every flag code must fall in one family (the build fails otherwise). */
+export const FLAG_FAMILIES = [
+  { key: "documents", label: "Documents", re: /^(missing-|no-listed-|dpwh-transparency-match)/ },
+  { key: "nep", label: "NEP comparison", re: /^(potential-nep-insertion|no-selected-nep-counterpart|nep-counterpart-|within-nep-|implementing-office-changed|allocation-(increase|decrease))/ },
+  { key: "cost", label: "Amount and cost", re: /^(repeated-allocation-amount|high-|extreme-|cost-per-meter|uniform-rcs|very-short-)/ },
+  { key: "location", label: "Location and map", re: /(map-review|doppelganger|coordinate|mpb-location|mpb-same-|conflicting-deo)/ },
+  { key: "history", label: "Repeats and history", re: /^(historical-|mpb-historical|within-hgab-repeat|explicit-historical|rehabilitation-on|road-rehabilitation|bridge-rated)/ },
+] as const;
+export type FlagFamily = (typeof FLAG_FAMILIES)[number]["key"];
+export function flagFamily(code: string): FlagFamily | null {
+  return FLAG_FAMILIES.find((f) => f.re.test(code))?.key ?? null;
+}
+/** Codes of the five missing-document flags we compute (with our links), in NAMED_TYPES order. */
+export const missingCode = (t: NamedType) => flagCode(`Missing ${t}`).code;
+
+export interface ReviewIndexFlag {
+  code: string;
+  /** The research site's label; for allocation increase/decrease, without the amount. */
+  label: string;
+  family: FlagFamily;
+  /** Rows carrying it. */
+  n: number;
+  /** Ours: a missing-document flag computed with our links (the research site's own count is in `n_upstream`). */
+  computed?: boolean;
+  n_upstream?: number;
+}
+export interface ReviewIndexOffice {
+  name: string;
+  /** Legislative districts the office serves (districts.json); empty for the Central and regional offices. */
+  districts: string[];
+  /** "A" lone, "B" shared, null when no district. */
+  tier: "A" | "B" | null;
+}
+/**
+ * One row of review.json `rows`, positional to keep the file small:
+ * [hgab_id, project_id, title, office index, region index, program index, amount_php, flag indexes, named-type
+ *  bitmask (bit i = NAMED_TYPES[i] present, with our links), files (Senate + Proposal)]
+ */
+export type ReviewIndexRow = [string, string, string, number, number, number, number, number[], number, number];
+export interface ReviewIndex {
+  schema: number;
+  built_at: string;
+  source_generated_at: Record<string, string>;
+  named_types: readonly string[];
+  flags: ReviewIndexFlag[];
+  offices: ReviewIndexOffice[];
+  regions: string[];
+  programs: string[];
+  rows: ReviewIndexRow[];
+}
+
+/** One file in a detail shard: [source, link_method, doc_type, source_type, name, url, bytes | null, archived, folder code]. */
+export type DetailFile = ["senate" | "proposal", LinkMethod, NamedType | "Other", string, string, string, number | null, boolean, string];
+export interface ReviewDetail {
+  page: number;
+  /** The House bill PDF and page of our row (dpwh/projects.parquet hgab3_doc / hgab3_page), for "see it in the bill". */
+  bill_doc: string | null;
+  bill_page: number | null;
+  pap: string | null;
+  join_method: JoinMethod;
+  proposal_code: string | null;
+  proposal_types_without_files: boolean;
+  flags: ReviewFlag[];
+  missing_upstream: string[];
+  notes: string[];
+  files: DetailFile[];
+}
+/** A detail shard: hgab_id → detail. */
+export type ReviewDetailShard = Record<string, ReviewDetail>;

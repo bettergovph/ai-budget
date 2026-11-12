@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, LINK_METHODS, NAMED_TYPES, PROPOSAL_TYPE_MAP,
-  parseHgabId, senateFileType,
+  REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
 } from "../src/lib/hgab-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -29,6 +29,7 @@ interface Manifest {
   schema: number; rows: number;
   sources: Record<string, { file: string; sha256: string }> & { shards: { file: string; sha256: string }[] };
   files: { total: number };
+  outputs: Record<string, { md5: string; bytes: number }>;
   review_flags: { occurrences: number };
 }
 
@@ -40,6 +41,8 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
   if (![P, F, M].every(existsSync)) return;
   const man = readJson<Manifest>(M);
   check("manifest schema", man.schema === DOCUMENTS_SCHEMA, String(man.schema));
+  const md5 = (p: string) => createHash("md5").update(readFileSync(p)).digest("hex");
+  check("the manifest's output MD5s (for ?v= links) are the files'", ["projects.parquet", "files.parquet"].every((f) => man.outputs?.[f]?.md5 === md5(resolve(dir, f))));
   const { shards, ...main } = man.sources;
   const srcFiles = [...Object.values(main), ...shards];
   const badSrc = srcFiles.filter((s) => !existsSync(resolve(dir, s.file)) || sha256(resolve(dir, s.file)) !== s.sha256);
@@ -169,6 +172,45 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
   check("evidence is deduplicated per flag", pFull.every((p) => p.review_flags.every((f) => new Set(f.evidence).size === f.evidence.length)));
   const movedFrom = new Set(Object.entries(FOLDER_REVIEWS).map(([code]) => researchFolder.get(code)!).filter((h, i, a) => h && a.indexOf(h) === i));
   const dropped = pFull.filter((p) => p.complete_upstream && !p.complete && !movedFrom.has(p.hgab_id));
+  // The reviewer's files say the same as the Parquet.
+  const ixPath = resolve(o.out, REVIEW_INDEX_PATH);
+  check("documents/review.json present", existsSync(ixPath));
+  if (existsSync(ixPath)) {
+    const ix = readJson<ReviewIndex>(ixPath);
+    const pBy = new Map(pFull.map((p) => [p.hgab_id, p]));
+    const meta = new Map((await rows<{ hgab_id: string; title: string; office: string; region: string; amount_php: string; project_id: string }>(c,
+      "SELECT hgab_id, title, office, region, amount_php::VARCHAR amount_php, project_id FROM doc_p")).map((r) => [r.hgab_id, r]));
+    check("review.json: every row once, in bill order", ix.rows.length === pFull.length && new Set(ix.rows.map((r) => r[0])).size === ix.rows.length
+      && ix.rows.every((r, i) => i === 0 || parseHgabId(r[0])!.seq > parseHgabId(ix.rows[i - 1][0])!.seq));
+    const rowOff = ix.rows.filter(([h, pid, title, oi, ri, , amt, fi, mask, nf]) => {
+      const m = meta.get(h), p = pBy.get(h);
+      if (!m || !p) return true;
+      const codes = [...p.review_flags.map((f) => f.code), ...p.missing_flags.map((l) => flagCode(l).code)];
+      return m.project_id !== pid || m.title !== title || ix.offices[oi]?.name !== m.office || ix.regions[ri] !== m.region || String(amt) !== m.amount_php
+        || [...new Set(codes)].sort().join() !== fi.map((i) => ix.flags[i].code).sort().join()
+        || NAMED_TYPES.filter((_, i) => mask & (1 << i)).join() !== p.named_present.join() || nf !== p.senate_files + p.proposal_files;
+    });
+    check("review.json: each row's ids, title, office, region, amount, flags, documents and file count are the Parquet's", rowOff.length === 0, rowOff.slice(0, 3).map((r) => r[0]).join(", "));
+    const nOff = ix.flags.filter((f, i) => f.n !== ix.rows.filter((r) => r[7].includes(i)).length || flagFamily(f.code) !== f.family);
+    check(`review.json: all ${ix.flags.length} flags' counts and families hold`, nOff.length === 0, nOff.map((f) => f.code).join(", "));
+    const deo = ix.offices.filter((x) => /Engineering Office/i.test(x.name) && (!x.districts.length || x.tier !== (x.districts.length === 1 ? "A" : "B")));
+    check("review.json: every DPWH engineering office names the legislative districts it serves, lone or shared", deo.length === 0, deo.map((x) => x.name).join(", "));
+    // Detail shards: every row in its shard, with exactly its files and flags.
+    const shardCache = new Map<string, ReviewDetailShard | null>();
+    const shard = (p: string) => { if (!shardCache.has(p)) { const f = resolve(o.out, p); shardCache.set(p, existsSync(f) ? readJson<ReviewDetailShard>(f) : null); } return shardCache.get(p); };
+    const urlsBy = new Map<string, string[]>();
+    for (const f of fRows) urlsBy.set(f.hgab_id, [...(urlsBy.get(f.hgab_id) ?? []), f.url]);
+    const norm = (f: { code: string; label: string; value: number | string | null; evidence: string[] }) => [f.code, f.label, f.value == null ? null : Number(f.value), f.evidence];
+    const detOff = pFull.filter((p) => {
+      const d = shard(detailShardPath(parseHgabId(p.hgab_id)!.seq))?.[p.hgab_id];
+      return !d || d.files.map((f) => f[5]).sort().join() !== (urlsBy.get(p.hgab_id) ?? []).sort().join()
+        || JSON.stringify(d.flags.map(norm)) !== JSON.stringify(p.review_flags.map(norm)) || d.missing_upstream.join() !== p.missing_flags_upstream.join();
+    });
+    check(`detail shards (${shardCache.size}): every row in its shard with exactly its files, flags and evidence`, detOff.length === 0, detOff.slice(0, 3).map((p) => p.hgab_id).join(", "));
+    const extra = [...shardCache.values()].reduce((s, x) => s + Object.keys(x ?? {}).length, 0);
+    check("detail shards hold no other rows", extra === pFull.length, String(extra));
+  }
+
   check("more rows are complete with our links than upstream, and none fewer except where a reviewed folder moved away",
     pFull.filter((p) => p.complete).length > pFull.filter((p) => p.complete_upstream).length && dropped.length === 0, dropped.slice(0, 3).map((p) => p.hgab_id).join(", "));
 }

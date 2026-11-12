@@ -26,12 +26,13 @@ import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import ExcelJS from "exceljs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES, PROPOSAL_TYPE_MAP, flagCode, parseHgabId,
-  senateFileType, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType,
-  type ProposalLink, type ReviewFlag,
+  AMOUNT_FLAG_RE, COMPLETE_AT, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
+  type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
+  type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
 } from "../src/lib/hgab-documents";
 
 const RESEARCH = "https://research.bettergov.ph/static/nep-preview";
@@ -57,6 +58,7 @@ function parseArgs(): Args {
 
 const log = (s: string) => process.stdout.write(`${s}\n`);
 const sha256 = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
+const md5 = (path: string) => createHash("md5").update(readFileSync(path)).digest("hex");
 const readJson = <T,>(p: string): T => JSON.parse(readFileSync(p, "utf8")) as T;
 function ensure(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`build-hgab-documents: ${msg}`);
@@ -96,7 +98,7 @@ interface ProposalRec { code: string; name: string; office: string; region: stri
 interface PowResult { code: string; matchStatus: string; hgabId: string | null }
 interface LinkRow { id: number; region: string; path: string; url: string; bytes: number; sha256: string }
 interface TrackerRow { code: string; title: string; amount_php: number; office: string }
-interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null }
+interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null }
 
 function curl(url: string, out: string): void {
   log(`  fetching ${url}`);
@@ -136,10 +138,11 @@ async function readTracker(path: string): Promise<TrackerRow[]> {
 }
 
 async function readOurs(c: DuckDBConnection, path: string): Promise<OurRow[]> {
-  const r = await c.runAndReadAll(`SELECT id, title, hgab3_php, hgab3_page, coalesce(office, ''), json_extract_string(record_json, '$.api.id')
-    FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
-  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api]) => ({
+  const r = await c.runAndReadAll(`SELECT id, title, hgab3_php, hgab3_page, coalesce(office, ''), json_extract_string(record_json, '$.api.id'),
+    hgab3_doc, coalesce(program, ''), pap FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
+  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap]) => ({
     id: String(id), title: String(title), amount: Number(amt), page: Number(page), office: String(office), apiId: api == null ? null : String(api),
+    doc: doc == null ? null : String(doc), program: String(program), pap: pap == null ? null : String(pap),
   }));
 }
 
@@ -479,6 +482,10 @@ async function main(): Promise<void> {
     link_method: "VARCHAR",
   });
 
+  const reviewer = writeReviewer(args.out, projects, files, joined, {
+    coverage: cov.generatedAtUtc, flags: flags.generatedAtUtc, in_depth: inDepth.generatedAtUtc,
+  });
+
   const count = <T,>(xs: T[], k: (x: T) => string) => { const m: Record<string, number> = {}; for (const x of xs) m[k(x)] = (m[k(x)] ?? 0) + 1; return m; };
   const folderLinks = [...F.links.values()];
   const senateFiles = files.filter((f) => f.source === "senate");
@@ -491,6 +498,8 @@ async function main(): Promise<void> {
       shards: SHARD_KEYS.flatMap((k) => inDepth.arrayShards[k].map((s) => ({ url: `${RESEARCH}/${s.path}`, file: `sources/shards/${basename(s.path)}`, sha256: s.sha256 }))),
     },
     source_generated_at: { coverage: cov.generatedAtUtc, flags: flags.generatedAtUtc, in_depth: inDepth.generatedAtUtc },
+    /** MD5 of each output, for `?v=` links: R2 caches Parquet for a day and isn't purged. */
+    outputs: Object.fromEntries(["projects.parquet", "files.parquet"].map((f) => [f, { md5: md5(resolve(dir, f)), bytes: statSync(resolve(dir, f)).size }])),
     rows: projects.length,
     our_rows: new Set(projects.map((p) => p.project_id)).size,
     join_methods: count(projects, (p) => p.join_method),
@@ -530,10 +539,94 @@ async function main(): Promise<void> {
       by_code: Object.fromEntries(Object.entries(count(projects.flatMap((p) => p.review_flags), (x) => x.code)).sort((a, b) => b[1] - a[1])),
     },
     notes: count(projects.flatMap((p) => p.notes), (x) => x),
+    reviewer,
   };
   writeFileSync(resolve(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   log(JSON.stringify({ join: manifest.join_methods, files: manifest.files, senate: manifest.senate, proposal: manifest.proposal, documents: { complete_upstream: manifest.documents.complete_upstream, complete: manifest.documents.complete } }, null, 2));
   log(`wrote ${dir}/projects.parquet (${projects.length}), files.parquet (${files.length}), manifest.json`);
+}
+
+// --- 5. The reviewer's files ---------------------------------------------------------------------------------------
+
+/** review.json (every row, compact) and detail/<NN>.json (files and flag evidence per row), for the Review screen. */
+function writeReviewer(out: string, projects: DocumentProject[], files: DocumentFile[], joined: Map<string, { row: OurRow }>, generated: Record<string, string>) {
+  const districts = readJson<{ districts: { id: string; label: string }[]; offices: Record<string, { name: string; district_ids: string[]; tier: string | null }> }>(resolve(out, "districts.json"));
+  const label = new Map(districts.districts.map((d) => [d.id, d.label]));
+  // districts.json names offices "Abra DEO"; our rows "Abra District Engineering Office".
+  const short = (name: string) => name.replace(/\bDistrict Engineering Office\b/i, "DEO").replace(/\bSub-District Engineering Office\b/i, "SDEO").trim();
+  // The bill's typos, fixed as build-hgab-districts.ts fixes them; names compared on letters and digits only.
+  const typos = (n: string) => n.replace(/Marindugue/gi, "Marinduque").replace(/Siguijor/gi, "Siquijor").replace(/Occidenatal/gi, "Occidental")
+    .replace(/Batagas/gi, "Batangas").replace(/Ilolilo/gi, "Iloilo");
+  const officeKey = (n: string) => fold(short(typos(n)));
+  const officeByName = new Map(Object.values(districts.offices).map((o) => [officeKey(o.name), o]));
+  const idx = <T,>(list: T[], key: (x: T) => string) => { const m = new Map(list.map((x, i) => [key(x), i])); return (k: string) => m.get(k)!; };
+
+  const officeNames = uniq(projects.map((p) => p.office)).sort();
+  const offices: ReviewIndexOffice[] = officeNames.map((name) => {
+    const o = officeByName.get(officeKey(name));
+    const ds = (o?.district_ids ?? []).map((id) => label.get(id)).filter((x): x is string => !!x);
+    return { name, districts: ds, tier: ds.length === 0 ? null : ds.length === 1 ? "A" : "B" };
+  });
+  const deoWithout = offices.filter((o) => /Engineering Office/i.test(o.name) && o.districts.length === 0).map((o) => o.name);
+  ensure(deoWithout.length === 0, `DPWH offices with no legislative district in districts.json: ${deoWithout.join(", ")}`);
+  const regions = uniq(projects.map((p) => p.region)).sort();
+  const programs = uniq(projects.map((p) => joined.get(p.hgab_id)!.row.program)).sort();
+
+  // Flags: the research site's review flags, then our missing-document flags (with our links).
+  const flagLabel = (l: string) => AMOUNT_FLAG_RE.exec(l)?.[1] ?? l;
+  const seen = new Map<string, { label: string; n: number }>();
+  for (const p of projects) for (const f of p.review_flags) {
+    const x = seen.get(f.code) ?? { label: flagLabel(f.label), n: 0 };
+    x.n++;
+    seen.set(f.code, x);
+  }
+  const flagsIdx: ReviewIndex["flags"] = [...seen].sort((a, b) => b[1].n - a[1].n).map(([code, x]) => {
+    const family = flagFamily(code);
+    ensure(family, `flag ${code} ("${x.label}") is in no FLAG_FAMILIES family`);
+    return { code, label: x.label, family, n: x.n };
+  });
+  for (const t of NAMED_TYPES) {
+    const code = missingCode(t), lab = `Missing ${t}`;
+    flagsIdx.push({ code, label: lab, family: "documents", n: projects.filter((p) => p.missing_flags.includes(lab)).length,
+      computed: true, n_upstream: projects.filter((p) => p.missing_flags_upstream.includes(lab)).length });
+  }
+  const flagAt = idx(flagsIdx, (f) => f.code), officeAt = idx(offices, (o) => o.name), regionAt = idx(regions, (r) => r), programAt = idx(programs, (r) => r);
+
+  const filesBy = new Map<string, DocumentFile[]>();
+  for (const f of files) filesBy.set(f.hgab_id, [...(filesBy.get(f.hgab_id) ?? []), f]);
+  const ordered = [...projects].sort((a, b) => a.seq - b.seq);
+  const rows: ReviewIndexRow[] = ordered.map((p) => [
+    p.hgab_id, p.project_id, p.title, officeAt(p.office), regionAt(p.region), programAt(joined.get(p.hgab_id)!.row.program), p.amount_php,
+    uniq([...p.review_flags.map((f) => flagAt(f.code)), ...p.missing_flags.map((l) => flagAt(flagCode(l).code))]),
+    NAMED_TYPES.reduce((m, t, i) => (p.named_present.includes(t) ? m | (1 << i) : m), 0),
+    filesBy.get(p.hgab_id)?.length ?? 0,
+  ]);
+  const index: ReviewIndex = {
+    schema: DOCUMENTS_SCHEMA, built_at: new Date().toISOString(), source_generated_at: generated, named_types: NAMED_TYPES,
+    flags: flagsIdx, offices, regions, programs, rows,
+  };
+  writeFileSync(resolve(out, REVIEW_INDEX_PATH), JSON.stringify(index));
+
+  const shards = new Map<string, ReviewDetailShard>();
+  for (const p of ordered) {
+    const our = joined.get(p.hgab_id)!.row;
+    const path = detailShardPath(p.seq);
+    const shard = shards.get(path) ?? {};
+    shard[p.hgab_id] = {
+      page: p.page, bill_doc: our.doc, bill_page: our.page, pap: our.pap, join_method: p.join_method, proposal_code: p.proposal_code,
+      proposal_types_without_files: p.notes.includes("proposal_types_without_files"),
+      flags: p.review_flags, missing_upstream: p.missing_flags_upstream, notes: p.notes,
+      files: (filesBy.get(p.hgab_id) ?? []).map((f): DetailFile => [f.source, f.link_method, f.doc_type, f.source_type, f.name, f.url, f.bytes, f.archived, f.folder_code]),
+    };
+    shards.set(path, shard);
+  }
+  rmSync(resolve(out, DOCUMENTS_DIR, "detail"), { recursive: true, force: true });
+  mkdirSync(resolve(out, DOCUMENTS_DIR, "detail"), { recursive: true });
+  for (const [path, shard] of shards) writeFileSync(resolve(out, path), JSON.stringify(shard));
+  return {
+    index: { file: REVIEW_INDEX_PATH.replace(`${DOCUMENTS_DIR}/`, ""), rows: rows.length, bytes: statSync(resolve(out, REVIEW_INDEX_PATH)).size },
+    detail: { shards: shards.size, rows_per_shard: DETAIL_SHARD_ROWS, bytes: [...shards.keys()].reduce((s, k) => s + statSync(resolve(out, k)).size, 0) },
+  };
 }
 
 async function writeParquet<T extends object>(c: DuckDBConnection, out: string, rows: T[], columns: Record<keyof T & string, string>): Promise<void> {
