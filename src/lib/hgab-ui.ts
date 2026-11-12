@@ -13,7 +13,7 @@
  */
 import { PLAIN_TERMS, type BridgeGroup, type DatasetKey, type DimKey, type HgabDatasetMeta, type ReconciliationRow } from './hgab';
 
-/** Tab labels for the four datasets, shared by the sub-nav, the switch and tables. */
+/** Names for the four datasets, shared by the switch, crumbs and tables; the sub-nav's shorter ones are PROGRAM_NAV's. */
 export const DATASET_SHORT: Record<DatasetKey, string> = {
   dpwh: 'DPWH',
   fmr: 'Farm-to-Market Roads',
@@ -147,11 +147,14 @@ export const DIM_TABS: ReadonlyArray<{ key: DimKey; label: string; param: string
   { key: 'pap', label: 'Program line', param: 'pap', help: PLAIN_TERMS.pap.meaning },
 ];
 
-/** The program hubs in sub-nav order, with whether each has the readings view. */
+/**
+ * The program hubs in sub-nav order, with whether each has the readings view. The sub-nav's labels are shorter than
+ * DATASET_SHORT's (Jason, 2026-11-12: "Farm to Market", "Health"); pages and tables keep the longer names.
+ */
 export const PROGRAM_NAV: ReadonlyArray<{ key: DatasetKey; label: string; hasReadings: boolean }> = [
   { key: 'dpwh', label: 'DPWH', hasReadings: true },
-  { key: 'fmr', label: 'Farm-to-Market Roads', hasReadings: false },
-  { key: 'hfep', label: 'Health Facilities', hasReadings: false },
+  { key: 'fmr', label: 'Farm to Market', hasReadings: false },
+  { key: 'hfep', label: 'Health', hasReadings: false },
   { key: 'nia', label: 'Irrigation', hasReadings: false },
 ];
 
