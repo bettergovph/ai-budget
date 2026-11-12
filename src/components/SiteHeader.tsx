@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
+import { INDICATORS_ROOT } from '../lib/indicators';
 
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
@@ -70,7 +71,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   // microsite covers the FY2027 NEP alone, and /hgab the House bill stage.
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
   const coverage = location.pathname.startsWith('/learn') || location.pathname.startsWith('/glossary')
-    || location.pathname.startsWith(CITIZEN_REPORTS_ROOT)
+    || location.pathname.startsWith(CITIZEN_REPORTS_ROOT) || location.pathname.startsWith(INDICATORS_ROOT)
     ? null // the guide, the glossary and the citizen reports span several documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`

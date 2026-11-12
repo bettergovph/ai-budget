@@ -25,6 +25,8 @@ import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { PARTY_DATA_ROOT } from "./hgab-congress-seats";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
+import { INDICATORS_ROOT, INDICATOR_BY_ID } from "./indicators";
+import { MPB_POPULATION_ROOT } from "./mpb-population";
 import { PBC_REPORT, RED_FLAGS_ROOT, RED_FLAG_POSTERS, RED_FLAG_TOTALS, pbcBillionsWords } from "./hgab-redflags";
 
 export interface PageMeta {
@@ -182,6 +184,46 @@ export function pageMeta(pathname: string): PageMeta {
         "appropriations, SARO, NCA, and 200+ other terms across documents, appropriations, taxes, " +
         "debt, and performance — searchable and filterable.",
     };
+  }
+  if (p === INDICATORS_ROOT) {
+    return {
+      title: `Indicators — Poverty, Age, Income and Budget by Province · ${SITE}`,
+      description:
+        "PSA statistics for every Philippine province and Metro Manila district beside the national budget: poverty " +
+        "and income, population and age, the economy, farms, registered births and deaths, the provincial NTA, and " +
+        "DPWH budget per person. Maps, rankings and a downloadable table.",
+    };
+  }
+  if (p === MPB_POPULATION_ROOT) {
+    return {
+      title: `Multi-Purpose Buildings per Person — by Region, Province and Town, FY2015 to the 2027 House Bill · ${SITE}`,
+      description:
+        "Every multi-purpose building line in the budget against the 2024 census population of its region, province, or " +
+        "city and municipality: budget per person and lines per 100,000 people, FY2015 GAA to the 2027 House bill.",
+    };
+  }
+  if (p === `${INDICATORS_ROOT}/budget-by-region`) {
+    return {
+      title: `Budget by Region, Beside Poverty, Children, Births and More — NEP 2027 and GAA 2026 · ${SITE}`,
+      description:
+        "Any PSA indicator beside the budget assigned to each Philippine region in the FY 2027 NEP and the FY 2026 GAA: " +
+        "poverty beside DSWD, children beside DepEd, births beside DOH, rice land beside DA, or the whole budget.",
+    };
+  }
+  if (p.startsWith(`${INDICATORS_ROOT}/places/`)) {
+    return {
+      title: `Indicators for one province or district · ${SITE}`,
+      description: "Every indicator for one Philippine province or Metro Manila district, beside the Philippines, with its rank among the areas.",
+    };
+  }
+  if (p.startsWith(`${INDICATORS_ROOT}/`)) {
+    const def = INDICATOR_BY_ID.get(p.slice(INDICATORS_ROOT.length + 1));
+    if (def) {
+      return {
+        title: `${def.title}, by province · ${SITE}`,
+        description: `${def.plain} A map of every Philippine province and Metro Manila district, the areas ranked, and the source.`,
+      };
+    }
   }
   if (p === CITIZEN_REPORTS_ROOT) {
     return {

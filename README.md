@@ -48,6 +48,9 @@ To serve data from `public/data` instead, leave `VITE_DATA_BASE_URL` unset. In t
 | `npm run dump:sql` | Export the SQLite database as D1-compatible SQL |
 | `npm run upload:r2 -- --all` | Upload generated JSON and Parquet assets to R2 |
 | `npm run build:gaa-series` | Build `data/gaa-explorer/series.json`, the FY2000–2026 national and per-department series the `/gaa` and `/d/:id` trend charts read, from the GAA Explorer manifest; `-- --upload` publishes it to R2 (see [docs/gaa-explorer.md](docs/gaa-explorer.md)) |
+| `npm run fetch:psa` | Save the PSA tables the Indicators section uses from [statistics.bettergov.ph](https://statistics.bettergov.ph) into `data/stats-psa/raw/` |
+| `npm run build:indicators` | Build `data/indicators/` (one row per province or Metro Manila district, 24 indicators); `-- --upload` puts it on R2 under `indicators/` (see [docs/indicators.md](docs/indicators.md)) |
+| `npm run verify:indicators` | Independent checks on the Indicators data, recomputed from PSA's raw rows; `-- --live` also compares R2 |
 | `scripts/hf/publish.py <dataset>` | Stage a dataset for Hugging Face (`bettergovph/*`) with its card and manifest, as a dry run; `--upload` publishes it (see [docs/hf-datasets.md](docs/hf-datasets.md)) |
 | `npm run build:citizen-reports` | Retake the `/citizen-reports` card screenshots (headless Chromium) into `public/screenshots/`; the sites are listed in `src/lib/citizen-reports.ts` |
 | `hearings` sync | Hearing transcripts are published by the [transcriptions pipeline](../transcriptions): `sync_to_site.py` uploads `hearings/<videoId>/` files to R2 and upserts `hearings` rows into D1. Served at `/hearings` (grid) and `/hearings/:videoId` (interactive transcript + summary). |
@@ -97,6 +100,9 @@ The main routes are:
 - `/d/:deptId/*` — department overview, trends, programs, objects, data, reports, and budget-cycle views
 - `/2027` — FY2027 National Expenditure Program microsite (overview, `/2027/d/:deptId`,
   `/2027/explore`, `/2027/methodology`)
+- `/indicators` — PSA statistics for every province and Metro Manila district beside the budget (`/indicators/:id`
+  for one indicator, `/indicators/places/:area` for one area, `/indicators/budget-by-region` for each region's
+  poor beside its NEP and GAA budget); see [docs/indicators.md](docs/indicators.md)
 - `/hgab` — FY2027 House General Appropriations Bill section; redirects to `/hgab/2027`
   (overview), with `/hgab/2027/:dataset?view=…` for one program's hub (`dpwh`, `fmr`,
   `hfep`, `nia`), `/hgab/2027/:dataset/p/:id` for one comparison record,
