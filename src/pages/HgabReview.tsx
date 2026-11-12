@@ -19,10 +19,11 @@ import {
   type ReviewIndex, type ReviewIndexFlag,
 } from '../lib/hgab-documents';
 import {
-  DOC_VERDICT_LABEL, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT, OVERALL_LABEL,
-  PRESETS, REVIEW_STORE_KEY, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, decodeIndex, docCount, flagYields, hasDoc, pesoFull, pesoShort,
-  readerText, reviewIsEmpty, reviewsCsv, runFunnel, sameStep, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch,
-  type DocVerdict, type DocsFilter, type MyReview, type Overall, type ReviewProject, type SortKey, type Step,
+  DOC_VERDICT_LABEL, DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
+  OVERALL_LABEL, PRESETS, REVIEW_STORE_KEY, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy, decodeIndex, docCount,
+  flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, reviewIsEmpty, reviewsCsv, runFunnel, setSingle,
+  setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
+  type DocVerdict, type MultiKind, type MyReview, type Overall, type ReviewProject, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import '../hgab-review.css';
 
@@ -80,165 +81,248 @@ function download(name: string, body: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// --- Funnel -----------------------------------------------------------------------------------------------------
+// --- Filters and the funnel -------------------------------------------------------------------------------------
 
-function FunnelSteps({ levels, flags, offices, onRemove, onFlip, onClear }: {
+/** A filter button in the bar that opens a panel of checkboxes; closes on Escape or a click outside. */
+function Dropdown({ label, count, active, wide, children }: { label: string; count?: number; active?: boolean; wide?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const click = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', click); document.removeEventListener('keydown', key); };
+  }, [open]);
+  return (
+    <div className={`rv-dd ${active ? 'is-active' : ''} ${open ? 'is-open' : ''}`} ref={ref}>
+      <button type="button" className="rv-dd-btn" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
+        {label}{count ? <b>{count}</b> : null}<span className="rv-dd-caret" aria-hidden="true">▾</span>
+      </button>
+      {open && <div className={`rv-dd-panel ${wide ? 'is-wide' : ''}`} role="group" aria-label={label}>{children}</div>}
+    </div>
+  );
+}
+
+/** One checkbox: its label, and how many projects it would keep beside a bar. */
+function Check({ checked, onChange, label, note, k, max, disabled }: {
+  checked: boolean; onChange: () => void; label: ReactNode; note?: ReactNode; k: number; max: number; disabled?: boolean;
+}) {
+  return (
+    <label className={`rv-check ${checked ? 'is-on' : ''} ${!checked && (disabled ?? k === 0) ? 'is-off' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={onChange} disabled={!checked && (disabled ?? k === 0)} />
+      <span className="rv-check-label">{label}{note && <small>{note}</small>}</span>
+      <span className="rv-check-n">{n(k)}</span>
+      <span className="rv-check-bar" aria-hidden="true"><span style={{ width: `${(k / Math.max(1, max)) * 100}%` }} /></span>
+    </label>
+  );
+}
+
+function PanelFilter({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+  return <input className="rv-input rv-dd-filter" type="search" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} aria-label={placeholder} autoFocus />;
+}
+function PanelFoot({ children }: { children: ReactNode }) { return <div className="rv-dd-foot">{children}</div>; }
+
+function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSteps }: {
+  ix: ReviewIndex;
+  all: ReviewProject[];
+  steps: Step[];
+  current: ReviewProject[];
+  ctx: StepContext;
+  reviewedCount: number;
+  presets: typeof PRESETS;
+  /** Gets the latest steps: the URL may not have caught up with a quick second click. */
+  onSteps: (fn: (cur: Step[]) => Step[]) => void;
+}) {
+  const [exclude, setExclude] = useState(false);
+  const [flagQ, setFlagQ] = useState('');
+  const [officeQ, setOfficeQ] = useState('');
+  const qStep = steps.find((s) => s.kind === 'q');
+  const [q, setQ] = useState(qStep && qStep.kind === 'q' ? qStep.value : '');
+  const yields = useMemo(() => flagYields(current, ix.flags.length), [current, ix.flags.length]);
+  const flagStep = (code: string) => steps.find((s) => s.kind === 'flag' && s.code === code);
+  const multi = (kind: MultiKind, key: (p: ReviewProject) => string) => {
+    const base = projectsWithout(all, steps, kind, ctx);
+    return { base: base.length, counts: countBy(base, key), checked: checkedValues(steps, kind) };
+  };
+  const toggleValue = (kind: MultiKind, v: string) => onSteps((cur) => {
+    const c = checkedValues(cur, kind);
+    return setValues(cur, kind, c.includes(v) ? c.filter((x) => x !== v) : [...c, v]);
+  });
+  const max = Math.max(1, current.length);
+
+  const flagChecks = (fams: FlagFamily[], computed: boolean) => fams.map((fam) => {
+    const items = ix.flags.map((f, i) => ({ f, i }))
+      .filter(({ f }) => f.family === fam && !!f.computed === computed && readerText(f.label).toLowerCase().includes(flagQ.toLowerCase()))
+      .sort((a, b) => yields[b.i] - yields[a.i]);
+    if (!items.length) return null;
+    return (
+      <div key={fam} className="rv-dd-group">
+        {!computed && <h3>{fam === 'documents' ? 'Documents, as research.bettergov.ph flags them' : FAMILY_LABEL[fam]}</h3>}
+        {items.map(({ f, i }) => {
+          const s = flagStep(f.code);
+          const k = s && s.kind === 'flag' && s.not ? current.length : exclude && !s ? current.length - yields[i] : yields[i];
+          return (
+            <Check key={f.code} checked={!!s} onChange={() => onSteps((cur) => toggleFlag(cur, f.code, exclude))} k={k} max={max}
+              label={<>{s && s.kind === 'flag' && s.not && <em className="rv-not">Leave out · </em>}{readerText(f.label)}</>}
+              note={f.computed ? `With the documents we matched; research.bettergov.ph counts ${n(f.n_upstream ?? 0)}` : undefined} />
+          );
+        })}
+      </div>
+    );
+  });
+  const flagCount = steps.filter((s) => s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed).length;
+  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs' || s.kind === 'reviewed').length;
+
+  const docs = multi('docs', () => '');
+  const docsBase = projectsWithout(all, steps, 'docs', ctx);
+  const region = multi('region', (p) => p.region);
+  const office = multi('office', (p) => p.office.name);
+  const program = multi('program', (p) => p.program);
+  const minStep = steps.find((s) => s.kind === 'min');
+  const minBase = projectsWithout(all, steps, 'min', ctx);
+  const revStep = steps.find((s) => s.kind === 'reviewed');
+  const revBase = projectsWithout(all, steps, 'reviewed', ctx);
+
+  return (
+    <div className="rv-filters" role="toolbar" aria-label="Filters">
+      <Dropdown label="Start from" wide>
+        <p className="rv-dd-note">A ready-made funnel. It replaces your filters.</p>
+        {presets.map((p) => (
+          <button key={p.key} type="button" className="rv-preset" onClick={() => onSteps(() => p.steps)}>
+            <b>{p.label}</b><span>{p.note}</span>
+          </button>
+        ))}
+      </Dropdown>
+
+      <Dropdown label="Red flags" count={flagCount} active={flagCount > 0} wide>
+        <PanelFilter value={flagQ} onChange={setFlagQ} placeholder="Find a flag" />
+        <label className="rv-exclude"><input type="checkbox" checked={exclude} onChange={(e) => setExclude(e.target.checked)} /> Leave out projects with the flags I check next</label>
+        <div className="rv-dd-cols">{flagChecks(FAMILY_ORDER.filter((f) => f !== 'documents'), false)}{flagChecks(['documents'], false)}</div>
+        <PanelFoot>
+          <span>Every checked flag is a step: projects must pass them all.</span>
+          {flagCount > 0 && <button type="button" onClick={() => onSteps((cur) => cur.filter((s) => !(s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed)))}>Clear</button>}
+        </PanelFoot>
+      </Dropdown>
+
+      <Dropdown label="Documents" count={docsCount} active={docsCount > 0} wide>
+        <div className="rv-dd-cols">
+          <div className="rv-dd-group">
+            <h3>How many of the 5 key documents</h3>
+            {DOCS_FILTERS.map((v) => {
+              const k = docsBase.filter(stepTest({ kind: 'docs', values: [v] }, ctx)).length;
+              return <Check key={v} checked={docs.checked.includes(v)} onChange={() => toggleValue('docs', v)} label={DOCS_FILTER_LABEL[v]} k={k} max={Math.max(1, docsBase.length)} />;
+            })}
+            <h3>My reviews</h3>
+            {(['no', 'yes'] as const).map((v) => {
+              const k = revBase.filter(stepTest({ kind: 'reviewed', value: v }, ctx)).length;
+              const on = !!revStep && revStep.kind === 'reviewed' && revStep.value === v;
+              return <Check key={v} checked={on} disabled={v === 'yes' && !reviewedCount} k={k} max={Math.max(1, revBase.length)}
+                label={v === 'yes' ? 'Reviewed by me' : 'Not yet reviewed by me'}
+                onChange={() => onSteps((cur) => setSingle(cur, 'reviewed', on ? null : { kind: 'reviewed', value: v }))} />;
+            })}
+          </div>
+          <div className="rv-dd-group">
+            <h3>Missing, after our matching</h3>
+            <label className="rv-exclude"><input type="checkbox" checked={exclude} onChange={(e) => setExclude(e.target.checked)} /> Leave out projects missing it</label>
+            {flagChecks(['documents'], true)}
+          </div>
+        </div>
+      </Dropdown>
+
+      <Dropdown label="Region" count={region.checked.length} active={region.checked.length > 0}>
+        {ix.regions.map((v) => (
+          <Check key={v} checked={region.checked.includes(v)} onChange={() => toggleValue('region', v)} label={v} k={region.counts.get(v) ?? 0} max={region.base} />
+        ))}
+        {region.checked.length > 0 && <PanelFoot><span>Projects in any checked region.</span><button type="button" onClick={() => onSteps((cur) => setValues(cur, 'region', []))}>Clear</button></PanelFoot>}
+      </Dropdown>
+
+      <Dropdown label="DPWH office" count={office.checked.length} active={office.checked.length > 0} wide>
+        <PanelFilter value={officeQ} onChange={setOfficeQ} placeholder="Find an office, province or district" />
+        <p className="rv-dd-note">Each office with the legislative districts it serves.</p>
+        <div className="rv-dd-scroll">
+          {ix.offices
+            .filter((o) => office.checked.includes(o.name) || (office.counts.get(o.name) ?? 0) > 0)
+            .filter((o) => !officeQ || foldText(`${o.name} ${o.districts.join(' ')}`).includes(foldText(officeQ)))
+            .sort((a, b) => Number(office.checked.includes(b.name)) - Number(office.checked.includes(a.name)) || (office.counts.get(b.name) ?? 0) - (office.counts.get(a.name) ?? 0))
+            .slice(0, officeQ ? 200 : 60)
+            .map((o) => (
+              <Check key={o.name} checked={office.checked.includes(o.name)} onChange={() => toggleValue('office', o.name)}
+                label={o.name === 'Central Office' ? 'DPWH Central Office' : shortOffice(o.name)}
+                note={o.districts.length ? `${o.districts.join(' · ')}${o.tier === 'B' ? ` · shared by ${o.districts.length}` : ''}` : 'No single legislative district'}
+                k={office.counts.get(o.name) ?? 0} max={office.base} />
+            ))}
+        </div>
+        <PanelFoot>
+          <span>{officeQ ? 'Matching offices.' : 'The 60 offices with the most projects here; type to find others.'}</span>
+          {office.checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'office', []))}>Clear</button>}
+        </PanelFoot>
+      </Dropdown>
+
+      <Dropdown label="Budget" count={(minStep ? 1 : 0) + program.checked.length} active={!!minStep || program.checked.length > 0} wide>
+        <div className="rv-dd-cols">
+          <div className="rv-dd-group">
+            <h3>Budget of at least</h3>
+            {[10e6, 50e6, 100e6, 500e6, 1e9].map((v) => {
+              const on = !!minStep && minStep.kind === 'min' && minStep.value === v;
+              return <Check key={v} checked={on} onChange={() => onSteps((cur) => setSingle(cur, 'min', on ? null : { kind: 'min', value: v }))}
+                label={pesoShort(v)} k={minBase.filter((p) => p.amount >= v).length} max={Math.max(1, minBase.length)} />;
+            })}
+          </div>
+          <div className="rv-dd-group">
+            <h3>Program</h3>
+            {ix.programs.filter((v) => program.checked.includes(v) || (program.counts.get(v) ?? 0) > 0).map((v) => (
+              <Check key={v} checked={program.checked.includes(v)} onChange={() => toggleValue('program', v)} label={v || 'No program listed'} k={program.counts.get(v) ?? 0} max={program.base} />
+            ))}
+          </div>
+        </div>
+      </Dropdown>
+
+      <form className="rv-filter-search" onSubmit={(e) => { e.preventDefault(); onSteps((cur) => setSingle(cur, 'q', q.trim() ? { kind: 'q', value: q.trim() } : null)); }}>
+        <input className="rv-input" type="search" placeholder="Search title, office, district" value={q}
+          onChange={(e) => { setQ(e.target.value); if (!e.target.value && qStep) onSteps((cur) => setSingle(cur, 'q', null)); }} aria-label="Search projects (press Enter)" />
+      </form>
+
+      {steps.length > 0 && <button type="button" className="rv-clear" onClick={() => { setQ(''); onSteps(() => []); }}>Clear all</button>}
+    </div>
+  );
+}
+
+/** The funnel, left to right: every project, then what each step keeps. */
+function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
   levels: ReturnType<typeof runFunnel>;
   flags: readonly ReviewIndexFlag[];
   offices: ReviewIndex['offices'];
   onRemove: (i: number) => void;
   onFlip: (i: number) => void;
-  onClear: () => void;
 }) {
   const total = levels[0].projects.length || 1;
   return (
-    <ol className="rv-steps" aria-label="Red-flag funnel">
+    <ol className="rv-strip" aria-label="Red-flag funnel">
       {levels.map((L, i) => {
         const prev = i ? levels[i - 1].projects.length : null;
-        const share = L.projects.length / total;
+        const label = L.step ? stepLabel(L.step, flags, offices) : 'All DPWH projects';
         return (
-          <li key={i} className={`rv-step ${i === levels.length - 1 ? 'is-last' : ''}`}>
-            <div className="rv-step-head">
-              <span className="rv-step-label">{L.step ? stepLabel(L.step, flags, offices) : 'All DPWH projects in the House bill'}</span>
-              {L.step && (
-                <span className="rv-step-actions">
-                  {L.step.kind === 'flag' && (
-                    <button type="button" onClick={() => onFlip(i - 1)} title={L.step.not ? 'Keep projects with this flag instead' : 'Leave out projects with this flag instead'}>
-                      {L.step.not ? 'keep' : 'leave out'}
-                    </button>
-                  )}
-                  <button type="button" onClick={() => onRemove(i - 1)} aria-label={`Remove step: ${stepLabel(L.step, flags, offices)}`}>×</button>
-                </span>
-              )}
+          <li key={i} className={`rv-stage ${i === levels.length - 1 ? 'is-last' : ''}`}>
+            <div className="rv-stage-head">
+              <span className="rv-stage-label" title={label}>{label}</span>
+              {L.step && <button type="button" className="rv-stage-x" onClick={() => onRemove(i - 1)} aria-label={`Remove: ${label}`}>×</button>}
             </div>
-            <div className="rv-step-bar" aria-hidden="true"><span style={{ width: `${Math.max(share * 100, L.projects.length ? 0.6 : 0)}%` }} /></div>
-            <div className="rv-step-figs">
-              <b>{n(L.projects.length)}</b> {L.projects.length === 1 ? 'project' : 'projects'}
-              <span>{pesoShort(L.amount)}</span>
+            <div className="rv-stage-figs">
+              <b>{n(L.projects.length)}</b><span>{pesoShort(L.amount)}</span>
               {prev != null && prev !== L.projects.length && <em>−{n(prev - L.projects.length)}</em>}
             </div>
+            <div className="rv-stage-bar" aria-hidden="true"><span style={{ width: `${Math.max((L.projects.length / total) * 100, L.projects.length ? 0.8 : 0)}%` }} /></div>
+            {L.step?.kind === 'flag' && (
+              <button type="button" className="rv-stage-flip" onClick={() => onFlip(i - 1)}>
+                {L.step.not ? 'Keep these instead' : 'Leave these out instead'}
+              </button>
+            )}
           </li>
         );
       })}
-      {levels.length > 1 && (
-        <li className="rv-step-clear"><button type="button" onClick={onClear}>Start over</button></li>
-      )}
     </ol>
-  );
-}
-
-type AddTab = 'flags' | 'documents' | 'place' | 'budget' | 'search';
-const ADD_TABS: { key: AddTab; label: string }[] = [
-  { key: 'flags', label: 'Red flags' }, { key: 'documents', label: 'Documents' }, { key: 'place', label: 'Place' },
-  { key: 'budget', label: 'Budget' }, { key: 'search', label: 'Search' },
-];
-
-function AddStep({ ix, current, steps, reviewedCount, ctx, onAdd }: {
-  ix: ReviewIndex;
-  current: ReviewProject[];
-  steps: Step[];
-  reviewedCount: number;
-  ctx: Parameters<typeof stepTest>[1];
-  onAdd: (s: Step) => void;
-}) {
-  const [tab, setTab] = useState<AddTab>('flags');
-  const [exclude, setExclude] = useState(false);
-  const [q, setQ] = useState('');
-  const yields = useMemo(() => flagYields(current, ix.flags.length), [current, ix.flags.length]);
-  const max = Math.max(1, current.length);
-  const has = (s: Step) => steps.some((x) => sameStep(x, s));
-  const count = (s: Step) => current.filter(stepTest(s, ctx)).length;
-  const option = (s: Step, label: ReactNode, k: number, title?: string) => (
-    <button key={stepToParam(s)} type="button" className="rv-add-opt" disabled={has(s) || (!exclude && k === 0) || (exclude && k === current.length)}
-      onClick={() => onAdd(s)} title={title}>
-      <span className="rv-add-opt-label">{label}</span>
-      <span className="rv-add-opt-n">{n(exclude && s.kind === 'flag' ? current.length - k : k)}</span>
-      <span className="rv-add-opt-bar" aria-hidden="true"><span style={{ width: `${(k / max) * 100}%` }} /></span>
-    </button>
-  );
-  const flagList = (family: FlagFamily, opts: { computed?: boolean } = {}) => ix.flags
-    .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.family === family && !!f.computed === !!opts.computed)
-    .sort((a, b) => yields[b.i] - yields[a.i])
-    .map(({ f, i }) => option({ kind: 'flag', code: f.code, not: exclude }, readerText(f.label), yields[i],
-      f.computed ? `With the documents we matched. The research site counts ${n(f.n_upstream ?? 0)} projects.` : undefined));
-  const byCount = (values: string[], kind: 'region' | 'office' | 'program') => {
-    const m = new Map<string, number>();
-    for (const p of current) { const v = kind === 'office' ? p.office.name : p[kind]; m.set(v, (m.get(v) ?? 0) + 1); }
-    return values.filter((v) => m.get(v)).sort((a, b) => (m.get(b) ?? 0) - (m.get(a) ?? 0)).map((v) => ({ v, k: m.get(v)! }));
-  };
-  const [placeQ, setPlaceQ] = useState('');
-  return (
-    <section className="rv-add" aria-label="Add a step">
-      <h2 className="rv-h">Add a step</h2>
-      <div className="rv-tabs" role="tablist">
-        {ADD_TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'is-on' : ''} onClick={() => setTab(t.key)}>{t.label}</button>
-        ))}
-      </div>
-      {tab === 'flags' && (
-        <>
-          <label className="rv-exclude"><input type="checkbox" checked={exclude} onChange={(e) => setExclude(e.target.checked)} /> Leave out projects with the flag</label>
-          {FAMILY_ORDER.filter((f) => f !== 'documents').map((fam) => (
-            <div key={fam} className="rv-add-group"><h3>{FAMILY_LABEL[fam]}</h3>{flagList(fam)}</div>
-          ))}
-          <div className="rv-add-group"><h3>Documents the research site flags</h3>{flagList('documents')}</div>
-        </>
-      )}
-      {tab === 'documents' && (
-        <>
-          <div className="rv-add-group">
-            <h3>How many of the 5 key documents</h3>
-            {(['none', 'incomplete', 'complete'] as DocsFilter[]).map((v) => { const s: Step = { kind: 'docs', value: v }; return option(s, DOCS_FILTER_LABEL[v], count(s)); })}
-          </div>
-          <div className="rv-add-group">
-            <h3>Missing, after our matching</h3>
-            <label className="rv-exclude"><input type="checkbox" checked={exclude} onChange={(e) => setExclude(e.target.checked)} /> Leave out projects missing it</label>
-            {flagList('documents', { computed: true })}
-          </div>
-          <div className="rv-add-group">
-            <h3>My reviews</h3>
-            {option({ kind: 'reviewed', value: 'no' }, 'Not yet reviewed by me', count({ kind: 'reviewed', value: 'no' }))}
-            {reviewedCount > 0 && option({ kind: 'reviewed', value: 'yes' }, 'Reviewed by me', count({ kind: 'reviewed', value: 'yes' }))}
-          </div>
-        </>
-      )}
-      {tab === 'place' && (
-        <>
-          <input className="rv-input" type="search" placeholder="Filter regions, offices, districts" value={placeQ} onChange={(e) => setPlaceQ(e.target.value)} aria-label="Filter places" />
-          <div className="rv-add-group">
-            <h3>Region</h3>
-            {byCount(ix.regions, 'region').filter(({ v }) => v.toLowerCase().includes(placeQ.toLowerCase())).map(({ v, k }) => option({ kind: 'region', value: v }, v, k))}
-          </div>
-          <div className="rv-add-group">
-            <h3>DPWH office and the legislative districts it serves</h3>
-            {byCount(ix.offices.map((o) => o.name), 'office')
-              .filter(({ v }) => { const o = ix.offices.find((x) => x.name === v)!; return `${v} ${o.districts.join(' ')}`.toLowerCase().includes(placeQ.toLowerCase()); })
-              .slice(0, placeQ ? 60 : 25)
-              .map(({ v, k }) => { const o = ix.offices.find((x) => x.name === v)!; return option({ kind: 'office', value: v }, <>{shortOffice(v)}<small>{o.districts.length ? o.districts.join(' · ') : 'No single legislative district'}</small></>, k); })}
-          </div>
-        </>
-      )}
-      {tab === 'budget' && (
-        <>
-          <div className="rv-add-group">
-            <h3>Budget of at least</h3>
-            {[10e6, 50e6, 100e6, 500e6, 1e9].map((v) => { const s: Step = { kind: 'min', value: v }; return option(s, pesoShort(v), count(s)); })}
-          </div>
-          <div className="rv-add-group">
-            <h3>Program</h3>
-            {byCount(ix.programs, 'program').map(({ v, k }) => option({ kind: 'program', value: v }, v || 'No program listed', k))}
-          </div>
-        </>
-      )}
-      {tab === 'search' && (
-        <form className="rv-search" onSubmit={(e) => { e.preventDefault(); if (q.trim()) { onAdd({ kind: 'q', value: q.trim() }); setQ(''); } }}>
-          <input className="rv-input" type="search" placeholder="Words in the title, office or district" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search projects" />
-          <button type="submit" className="rv-btn" disabled={!q.trim()}>Add</button>
-          {q.trim() && <p className="rv-hint">{n(count({ kind: 'q', value: q.trim() }))} of these projects match.</p>}
-        </form>
-      )}
-    </section>
   );
 }
 
@@ -499,6 +583,7 @@ function ProjectPane({ project, index, mine, onSave, inlineViewer, onPrev, onNex
               <FlagList detail={detail} index={index} />
             </section>
             <ReviewForm project={project} detail={detail} mine={mine} onSave={onSave} />
+            <DisclaimerNotice compact className="rv-disclaimer" />
           </>
         )}
       </div>
@@ -542,7 +627,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
 
 // --- Page -------------------------------------------------------------------------------------------------------
 
-type Pane = 'funnel' | 'list' | 'project';
+type Pane = 'list' | 'project';
 
 export default function HgabReview() {
   const [index, setIndex] = useState<ReviewIndex | null>(null);
@@ -575,7 +660,15 @@ export default function HgabReview() {
   const update = useCallback((fn: (p: URLSearchParams) => void, replace = false) => {
     setParams((prev) => { const next = new URLSearchParams(prev); fn(next); return next; }, { replace });
   }, [setParams]);
-  const setSteps = (next: Step[]) => update((p) => { p.delete('s'); next.forEach((s) => p.append('s', stepToParam(s))); });
+  // The latest steps, ahead of the URL: react-router commits the URL asynchronously, so a quick second click would
+  // otherwise start from the steps before the first.
+  const stepsRef = useRef(steps);
+  useEffect(() => { stepsRef.current = steps; }, [steps]);
+  const applySteps = (fn: (cur: Step[]) => Step[]) => {
+    const next = fn(stepsRef.current);
+    stepsRef.current = next;
+    update((p) => { p.delete('s'); next.forEach((s) => p.append('s', stepToParam(s))); });
+  };
   const open = useCallback((p: ReviewProject) => { update((q) => q.set('p', p.hgabId), true); setPane('project'); }, [update]);
   const at = listed.findIndex((p) => p.hgabId === selectedId);
   const prev = useMemo(() => (at > 0 ? () => open(listed[at - 1]) : null), [at, listed, open]);
@@ -614,7 +707,7 @@ export default function HgabReview() {
                   <p>{myList.length} {myList.length === 1 ? 'review' : 'reviews'} saved in this browser.</p>
                   <button type="button" className="rv-btn" onClick={() => download('bettergov-house-bill-reviews.csv', reviewsCsv(myList), 'text/csv;charset=utf-8')}>Download CSV</button>
                   <button type="button" className="rv-btn" onClick={() => download('bettergov-house-bill-reviews.json', JSON.stringify(myList, null, 2), 'application/json')}>Download JSON</button>
-                  <button type="button" className="rv-btn" onClick={() => setSteps([...steps.filter((s) => s.kind !== 'reviewed'), { kind: 'reviewed', value: 'yes' }])}>Show them</button>
+                  <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setSingle(cur, 'reviewed', { kind: 'reviewed', value: 'yes' }))}>Show them</button>
                 </>
               ) : <p>No reviews yet. Open a project and fill in “Your review”.</p>}
             </div>
@@ -626,29 +719,19 @@ export default function HgabReview() {
       {error && <p className="rv-error rv-pad">{error}</p>}
       {!index && !error && <p className="rv-muted rv-pad" role="status">Loading the House bill’s DPWH projects…</p>}
       {index && (
+        <>
+        <div className="rv-filterbar">
+          <FilterBar key={params.getAll('s').filter((x) => x.startsWith('q:')).join()} ix={index} all={all} steps={steps} current={current} ctx={ctx}
+            reviewedCount={myList.length} presets={presets} onSteps={(fn) => { applySteps(fn); setPane('list'); }} />
+          <FunnelStrip
+            levels={levels}
+            flags={index.flags}
+            offices={index.offices}
+            onRemove={(i) => applySteps((cur) => cur.filter((_, j) => j !== i))}
+            onFlip={(i) => applySteps((cur) => cur.map((s, j) => (j === i && s.kind === 'flag' ? { ...s, not: !s.not } : s)))}
+          />
+        </div>
         <div className={`rv-cols show-${pane}`}>
-          <aside className="rv-funnel" aria-label="Funnel">
-            <h2 className="rv-h">Red-flag funnel</h2>
-            <FunnelSteps
-              levels={levels}
-              flags={index.flags}
-              offices={index.offices}
-              onRemove={(i) => setSteps(steps.filter((_, j) => j !== i))}
-              onFlip={(i) => setSteps(steps.map((s, j) => (j === i && s.kind === 'flag' ? { ...s, not: !s.not } : s)))}
-              onClear={() => setSteps([])}
-            />
-            <AddStep ix={index} current={current} steps={steps} reviewedCount={myList.length} ctx={ctx} onAdd={(s) => setSteps([...steps, s])} />
-            <section className="rv-presets" aria-label="Start from">
-              <h2 className="rv-h">Start from</h2>
-              {presets.map((p) => (
-                <button key={p.key} type="button" className="rv-preset" onClick={() => { setSteps(p.steps); setPane('list'); }}>
-                  <b>{p.label}</b><span>{p.note}</span>
-                </button>
-              ))}
-            </section>
-            <DisclaimerNotice compact className="rv-disclaimer" />
-          </aside>
-
           <section className="rv-list" aria-label="Projects">
             <div className="rv-list-head">
               <p><b>{n(current.length)}</b> {current.length === 1 ? 'project' : 'projects'} · {pesoShort(levels[levels.length - 1].amount)}</p>
@@ -669,19 +752,20 @@ export default function HgabReview() {
               : (
                 <div className="rv-welcome">
                   <h2>Pick a project to review</h2>
-                  <p>Narrow the list with the funnel, or start from a ready-made one on the left.</p>
+                  <p>Narrow the list with the filters above. Each one you add is a step in the funnel, with what it keeps.</p>
                   <p>Then open each document and fill in your review. Use <kbd>j</kbd> and <kbd>k</kbd> to move between projects.</p>
                   {listed.length > 0 && <button type="button" className="rv-btn is-primary" onClick={() => open(listed[0])}>Open the first project</button>}
+                  <DisclaimerNotice compact className="rv-disclaimer" />
                 </div>
               )}
           </section>
 
           <nav className="rv-panes" aria-label="Panels">
-            <button type="button" className={pane === 'funnel' ? 'is-on' : ''} onClick={() => setPane('funnel')}>Funnel{steps.length ? ` · ${steps.length}` : ''}</button>
             <button type="button" className={pane === 'list' ? 'is-on' : ''} onClick={() => setPane('list')}>Projects · {n(current.length)}</button>
             <button type="button" className={pane === 'project' ? 'is-on' : ''} onClick={() => setPane('project')} disabled={!selected}>Project</button>
           </nav>
         </div>
+        </>
       )}
       {about && index && <About index={index} onClose={() => setAbout(false)} />}
     </div>

@@ -45,27 +45,32 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 // --- Steps --------------------------------------------------------------------------------------------------------
 
 export type DocsFilter = 'none' | 'incomplete' | 'complete';
+/** Filters where checking several values keeps projects matching any of them (one funnel step each). */
+export type MultiKind = 'region' | 'office' | 'program' | 'docs';
 export type Step =
   | { kind: 'flag'; code: string; not?: boolean }
-  | { kind: 'region'; value: string }
-  | { kind: 'office'; value: string }
-  | { kind: 'program'; value: string }
-  | { kind: 'docs'; value: DocsFilter }
+  | { kind: 'region'; values: string[] }
+  | { kind: 'office'; values: string[] }
+  | { kind: 'program'; values: string[] }
+  | { kind: 'docs'; values: DocsFilter[] }
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
   | { kind: 'reviewed'; value: 'yes' | 'no' };
 
+export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
 export const DOCS_FILTER_LABEL: Record<DocsFilter, string> = {
   none: 'No documents found',
   incomplete: 'Fewer than 4 of the 5 key documents',
   complete: 'At least 4 of the 5 key documents',
 };
 
-/** `flag:potential-nep-insertion`, `-flag:repeated-allocation-amount`, `region:Region V`, `min:100000000`, … */
+/** Several values of one filter in the URL: `region:Region V|Region IV-A`. Names never contain "|". */
+const SEP = '|';
+/** `flag:potential-nep-insertion`, `-flag:repeated-allocation-amount`, `region:Region V|NCR`, `min:100000000`, … */
 export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
-    case 'min': return `min:${s.value}`;
+    case 'region': case 'office': case 'program': case 'docs': return `${s.kind}:${s.values.join(SEP)}`;
     default: return `${s.kind}:${s.value}`;
   }
 }
@@ -73,10 +78,15 @@ export function stepFromParam(p: string): Step | null {
   const m = /^(-?)([a-z]+):(.+)$/s.exec(p);
   if (!m) return null;
   const [, neg, kind, value] = m;
+  const values = [...new Set(value.split(SEP).map((v) => v.trim()).filter(Boolean))];
   switch (kind) {
     case 'flag': return /^[a-z0-9-]+$/.test(value) ? { kind: 'flag', code: value, not: neg === '-' } : null;
-    case 'region': case 'office': case 'program': case 'q': return value.trim() ? { kind, value } : null;
-    case 'docs': return value === 'none' || value === 'incomplete' || value === 'complete' ? { kind, value } : null;
+    case 'region': case 'office': case 'program': return values.length ? { kind, values } : null;
+    case 'docs': {
+      const ok = values.filter((v): v is DocsFilter => (DOCS_FILTERS as readonly string[]).includes(v));
+      return ok.length ? { kind, values: ok } : null;
+    }
+    case 'q': return value.trim() ? { kind, value } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'reviewed': return value === 'yes' || value === 'no' ? { kind, value } : null;
     default: return null;
@@ -87,6 +97,30 @@ export function stepsFromSearch(search: URLSearchParams, flagCodes: ReadonlySet<
 }
 export const sameStep = (a: Step, b: Step) => stepToParam(a) === stepToParam(b);
 
+/** The values checked for a multi-value filter (empty when it has no step). */
+export function checkedValues(steps: readonly Step[], kind: MultiKind): string[] {
+  const s = steps.find((x) => x.kind === kind);
+  return s && 'values' in s ? s.values : [];
+}
+/** Sets a multi-value filter: its step keeps its place in the funnel, is added at the end, or goes when empty. */
+export function setValues(steps: readonly Step[], kind: MultiKind, values: string[]): Step[] {
+  const i = steps.findIndex((x) => x.kind === kind);
+  const step = values.length ? ({ kind, values } as Step) : null;
+  if (i < 0) return step ? [...steps, step] : [...steps];
+  return step ? steps.map((x, j) => (j === i ? step : x)) : steps.filter((_, j) => j !== i);
+}
+/** Sets a single-value filter (min, q, reviewed) the same way; null removes it. */
+export function setSingle(steps: readonly Step[], kind: 'min' | 'q' | 'reviewed', step: Step | null): Step[] {
+  const i = steps.findIndex((x) => x.kind === kind);
+  if (i < 0) return step ? [...steps, step] : [...steps];
+  return step ? steps.map((x, j) => (j === i ? step : x)) : steps.filter((_, j) => j !== i);
+}
+/** Checks or unchecks a flag: checking adds a step at the end, unchecking removes it wherever it is. */
+export function toggleFlag(steps: readonly Step[], code: string, not = false): Step[] {
+  const i = steps.findIndex((x) => x.kind === 'flag' && x.code === code);
+  return i >= 0 ? steps.filter((_, j) => j !== i) : [...steps, { kind: 'flag', code, not }];
+}
+
 /** Folds case and accents, for search. */
 export const foldText = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -94,18 +128,18 @@ export interface StepContext {
   flagIndex: ReadonlyMap<string, number>;
   reviewed: ReadonlySet<string>;
 }
+const docsTest = (v: DocsFilter) => (p: ReviewProject) =>
+  v === 'none' ? p.files === 0 && p.docs === 0 : v === 'complete' ? docCount(p.docs) >= 4 : docCount(p.docs) < 4;
 export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boolean {
   switch (s.kind) {
     case 'flag': {
       const i = ctx.flagIndex.get(s.code);
       return i == null ? () => !!s.not : (p) => p.flags.includes(i) !== !!s.not;
     }
-    case 'region': return (p) => p.region === s.value;
-    case 'office': return (p) => p.office.name === s.value;
-    case 'program': return (p) => p.program === s.value;
-    case 'docs':
-      return s.value === 'none' ? (p) => p.files === 0 && p.docs === 0
-        : s.value === 'complete' ? (p) => docCount(p.docs) >= 4 : (p) => docCount(p.docs) < 4;
+    case 'region': { const v = new Set(s.values); return (p) => v.has(p.region); }
+    case 'office': { const v = new Set(s.values); return (p) => v.has(p.office.name); }
+    case 'program': { const v = new Set(s.values); return (p) => v.has(p.program); }
+    case 'docs': { const tests = s.values.map(docsTest); return (p) => tests.some((t) => t(p)); }
     case 'min': return (p) => p.amount >= s.value;
     case 'q': {
       const words = foldText(s.value).split(/\s+/).filter(Boolean);
@@ -127,6 +161,17 @@ export function runFunnel(all: ReviewProject[], steps: readonly Step[], ctx: Ste
     levels.push({ step: s, projects: next, amount: sum(next) });
   }
   return levels;
+}
+/** The projects every step but `kind`'s keeps: what a multi-value filter's options are counted against. */
+export function projectsWithout(all: ReviewProject[], steps: readonly Step[], kind: Step['kind'], ctx: StepContext): ReviewProject[] {
+  const tests = steps.filter((s) => s.kind !== kind).map((s) => stepTest(s, ctx));
+  return all.filter((p) => tests.every((t) => t(p)));
+}
+/** How many of `projects` have each value of a field. */
+export function countBy(projects: readonly ReviewProject[], key: (p: ReviewProject) => string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const p of projects) { const k = key(p); m.set(k, (m.get(k) ?? 0) + 1); }
+  return m;
 }
 
 /** How many of `projects` carry each flag: what the next step would keep. */
@@ -152,13 +197,13 @@ export const PRESETS: readonly { key: string; label: string; note: string; steps
     key: 'inserted-no-docs',
     label: 'House additions without documents',
     note: 'In the House bill, not matched to the NEP, and no documents found.',
-    steps: [{ kind: 'flag', code: 'potential-nep-insertion' }, { kind: 'docs', value: 'none' }],
+    steps: [{ kind: 'flag', code: 'potential-nep-insertion' }, { kind: 'docs', values: ['none'] }],
   },
   {
     key: 'inserted-incomplete',
     label: 'House additions with gaps',
     note: 'House bill only, and fewer than 4 of the 5 key documents.',
-    steps: [{ kind: 'flag', code: 'potential-nep-insertion' }, { kind: 'docs', value: 'incomplete' }],
+    steps: [{ kind: 'flag', code: 'potential-nep-insertion' }, { kind: 'docs', values: ['incomplete'] }],
   },
   {
     key: 'no-pow',
@@ -201,14 +246,17 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
       const l = f ? readerText(f.label) : s.code;
       return s.not ? `Not: ${l}` : l;
     }
-    case 'region': return s.value;
+    case 'region': return s.values.length === 1 ? s.values[0] : `${s.values.length} regions: ${s.values.join(', ')}`;
     case 'office': {
-      const deo = s.value.replace(/\bDistrict Engineering Office\b/i, 'DEO');
-      const ds = offices.find((o) => o.name === s.value)?.districts ?? [];
-      return ds.length ? `${ds.join(' · ')} [${deo}]` : `DPWH ${deo}`;
+      const one = (name: string) => {
+        const deo = name.replace(/\bDistrict Engineering Office\b/i, 'DEO');
+        const ds = offices.find((o) => o.name === name)?.districts ?? [];
+        return ds.length ? `${ds.join(' · ')} [${deo}]` : `DPWH ${deo}`;
+      };
+      return s.values.length === 1 ? one(s.values[0]) : `${s.values.length} DPWH offices: ${s.values.map((v) => v.replace(/\bDistrict Engineering Office\b/i, 'DEO')).join(', ')}`;
     }
-    case 'program': return s.value;
-    case 'docs': return DOCS_FILTER_LABEL[s.value];
+    case 'program': return s.values.length === 1 ? s.values[0] : `${s.values.length} programs`;
+    case 'docs': return s.values.map((v) => DOCS_FILTER_LABEL[v]).join(' or ');
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
     case 'reviewed': return s.value === 'yes' ? 'Reviewed by me' : 'Not yet reviewed by me';
