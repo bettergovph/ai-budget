@@ -215,7 +215,7 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
   - `/indicators/:id`: map, ranking, a chart against any other indicator, and the indicator beside the budget by region.
   - `/indicators/places/:area`: one area against the Philippines.
   - `/indicators/budget-by-region`: any indicator beside the budget assigned to each region, for the 2027 NEP, the 2027 House bill or the 2026 GAA, and any department.
-- **Data:** `npm run fetch:psa` (statistics.bettergov.ph) → `npm run build:indicators` → `npm run verify:indicators` (532 checks). Output goes to `data/indicators/` → R2 `indicators/`. **Upload `indicators/` (`build:indicators -- --upload`) before the merge that ships the pages.**
+- **Data:** `npm run fetch:psa` (statistics.bettergov.ph) → `npm run build:indicators` → `npm run verify:indicators` (571 checks, including the multi-purpose buildings per person below). Output goes to `data/indicators/` → R2 `indicators/`. **Upload `indicators/` (`build:indicators -- --upload`) before the merge that ships the pages.**
 - **A region's budget:**
   - It is the budget DBM codes to the region: the region of the office that manages it.
   - Central offices that DBM codes to NCR and nationwide items (NTA, debt service) are listed as their own rows, so every peso shows.
@@ -226,7 +226,11 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
   - BIR collections by province can't be used: they are reported by revenue district.
   - PSA's NTA table is in pesos, though titled "million".
 - **"New · under review" notice:** `INDICATORS_UNDER_REVIEW` in `src/lib/indicators.ts`. Lift it only when the maintainer says the review is done.
-- **Nav:** the eighth top tab. At 1025–1500px the tabs use 6px padding and 15.5px type, so they fit one row from 1349px; recheck if a tab is added or renamed.
+- **Nav:** not in the primary nav since 2026-11-12 (Jason: "Hide the indicators from the main nav and put it under about"). It is the third item of the House bill sub-nav's About menu (`ABOUT_MENU` in `HgabBits.tsx`), after Sources and Methodology. The pages keep their URLs and stay in the sitemap.
+- **Multi-purpose buildings per person** (`/hgab/2027/multi-purpose/per-person`, "Per person" in the MPB menu): every MPB line, FY2015 GAA to the 2027 House bill, against the population of its region, province, or city and municipality. It shows a map first, then bars or a town scatter and table, with "1 project for every N people" spelled out.
+  - **Population by budget year:** PSA's 2015, 2020 and 2024 censuses, filled in between them; after 2024, the 2024 count, with no projection (`popInYear`, `peopleIn` in `src/lib/mpb-population.ts`). Budgets of several years (the combined and all-years options) are a yearly average, never a total over one year's population.
+  - **Data:** `npm run build:mpb-population` → `mpb-years/population.json` (schema 2) and `population.csv`. **Upload both (`upload:hgab -- --only=mpb-years/population.json,mpb-years/population.csv --skip-verify`) before #75 merges.**
+  - **Carousel:** `npm run build:hgab-poster-mpb-people` renders five slides in the dark NEP vs House bill figure style; the fifth, "Too many multi-purpose buildings?", compares MPBs with flood control and with school and health facilities. The slides are not yet in the campaign gallery or on R2.
 
 ### Outside this repo
 
@@ -244,7 +248,7 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
 Re-check before relying on any of this: `gh pr list`, plus `git worktree list` and `git status` in each worktree.
 
 **Open PRs:**
-- #75: the Indicators section and budget by region (`docs/indicators.md`); `indicators/` not yet on R2
+- #75: the Indicators section, budget by region, and multi-purpose buildings per person (`docs/indicators.md`); `indicators/` and `mpb-years/population.{json,csv}` not yet on R2
 - #74: GAA FY2000–2026 pipeline + Hugging Face publishing
 - #72: foreign-assisted poster
 - #27: link-preview images for every House bill page (cards already on R2)
@@ -255,7 +259,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 
 | Work | Where | State |
 |---|---|---|
-| Indicators section | PR #75 (branch `budget-vs-statistics`, worktree `/tmp/wt-stats-psa`, preview :5139) | Committed and pushed 2026-11-09; under review; `indicators/` needs an R2 upload before merge |
+| Indicators section + MPB per person | PR #75 (branch `budget-vs-statistics`, worktree `/tmp/wt-stats-psa`, preview :5139) | Committed and pushed 2026-11-12; under review; `indicators/` and `mpb-years/population.{json,csv}` need R2 uploads before merge |
 | Party members page (`/hgab/2027/parties/members`) | worktree `ordinary-hyena`, `src/pages/HgabPartyMembers.tsx` + party builder edits | Built; data already on R2; needs its own branch from main + PR |
 | Poster builders: line by line, parties, receipts, reviewer | `ordinary-hyena`, untracked `scripts/build-hgab-poster-*.ts` | Posters published; scripts never committed |
 | MPB and flood control tables by DEO (`office-matrix.ts`) | worktree `mpb-nep-house`, branch `hgab-deo-tables` | Built; needs a `flood-compare/summary.json` upload + PR |
