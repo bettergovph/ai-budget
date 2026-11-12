@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  PRESETS, checkedValues, countBy, decodeIndex, docCount, flagYields, projectsWithout, readerText, reviewsCsv, runFunnel, setValues,
+  PRESETS, checkedValues, countBy, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -43,12 +43,6 @@ test("filters keep their place in the funnel", () => {
 test("reader text says House bill, not HGAB", () => {
   assert.equal(readerText("Implementing office changed between NEP and HGAB"), "Implementing office changed between NEP and House bill");
   assert.equal(readerText("Within-HGAB repeat candidate"), "Within-House bill repeat candidate");
-});
-
-test("CSV escapes and keeps one row per review", () => {
-  const csv = reviewsCsv([{ hgabId: "HB10858-3-0111-000001", projectId: "house-reading:32", title: 'Road, "A"', docs: { POW: "matches" }, overall: "partly", notes: "line1\nline2", savedAt: "2026-11-12" }]);
-  assert.ok(csv.startsWith("\uFEFFhgab_id,project_id,title,doc_pow,"));
-  assert.ok(csv.includes('"Road, ""A"""') && csv.includes('"line1\nline2"'));
 });
 
 test("the funnel on review.json", { skip: !ix && "review.json not built" }, () => {

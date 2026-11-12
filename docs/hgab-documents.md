@@ -75,5 +75,5 @@ A workspace for volunteers, with its own full-height layout (a slim bar, no site
 - **Missing-document flags** in the funnel are ours, computed with our links. Hover shows the research site's own count.
 - **Words.** Flag labels and evidence are the research site's, with "HGAB" shown as "House bill" (`readerText`). A DPWH office always appears with the districts it serves.
 - **Documents** show inline at 1600 px and wider, and over the page below that. Both PDF hosts allow framing. Each file says where it came from and how it was matched; tracker matches are marked weaker.
-- **Reviews** stay in the browser (`localStorage` key `hgab-review:v1`) and download as CSV or JSON from "My reviews". **Submissions need a backend decision** (for example a D1 table behind the Worker).
+- **Reviews** follow the volunteer team's red-flag registry: see `docs/hgab-review-form.md`. They stay in the browser (`localStorage` key `hgab-review:v2`) and download as JSON or as the team's workbook rows from "My reviews". **Submissions need a backend decision** (for example a D1 table behind the Worker).
 - Not in the section's sub-nav or the sitemap yet.

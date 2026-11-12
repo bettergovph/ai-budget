@@ -10,6 +10,7 @@
   display: flex;
   flex-direction: column;
   height: 100dvh;
+  overflow: hidden;
   background: var(--paper-2);
   color: var(--ink);
   font-family: var(--font-body);
@@ -69,6 +70,8 @@
 .rv-cols {
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);
+  /* One row the height left under the bars: without it the row grows with a long review and the page scrolls. */
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -231,19 +234,75 @@ kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; b
 .rv-flaggroup summary { cursor: pointer; }
 .rv-flaggroup details p { margin: 4px 0 6px 16px; font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
 
-/* --- the review form ------------------------------------------------------------ */
-.rv-form { padding: 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper-2); }
-.rv-form-docs { width: 100%; border-collapse: collapse; margin: 0 0 12px; }
-.rv-form-docs th { padding: 4px 8px 4px 0; text-align: left; font-size: 12.5px; font-weight: 600; vertical-align: middle; }
-.rv-form-docs th small { display: block; font-weight: 400; color: var(--rv-flag); font-size: 11px; }
-.rv-form-docs td { padding: 4px 0; }
-.rv-form-docs select { width: 100%; padding: 4px 6px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); font-size: 12.5px; }
-.rv-overall { margin: 0 0 12px; padding: 0; border: 0; }
-.rv-overall legend { margin-bottom: 6px; font-size: 13px; font-weight: 600; }
-.rv-overall label { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13px; }
-.rv-notes { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
-.rv-notes textarea { padding: 7px 9px; border: 1px solid var(--rule); border-radius: 6px; font: inherit; font-weight: 400; font-size: 13px; resize: vertical; }
-.rv-form-actions { display: flex; gap: 8px; margin-top: 10px; }
+/* --- the review form: the team's red-flag checklist (.rf-*) ----------------------------------- */
+.rf-form { padding: 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper-2); }
+.rf-head p { margin: 0 0 6px; }
+.rf-sec { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--rule); }
+.rf-sec h4 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+.rf-sec h4 small { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--ink-mute); }
+.rf-toggle { margin-left: auto; padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; cursor: pointer; }
+.rf-docs { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rf-docs th, .rf-docs td { padding: 4px 6px 4px 0; text-align: left; vertical-align: middle; }
+.rf-docs thead th { font-family: var(--font-mono); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); }
+.rf-docs tbody th { font-weight: 600; }
+.rf-docs tbody th small { display: block; font-weight: 400; font-size: 11px; color: var(--ink-3); }
+.rf-select, .rf-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper);
+  font: inherit;
+  font-size: 12.5px;
+}
+textarea.rf-input { resize: vertical; }
+.rf-cards { list-style: none; margin: 0; padding: 0; }
+.rf-card { margin: 0 0 6px; border: 1px solid var(--rule); border-left-width: 3px; border-radius: 6px; background: var(--paper); }
+.rf-card.is-ai_candidate { border-left-color: var(--rv-flag); }
+.rf-card.is-under_human_review { border-left-color: var(--neutral); }
+.rf-card.is-human_outcome { border-left-color: var(--positive); }
+.rf-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 8px; width: 100%; padding: 8px 10px; border: 0; background: none; text-align: left; cursor: pointer; }
+.rf-id, .rv-rf { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.rf-id { padding-top: 1px; }
+.rf-title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.rf-status { padding: 1px 6px; border-radius: 9px; background: var(--paper-3); color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+.rf-status.is-ai_candidate { background: #fbeae7; color: var(--rv-flag); }
+.rf-status.is-under_human_review, .rf-status.is-pending_technical_review { background: #f3eedf; color: #6b5a2e; }
+.rf-status.is-verified_concern { background: var(--rv-flag); color: #fff; }
+.rf-status.is-cleared_explained { background: #e7f0e7; color: var(--positive); }
+.rf-status.is-unresolved_evidence_gap { background: #f3eedf; color: #6b5a2e; }
+.rf-status:empty { display: none; }
+.rf-why { margin: -2px 10px 8px 10px; font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+.rf-body { padding: 0 10px 10px; border-top: 1px solid var(--rule-soft); }
+.rf-body h5 { margin: 10px 0 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.rf-body h5 small { font-family: var(--font-mono); font-weight: 400; color: var(--ink-mute); }
+.rf-body p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.45; }
+.rf-lead { margin-top: 8px !important; color: var(--ink-3); }
+.rf-more summary { cursor: pointer; font-size: 12px; color: var(--accent); }
+.rf-more p { white-space: pre-line; color: var(--ink-2); }
+.rf-chips { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0 0 8px; padding: 0; }
+.rf-chips li { padding: 1px 7px; border-radius: 10px; background: var(--paper-2); border: 1px solid var(--rule-soft); font-size: 11.5px; }
+.rf-safeguard { padding: 7px 9px; border-left: 3px solid var(--neutral); background: #faf6ec; }
+.rf-field { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.rf-field > span small { display: block; font-weight: 400; color: var(--ink-mute); font-size: 11px; }
+.rf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; }
+.rf-seg { display: flex; flex-wrap: wrap; gap: 4px; font-weight: 400; }
+.rf-seg label { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); font-size: 12px; cursor: pointer; }
+.rf-seg label.is-on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.rf-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.rf-evidence-list { margin-top: 6px; }
+.rf-evidence { margin: 0 0 8px; padding: 8px; border: 1px solid var(--rule-soft); border-radius: 6px; background: var(--paper-2); }
+.rf-evidence-doc { position: relative; display: flex; flex-direction: column; gap: 4px; padding-right: 28px; font-size: 12.5px; word-break: break-word; }
+.rf-evidence-doc small { color: var(--ink-3); font-size: 11px; }
+.rf-x { position: absolute; top: 0; right: 0; width: 22px; height: 22px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); cursor: pointer; }
+.rf-add-evidence { display: flex; gap: 6px; }
+.rf-add-evidence .rf-select { flex: 1; min-width: 0; }
+.rf-issues { margin: 12px 0 0; padding: 8px 10px 8px 26px; border-radius: 6px; background: var(--paper); border: 1px solid var(--rule); font-size: 12px; }
+.rf-issues li.is-error { color: var(--rv-flag); }
+.rf-issues li.is-warning { color: #6b5a2e; }
+.rf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.rf-export { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.rf-export button { padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; cursor: pointer; }
 
 /* --- viewer ------------------------------------------------------------------- */
 .rv-viewer { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--paper-3); }

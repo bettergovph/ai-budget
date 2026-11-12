@@ -46,13 +46,15 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 
 export type DocsFilter = 'none' | 'incomplete' | 'complete';
 /** Filters where checking several values keeps projects matching any of them (one funnel step each). */
-export type MultiKind = 'region' | 'office' | 'program' | 'docs';
+export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team';
 export type Step =
   | { kind: 'flag'; code: string; not?: boolean }
   | { kind: 'region'; values: string[] }
   | { kind: 'office'; values: string[] }
   | { kind: 'program'; values: string[] }
   | { kind: 'docs'; values: DocsFilter[] }
+  /** Team checks (RF-001…): projects whose detector flags suggest any of them (src/lib/hgab-redflags-team.ts). */
+  | { kind: 'team'; values: string[] }
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
   | { kind: 'reviewed'; value: 'yes' | 'no' };
@@ -70,7 +72,7 @@ const SEP = '|';
 export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
-    case 'region': case 'office': case 'program': case 'docs': return `${s.kind}:${s.values.join(SEP)}`;
+    case 'region': case 'office': case 'program': case 'docs': case 'team': return `${s.kind}:${s.values.join(SEP)}`;
     default: return `${s.kind}:${s.value}`;
   }
 }
@@ -86,6 +88,7 @@ export function stepFromParam(p: string): Step | null {
       const ok = values.filter((v): v is DocsFilter => (DOCS_FILTERS as readonly string[]).includes(v));
       return ok.length ? { kind, values: ok } : null;
     }
+    case 'team': { const ok = values.filter((v) => /^RF-\d{3}$/.test(v)); return ok.length ? { kind, values: ok } : null; }
     case 'q': return value.trim() ? { kind, value } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'reviewed': return value === 'yes' || value === 'no' ? { kind, value } : null;
@@ -127,6 +130,8 @@ export const foldText = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '')
 export interface StepContext {
   flagIndex: ReadonlyMap<string, number>;
   reviewed: ReadonlySet<string>;
+  /** Team check → the review.json flag indexes of the detector flags that suggest it. */
+  teamIndex?: ReadonlyMap<string, readonly number[]>;
 }
 const docsTest = (v: DocsFilter) => (p: ReviewProject) =>
   v === 'none' ? p.files === 0 && p.docs === 0 : v === 'complete' ? docCount(p.docs) >= 4 : docCount(p.docs) < 4;
@@ -140,6 +145,10 @@ export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boole
     case 'office': { const v = new Set(s.values); return (p) => v.has(p.office.name); }
     case 'program': { const v = new Set(s.values); return (p) => v.has(p.program); }
     case 'docs': { const tests = s.values.map(docsTest); return (p) => tests.some((t) => t(p)); }
+    case 'team': {
+      const idx = new Set(s.values.flatMap((v) => ctx.teamIndex?.get(v) ?? []));
+      return (p) => p.flags.some((i) => idx.has(i));
+    }
     case 'min': return (p) => p.amount >= s.value;
     case 'q': {
       const words = foldText(s.value).split(/\s+/).filter(Boolean);
@@ -239,7 +248,7 @@ export const readerText = (s: string) => s.replace(/\bHGAB\b/g, 'House bill').re
 export const FAMILY_LABEL: Record<FlagFamily, string> = Object.fromEntries(FLAG_FAMILIES.map((f) => [f.key, f.label])) as Record<FlagFamily, string>;
 export const FAMILY_ORDER: readonly FlagFamily[] = FLAG_FAMILIES.map((f) => f.key);
 
-export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: readonly ReviewIndexOffice[] = []): string {
+export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: readonly ReviewIndexOffice[] = [], teamTitles: ReadonlyMap<string, string> = new Map()): string {
   switch (s.kind) {
     case 'flag': {
       const f = flags.find((x) => x.code === s.code);
@@ -257,6 +266,7 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     }
     case 'program': return s.values.length === 1 ? s.values[0] : `${s.values.length} programs`;
     case 'docs': return s.values.map((v) => DOCS_FILTER_LABEL[v]).join(' or ');
+    case 'team': return s.values.length === 1 ? `Team check ${s.values[0]}: ${teamTitles.get(s.values[0]) ?? ''}`.replace(/: $/, '') : `Team checks ${s.values.join(', ')}`;
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
     case 'reviewed': return s.value === 'yes' ? 'Reviewed by me' : 'Not yet reviewed by me';
@@ -300,39 +310,3 @@ export const NAMED_MEANING: Record<(typeof NAMED_TYPES)[number], string> = {
   'Geotagged photos': 'Photos of the site with their location.',
   'Certificate of Implementability': 'The office certifies the project can be carried out.',
 };
-
-// --- My reviews (kept in this browser until submissions open) ----------------------------------------------------
-
-export const REVIEW_STORE_KEY = 'hgab-review:v1';
-export type DocVerdict = '' | 'matches' | 'other-project' | 'unreadable' | 'absent';
-export const DOC_VERDICT_LABEL: Record<Exclude<DocVerdict, ''>, string> = {
-  matches: 'Here, and it is for this project',
-  'other-project': 'Here, but for another project',
-  unreadable: 'Here, but unreadable',
-  absent: 'Not among the files',
-};
-export type Overall = '' | 'yes' | 'partly' | 'no';
-export const OVERALL_LABEL: Record<Exclude<Overall, ''>, string> = {
-  yes: 'Yes, they support this project',
-  partly: 'Partly',
-  no: 'No',
-};
-export interface MyReview {
-  hgabId: string;
-  projectId: string;
-  title: string;
-  docs: Partial<Record<(typeof NAMED_TYPES)[number], DocVerdict>>;
-  overall: Overall;
-  notes: string;
-  savedAt: string;
-}
-export const reviewIsEmpty = (r: Pick<MyReview, 'docs' | 'overall' | 'notes'>) =>
-  !r.overall && !r.notes.trim() && !Object.values(r.docs).some(Boolean);
-
-/** My reviews as CSV (UTF-8 with BOM, for spreadsheets). */
-export function reviewsCsv(reviews: readonly MyReview[]): string {
-  const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  const head = ['hgab_id', 'project_id', 'title', ...NAMED_TYPES.map((t) => `doc_${t.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`), 'overall', 'notes', 'saved_at'];
-  const lines = reviews.map((r) => [r.hgabId, r.projectId, r.title, ...NAMED_TYPES.map((t) => r.docs[t] ?? ''), r.overall, r.notes, r.savedAt].map((v) => cell(String(v))).join(','));
-  return `\uFEFF${[head.join(','), ...lines].join('\n')}\n`;
-}

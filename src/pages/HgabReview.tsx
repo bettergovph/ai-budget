@@ -19,12 +19,18 @@ import {
   type ReviewIndex, type ReviewIndexFlag,
 } from '../lib/hgab-documents';
 import {
-  DOC_VERDICT_LABEL, DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  OVERALL_LABEL, PRESETS, REVIEW_STORE_KEY, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy, decodeIndex, docCount,
-  flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, reviewIsEmpty, reviewsCsv, runFunnel, setSingle,
+  DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
+  PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy, decodeIndex, docCount,
+  flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type DocVerdict, type MultiKind, type MyReview, type Overall, type ReviewProject, type SortKey, type Step, type StepContext,
+  type MultiKind, type ReviewProject, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
+import {
+  BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, STORE_CASES, STORE_PROFILE, STORE_V1, TEAM_FLAGS, caseTouched, classifyProject,
+  detectorsFor, fromV1, newCaseReview, type CaseReview, type Reviewer, type ReviewV1,
+} from '../lib/hgab-redflags-team';
+import HgabReviewForm from '../components/HgabReviewForm';
+import { downloadCases } from '../lib/hgab-review-export';
 import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
@@ -52,33 +58,66 @@ function officeLine(o: ReviewProject['office'], max: number): string {
 const isPdf = (f: DetailFile) => /\.pdf$/i.test(f[4]) || /\.pdf(\?|$)/i.test(f[5]);
 const fileSize = (b: number | null) => (b == null ? '' : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
-// --- My reviews -------------------------------------------------------------------------------------------------
+// --- My reviews (in this browser until reviews can be sent) ------------------------------------------------------
 
-function readReviews(): Record<string, MyReview> {
-  try { return JSON.parse(localStorage.getItem(REVIEW_STORE_KEY) ?? '{}') as Record<string, MyReview>; } catch { return {}; }
+const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+function readJsonStore<T>(key: string, fallback: T): T {
+  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
 }
-function useMyReviews() {
-  const [reviews, setReviews] = useState<Record<string, MyReview>>(readReviews);
+function writeJsonStore(key: string, v: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage full or blocked: keep in memory */ }
+}
+/** The volunteer's random id, and the name and role they last gave; prefills each new review. */
+function readProfile(): Reviewer {
+  const p = readJsonStore<Partial<Reviewer>>(STORE_PROFILE, {});
+  const out = { reviewer_id: p.reviewer_id || newId(), display_name: p.display_name ?? '', task_id: p.task_id ?? '' };
+  if (!p.reviewer_id) writeJsonStore(STORE_PROFILE, out);
+  return out;
+}
+/** A fresh review for a project, for this volunteer. */
+function caseFor(p: ReviewProject, ix: ReviewIndex, reviewer: Reviewer, pap?: string | null): CaseReview {
+  const n = new Date().toISOString();
+  return newCaseReview({
+    caseId: newId(), reviewer, dataBuiltAt: ix.built_at, now: n,
+    project: {
+      hgab_id: p.hgabId, project_id: p.projectId, budget_source_version: BUDGET_SOURCE_VERSION, title: p.title, office: p.office.name,
+      region: p.region, amount_php: p.amount, categories: classifyProject({ title: p.title, pap, program: p.program }),
+      detector_rule_ids: p.flags.map((i) => ix.flags[i].code),
+    },
+  });
+}
+function useCases() {
+  const [cases, setCases] = useState<Record<string, CaseReview>>(() => readJsonStore(STORE_CASES, {}));
+  const [profile, setProfile] = useState<Reviewer>(readProfile);
   useEffect(() => {
-    const on = (e: StorageEvent) => { if (e.key === REVIEW_STORE_KEY) setReviews(readReviews()); };
+    const on = (e: StorageEvent) => { if (e.key === STORE_CASES) setCases(readJsonStore(STORE_CASES, {})); };
     window.addEventListener('storage', on);
     return () => window.removeEventListener('storage', on);
   }, []);
-  const save = useCallback((r: MyReview | null, hgabId: string) => {
-    setReviews((prev) => {
+  /** First-version reviews become cases once the project list is here; the old store is then cleared. */
+  const migrate = useCallback((index: ReviewIndex, all: ReviewProject[]) => {
+    const v1 = readJsonStore<Record<string, ReviewV1>>(STORE_V1, {});
+    if (!Object.keys(v1).length) return;
+    const byId = new Map(all.map((p) => [p.hgabId, p]));
+    const moved: Record<string, CaseReview> = {};
+    for (const [id, r] of Object.entries(v1)) { const p = byId.get(id); if (p) moved[id] = fromV1(r, caseFor(p, index, profile)); }
+    setCases((prev) => { const next = { ...moved, ...prev }; writeJsonStore(STORE_CASES, next); return next; });
+    try { localStorage.removeItem(STORE_V1); } catch { /* ignore */ }
+  }, [profile]);
+  const save = useCallback((r: CaseReview) => {
+    setCases((prev) => {
       const next = { ...prev };
-      if (r && !reviewIsEmpty(r)) next[hgabId] = r; else delete next[hgabId];
-      try { localStorage.setItem(REVIEW_STORE_KEY, JSON.stringify(next)); } catch { /* storage full or blocked: keep in memory */ }
+      if (caseTouched(r)) next[r.project.hgab_id] = r; else delete next[r.project.hgab_id];
+      writeJsonStore(STORE_CASES, next);
       return next;
     });
-  }, []);
-  return { reviews, save };
-}
-function download(name: string, body: string, type: string) {
-  const url = URL.createObjectURL(new Blob([body], { type }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: name });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (r.reviewer.display_name !== profile.display_name || r.reviewer.task_id !== profile.task_id) {
+      const p = { ...profile, display_name: r.reviewer.display_name, task_id: r.reviewer.task_id };
+      setProfile(p);
+      writeJsonStore(STORE_PROFILE, p);
+    }
+  }, [profile]);
+  return { cases, save, profile, migrate };
 }
 
 // --- Filters and the funnel -------------------------------------------------------------------------------------
@@ -123,6 +162,43 @@ function PanelFilter({ value, onChange, placeholder }: { value: string; onChange
   return <input className="rv-input rv-dd-filter" type="search" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} aria-label={placeholder} autoFocus />;
 }
 function PanelFoot({ children }: { children: ReactNode }) { return <div className="rv-dd-foot">{children}</div>; }
+
+/** The volunteer team's checks (RF-001…): projects whose red flags suggest each one. Rendered only while open. */
+function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: Step[]; ctx: StepContext; onSteps: (fn: (cur: Step[]) => Step[]) => void }) {
+  const [q, setQ] = useState('');
+  const base = useMemo(() => projectsWithout(all, steps, 'team', ctx), [all, steps, ctx]);
+  const checked = checkedValues(steps, 'team');
+  const rows = useMemo(() => REGISTRY.flags.map((f) => {
+    const idx = new Set(ctx.teamIndex?.get(f.id) ?? []);
+    return { f, k: idx.size ? base.filter((p) => p.flags.some((i) => idx.has(i))).length : 0, detectors: idx.size };
+  }), [base, ctx.teamIndex]);
+  const toggle = (id: string) => onSteps((cur) => {
+    const c = checkedValues(cur, 'team');
+    return setValues(cur, 'team', c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
+  });
+  const shown = rows.filter(({ f }) => !q || foldText(`${f.id} ${f.title} ${f.category} ${f.lead_skill}`).includes(foldText(q)));
+  return (
+    <>
+      <PanelFilter value={q} onChange={setQ} placeholder="Find a team check, category or specialist" />
+      <p className="rv-dd-note">The volunteer team’s registry ({REGISTRY.source.version}). A project shows under a check when its red flags suggest it. {MAPPING_STATUS}.</p>
+      <div className="rv-dd-cols">
+        {[true, false].map((auto) => (
+          <div key={String(auto)} className="rv-dd-group">
+            <h3>{auto ? 'Suggested by red flags' : 'No red flag points here yet: check by hand'}</h3>
+            {shown.filter((r) => (r.detectors > 0) === auto).map(({ f, k }) => (
+              <Check key={f.id} checked={checked.includes(f.id)} onChange={() => toggle(f.id)} k={k} max={Math.max(1, base.length)} disabled={!auto}
+                label={<><b className="rv-rf">{f.id}</b> {f.title}</>} note={`${f.category} · ${f.lead_skill}`} />
+            ))}
+          </div>
+        ))}
+      </div>
+      <PanelFoot>
+        <span>Projects suggested for any checked team check.</span>
+        {checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'team', []))}>Clear</button>}
+      </PanelFoot>
+    </>
+  );
+}
 
 function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSteps }: {
   ix: ReviewIndex;
@@ -204,6 +280,10 @@ function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSte
           <span>Every checked flag is a step: projects must pass them all.</span>
           {flagCount > 0 && <button type="button" onClick={() => onSteps((cur) => cur.filter((s) => !(s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed)))}>Clear</button>}
         </PanelFoot>
+      </Dropdown>
+
+      <Dropdown label="Team checklist" count={checkedValues(steps, 'team').length} active={checkedValues(steps, 'team').length > 0} wide>
+        <TeamPanel all={all} steps={steps} ctx={ctx} onSteps={onSteps} />
       </Dropdown>
 
       <Dropdown label="Documents" count={docsCount} active={docsCount > 0} wide>
@@ -289,6 +369,8 @@ function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSte
   );
 }
 
+const TEAM_TITLES: ReadonlyMap<string, string> = new Map([...TEAM_FLAGS].map(([id, f]) => [id, f.title]));
+
 /** The funnel, left to right: every project, then what each step keeps. */
 function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
   levels: ReturnType<typeof runFunnel>;
@@ -302,7 +384,7 @@ function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
     <ol className="rv-strip" aria-label="Red-flag funnel">
       {levels.map((L, i) => {
         const prev = i ? levels[i - 1].projects.length : null;
-        const label = L.step ? stepLabel(L.step, flags, offices) : 'All DPWH projects';
+        const label = L.step ? stepLabel(L.step, flags, offices, TEAM_TITLES) : 'All DPWH projects';
         return (
           <li key={i} className={`rv-stage ${i === levels.length - 1 ? 'is-last' : ''}`}>
             <div className="rv-stage-head">
@@ -339,7 +421,7 @@ function DocDots({ mask }: { mask: number }) {
 function ProjectList({ projects, selected, reviews, onOpen }: {
   projects: ReviewProject[];
   selected: string | null;
-  reviews: Record<string, MyReview>;
+  reviews: Record<string, CaseReview>;
   onOpen: (p: ReviewProject) => void;
 }) {
   // The parent keys this list by its funnel and sort, so a new list starts again at the first page.
@@ -453,61 +535,38 @@ function Viewer({ file, onClose, inline }: { file: DetailFile; onClose: () => vo
   return inline ? body : <div className="rv-viewer-modal" role="dialog" aria-label={file[4]}>{body}</div>;
 }
 
-function ReviewForm({ project, detail, mine, onSave }: {
+/** The review form for one project, holding the draft until it is saved. */
+function CasePanel({ project, detail, index, mine, profile, onSave }: {
   project: ReviewProject;
   detail: ReviewDetail;
-  mine: MyReview | undefined;
-  onSave: (r: MyReview | null) => void;
+  index: ReviewIndex;
+  mine: CaseReview | undefined;
+  profile: Reviewer;
+  onSave: (r: CaseReview) => void;
 }) {
-  const blank = useCallback((): MyReview => ({ hgabId: project.hgabId, projectId: project.projectId, title: project.title, docs: {}, overall: '', notes: '', savedAt: '' }), [project]);
-  // ProjectPane is keyed by project, so this form starts fresh for each one.
-  const [r, setR] = useState<MyReview>(() => mine ?? blank());
+  // ProjectPane is keyed by project, so the draft starts fresh for each one.
+  const [draft, setDraft] = useState<CaseReview>(() => mine ?? caseFor(project, index, profile, detail.pap));
   const [saved, setSaved] = useState(!!mine);
-  const set = (patch: Partial<MyReview>) => { setR((x) => ({ ...x, ...patch })); setSaved(false); };
-  const typesHere = new Set(detail.files.map((f) => f[2]));
   return (
-    <form className="rv-form" onSubmit={(e) => { e.preventDefault(); onSave({ ...r, savedAt: new Date().toISOString() }); setSaved(true); }}>
-      <h3 className="rv-h">Your review</h3>
-      <p className="rv-muted">Open each document, then say what you found.</p>
-      <table className="rv-form-docs">
-        <tbody>
-          {NAMED_TYPES.map((t) => (
-            <tr key={t}>
-              <th scope="row" title={NAMED_MEANING[t]}>{t}{!typesHere.has(t) && <small>no file found</small>}</th>
-              <td>
-                <select value={r.docs[t] ?? ''} onChange={(e) => set({ docs: { ...r.docs, [t]: e.target.value as DocVerdict } })} aria-label={`${t}: what you found`}>
-                  <option value="">Not checked</option>
-                  {Object.entries(DOC_VERDICT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <fieldset className="rv-overall">
-        <legend>Do the documents support this project as the House bill lists it?</legend>
-        {Object.entries(OVERALL_LABEL).map(([k, l]) => (
-          <label key={k}><input type="radio" name="overall" value={k} checked={r.overall === k} onChange={() => set({ overall: k as Overall })} /> {l}</label>
-        ))}
-      </fieldset>
-      <label className="rv-notes">
-        Notes
-        <textarea rows={4} value={r.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="What doesn’t match: title, location, amount, dates, signatures…" />
-      </label>
-      <div className="rv-form-actions">
-        <button type="submit" className="rv-btn is-primary" disabled={saved}>{saved ? 'Saved' : 'Save review'}</button>
-        {mine && <button type="button" className="rv-btn" onClick={() => { onSave(null); setR(blank()); setSaved(false); }}>Clear</button>}
-      </div>
-      <p className="rv-hint">Reviews stay in this browser for now. Download them from “My reviews”.</p>
-    </form>
+    <HgabReviewForm
+      review={draft}
+      detail={detail}
+      categories={draft.project.categories}
+      detectorCodes={draft.project.detector_rule_ids}
+      flags={index.flags}
+      saved={saved}
+      onChange={(r) => { setDraft(r); setSaved(false); }}
+      onSave={(r) => { setDraft(r); onSave(r); setSaved(true); }}
+    />
   );
 }
 
-function ProjectPane({ project, index, mine, onSave, inlineViewer, onPrev, onNext }: {
+function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPrev, onNext }: {
   project: ReviewProject;
   index: ReviewIndex;
-  mine: MyReview | undefined;
-  onSave: (r: MyReview | null) => void;
+  mine: CaseReview | undefined;
+  profile: Reviewer;
+  onSave: (r: CaseReview) => void;
   inlineViewer: boolean;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -582,7 +641,7 @@ function ProjectPane({ project, index, mine, onSave, inlineViewer, onPrev, onNex
               <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
               <FlagList detail={detail} index={index} />
             </section>
-            <ReviewForm project={project} detail={detail} mine={mine} onSave={onSave} />
+            <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />
             <DisclaimerNotice compact className="rv-disclaimer" />
           </>
         )}
@@ -613,6 +672,10 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         </ul>
         <p>research.bettergov.ph matched most of them; we added more. Each file says how it was matched.</p>
         <p>Matches can be wrong, and a file being here doesn’t confirm what it says. That is what reviews are for.</p>
+        <h3>The review checklist</h3>
+        <p>Each project has the volunteer team’s red-flag checks that fit it ({REGISTRY.flags.length} in all, {REGISTRY.source.version}).</p>
+        <p>Red flags suggest which checks to start with. A suggested check is a candidate, not a finding.</p>
+        <p>Each check says who should lead it, what evidence it needs, and what not to conclude.</p>
         <h3>The 5 key documents</h3>
         <ul>{NAMED_TYPES.map((t) => <li key={t}><b>{t}:</b> {NAMED_MEANING[t]}</li>)}</ul>
         <p className="rv-muted">
@@ -633,7 +696,7 @@ export default function HgabReview() {
   const [index, setIndex] = useState<ReviewIndex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
-  const { reviews, save } = useMyReviews();
+  const { cases: reviews, save, profile, migrate } = useCases();
   const [about, setAbout] = useState(false);
   const [pane, setPane] = useState<Pane>('list');
   const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1600px)').matches);
@@ -643,13 +706,17 @@ export default function HgabReview() {
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
   }, []);
-  useEffect(() => { loadIndex().then(setIndex).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e))); }, []);
+  useEffect(() => {
+    loadIndex().then((ix) => { setIndex(ix); migrate(ix, decodeIndex(ix)); }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  }, [migrate]);
 
   const all = useMemo(() => (index ? decodeIndex(index) : []), [index]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
   const reviewed = useMemo(() => new Set(Object.keys(reviews)), [reviews]);
-  const ctx = useMemo(() => ({ flagIndex, reviewed }), [flagIndex, reviewed]);
+  // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
+  const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
+  const ctx = useMemo(() => ({ flagIndex, reviewed, teamIndex }), [flagIndex, reviewed, teamIndex]);
   const levels = useMemo(() => runFunnel(all, steps, ctx), [all, steps, ctx]);
   const sort = (params.get('sort') as SortKey) in SORT_LABEL ? (params.get('sort') as SortKey) : 'flags';
   const current = levels[levels.length - 1].projects;
@@ -705,11 +772,12 @@ export default function HgabReview() {
               {myList.length ? (
                 <>
                   <p>{myList.length} {myList.length === 1 ? 'review' : 'reviews'} saved in this browser.</p>
-                  <button type="button" className="rv-btn" onClick={() => download('bettergov-house-bill-reviews.csv', reviewsCsv(myList), 'text/csv;charset=utf-8')}>Download CSV</button>
-                  <button type="button" className="rv-btn" onClick={() => download('bettergov-house-bill-reviews.json', JSON.stringify(myList, null, 2), 'application/json')}>Download JSON</button>
+                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
+                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
+                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
                   <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setSingle(cur, 'reviewed', { kind: 'reviewed', value: 'yes' }))}>Show them</button>
                 </>
-              ) : <p>No reviews yet. Open a project and fill in “Your review”.</p>}
+              ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
             </div>
           </details>
           <Link to={`${HGAB_ROOT}/overview`}>House bill analysis</Link>
@@ -747,7 +815,7 @@ export default function HgabReview() {
 
           <section className="rv-detail" aria-label="Project">
             {selected
-              ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} onSave={(r) => save(r, selected.hgabId)}
+              ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} profile={profile} onSave={save}
                   inlineViewer={inlineViewer} onPrev={prev} onNext={next} />
               : (
                 <div className="rv-welcome">
