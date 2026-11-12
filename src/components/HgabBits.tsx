@@ -53,7 +53,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
  * The section's sub-nav, left to right (Jason's order, 2026-11-02): Overview (the landing page, where `/hgab` and
  * `/hgab/2027` redirect), Line by line (the whole-bill explorer), Red Flags (PBC's red-flag basket; Jason, 2026-11-04:
  * "add a link 'Red Flags' after Line by Line") and Leaderboards; then the dropdowns Districts, the
- * four programs and Multi-purpose buildings; Write a letter; and About (Sources, Methodology). The story-style
+ * four programs and Multi-purpose buildings; Foreign-assisted (Jason, 2026-11-12: "Move Foreign Assisted after
+ * Multi-purpose buildings"); Write a letter; and About (Sources, Methodology, Indicators). The story-style
  * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
  * entries out for now, keeping their pages at their addresses.
  */
@@ -67,9 +68,11 @@ const LEAD_LINKS: readonly NavLink[] = [
   // Its address has a capital; the page answers in any letter case, and so does the tab.
   { key: 'red-flags', to: RED_FLAGS_ROOT, label: 'Red Flags', match: (p) => p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase() },
   { to: `${HGAB_ROOT}/leaderboard`, label: 'Leaderboards' },
-  { to: FAP_ROOT, label: 'Foreign-assisted' },
 ];
-const TAIL_LINKS: readonly NavLink[] = [{ to: `${HGAB_ROOT}/letter`, label: 'Write a letter' }];
+const TAIL_LINKS: readonly NavLink[] = [
+  { to: FAP_ROOT, label: 'Foreign-assisted' },
+  { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
+];
 /**
  * Entries kept out of the sub-nav and the drawer: a key here hides its entry (Districts → By party is `parties`, the
  * Multi-purpose buildings menu `multi-purpose`, Red Flags `red-flags`), keeping the page at its address. Empty since

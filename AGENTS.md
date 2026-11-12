@@ -198,6 +198,7 @@ The House bill is HB 10858 at second and third reading, compared with the NEP. S
   - Docs: `docs/hgab-parties.md`.
 - **₱1 trillion in red flags (#60, #63):** PBC's red-flag basket, at `/hgab/2027/1T-redflags`. #63 hid the tab and removed the poster downloads; #69 made the tab visible again (`NAV_HIDDEN` in `HgabBits.tsx` is now empty).
 - **Foreign-assisted projects (#62):** `/hgab/2027/foreign-assisted`, NEP ₱416.6B → House ₱285.9B, plus every budget since FY2021 from DBM BESF Table B.13. Docs: `docs/hgab-fap.md`. The poster is in #72 (open).
+- **Sub-nav (`HgabHeader` in `src/components/HgabBits.tsx`), since 2026-11-12:** Overview, Line by line, Red Flags, Leaderboards; the menus Districts, DPWH, Farm to Market, Health, Irrigation and Multi-purpose buildings; Foreign-assisted; Write a letter; About. The program labels are shortened in the nav only (`PROGRAM_NAV` in `src/lib/hgab-ui.ts`). Pages, crumbs and tables keep "Farm-to-Market Roads" and "Health Facilities" (`DATASET_SHORT`).
 - **Campaign posters:**
   - "We are not ignorant", "Insertions ranked", "Multi-purpose buildings", "Publish the documents", "Write to your representative", "The budget line by line", "Insertions by party", "₱1 trillion in red flags", "Cut year after year" and others.
   - Builders are `scripts/build-hgab-poster*.ts`; several still sit untracked in worktrees (see In progress).
