@@ -30,6 +30,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
+import { INDICATORS_ROOT } from '../lib/indicators';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { PARTY_DATA_ROOT } from '../lib/hgab-congress-seats';
@@ -98,12 +99,14 @@ const PROGRAM_EXTRAS: Partial<Record<DatasetKey, NavMenu['items']>> = {
     { key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT },
   ],
 };
+/** About also opens Indicators (PSA statistics beside the budget), which left the site's primary nav. */
 const ABOUT_MENU: NavMenu = {
   key: 'about',
   label: 'About',
   items: [
     { key: 'sources', label: 'Sources', to: `${HGAB_ROOT}/sources` },
     { key: 'methodology', label: 'Methodology', to: `${HGAB_ROOT}/methodology` },
+    { key: 'indicators', label: 'Indicators', to: INDICATORS_ROOT },
   ],
 };
 

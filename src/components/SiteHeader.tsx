@@ -199,12 +199,6 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               General Appropriations 2000–2026
             </Link>
             <Link
-              to={INDICATORS_ROOT}
-              className={`primary-nav-link ${isActivePath(location.pathname, INDICATORS_ROOT) ? 'active' : ''}`}
-            >
-              Indicators
-            </Link>
-            <Link
               to={CITIZEN_REPORTS_ROOT}
               className={`primary-nav-link ${isActivePath(location.pathname, CITIZEN_REPORTS_ROOT) ? 'active' : ''}`}
             >
@@ -269,9 +263,6 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>
-          </Link>
-          <Link className="drawer-link" to={INDICATORS_ROOT} onClick={() => setMenuOpen(false)}>
-            Indicators <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to={CITIZEN_REPORTS_ROOT} onClick={() => setMenuOpen(false)}>
             Citizen Reports <span className="drawer-link-arrow">→</span>

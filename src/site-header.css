@@ -244,13 +244,12 @@
   gap: 6px;
 }
 
-/* ---- Laptop widths: the eight tabs need about 1,520px at 18px each side.
+/* ---- Laptop widths: the seven tabs need about 1,440px at 18px each side.
    Up to 1500px, tighten them so they keep one row down to a 1366px screen
-   with a scrollbar (about 1,295px for the tabs); narrower windows wrap, as
-   before. Measured in Chromium: 1,280px of tabs at 6px padding and 15.5px. ---- */
+   with a scrollbar; narrower windows wrap, as before. ---- */
 @media (min-width: 1025px) and (max-width: 1500px) {
-  .primary-nav { margin-left: -6px; }
-  .primary-nav-link { padding-left: 6px; padding-right: 6px; font-size: 15.5px; }
+  .primary-nav { margin-left: -10px; }
+  .primary-nav-link { padding-left: 10px; padding-right: 10px; }
 }
 
 /* ---- Tablet (≤ 1024px): tighten padding ---- */

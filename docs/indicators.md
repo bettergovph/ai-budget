@@ -21,7 +21,7 @@ Components:
 
 Helpers: `src/lib/indicators-view.ts` (colour classes, loader) and `src/lib/use-indicators.ts`.
 
-**Nav:** "Indicators" is a primary tab between "General Appropriations 2000–2026" and "Citizen Reports". The eighth tab no longer fit one row at 1366px. Between 1025px and 1500px the tabs therefore use 6px padding and 15.5px type (`src/site-header.css`). Measured in Chromium, they fit one row from 1349px wide (a 1366px screen with a scrollbar); narrower windows wrap, as before.
+**Nav:** "Indicators" is not in the site's primary nav (Jason, 2026-11-12: "Hide the indicators from the main nav and put it under about"). It sits in the House bill section's About menu, after Sources and Methodology (`ABOUT_MENU` in `src/components/HgabBits.tsx`), and so in that section's drawer too. The pages keep their URLs, and the sitemap still lists them. With seven primary tabs again, `src/site-header.css` is back to main's laptop padding (10px). For a while, Indicators was an eighth tab, which needed 6px padding and 15.5px type to fit one row at 1366px.
 
 **Colours:** sequential indicators use one blue ramp in five quintile classes. Changes (growth, poverty change, House change) are diverging: blue went down, red went up, grey is about zero. The map note says the colours do not mean good or bad. The ramps passed the dataviz validator's CVD checks; the low-contrast light steps are covered by the table under every map.
 
