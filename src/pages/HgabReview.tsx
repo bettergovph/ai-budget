@@ -21,10 +21,11 @@ import {
 } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy, decodeIndex, docCount,
+  DEFAULT_SORT, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
+  decodeIndex, docCount, pageCount, pageOf, pageWindow, reviewStatusFromStage,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type MultiKind, type ReviewProject, type SortKey, type Step, type StepContext,
+  type MultiKind, type ReviewProject, type ReviewStatus, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, STORE_CASES, STORE_PROFILE, STORE_V1, TEAM_FLAGS, caseTouched, classifyProject,
@@ -40,7 +41,6 @@ const loadShard = (seq: number) => {
   const path = detailShardPath(seq);
   return cached(`review-detail:${path}`, () => getJson<ReviewDetailShard>(dataUrl(`${HGAB_BASE}/${path}`), 'Failed to load the project’s documents'));
 };
-const PAGE_ROWS = 80;
 const n = (v: number) => v.toLocaleString('en-US');
 const asOf = (iso: string | undefined) => {
   const d = iso ? new Date(iso) : null;
@@ -201,13 +201,12 @@ function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: 
   );
 }
 
-function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSteps }: {
+function FilterBar({ ix, all, steps, current, ctx, presets, onSteps }: {
   ix: ReviewIndex;
   all: ReviewProject[];
   steps: Step[];
   current: ReviewProject[];
   ctx: StepContext;
-  reviewedCount: number;
   presets: typeof PRESETS;
   /** Gets the latest steps: the URL may not have caught up with a quick second click. */
   onSteps: (fn: (cur: Step[]) => Step[]) => void;
@@ -250,7 +249,7 @@ function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSte
     );
   });
   const flagCount = steps.filter((s) => s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed).length;
-  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs' || s.kind === 'reviewed').length;
+  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs' || s.kind === 'status').length;
 
   const docs = multi('docs', () => '');
   const docsBase = projectsWithout(all, steps, 'docs', ctx);
@@ -259,8 +258,7 @@ function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSte
   const program = multi('program', (p) => p.program);
   const minStep = steps.find((s) => s.kind === 'min');
   const minBase = projectsWithout(all, steps, 'min', ctx);
-  const revStep = steps.find((s) => s.kind === 'reviewed');
-  const revBase = projectsWithout(all, steps, 'reviewed', ctx);
+  const status = multi('status', (p) => ctx.statusOf(p.hgabId));
 
   return (
     <div className="rv-filters" role="toolbar" aria-label="Filters">
@@ -295,14 +293,12 @@ function FilterBar({ ix, all, steps, current, ctx, reviewedCount, presets, onSte
               const k = docsBase.filter(stepTest({ kind: 'docs', values: [v] }, ctx)).length;
               return <Check key={v} checked={docs.checked.includes(v)} onChange={() => toggleValue('docs', v)} label={DOCS_FILTER_LABEL[v]} k={k} max={Math.max(1, docsBase.length)} />;
             })}
-            <h3>My reviews</h3>
-            {(['no', 'yes'] as const).map((v) => {
-              const k = revBase.filter(stepTest({ kind: 'reviewed', value: v }, ctx)).length;
-              const on = !!revStep && revStep.kind === 'reviewed' && revStep.value === v;
-              return <Check key={v} checked={on} disabled={v === 'yes' && !reviewedCount} k={k} max={Math.max(1, revBase.length)}
-                label={v === 'yes' ? 'Reviewed by me' : 'Not yet reviewed by me'}
-                onChange={() => onSteps((cur) => setSingle(cur, 'reviewed', on ? null : { kind: 'reviewed', value: v }))} />;
-            })}
+            <h3>Review status</h3>
+            {REVIEW_STATUSES.map((v) => (
+              <Check key={v} checked={status.checked.includes(v)} onChange={() => toggleValue('status', v)} label={REVIEW_STATUS_LABEL[v]}
+                k={status.counts.get(v) ?? 0} max={status.base} />
+            ))}
+            <p className="rv-dd-note">For now, from the reviews saved in this browser.</p>
           </div>
           <div className="rv-dd-group">
             <h3>Missing, after our matching</h3>
@@ -419,45 +415,54 @@ function DocDots({ mask }: { mask: number }) {
   );
 }
 
-function ProjectList({ projects, selected, reviews, onOpen }: {
+/** One page of the list. The parent keys it by funnel, sort and page, so each page starts at the top. */
+function ProjectList({ projects, selected, statusOf, onOpen }: {
   projects: ReviewProject[];
   selected: string | null;
-  reviews: Record<string, CaseReview>;
+  statusOf: (hgabId: string) => ReviewStatus;
   onOpen: (p: ReviewProject) => void;
 }) {
-  // The parent keys this list by its funnel and sort, so a new list starts again at the first page.
-  const [more, setMore] = useState(0);
-  const sentinel = useRef<HTMLLIElement>(null);
-  const at = projects.findIndex((p) => p.hgabId === selected);
-  const shown = Math.max(PAGE_ROWS + more, at >= 0 ? at + PAGE_ROWS : 0);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) setMore(shown); }, { rootMargin: '400px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [projects, shown]);
   // Keep the open project in view when it moves (keyboard).
   useEffect(() => { document.getElementById(`rv-item-${selected}`)?.scrollIntoView({ block: 'nearest' }); }, [selected]);
   if (!projects.length) return <p className="rv-empty">No project passes every step. Remove a step to see more.</p>;
   return (
     <ul className="rv-items">
-      {projects.slice(0, shown).map((p) => (
-        <li key={p.hgabId} id={`rv-item-${p.hgabId}`}>
-          <button type="button" className={`rv-item ${p.hgabId === selected ? 'is-on' : ''}`} onClick={() => onOpen(p)} aria-current={p.hgabId === selected ? 'true' : undefined}>
-            <span className="rv-item-title">{p.title}</span>
-            <span className="rv-item-meta" title={officeLine(p.office, 99)}>{officeLine(p.office, 1)} · {p.region}</span>
-            <span className="rv-item-foot">
-              <b>{pesoShort(p.amount)}</b>
-              <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
-              <DocDots mask={p.docs} />
-              {reviews[p.hgabId] && <span className="rv-done" title="You reviewed this project">✓ reviewed</span>}
-            </span>
-          </button>
-        </li>
-      ))}
-      {shown < projects.length && <li ref={sentinel} className="rv-more">Loading more…</li>}
+      {projects.map((p) => {
+        const st = statusOf(p.hgabId);
+        return (
+          <li key={p.hgabId} id={`rv-item-${p.hgabId}`}>
+            <button type="button" className={`rv-item ${p.hgabId === selected ? 'is-on' : ''}`} onClick={() => onOpen(p)} aria-current={p.hgabId === selected ? 'true' : undefined}>
+              <span className="rv-item-title">{p.title}</span>
+              <span className="rv-item-meta" title={officeLine(p.office, 99)}>{officeLine(p.office, 1)} · {p.region}</span>
+              <span className="rv-item-foot">
+                <b>{pesoShort(p.amount)}</b>
+                <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
+                <DocDots mask={p.docs} />
+                {st !== 'not_started' && <span className={`rv-status is-${st}`}>{REVIEW_STATUS_LABEL[st]}</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+/** Page numbers under the list: first, last and two either side of this one, with previous and next. */
+function Pager({ page, total, items, onPage }: { page: number; total: number; items: number; onPage: (p: number) => void }) {
+  if (items <= PAGE_SIZE) return null;
+  const from = (page - 1) * PAGE_SIZE + 1, to = Math.min(items, page * PAGE_SIZE);
+  return (
+    <nav className="rv-pager" aria-label="Pages">
+      <span className="rv-pager-range">{n(from)}–{n(to)} of {n(items)}</span>
+      <div className="rv-pager-pages">
+        <button type="button" onClick={() => onPage(page - 1)} disabled={page <= 1} aria-label="Previous page">‹</button>
+        {pageWindow(page, total).map((x, i) => (x == null
+          ? <span key={`gap${i}`} className="rv-pager-gap" aria-hidden="true">…</span>
+          : <button key={x} type="button" className={x === page ? 'is-on' : ''} aria-current={x === page ? 'page' : undefined} onClick={() => onPage(x)}>{n(x)}</button>))}
+        <button type="button" onClick={() => onPage(page + 1)} disabled={page >= total} aria-label="Next page">›</button>
+      </div>
+    </nav>
   );
 }
 
@@ -910,19 +915,26 @@ export default function HgabReview() {
   const all = useMemo(() => (index ? decodeIndex(index) : []), [index]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
-  const reviewed = useMemo(() => new Set(Object.keys(reviews)), [reviews]);
+  // A project's review status: from this browser's reviews for now; the API will supply everyone's later.
+  const statusOf = useCallback((h: string): ReviewStatus => reviewStatusFromStage(reviews[h]?.case_stage), [reviews]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
   const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
-  const ctx = useMemo(() => ({ flagIndex, reviewed, teamIndex }), [flagIndex, reviewed, teamIndex]);
+  const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex }), [flagIndex, statusOf, teamIndex]);
   const levels = useMemo(() => runFunnel(all, steps, ctx), [all, steps, ctx]);
-  const sort = (params.get('sort') as SortKey) in SORT_LABEL ? (params.get('sort') as SortKey) : 'flags';
+  const sort = (params.get('sort') as SortKey) in SORT_LABEL ? (params.get('sort') as SortKey) : DEFAULT_SORT;
   const current = levels[levels.length - 1].projects;
-  const listed = useMemo(() => sortProjects(current, sort), [current, sort]);
+  const listed = useMemo(() => sortProjects(current, sort, statusOf), [current, sort, statusOf]);
   const selectedId = params.get('p');
   // The project's tab stays as you move between projects; it is in the URL so a link opens on it.
   const tab = paneTab(params.get('tab'));
   const [split, setSplit] = useSplit();
   const selected = useMemo(() => all.find((p) => p.hgabId === selectedId) ?? null, [all, selectedId]);
+  // Pages of PAGE_SIZE: `pg=` in the URL, else the page holding the open project.
+  const pages = pageCount(listed.length);
+  const selectedAt = listed.findIndex((p) => p.hgabId === selectedId);
+  const pgParam = Number(params.get('pg'));
+  const page = Math.min(pages, Math.max(1, Number.isInteger(pgParam) && pgParam > 0 ? pgParam : selectedAt >= 0 ? pageOf(selectedAt) : 1));
+  const pageItems = useMemo(() => listed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [listed, page]);
 
   const update = useCallback((fn: (p: URLSearchParams) => void, replace = false) => {
     setParams((prev) => { const next = new URLSearchParams(prev); fn(next); return next; }, { replace });
@@ -934,10 +946,15 @@ export default function HgabReview() {
   const applySteps = (fn: (cur: Step[]) => Step[]) => {
     const next = fn(stepsRef.current);
     stepsRef.current = next;
-    update((p) => { p.delete('s'); next.forEach((s) => p.append('s', stepToParam(s))); });
+    update((p) => { p.delete('s'); p.delete('pg'); next.forEach((s) => p.append('s', stepToParam(s))); });
   };
   const setTab = useCallback((t: PaneTab) => update((q) => { if (t === 'overview') q.delete('tab'); else q.set('tab', t); }, true), [update]);
-  const open = useCallback((p: ReviewProject) => { update((q) => q.set('p', p.hgabId), true); setPane('project'); }, [update]);
+  // Opening a project (j / k included) turns to the page it is on.
+  const open = useCallback((p: ReviewProject) => {
+    const i = listed.findIndex((x) => x.hgabId === p.hgabId);
+    update((q) => { q.set('p', p.hgabId); if (i >= 0) q.set('pg', String(pageOf(i))); }, true);
+    setPane('project');
+  }, [update, listed]);
   const at = listed.findIndex((p) => p.hgabId === selectedId);
   const prev = useMemo(() => (at > 0 ? () => open(listed[at - 1]) : null), [at, listed, open]);
   const next = useMemo(() => (at >= 0 && at < listed.length - 1 ? () => open(listed[at + 1]) : at < 0 && listed.length ? () => open(listed[0]) : null), [at, listed, open]);
@@ -979,7 +996,7 @@ export default function HgabReview() {
                   <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
                   <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
                   <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
-                  <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setSingle(cur, 'reviewed', { kind: 'reviewed', value: 'yes' }))}>Show them</button>
+                  <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', REVIEW_STATUSES.filter((v) => v !== 'not_started')))}>Show them</button>
                 </>
               ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
             </div>
@@ -994,7 +1011,7 @@ export default function HgabReview() {
         <>
         <div className="rv-filterbar">
           <FilterBar key={params.getAll('s').filter((x) => x.startsWith('q:')).join()} ix={index} all={all} steps={steps} current={current} ctx={ctx}
-            reviewedCount={myList.length} presets={presets} onSteps={(fn) => { applySteps(fn); setPane('list'); }} />
+            presets={presets} onSteps={(fn) => { applySteps(fn); setPane('list'); }} />
           <FunnelStrip
             levels={levels}
             flags={index.flags}
@@ -1009,12 +1026,13 @@ export default function HgabReview() {
               <p><b>{n(current.length)}</b> {current.length === 1 ? 'project' : 'projects'} · {pesoShort(levels[levels.length - 1].amount)}</p>
               <label>
                 <span className="visually-hidden">Sort</span>
-                <select value={sort} onChange={(e) => update((p) => p.set('sort', e.target.value), true)}>
+                <select value={sort} onChange={(e) => update((p) => { if (e.target.value === DEFAULT_SORT) p.delete('sort'); else p.set('sort', e.target.value); p.delete('pg'); }, true)}>
                   {Object.entries(SORT_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select>
               </label>
             </div>
-            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}`} projects={listed} selected={selectedId} reviews={reviews} onOpen={open} />
+            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}|${page}`} projects={pageItems} selected={selectedId} statusOf={statusOf} onOpen={open} />
+            <Pager page={page} total={pages} items={listed.length} onPage={(x) => update((q) => q.set('pg', String(x)))} />
           </section>
 
           <section className="rv-detail" aria-label="Project">

@@ -46,7 +46,7 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 
 export type DocsFilter = 'none' | 'incomplete' | 'complete';
 /** Filters where checking several values keeps projects matching any of them (one funnel step each). */
-export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team';
+export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status';
 export type Step =
   | { kind: 'flag'; code: string; not?: boolean }
   | { kind: 'region'; values: string[] }
@@ -57,9 +57,40 @@ export type Step =
   | { kind: 'team'; values: string[] }
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
-  | { kind: 'reviewed'; value: 'yes' | 'no' };
+  /** Review status (REVIEW_STATUSES): today from this browser's reviews, later from the API. */
+  | { kind: 'status'; values: ReviewStatus[] };
 
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
+
+/**
+ * Where a project's review stands. Today it comes from the reviews saved in this browser (`reviewStatusOf` in the
+ * page, from the case stage); once reviews are sent to the API, the API supplies it for every volunteer's work and
+ * the page passes that in instead. Ordered as work goes: what still needs a reviewer first.
+ */
+export const REVIEW_STATUSES = ['not_started', 'in_progress', 'on_hold', 'in_independent_review', 'completed'] as const;
+export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  on_hold: 'On hold',
+  in_independent_review: 'In independent review',
+  completed: 'Completed',
+};
+/**
+ * What the API will return for the list (`GET /api/v1/hgab/2027/reviews/status`, not built): every project's
+ * review status across volunteers. The page's `statusOf` reads this when it exists, else this browser's reviews.
+ */
+export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: number; updated_at: string }>;
+
+/**
+ * A review's case stage (the team workbook's vocabulary) as a status. No review is "not started"; a saved draft is
+ * "in progress" even while its case stage still reads "Not started".
+ */
+export function reviewStatusFromStage(stage: string | null | undefined): ReviewStatus {
+  if (!stage) return 'not_started';
+  if (stage === 'on_hold' || stage === 'in_independent_review' || stage === 'completed') return stage;
+  return 'in_progress';
+}
 export const DOCS_FILTER_LABEL: Record<DocsFilter, string> = {
   none: 'No documents found',
   incomplete: 'Fewer than 4 of the 5 key documents',
@@ -72,7 +103,7 @@ const SEP = '|';
 export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
-    case 'region': case 'office': case 'program': case 'docs': case 'team': return `${s.kind}:${s.values.join(SEP)}`;
+    case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': return `${s.kind}:${s.values.join(SEP)}`;
     default: return `${s.kind}:${s.value}`;
   }
 }
@@ -91,7 +122,14 @@ export function stepFromParam(p: string): Step | null {
     case 'team': { const ok = values.filter((v) => /^RF-\d{3}$/.test(v)); return ok.length ? { kind, values: ok } : null; }
     case 'q': return value.trim() ? { kind, value } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
-    case 'reviewed': return value === 'yes' || value === 'no' ? { kind, value } : null;
+    case 'status': {
+      const ok = values.filter((v): v is ReviewStatus => (REVIEW_STATUSES as readonly string[]).includes(v));
+      return ok.length ? { kind, values: ok } : null;
+    }
+    // Links from before review statuses: "reviewed by me" or not.
+    case 'reviewed':
+      return value === 'no' ? { kind: 'status', values: ['not_started'] }
+        : value === 'yes' ? { kind: 'status', values: REVIEW_STATUSES.filter((v) => v !== 'not_started') } : null;
     default: return null;
   }
 }
@@ -112,8 +150,8 @@ export function setValues(steps: readonly Step[], kind: MultiKind, values: strin
   if (i < 0) return step ? [...steps, step] : [...steps];
   return step ? steps.map((x, j) => (j === i ? step : x)) : steps.filter((_, j) => j !== i);
 }
-/** Sets a single-value filter (min, q, reviewed) the same way; null removes it. */
-export function setSingle(steps: readonly Step[], kind: 'min' | 'q' | 'reviewed', step: Step | null): Step[] {
+/** Sets a single-value filter (min, q) the same way; null removes it. */
+export function setSingle(steps: readonly Step[], kind: 'min' | 'q', step: Step | null): Step[] {
   const i = steps.findIndex((x) => x.kind === kind);
   if (i < 0) return step ? [...steps, step] : [...steps];
   return step ? steps.map((x, j) => (j === i ? step : x)) : steps.filter((_, j) => j !== i);
@@ -129,7 +167,8 @@ export const foldText = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '')
 
 export interface StepContext {
   flagIndex: ReadonlyMap<string, number>;
-  reviewed: ReadonlySet<string>;
+  /** A project's review status (REVIEW_STATUSES). */
+  statusOf: (hgabId: string) => ReviewStatus;
   /** Team check → the review.json flag indexes of the detector flags that suggest it. */
   teamIndex?: ReadonlyMap<string, readonly number[]>;
 }
@@ -154,7 +193,7 @@ export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boole
       const words = foldText(s.value).split(/\s+/).filter(Boolean);
       return (p) => { const t = foldText(`${p.title} ${p.office.name} ${p.office.districts.join(' ')} ${p.hgabId}`); return words.every((w) => t.includes(w)); };
     }
-    case 'reviewed': return (p) => ctx.reviewed.has(p.hgabId) === (s.value === 'yes');
+    case 'status': { const v = new Set<string>(s.values); return (p) => v.has(ctx.statusOf(p.hgabId)); }
   }
 }
 
@@ -190,13 +229,36 @@ export function flagYields(projects: readonly ReviewProject[], nFlags: number): 
   return n;
 }
 
-export type SortKey = 'flags' | 'amount' | 'bill';
-export const SORT_LABEL: Record<SortKey, string> = { flags: 'Most flags', amount: 'Largest budget', bill: 'Bill order' };
-export function sortProjects(xs: readonly ReviewProject[], key: SortKey): ReviewProject[] {
+/**
+ * Bill order is the default: most red flags first would put the projects most likely to be ruled out at the top.
+ * Review status puts what still needs a reviewer first, then bill order.
+ */
+export type SortKey = 'bill' | 'status' | 'amount' | 'flags';
+export const SORT_LABEL: Record<SortKey, string> = { bill: 'Bill order', status: 'Review status', amount: 'Largest budget', flags: 'Most flags' };
+export const DEFAULT_SORT: SortKey = 'bill';
+export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusOf?: (hgabId: string) => ReviewStatus): ReviewProject[] {
   const out = [...xs];
-  if (key === 'flags') out.sort((a, b) => b.flags.length - a.flags.length || b.amount - a.amount || a.seq - b.seq);
+  if (key === 'status') {
+    const rank = (p: ReviewProject) => REVIEW_STATUSES.indexOf(statusOf ? statusOf(p.hgabId) : 'not_started');
+    out.sort((a, b) => rank(a) - rank(b) || a.seq - b.seq);
+  } else if (key === 'flags') out.sort((a, b) => b.flags.length - a.flags.length || b.amount - a.amount || a.seq - b.seq);
   else if (key === 'amount') out.sort((a, b) => b.amount - a.amount || a.seq - b.seq);
   else out.sort((a, b) => a.seq - b.seq);
+  return out;
+}
+
+// --- Pages ------------------------------------------------------------------------------------------------------
+
+export const PAGE_SIZE = 50;
+export const pageCount = (n: number) => Math.max(1, Math.ceil(n / PAGE_SIZE));
+/** The page (from 1) holding the item at `index` (from 0). */
+export const pageOf = (index: number) => Math.floor(Math.max(0, index) / PAGE_SIZE) + 1;
+/** Page numbers to show around `page`: the first, the last, and two either side, with null for a gap. */
+export function pageWindow(page: number, total: number): (number | null)[] {
+  const keep = new Set([1, total, page - 2, page - 1, page, page + 1, page + 2].filter((x) => x >= 1 && x <= total));
+  const nums = [...keep].sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  nums.forEach((x, i) => { if (i && x - nums[i - 1] > 1) out.push(null); out.push(x); });
   return out;
 }
 
@@ -269,7 +331,7 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     case 'team': return s.values.length === 1 ? `Team check ${s.values[0]}: ${teamTitles.get(s.values[0]) ?? ''}`.replace(/: $/, '') : `Team checks ${s.values.join(', ')}`;
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
-    case 'reviewed': return s.value === 'yes' ? 'Reviewed by me' : 'Not yet reviewed by me';
+    case 'status': return `Review: ${s.values.map((v) => REVIEW_STATUS_LABEL[v]).join(' or ')}`;
   }
 }
 

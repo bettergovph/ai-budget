@@ -214,6 +214,7 @@ Columns for later workflow steps stay blank: independent verifier, the budget-or
 
 - `POST /api/v1/hgab/2027/reviews` takes a `CaseReview`, runs `validateCaseReview` on the server, sets `submitted_at` and returns the stored case. It is idempotent on `case_id`.
 - `GET /api/v1/hgab/2027/reviews?hgab_id=…` lists a project's reviews, for the independent verifier.
+- `GET /api/v1/hgab/2027/reviews/status` returns a `ReviewStatusIndex` (`hgab_id` → status, number of reviews, last update; `src/lib/hgab-review.ts`). It feeds the list's status chips, the review-status filter and the review-status sort, which today read this browser's reviews.
 - Storage could be a D1 table per case plus one per check and per piece of evidence, matching the workbook rows. A D1 table needs the maintainer's go-ahead.
 - Before reviews go public, decide what is shown. The workbook asks that case notes and personal data stay with authorized reviewers.
 
