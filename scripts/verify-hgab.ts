@@ -136,6 +136,7 @@ import {
 import { PLACED_KIND_ROWS, kindPhp, placedNet, placedTotals, sortPlaced } from "../src/lib/hgab-placed";
 import { verifyRedFlags } from "./verify-hgab-redflags";
 import { verifyFap } from "./verify-hgab-fap";
+import { verifyDocuments } from "./verify-hgab-documents";
 
 const argv = process.argv.slice(2);
 const arg = (k: string, d: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d;
@@ -723,6 +724,7 @@ async function main(): Promise<void> {
   await verifyLocations(overview, c);
   await verifyRedFlags(c, check, { out: OUT, words, readerCopyHits });
   await verifyFap(c, check, { out: OUT, data: resolve(GAA, ".."), words, readerCopyHits });
+  await verifyDocuments(c, check, { out: OUT });
 
   if (D1_MODE === "local") await verifyD1(overview, c);
 

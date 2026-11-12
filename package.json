@@ -26,6 +26,7 @@
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
+    "build:hgab-documents": "tsx scripts/build-hgab-documents.ts",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:hgab-flood-compare": "bash scripts/hgab-flood-compare/run.sh",
     "build:hgab-congress-seats": "tsx scripts/build-hgab-congress-seats.ts",

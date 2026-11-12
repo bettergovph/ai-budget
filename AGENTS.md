@@ -198,6 +198,9 @@ The House bill is HB 10858 at second and third reading, compared with the NEP. S
   - Docs: `docs/hgab-parties.md`.
 - **₱1 trillion in red flags (#60, #63):** PBC's red-flag basket, at `/hgab/2027/1T-redflags`. #63 hid the tab and removed the poster downloads; #69 made the tab visible again (`NAV_HIDDEN` in `HgabBits.tsx` is now empty).
 - **Foreign-assisted projects (#62):** `/hgab/2027/foreign-assisted`, NEP ₱416.6B → House ₱285.9B, plus every budget since FY2021 from DBM BESF Table B.13. Docs: `docs/hgab-fap.md`. The poster is in #72 (open).
+- **Documents and review flags per project (started 2026-11-12, branch `hgab-review-docs`, worktree `/tmp/wt-hgab-docs`):** data for a planned **Review** button on every DPWH project. Every row of the research site's document coverage and `flags.json` is tied to one of our DPWH rows, with its Senate files, DPWH Transparency (Proposal) files and review flags. `npm run build:hgab-documents -- --fetch` → `documents/` (not on R2 yet). Docs: `docs/hgab-documents.md`.
+  - `hgabId` `HB10858-3-PPPP-NNNNNN` is the PDF page and the bill row, not a project ID. Store it rather than our positional `house-reading:N`.
+  - The research site's folder ties are wrong about 1.5% of the time, and so is Region IV-A's tracker. Disputes are settled by reading the POW, in `FOLDER_REVIEWS`. **Don't place folders by code sequence**: it lands on a neighbouring project.
 - **Campaign posters:**
   - "We are not ignorant", "Insertions ranked", "Multi-purpose buildings", "Publish the documents", "Write to your representative", "The budget line by line", "Insertions by party", "₱1 trillion in red flags", "Cut year after year" and others.
   - Builders are `scripts/build-hgab-poster*.ts`; several still sit untracked in worktrees (see In progress).
@@ -267,6 +270,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Disclaimer, Terms of Service and the first-visit agreement | #78 merged 2026-11-08. Follow-up branch `site-terms-pbc` (worktree `/tmp/wt-terms`, preview :5142): PBC as a party, footer credit, models, repo URL | PR open; the licence choice and a lawyer's read are still open |
 | "Publish the documents" and "We demand answers" poster builders | worktree `hgab-programs`, untracked | The first is published; the second is not approved |
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
+| Documents and review flags per project (`build:hgab-documents`, `docs/hgab-documents.md`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs` | Built and verified 2026-11-12, not committed; next is the Review screen and form, then upload `documents/` (without `sources/`) |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
