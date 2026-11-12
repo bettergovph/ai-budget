@@ -203,7 +203,7 @@ export const detailShardPath = (seq: number) => `${DOCUMENTS_DIR}/detail/${Strin
 /** How the funnel groups flags. Every flag code must fall in one family (the build fails otherwise). */
 export const FLAG_FAMILIES = [
   { key: "documents", label: "Documents", re: /^(missing-|no-listed-|dpwh-transparency-match)/ },
-  { key: "nep", label: "NEP comparison", re: /^(potential-nep-insertion|no-selected-nep-counterpart|nep-counterpart-|within-nep-|implementing-office-changed|allocation-(increase|decrease))/ },
+  { key: "nep", label: "NEP comparison", re: /^(potential-nep-insertion|house-bill-only-our-comparison|nep-match-sources-disagree|no-selected-nep-counterpart|nep-counterpart-|within-nep-|implementing-office-changed|allocation-(increase|decrease))/ },
   { key: "cost", label: "Amount and cost", re: /^(repeated-allocation-amount|high-|extreme-|cost-per-meter|uniform-rcs|very-short-)/ },
   { key: "location", label: "Location and map", re: /(map-review|doppelganger|coordinate|mpb-location|mpb-same-|conflicting-deo)/ },
   { key: "history", label: "Repeats and history", re: /^(historical-|mpb-historical|within-hgab-repeat|explicit-historical|rehabilitation-on|road-rehabilitation|bridge-rated)/ },
@@ -225,6 +225,10 @@ export interface ReviewIndexFlag {
   /** Ours: a missing-document flag computed with our links (the research site's own count is in `n_upstream`). */
   computed?: boolean;
   n_upstream?: number;
+  /** Whose flag: research.bettergov.ph's (absent) or ours ("bettergov": our matching or our NEP comparison). */
+  source?: "bettergov";
+  /** What our flag means, in a sentence, for the page. */
+  note?: string;
 }
 export interface ReviewIndexOffice {
   name: string;
@@ -233,6 +237,26 @@ export interface ReviewIndexOffice {
   /** "A" lone, "B" shared, null when no district. */
   tier: "A" | "B" | null;
 }
+/**
+ * Our own NEP comparison beside research.bettergov.ph's flags. Our House bill pages count "in the House bill only"
+ * from the analysis workbench (the bridge's House-only group: no NEP pair, a fuzzy match, or an ambiguous one); the
+ * research site's "Potential NEP insertion" leaves out rows where its newer matching sees a possible NEP counterpart
+ * it can't confirm. Both are candidates; where they disagree, a person should look.
+ */
+export const HOUSE_ONLY_TRACES: readonly string[] = ["house_only_candidate", "fuzzy_candidate", "ambiguous"];
+export const OUR_NEP_FLAGS = {
+  houseOnly: {
+    code: "house-bill-only-our-comparison",
+    label: "In the House bill only (our comparison)",
+    note: "Our comparison found no NEP line for this project, or only an uncertain one. Our House bill pages count it as in the House bill only.",
+  },
+  disagree: {
+    code: "nep-match-sources-disagree",
+    label: "Sources disagree on the NEP match",
+    note: "Our comparison and research.bettergov.ph’s “Potential NEP insertion” disagree on whether this project has an NEP line. Check the NEP by hand.",
+  },
+} as const;
+
 /**
  * One row of review.json `rows`, positional to keep the file small:
  * [hgab_id, project_id, title, office index, region index, program index, amount_php, flag indexes, named-type

@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  AMOUNT_FLAG_RE, COMPLETE_AT, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  AMOUNT_FLAG_RE, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
   PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
   type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
   type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
@@ -98,7 +98,7 @@ interface ProposalRec { code: string; name: string; office: string; region: stri
 interface PowResult { code: string; matchStatus: string; hgabId: string | null }
 interface LinkRow { id: number; region: string; path: string; url: string; bytes: number; sha256: string }
 interface TrackerRow { code: string; title: string; amount_php: number; office: string }
-interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null }
+interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null; trace: string }
 
 function curl(url: string, out: string): void {
   log(`  fetching ${url}`);
@@ -139,10 +139,10 @@ async function readTracker(path: string): Promise<TrackerRow[]> {
 
 async function readOurs(c: DuckDBConnection, path: string): Promise<OurRow[]> {
   const r = await c.runAndReadAll(`SELECT id, title, hgab3_php, hgab3_page, coalesce(office, ''), json_extract_string(record_json, '$.api.id'),
-    hgab3_doc, coalesce(program, ''), pap FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
-  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap]) => ({
+    hgab3_doc, coalesce(program, ''), pap, coalesce(trace, '') FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
+  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap, trace]) => ({
     id: String(id), title: String(title), amount: Number(amt), page: Number(page), office: String(office), apiId: api == null ? null : String(api),
-    doc: doc == null ? null : String(doc), program: String(program), pap: pap == null ? null : String(pap),
+    doc: doc == null ? null : String(doc), program: String(program), pap: pap == null ? null : String(pap), trace: String(trace),
   }));
 }
 
@@ -585,10 +585,20 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
     ensure(family, `flag ${code} ("${x.label}") is in no FLAG_FAMILIES family`);
     return { code, label: x.label, family, n: x.n };
   });
+  // Our NEP comparison beside the research site's insertion flag (OUR_NEP_FLAGS).
+  const ourHouseOnly = (p: DocumentProject) => HOUSE_ONLY_TRACES.includes(joined.get(p.hgab_id)!.row.trace);
+  const researchInsertion = (p: DocumentProject) => p.review_flags.some((f) => f.code === "potential-nep-insertion");
+  const ourNep = (p: DocumentProject) => [
+    ...(ourHouseOnly(p) ? [OUR_NEP_FLAGS.houseOnly.code] : []),
+    ...(ourHouseOnly(p) !== researchInsertion(p) ? [OUR_NEP_FLAGS.disagree.code] : []),
+  ];
+  for (const f of [OUR_NEP_FLAGS.houseOnly, OUR_NEP_FLAGS.disagree]) {
+    flagsIdx.push({ code: f.code, label: f.label, family: "nep", n: projects.filter((p) => ourNep(p).includes(f.code)).length, source: "bettergov", note: f.note });
+  }
   for (const t of NAMED_TYPES) {
     const code = missingCode(t), lab = `Missing ${t}`;
     flagsIdx.push({ code, label: lab, family: "documents", n: projects.filter((p) => p.missing_flags.includes(lab)).length,
-      computed: true, n_upstream: projects.filter((p) => p.missing_flags_upstream.includes(lab)).length });
+      computed: true, n_upstream: projects.filter((p) => p.missing_flags_upstream.includes(lab)).length, source: "bettergov" });
   }
   const flagAt = idx(flagsIdx, (f) => f.code), officeAt = idx(offices, (o) => o.name), regionAt = idx(regions, (r) => r), programAt = idx(programs, (r) => r);
 
@@ -597,7 +607,7 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
   const ordered = [...projects].sort((a, b) => a.seq - b.seq);
   const rows: ReviewIndexRow[] = ordered.map((p) => [
     p.hgab_id, p.project_id, p.title, officeAt(p.office), regionAt(p.region), programAt(joined.get(p.hgab_id)!.row.program), p.amount_php,
-    uniq([...p.review_flags.map((f) => flagAt(f.code)), ...p.missing_flags.map((l) => flagAt(flagCode(l).code))]),
+    uniq([...p.review_flags.map((f) => flagAt(f.code)), ...ourNep(p).map(flagAt), ...p.missing_flags.map((l) => flagAt(flagCode(l).code))]),
     NAMED_TYPES.reduce((m, t, i) => (p.named_present.includes(t) ? m | (1 << i) : m), 0),
     filesBy.get(p.hgab_id)?.length ?? 0,
   ]);
@@ -624,6 +634,13 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
   mkdirSync(resolve(out, DOCUMENTS_DIR, "detail"), { recursive: true });
   for (const [path, shard] of shards) writeFileSync(resolve(out, path), JSON.stringify(shard));
   return {
+    nep_comparison: {
+      ours_house_only: projects.filter(ourHouseOnly).length,
+      research_potential_insertion: projects.filter(researchInsertion).length,
+      both: projects.filter((p) => ourHouseOnly(p) && researchInsertion(p)).length,
+      ours_only: projects.filter((p) => ourHouseOnly(p) && !researchInsertion(p)).length,
+      research_only: projects.filter((p) => !ourHouseOnly(p) && researchInsertion(p)).length,
+    },
     index: { file: REVIEW_INDEX_PATH.replace(`${DOCUMENTS_DIR}/`, ""), rows: rows.length, bytes: statSync(resolve(out, REVIEW_INDEX_PATH)).size },
     detail: { shards: shards.size, rows_per_shard: DETAIL_SHARD_ROWS, bytes: [...shards.keys()].reduce((s, k) => s + statSync(resolve(out, k)).size, 0) },
   };

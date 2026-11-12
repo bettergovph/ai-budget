@@ -22,7 +22,7 @@ Encoder names are left out; the workbook asks that personal details stay with au
 
 They are different things, and the team's integration spec says so: `detector_rule_id` is "NOT identical to volunteer Flag ID".
 
-- **Detector flags** say where to look. They are research.bettergov.ph's 39 flags plus our 5 "Missing …" document flags (`review.json` codes).
+- **Detector flags** say where to look. They are research.bettergov.ph's 39 flags, plus our 5 "Missing …" document flags and our 2 NEP comparison flags (`review.json` codes).
 - **Team checks** say what a person verifies, who leads, what evidence is needed and what not to conclude.
 
 `DETECTOR_TO_TEAM` maps every detector flag to the team checks it suggests. It is our proposal ("Proposed by BetterGov, 2026-11-12 · pending team review"), and the tests fail if a detector code is missing or names an unknown RF. A suggested check is an **AI candidate**, never a finding.
@@ -30,6 +30,8 @@ They are different things, and the team's integration spec says so: `detector_ru
 | Detector flag | Projects | Suggests |
 | --- | ---: | --- |
 | Potential NEP insertion | 5,548 | RF-024 |
+| In the House bill only (our comparison) | 6,192 | RF-024 |
+| Sources disagree on the NEP match | 862 | RF-024 |
 | No selected NEP counterpart | 6,105 | RF-024 |
 | NEP counterpart pairing is ambiguous | 556 | RF-024 |
 | NEP counterpart needs scope review | 530 | RF-024, RF-016 |
@@ -73,6 +75,13 @@ They are different things, and the team's integration spec says so: `detector_ru
 | Missing Development Council | 10,791 | RF-044, RF-033 |
 | Missing Geotagged photos | 4,249 | RF-040, RF-033 |
 | Missing Certificate of Implementability | 2,401 | RF-041, RF-033 |
+
+**Our NEP comparison is a detector too.** Our House bill pages count 6,193 DPWH rows (6,196 bill lines) as in the House bill only. That is the analysis workbench's House-only group: no NEP pair, a fuzzy match or an ambiguous one. research.bettergov.ph flags 5,548 lines as "Potential NEP insertion", because it leaves out lines where its newer matching sees a possible NEP counterpart it can't confirm ("pairing is ambiguous" 548, "needs scope review" 192). Both lists are candidates, so the reviewer carries both:
+
+- `house-bill-only-our-comparison`, "In the House bill only (our comparison)": 6,192 lines. Four House-only rows are outside the research site's 15,979.
+- `nep-match-sources-disagree`, "Sources disagree on the NEP match": 862 lines. 753 are ours but not theirs; 109 are theirs, but our comparison pairs them with an NEP line (47 with the same amount, 37 on different stretches of the same road, 14 raised, 11 cut). These are the lines a person should settle first. They have a "Start from" preset.
+
+Both suggest RF-024 and appear in each project's Red flags tab under "From our comparison". The manifest's `reviewer.nep_comparison` and `verify:hgab` keep the counts.
 
 22 of the 44 checks have no detector yet. Volunteers check them by hand, and the Team checklist filter shows them as "No red flag points here yet": RF-004 No watershed or drainage master plan; RF-005 Edited geotagged photos; RF-006 Not complete set of plans; RF-007 No identified water source; RF-008 No identified purpose; RF-011 Repeated awards to the same contractor; RF-012 Repeated awards despite poor performance; RF-013 Unsubstantiated pumping capacity; RF-014 Inconsistent or unsupported project quantities; RF-015 Unclear discharge or outfall arrangement; RF-019 Unclear physical scope and capacity; RF-020 Unrealistic construction duration; RF-026 Conflicting document dates; RF-027 Project plans are not signed and sealed; RF-028 At least one of the professionals who signed and sealed the plans are not in the database of PRC; RF-030 Apparent multi-phased project might have issues; RF-031 Unjustified embankment boulder-fill quantities; RF-032 Unsubstantiated quarry sources and hauling  costs; RF-036 Conflicting document dates; RF-037 Uncommon pay item; RF-042 Master Plan; RF-043 Feasibility Study. RF-042 and RF-043 still appear on a project when a Master Plan or Feasibility Study is among its files.
 

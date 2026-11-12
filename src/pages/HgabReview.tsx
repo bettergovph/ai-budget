@@ -242,7 +242,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, onSteps }: {
           return (
             <Check key={f.code} checked={!!s} onChange={() => onSteps((cur) => toggleFlag(cur, f.code, exclude))} k={k} max={max}
               label={<>{s && s.kind === 'flag' && s.not && <em className="rv-not">Leave out · </em>}{readerText(f.label)}</>}
-              note={f.computed ? `With the documents we matched; research.bettergov.ph counts ${n(f.n_upstream ?? 0)}` : undefined} />
+              note={f.computed ? `With the documents we matched; research.bettergov.ph counts ${n(f.n_upstream ?? 0)}` : f.source === 'bettergov' ? `Ours. ${f.note ?? ''}` : undefined} />
           );
         })}
       </div>
@@ -746,11 +746,13 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
   }, [detail]);
   const o = project.office;
   const filesByType = (t: string) => (detail?.files ?? []).filter((f) => f[2] === t);
+  // Our own NEP comparison on this project (review.json), beside the research site's flags in the detail shard.
+  const ourFlags = project.flags.map((i) => index.flags[i]).filter((f) => f.source === 'bettergov' && !f.computed);
   const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
   const tabs: { key: PaneTab; label: string; count?: string }[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'documents', label: 'Documents', count: detail ? String(detail.files.length) : undefined },
-    { key: 'flags', label: 'Red flags', count: detail ? String(detail.flags.length) : undefined },
+    { key: 'flags', label: 'Red flags', count: detail ? String(detail.flags.length + ourFlags.length) : undefined },
     { key: 'review', label: 'Review', count: mine ? (mine.case_stage === 'in_independent_review' ? '✓' : String(outcomes)) : undefined },
   ];
   const tabId = (t: PaneTab) => `rv-tab-${t}`;
@@ -841,6 +843,12 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                   <h3 className="rv-h">{detail.flags.length} red {detail.flags.length === 1 ? 'flag' : 'flags'} from research.bettergov.ph</h3>
                   <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
                   <FlagList detail={detail} index={index} />
+                  {ourFlags.length > 0 && (
+                    <div className="rv-flaggroup rv-ourflags">
+                      <h4>From our comparison</h4>
+                      <ul>{ourFlags.map((f) => <li key={f.code}><details open><summary>{f.label}</summary><p>{f.note}</p></details></li>)}</ul>
+                    </div>
+                  )}
                 </>
               ))}
               {panel('review', <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}

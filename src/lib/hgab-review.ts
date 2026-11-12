@@ -277,6 +277,12 @@ export const PRESETS: readonly { key: string; label: string; note: string; steps
     steps: [{ kind: 'flag', code: 'potential-nep-insertion' }, { kind: 'docs', values: ['incomplete'] }],
   },
   {
+    key: 'sources-disagree',
+    label: 'Sources disagree on the NEP match',
+    note: 'Our comparison and research.bettergov.ph disagree on whether the project has an NEP line.',
+    steps: [{ kind: 'flag', code: 'nep-match-sources-disagree' }],
+  },
+  {
     key: 'no-pow',
     label: 'No program of work',
     note: 'No program of work (POW) found, the document that prices the work.',

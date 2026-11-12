@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, LINK_METHODS, NAMED_TYPES, PROPOSAL_TYPE_MAP,
-  REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
+  HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
 } from "../src/lib/hgab-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -52,7 +52,7 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
 
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_p AS SELECT * FROM read_parquet('${q(P)}')`);
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_f AS SELECT * FROM read_parquet('${q(F)}')`);
-  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
+  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page, trace FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
 
   // Rows: the research site's rows, once each, on one of our House bill rows.
   const cov = readJson<{ projects: { hgabId: string; amountPesos: number; senateDocuments: { fileLinkId: number; path: string; documentType: string }[]; senateDocumentTypes: string[]; proposalDocumentTypes: string[]; proposalDocumentsMatched: boolean }[] }>(src("coverage"));
@@ -178,14 +178,20 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
   if (existsSync(ixPath)) {
     const ix = readJson<ReviewIndex>(ixPath);
     const pBy = new Map(pFull.map((p) => [p.hgab_id, p]));
-    const meta = new Map((await rows<{ hgab_id: string; title: string; office: string; region: string; amount_php: string; project_id: string }>(c,
-      "SELECT hgab_id, title, office, region, amount_php::VARCHAR amount_php, project_id FROM doc_p")).map((r) => [r.hgab_id, r]));
+    const meta = new Map((await rows<{ hgab_id: string; title: string; office: string; region: string; amount_php: string; project_id: string; trace: string }>(c,
+      "SELECT p.hgab_id, p.title, p.office, p.region, p.amount_php::VARCHAR amount_php, p.project_id, o.trace FROM doc_p p JOIN doc_ours o ON o.id = p.project_id")).map((r) => [r.hgab_id, r]));
+    // Our NEP comparison, on this path: House-only by our row's trace; disagreeing with the research site's insertion flag.
+    const ourNep = (h: string, codes: string[]) => {
+      const ours = HOUSE_ONLY_TRACES.includes(meta.get(h)?.trace ?? ''), theirs = codes.includes('potential-nep-insertion');
+      return [...(ours ? [OUR_NEP_FLAGS.houseOnly.code] : []), ...(ours !== theirs ? [OUR_NEP_FLAGS.disagree.code] : [])];
+    };
     check("review.json: every row once, in bill order", ix.rows.length === pFull.length && new Set(ix.rows.map((r) => r[0])).size === ix.rows.length
       && ix.rows.every((r, i) => i === 0 || parseHgabId(r[0])!.seq > parseHgabId(ix.rows[i - 1][0])!.seq));
     const rowOff = ix.rows.filter(([h, pid, title, oi, ri, , amt, fi, mask, nf]) => {
       const m = meta.get(h), p = pBy.get(h);
       if (!m || !p) return true;
-      const codes = [...p.review_flags.map((f) => f.code), ...p.missing_flags.map((l) => flagCode(l).code)];
+      const research = p.review_flags.map((f) => f.code);
+      const codes = [...research, ...ourNep(h, research), ...p.missing_flags.map((l) => flagCode(l).code)];
       return m.project_id !== pid || m.title !== title || ix.offices[oi]?.name !== m.office || ix.regions[ri] !== m.region || String(amt) !== m.amount_php
         || [...new Set(codes)].sort().join() !== fi.map((i) => ix.flags[i].code).sort().join()
         || NAMED_TYPES.filter((_, i) => mask & (1 << i)).join() !== p.named_present.join() || nf !== p.senate_files + p.proposal_files;
@@ -193,6 +199,11 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     check("review.json: each row's ids, title, office, region, amount, flags, documents and file count are the Parquet's", rowOff.length === 0, rowOff.slice(0, 3).map((r) => r[0]).join(", "));
     const nOff = ix.flags.filter((f, i) => f.n !== ix.rows.filter((r) => r[7].includes(i)).length || flagFamily(f.code) !== f.family);
     check(`review.json: all ${ix.flags.length} flags' counts and families hold`, nOff.length === 0, nOff.map((f) => f.code).join(", "));
+    const nOf = (code: string) => ix.flags.find((f) => f.code === code)?.n ?? -1;
+    const theirs = nOf('potential-nep-insertion'), ours = nOf(OUR_NEP_FLAGS.houseOnly.code), dis = nOf(OUR_NEP_FLAGS.disagree.code);
+    const both = ix.rows.filter((r) => { const cs = r[7].map((i) => ix.flags[i].code); return cs.includes('potential-nep-insertion') && cs.includes(OUR_NEP_FLAGS.houseOnly.code); }).length;
+    check(`our NEP comparison beside the research site's: ${ours.toLocaleString('en-US')} House-only lines, ${theirs.toLocaleString('en-US')} research insertion flags, ${dis.toLocaleString('en-US')} where they disagree (= ours + theirs − 2 × both)`,
+      ours > 6_000 && dis === ours + theirs - 2 * both && ix.flags.filter((f) => f.source === 'bettergov').every((f) => f.code.startsWith('missing-') || f.note), `both ${both}`);
     const deo = ix.offices.filter((x) => /Engineering Office/i.test(x.name) && (!x.districts.length || x.tier !== (x.districts.length === 1 ? "A" : "B")));
     check("review.json: every DPWH engineering office names the legislative districts it serves, lone or shared", deo.length === 0, deo.map((x) => x.name).join(", "));
     // Detail shards: every row in its shard, with exactly its files and flags.

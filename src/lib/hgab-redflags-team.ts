@@ -16,7 +16,7 @@
  * TRACKER and CASE EVIDENCE TEMPLATE sheets.
  */
 import registryJson from './hgab-redflag-registry.json';
-import { NAMED_TYPES, type NamedType } from './hgab-documents';
+import { NAMED_TYPES, OUR_NEP_FLAGS, type NamedType } from './hgab-documents';
 
 // --- The registry ----------------------------------------------------------------------------------------------
 
@@ -121,6 +121,8 @@ export function classifyProject(p: { title: string; pap?: string | null; program
 export const DETECTOR_TO_TEAM: Readonly<Record<string, readonly string[]>> = {
   // NEP comparison → RF-024 New or increased budget allocations requiring justification
   'potential-nep-insertion': ['RF-024'],
+  'house-bill-only-our-comparison': ['RF-024'],
+  'nep-match-sources-disagree': ['RF-024'],
   'no-selected-nep-counterpart': ['RF-024'],
   'nep-counterpart-pairing-is-ambiguous': ['RF-024'],
   'nep-counterpart-needs-scope-review': ['RF-024', 'RF-016'],
@@ -431,13 +433,13 @@ export function validateCaseReview(r: CaseReview): ValidationIssue[] {
 
 // --- The team's workbook rows -------------------------------------------------------------------------------------
 
-/** Our missing-document flags (with our matching) start "missing-"; the rest are research.bettergov.ph's detectors. */
-export const isOurDetector = (code: string) => code.startsWith('missing-');
+/** Our own flags: missing documents (with our matching) and our NEP comparison; the rest are research.bettergov.ph's. */
+export const isOurDetector = (code: string) => code.startsWith('missing-') || code === OUR_NEP_FLAGS.houseOnly.code || code === OUR_NEP_FLAGS.disagree.code;
 function screeningSource(codes: readonly string[]): string {
   const ours = codes.filter(isOurDetector), theirs = codes.filter((c) => !isOurDetector(c));
   return [
     theirs.length ? `research.bettergov.ph flags: ${theirs.join(', ')}` : '',
-    ours.length ? `BetterGov document matching: ${ours.join(', ')}` : '',
+    ours.length ? `BetterGov (our matching and NEP comparison): ${ours.join(', ')}` : '',
   ].filter(Boolean).join('; ') || 'Volunteer review';
 }
 
