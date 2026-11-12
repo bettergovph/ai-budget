@@ -247,21 +247,25 @@ kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; b
 .rv-ptabs { display: flex; gap: 2px; margin-bottom: -1px; overflow-x: auto; }
 .rv-ptabs button {
   display: inline-flex;
+  flex: 1 1 auto;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 7px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 10px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: none;
   color: var(--ink-3);
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
   cursor: pointer;
 }
 .rv-ptabs button:hover { color: var(--ink); }
 .rv-ptabs button.is-on { border-color: var(--rule); background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 0 var(--paper); }
-.rv-ptabs small { min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--paper-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; text-align: center; }
+.rv-ptabs small { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--paper-3); font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; text-align: center; }
 .rv-ptabs button.is-on small { background: var(--accent-soft); color: var(--accent-deep); }
 .rv-tabpanel[hidden] { display: none; }
 .rv-next { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
@@ -350,7 +354,51 @@ textarea.rf-input { resize: vertical; }
 .rv-viewer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: 11.5px; }
 .rv-viewer-bar button { width: 26px; height: 26px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); cursor: pointer; }
 .rv-viewer iframe { flex: 1; width: 100%; border: 0; background: var(--paper-3); }
-.rv-viewer-empty { align-items: center; justify-content: center; color: var(--ink-3); }
+.rv-viewer-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
+.rv-viewer-bar .rv-src { flex: none; font-family: var(--font-mono); font-size: 10.5px; padding: 0 5px; }
+
+/* The document switcher above the viewer: a tab per kind, the files of the open kind, previous / next. */
+.rv-docbar { flex: none; padding: 8px 12px 0; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.rv-docbar-row { display: flex; align-items: flex-end; gap: 10px; }
+.rv-doctabs { display: flex; flex: 1; min-width: 0; gap: 2px; overflow-x: auto; margin-bottom: -1px; }
+.rv-doctabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rv-doctabs button:hover { color: var(--ink); background: var(--paper-2); }
+.rv-doctabs button.is-on { border-color: var(--rule); background: var(--paper-2); color: var(--ink); font-weight: 600; }
+.rv-doctabs small { padding: 1px 6px; border-radius: 9px; background: var(--paper-3); font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
+.rv-docnav { display: flex; flex: none; align-items: center; gap: 6px; padding-bottom: 7px; font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+.rv-docnav button { width: 32px; height: 28px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); font-size: 14px; line-height: 1; cursor: pointer; }
+.rv-docnav button:disabled { opacity: 0.35; cursor: default; }
+.rv-docfiles { display: flex; gap: 6px; margin: 0 -12px; padding: 7px 12px; list-style: none; overflow-x: auto; background: var(--paper-2); border-top: 1px solid var(--rule); }
+.rv-docfiles button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 300px;
+  padding: 5px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--paper);
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rv-docfiles button.is-on { border-color: var(--accent); background: var(--accent-soft); }
+.rv-docfiles-name { overflow: hidden; text-overflow: ellipsis; }
+.rv-docfiles .rv-src { font-family: var(--font-mono); font-size: 10px; padding: 0 4px; }
 .rv-viewer-modal { position: fixed; inset: 0; z-index: 50; display: flex; padding: 16px; background: rgba(17, 21, 28, 0.55); }
 .rv-viewer-modal .rv-viewer { flex: 1; border-radius: 8px; overflow: hidden; }
 

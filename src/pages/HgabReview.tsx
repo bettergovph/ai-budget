@@ -520,20 +520,88 @@ function FileButton({ f, on, onOpen }: { f: DetailFile; on: boolean; onOpen: () 
   );
 }
 
-function Viewer({ file, onClose, inline }: { file: DetailFile; onClose: () => void; inline: boolean }) {
-  const body = (
-    <div className="rv-viewer">
-      <div className="rv-viewer-bar">
-        <span className="rv-viewer-name">{file[4]}</span>
-        <a href={file[5]} target="_blank" rel="noopener noreferrer">Open in a new tab</a>
-        <button type="button" onClick={onClose} aria-label="Close the document">×</button>
+/** The project's files in viewing order: the five key types, then the rest; current copies before earlier ones. */
+function viewOrder(files: readonly DetailFile[]): DetailFile[] {
+  const rank = (t: string) => { const i = (NAMED_TYPES as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
+  return [...files].sort((a, b) => rank(a[2]) - rank(b[2]) || Number(a[7]) - Number(b[7]) || a[0].localeCompare(b[0]) || a[4].localeCompare(b[4]));
+}
+
+/**
+ * Above the document: a tab per kind of document (with its count), the files of the open kind when it has several,
+ * and previous / next through every file ([ and ] on the keyboard).
+ */
+function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; file: DetailFile | null; onPick: (f: DetailFile) => void }) {
+  const ordered = viewOrder(files);
+  const groups = [...NAMED_TYPES, 'Other'].map((t) => ({ t, fs: ordered.filter((f) => f[2] === t) })).filter((g) => g.fs.length);
+  const at = file ? ordered.findIndex((f) => f[5] === file[5]) : -1;
+  const kind = file?.[2] ?? null;
+  const siblings = groups.find((g) => g.t === kind)?.fs ?? [];
+  if (!ordered.length) return null;
+  return (
+    <div className="rv-docbar">
+      <div className="rv-docbar-row">
+        <div className="rv-doctabs" role="tablist" aria-label="Documents">
+          {groups.map((g) => {
+            const on = kind === g.t;
+            return (
+              <button key={g.t} type="button" role="tab" aria-selected={on} className={on ? 'is-on' : ''}
+                title={NAMED_MEANING[g.t as (typeof NAMED_TYPES)[number]] ?? 'Other files'}
+                onClick={() => onPick(on && file ? file : g.fs[0])}>
+                {g.t === 'Other' ? 'Other' : NAMED_SHORT[g.t as (typeof NAMED_TYPES)[number]]}
+                {g.fs.length > 1 && <small>{g.fs.length}</small>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="rv-docnav">
+          <button type="button" onClick={() => onPick(ordered[at - 1])} disabled={at <= 0} aria-label="Previous document ([)" title="Previous document ([)">‹</button>
+          <span>{at >= 0 ? `${at + 1} of ${ordered.length}` : `${ordered.length} files`}</span>
+          <button type="button" onClick={() => onPick(ordered[at + 1] ?? ordered[0])} disabled={at >= ordered.length - 1} aria-label="Next document (])" title="Next document (])">›</button>
+        </div>
       </div>
-      {isPdf(file)
-        ? <iframe key={file[5]} src={`${file[5]}#view=FitH`} title={file[4]} />
-        : <p className="rv-empty">This file can’t be shown here. <a href={file[5]} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
+      {siblings.length > 1 && (
+        <ul className="rv-docfiles" aria-label={`${kind} files`}>
+          {siblings.map((f) => (
+            <li key={f[5]}>
+              <button type="button" className={f[5] === file?.[5] ? 'is-on' : ''} onClick={() => onPick(f)} title={f[4]}>
+                <span className={`rv-src is-${f[0]}`}>{SOURCE_LABEL[f[0]]}</span>
+                <span className="rv-docfiles-name">{f[2] === 'Other' && f[3] ? f[3] : f[4]}</span>
+                {f[7] && <span className="rv-tag">earlier copy</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
-  return inline ? body : <div className="rv-viewer-modal" role="dialog" aria-label={file[4]}>{body}</div>;
+}
+
+function Viewer({ files, file, onPick, onClose, inline }: {
+  files: readonly DetailFile[];
+  file: DetailFile | null;
+  onPick: (f: DetailFile) => void;
+  onClose: () => void;
+  inline: boolean;
+}) {
+  const body = (
+    <div className="rv-viewer">
+      <DocSwitcher files={files} file={file} onPick={onPick} />
+      {file && (
+        <div className="rv-viewer-bar">
+          <span className={`rv-src is-${file[0]}`}>{SOURCE_LABEL[file[0]]}</span>
+          <span className="rv-viewer-name" title={file[4]}>{file[4]}</span>
+          <a href={file[5]} target="_blank" rel="noopener noreferrer">Open in a new tab</a>
+          <button type="button" onClick={onClose} aria-label="Close the document">×</button>
+        </div>
+      )}
+      {!file
+        ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
+        : isPdf(file)
+          ? <iframe key={file[5]} src={`${file[5]}#view=FitH`} title={file[4]} />
+          : <p className="rv-empty">This file can’t be shown here. <a href={file[5]} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
+    </div>
+  );
+  return inline ? body : <div className="rv-viewer-modal" role="dialog" aria-label={file?.[4] ?? 'Documents'}>{body}</div>;
 }
 
 /** The review form for one project, holding the draft until it is saved. */
@@ -568,7 +636,7 @@ const paneTab = (v: string | null): PaneTab => (PANE_TABS as readonly string[]).
 
 /** Width of the project beside the document viewer, kept in this browser; the divider between them sets it. */
 const SPLIT_KEY = 'hgab-review:split';
-const SPLIT_DEFAULT = 460, SPLIT_MIN = 340, VIEWER_MIN = 320;
+const SPLIT_DEFAULT = 460, SPLIT_MIN = 420, VIEWER_MIN = 320;
 function useSplit(): [number, (w: number) => void] {
   const [w, setW] = useState(() => { const v = Number(typeof localStorage !== 'undefined' ? localStorage.getItem(SPLIT_KEY) : NaN); return Number.isFinite(v) && v >= SPLIT_MIN ? v : SPLIT_DEFAULT; });
   const set = useCallback((x: number) => { setW(x); try { localStorage.setItem(SPLIT_KEY, String(Math.round(x))); } catch { /* ignore */ } }, []);
@@ -654,6 +722,23 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
     }).catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)));
     return () => { live = false; };
   }, [project.hgabId, project.seq, inlineViewer]);
+  // [ and ] step through the documents, as the arrows above the document do; not while typing.
+  useEffect(() => {
+    if (!detail?.files.length) return;
+    const on = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
+      if (e.key !== '[' && e.key !== ']') return;
+      e.preventDefault();
+      const ordered = viewOrder(detail.files);
+      setOpen((cur) => {
+        const i = cur ? ordered.findIndex((f) => f[5] === cur[5]) : -1;
+        return ordered[Math.min(ordered.length - 1, Math.max(0, e.key === ']' ? i + 1 : i < 0 ? 0 : i - 1))];
+      });
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, [detail]);
   const o = project.office;
   const filesByType = (t: string) => (detail?.files ?? []).filter((f) => f[2] === t);
   const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
@@ -739,7 +824,7 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                     return (
                       <div key={t} className="rv-filegroup">
                         <h4>{t === 'Other' ? 'Other files' : t} <small>{fs.length}</small></h4>
-                        <ul>{fs.map((f) => <FileButton key={f[5]} f={f} on={open?.[5] === f[5]} onOpen={() => (isPdf(f) ? setOpen(f) : window.open(f[5], '_blank', 'noopener'))} />)}</ul>
+                        <ul>{fs.map((f) => <FileButton key={f[5]} f={f} on={open?.[5] === f[5]} onOpen={() => setOpen(f)} />)}</ul>
                       </div>
                     );
                   })}
@@ -759,8 +844,7 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {open && <Viewer file={open} inline={inlineViewer} onClose={() => setOpen(null)} />}
-      {inlineViewer && !open && detail && <div className="rv-viewer rv-viewer-empty"><p>Pick a document to read it here.</p></div>}
+      {detail && (inlineViewer || open) && <Viewer files={detail.files} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
   );
 }
