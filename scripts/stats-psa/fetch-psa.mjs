@@ -1,8 +1,9 @@
 // Download the PSA tables the budget comparison uses from statistics.bettergov.ph (PSA OpenSTAT mirror).
-// node scripts/stats-psa/fetch-psa.mjs [out dir, default data/stats-psa/raw]
+// node scripts/stats-psa/fetch-psa.mjs [out dir, default data/stats-psa/raw] [--only=name,name]
 import { writeFileSync, mkdirSync } from 'node:fs';
 const B = 'https://statistics.bettergov.ph/api/v1';
-const OUT = process.argv[2] ?? 'data/stats-psa/raw';
+const OUT = process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 'data/stats-psa/raw';
+const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
 mkdirSync(OUT, { recursive: true });
 const H = { 'user-agent': 'bettergov-budget-stats/0.1', 'content-type': 'application/json' };
 async function get(p, opt = {}) {
@@ -25,6 +26,11 @@ const TABLES = {
   '85c06b8cbf6e6cdee6f6': { name: 'gdp_level', fix: { 'Type of Valuation': ['0'] } },
   ac785073d7e6bc1755ae: { name: 'gdp_pc', fix: { 'Type of Valuation': ['0'] } },
   // Indicators section (docs/indicators.md)
+  // Every city and municipality's 2024 population (MPB lines are placed to a town).
+  '05c931eaecec498f9756#towns': { name: 'census2024_towns', fix: { Parameter: ['2'] } },
+  // The same towns in 2015 and 2020 (each its own query: three years of 1,744 places pass the 5,000-point limit).
+  '05c931eaecec498f9756#towns2015': { name: 'census2024_towns_2015', fix: { Parameter: ['0'] } },
+  '05c931eaecec498f9756#towns2020': { name: 'census2024_towns_2020', fix: { Parameter: ['1'] } },
   '4879ea33985e005d7fa3': { name: 'census2024_urban', fix: { Parameter: ['0', '1'] }, pick: { 'Geographic Location': (x) => /00000$/.test(x.code) } },
   '77a4ff24e6268c085b93': { name: 'poverty_gap', fix: {} },
   d10aa08e70c9bcded2e1: { name: 'fies2023', fix: { Indicators: ['0', '1', '2'] } },
@@ -39,7 +45,9 @@ const TABLES = {
   // Not used: BIR collections (0a58945026dd4156fb1b) are by revenue district, which merges provinces
   // ("Apayao and Kalinga") and books big companies to the Large Taxpayers Service, not a place.
 };
-for (const [id, t] of Object.entries(TABLES)) {
+for (const [key, t] of Object.entries(TABLES)) {
+  if (ONLY && !ONLY.includes(t.name)) continue;
+  const id = key.split('#')[0]; // one table can be saved twice with different selections ("<id>#<name>")
   const { data: meta } = await get('/datasets/' + id);
   const release = typeof meta.release === 'string' ? meta.release : meta.release.id;
   const selection = {};

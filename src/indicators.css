@@ -230,3 +230,30 @@ tr.is-missing th { color: var(--ink-3) !important; }
 .ind-table tr.is-outside th .ind-region { display: block; margin: 1px 0 0; font-family: var(--font-body); white-space: normal; max-width: 300px; }
 .bpr-row.is-outside { grid-template-columns: minmax(0, 420px) 82px minmax(0, 1fr) 150px; }
 @media (max-width: 760px) { .bpr-row.is-outside { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* ---- multi-purpose buildings per person (/hgab/2027/multi-purpose/per-person) ---- */
+.mpbp-main { max-width: 1320px; }
+.bpr-row.mpbp-row { grid-template-columns: 260px minmax(0, 1fr) 330px; }
+.mpbp-row .bpr-name a { color: inherit; text-decoration: none; }
+.mpbp-row .bpr-name a:hover strong { color: var(--accent); text-decoration: underline; }
+.mpbp-meta { font: 11.5px var(--font-body); color: var(--ink-mute); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mpbp-dot { fill: #2a78d6; fill-opacity: 0.55; stroke: #fff; stroke-width: 0.6; cursor: pointer; }
+.mpbp-dot.is-top { fill: #0d366b; fill-opacity: 1; }
+.mpbp-dot.is-on { fill: var(--ink); fill-opacity: 1; }
+.mpbp-avg { font: 600 10.5px var(--font-body); fill: var(--ink-3); }
+.mpbp-scatter { max-width: 980px; }
+.mpbp-table { max-height: 640px; }
+.mpbp-more { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline; }
+.ind-select input[type='search'] { font: 13px var(--font-body); padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; min-width: 220px; }
+@media (max-width: 760px) {
+  .bpr-row.mpbp-row { grid-template-columns: minmax(0, 1fr); }
+  .mpbp-meta { text-align: left; white-space: normal; }
+}
+
+.bpr-val.mpbp-say { font-weight: 600; color: var(--ink); }
+
+.mpbp-map { max-width: 900px; margin: 0 auto; }
+.mpbp-map svg { max-height: 82vh; }
+.mpbp-bubble { stroke: #fff; cursor: pointer; fill-opacity: 0.9; vector-effect: non-scaling-stroke; }
+.mpbp-bubble:hover { stroke: var(--ink); stroke-width: 1.5px; fill-opacity: 1; }
+.mpbp-tip { white-space: normal; width: max-content; max-width: min(320px, calc(100vw - 40px)); }

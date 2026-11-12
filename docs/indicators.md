@@ -25,6 +25,48 @@ Helpers: `src/lib/indicators-view.ts` (colour classes, loader) and `src/lib/use-
 
 **Colours:** sequential indicators use one blue ramp in five quintile classes. Changes (growth, poverty change, House change) are diverging: blue went down, red went up, grey is about zero. The map note says the colours do not mean good or bad. The ramps passed the dataviz validator's CVD checks; the low-contrast light steps are covered by the table under every map.
 
+## Multi-purpose buildings per person (`/hgab/2027/multi-purpose/per-person`)
+
+This page sits in the House bill section's Multi-purpose buildings menu, as "Per person". It sets every MPB line (FY2015 GAA to the 2027 House bill, `mpb-years/lines.json`) against the population in each budget's own year.
+
+- **Map first** (`src/components/MpbPopulationMap.tsx`), because people read a map faster than a long table:
+  - **Regions and provinces:** the province outlines in five quintile classes of the blue ramp. A region shades all its provinces the same.
+  - **Cities and municipalities:** there are no town outlines, so each town is a circle at its place in the MPB data (its own point, else the middle of its barangays; 1,631 of 1,642 towns). The circle's size is the budget (or the number of projects) and its shade is the per-person class. Clicking a circle finds the town in the table.
+  - Metro Manila repeats in an inset. Tips show on hover, and on tap on phones, and stay inside the map.
+- **Measures** are written out in full, never as a bare number: "₱1,761 per person", or "1 project for every 990 people", which is easier to read than "101 per 100,000". Projects per 100,000 people is the secondary figure in each row's meta line and in the table.
+- **Views under the map:**
+  - **Regions and provinces:** bars with the label on each bar; blue above the country's average.
+  - **Cities and municipalities:** a population-vs-budget log-log scatter of all 1,642 towns, with the country's average as a line and the ten highest per person labelled, plus a searchable table.
+
+  A plain-language version (find your city, an answer card in sentences) was built and set aside at Jason's choice ("I kind of like it before").
+- **Budgets:** any single budget; the FY2020–2026 GAA combined; or all years (`all-2015-2027-nep`: FY2015–2026 GAA + the 2027 NEP, ₱696.5B in 76,978 lines; `all-2015-2027-house`: + the 2027 House bill instead, ₱739.6B). Never both 2027 documents. The page says that all years mixes enacted budgets with a proposal, and that a multi-year building has a line each year.
+- **Several years are a yearly average** (Jason, 2026-11-09). The combined and all-years budgets used to be totals over the 2024 population ("79,970 projects: 1 for every 1,410 people"), which reads like a count of buildings that exist. They are now per year: a place's projects and budget ÷ the number of years ÷ its average population over those years. So all years with the House bill is "1 project for every 17,672 people a year", ₱523 per person a year. Each budget lists its `years`; the rates say "a year" whenever there is more than one.
+- **Placement:** a line counts where the MPB map places it:
+  - the town its title names, or its GPS point (2023 PSGC codes moved to today's: NIR, Sulu, Manila's districts);
+  - else the province;
+  - else the one district its office serves.
+
+  In the 2027 House bill, 99.2% of the budget is placed in a town and 100% in a region. Lines with no place in the source (₱4.2B in FY2019) stay unplaced, and the page shows the placed share.
+- **Population, by budget year** (`popInYear` and `peopleIn` in `src/lib/mpb-population.ts`):
+  - Every city and municipality carries its 2015, 2020 and 2024 counts (`census`). They come from one PSA table (`05c931eaecec498f9756`), which restates 2015 and 2020 on today's boundaries, so NIR and the BARMM towns line up. It is saved as three selections, because the three years together pass the API's 5,000-point limit: `census2024_towns`, `census2024_towns_2015` and `census2024_towns_2020`.
+  - A budget year's population is that year's census, filled in between censuses at a steady (geometric) rate. Years after 2024, including 2027, use the 2024 count: we do not project. So the 2027 NEP and House bill are measured against the 2024 census, as before.
+  - Provinces and regions are the sums of their towns. The build checks the towns against the country (100,979,303, 109,033,245 and 112,727,776) and against PSA's 18 region rows in each census.
+  - With each year's own population, regions move 1–4% from the 2024-only figures (Bangsamoro, the fastest growing, about 8%). No region changes rank.
+  - Isabela City is listed under Zamboanga Sibugay and is moved to its own area.
+- **CSV:** one row per budget and place. Columns: the three census counts, `people` (the budget year's, or the average), totals, and the per-year rates (`php_per_person_per_year`, `people_per_line_per_year`, `lines_per_100k_per_year`).
+- **Build:** `npm run fetch:psa -- --only=census2024_towns,census2024_towns_2015,census2024_towns_2020` if the census tables are missing, then `npm run build:mpb-population` (after `build:indicators`). It writes `hgab/2027/mpb-years/population.json` (schema 2, 889 KB) and `population.csv` (4.2 MB). Upload both with `upload:hgab -- --only=mpb-years/population.json,mpb-years/population.csv --skip-verify` after a full verify.
+- **Carousel:** `npm run build:hgab-poster-mpb-people` writes five 1080×1350 slides, `mpbs-for-the-people-{1..5}of5`, to `data/hgab/2027/campaign/`. They use the dark figure style of the NEP vs House bill images:
+  - 1: the 2027 House bill on a region map, with the most and the fewest;
+  - 2: every region ranked;
+  - 3: the NEP beside the House bill;
+  - 4: all years as a yearly average;
+  - 5: "Too many multi-purpose buildings?", in context. It shows:
+    - the NEP → House bill beside flood control, DepEd school facilities and DOH health facilities (the budget-by-year chart's program lines in `history.json`, so the four compare like with like);
+    - the budget per person each year;
+    - how many of PSA's 42,010 barangays (PSGC, Q3 2026) were funded, and how often.
+
+  Figures come from `population.json` (slide 5 also reads `history.json` and `lines.json`). The script stops if a total disagrees, if a claim on slide 5 stops being true (only MPBs went up; MPBs exceed school and health facilities together), or if any text is cut short.
+
 ## Budget beside each indicator, by region
 
 Every indicator except the three budget ones can be set beside the budget assigned to each region, in two places:
@@ -182,4 +224,4 @@ Indicators marked `'covered'` use the ratio of sums over the areas that have a f
 - No share or og images.
 - No /docs "What's new" entry.
 - Region-only PSA series (stunting, unemployment, electricity, safe water) are not included. They would need a region view.
-- Town-level figures (2024 population by barangay) are not used. They could go under the multi-purpose building map.
+- Barangay populations (2024) are not used; the MPB per-person page stops at cities and municipalities.

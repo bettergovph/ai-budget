@@ -38,6 +38,7 @@
     "fetch:psa": "node scripts/stats-psa/fetch-psa.mjs",
     "build:indicators": "node scripts/stats-psa/build.mjs && tsx scripts/build-indicators.ts",
     "verify:indicators": "tsx scripts/verify-indicators.ts",
+    "build:mpb-population": "tsx scripts/build-mpb-population.ts",
     "build:citizen-reports": "tsx scripts/build-citizen-report-shots.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",
     "verify:cycle": "tsx scripts/verify-budget-cycle.ts",

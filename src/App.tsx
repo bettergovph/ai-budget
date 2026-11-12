@@ -17,6 +17,7 @@ const Indicators = lazy(() => import('./pages/Indicators'));
 const IndicatorDetail = lazy(() => import('./pages/IndicatorDetail'));
 const IndicatorPlace = lazy(() => import('./pages/IndicatorPlace'));
 const BudgetByRegion = lazy(() => import('./pages/BudgetByRegion'));
+const HgabMpbPopulation = lazy(() => import('./pages/HgabMpbPopulation'));
 const Disclaimer = lazy(() => import('./pages/Disclaimer'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const Explore = lazy(() => import('./pages/Explore'));
@@ -155,6 +156,7 @@ export default function App() {
           {/* Multi-purpose buildings (its own menu): the budget by year, with flood control, BIP, SIPAG, school and health facilities; and every line on a map. */}
           <Route path="/hgab/2027/multi-purpose" element={<HgabHistory />} />
           <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
+          <Route path="/hgab/2027/multi-purpose/per-person" element={<HgabMpbPopulation />} />
           <Route path="/hgab/2027/multi-purpose/nep-vs-house-bill" element={<HgabMpbCompare key="mpb" />} />
           {/* Flood control in 2025, 2026 and 2027, side by side ("Flood control projects are back"); no menu entry yet. */}
           <Route path="/hgab/2027/flood-control" element={<HgabMpbCompare key="flood" topic="flood" />} />

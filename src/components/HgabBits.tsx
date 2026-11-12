@@ -29,6 +29,7 @@ import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubVi
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
+import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { PARTY_DATA_ROOT } from '../lib/hgab-congress-seats';
@@ -84,6 +85,7 @@ const MPB_MENU: NavMenu = {
     { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
     { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
     { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
+    { key: 'per-person', label: 'Per person', to: MPB_POPULATION_ROOT },
   ],
 };
 /**

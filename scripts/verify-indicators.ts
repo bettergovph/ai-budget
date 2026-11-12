@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { INDICATORS, INDICATORS_CSV_PATH, INDICATORS_DATA_PATH, THEMES, type IndicatorsFile } from '../src/lib/indicators';
+import { ALL_HOUSE_KEY, ALL_NEP_KEY, COMBINED_KEY, peopleIn, popInYear, type MpbPopulationFile } from '../src/lib/mpb-population';
 import { BUDGET_YEARS, REGION_BUDGET_CSV_PATH, REGION_BUDGET_PATH, REGION_BY_CODE, REGION_ORDER, type RegionBudgetFile } from '../src/lib/budget-regions';
 import { DuckDBInstance } from '@duckdb/node-api';
 
@@ -176,6 +177,41 @@ check(near(cebuU15.values['under-15'], (100 * cebuU15.needs.age_under15_2024!) /
   check(Math.abs((rf.budget['2026']['07']?.V ?? 0) - Number(deped[0].t)) < 1, '2026 DepEd in Region V equals its lines');
   const ncr = rf.budget['2027'].all.NCR, ncrAll = Number(byCode.find((x) => x.r === '13')!.t);
   check(ncr > 0 && ncr < 0.1 * ncrAll, `NCR's own offices are a small part of what DBM codes NCR (${(ncr / 1e9).toFixed(1)}B of ${(ncrAll / 1e9).toFixed(1)}B)`);
+}
+
+// ---- multi-purpose buildings per person (hgab/2027/mpb-years/population.json) ----
+{
+  const mp = JSON.parse(readFileSync(`${DATA}/hgab/2027/mpb-years/population.json`, 'utf8')) as MpbPopulationFile;
+  const ms = JSON.parse(readFileSync(`${DATA}/hgab/2027/mpb-years/summary.json`, 'utf8')) as { budgets: { key: string; lines: number; php: number }[] };
+  check(mp.towns.length === 1642 && mp.towns.reduce((s, t) => s + t.population, 0) === 112727776, 'MPB per person: 1,642 towns adding up to the country');
+  const townPop = raw('census2024_towns');
+  const laoag = mp.towns.find((t) => t.name === 'City of Laoag')!;
+  check(laoag.population === townPop.rows.find((r) => r.codes[0] === laoag.code)!.value, 'Laoag’s population is the census row');
+  for (const s of ms.budgets) {
+    const b = mp.budgets.find((x) => x.key === s.key)!;
+    check(b.lines === s.lines && b.php === s.php, `MPB per person ${s.key}: totals = mpb-years summary`);
+    const sumRegions = Object.values(mp.by[s.key].region).reduce((a, t) => a + t[1], 0);
+    check(sumRegions === b.placed.region[1] && sumRegions <= b.php, `MPB per person ${s.key}: regions add up to what is placed`);
+  }
+  check(mp.areas.every((a) => a.population === file.indicators.find((i) => i.id === 'population')!.values[a.id]), 'MPB per person: area populations = the Indicators population');
+  // Each budget against its own year's population: 2015, 2020 and 2024 counts, filled in between, 2024 after.
+  check(mp.schema === 2, 'MPB per person: schema 2 (census years)');
+  const sumYear = (i: number) => mp.towns.reduce((s, t) => s + t.census[i], 0);
+  check(sumYear(0) === 100979303 && sumYear(1) === 109033245 && sumYear(2) === 112727776, 'MPB per person: towns add up to the country in the 2015, 2020 and 2024 censuses');
+  check(mp.towns.every((t) => t.census[2] === t.population) && mp.regions.every((r) => r.census[2] === r.population), 'MPB per person: the 2024 count is the population');
+  const p15 = raw('census2024_towns_2015'), p20 = raw('census2024_towns_2020');
+  check(laoag.census[0] === p15.rows.find((r) => r.codes[0] === laoag.code)!.value && laoag.census[1] === p20.rows.find((r) => r.codes[0] === laoag.code)!.value, 'Laoag’s 2015 and 2020 populations are the census rows');
+  const c = laoag.census;
+  check(popInYear(c, 2015) === c[0] && popInYear(c, 2020) === c[1] && popInYear(c, 2024) === c[2] && popInYear(c, 2027) === c[2], 'popInYear: census years are the counts; after 2024, the 2024 count');
+  check(near(popInYear(c, 2017.5), Math.sqrt(c[0] * c[1]), 1e-6) && Math.min(c[0], c[1]) <= popInYear(c, 2017) && popInYear(c, 2017) <= Math.max(c[0], c[1]), 'popInYear: between censuses, a steady rate');
+  const yearsOf = (k: string) => mp.budgets.find((b) => b.key === k)!.years.join();
+  check(yearsOf('house-2027') === '2027' && yearsOf('gaa-2015') === '2015' && yearsOf(COMBINED_KEY) === '2020,2021,2022,2023,2024,2025,2026'
+    && yearsOf(ALL_HOUSE_KEY) === Array.from({ length: 13 }, (_, i) => 2015 + i).join() && yearsOf(ALL_NEP_KEY) === yearsOf(ALL_HOUSE_KEY), 'MPB per person: every budget lists its years');
+  // All years as a yearly average equals the thirteen budgets' lines over the thirteen years' people.
+  const all = mp.budgets.find((b) => b.key === ALL_HOUSE_KEY)!;
+  const ph = mp.regions.reduce((s, r) => s + peopleIn(r.census, all.years), 0);
+  const perYearSum = all.years.reduce((s, y) => s + mp.regions.reduce((a, r) => a + popInYear(r.census, y), 0), 0);
+  check(near((ph * all.years.length) / all.lines, perYearSum / all.lines, 1e-6), 'MPB per person: all years = lines ÷ the thirteen years’ population');
 }
 
 // ---- live copy on R2 ----
