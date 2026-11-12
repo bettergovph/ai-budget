@@ -10,6 +10,7 @@
  * Reviews stay in this browser (localStorage) until submissions open; volunteers can download them as CSV.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DisclaimerNotice } from '../components/HgabBits';
 import { cached, getJson, HGAB_ROOT, pdfUrl, recordPath } from '../lib/hgab';
@@ -561,7 +562,70 @@ function CasePanel({ project, detail, index, mine, profile, onSave }: {
   );
 }
 
-function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPrev, onNext }: {
+type PaneTab = 'overview' | 'documents' | 'flags' | 'review';
+const PANE_TABS: readonly PaneTab[] = ['overview', 'documents', 'flags', 'review'];
+const paneTab = (v: string | null): PaneTab => (PANE_TABS as readonly string[]).includes(v ?? '') ? (v as PaneTab) : 'overview';
+
+/** Width of the project beside the document viewer, kept in this browser; the divider between them sets it. */
+const SPLIT_KEY = 'hgab-review:split';
+const SPLIT_DEFAULT = 460, SPLIT_MIN = 340, VIEWER_MIN = 320;
+function useSplit(): [number, (w: number) => void] {
+  const [w, setW] = useState(() => { const v = Number(typeof localStorage !== 'undefined' ? localStorage.getItem(SPLIT_KEY) : NaN); return Number.isFinite(v) && v >= SPLIT_MIN ? v : SPLIT_DEFAULT; });
+  const set = useCallback((x: number) => { setW(x); try { localStorage.setItem(SPLIT_KEY, String(Math.round(x))); } catch { /* ignore */ } }, []);
+  return [w, set];
+}
+
+/**
+ * The divider between the project and the document viewer: drag it, or focus it and use the arrow keys (Home and
+ * End for the limits); a double click resets it. The viewer's frame ignores the pointer while dragging, or it would
+ * swallow the moves.
+ */
+function SplitHandle({ width, onWidth, container }: { width: number; onWidth: (w: number) => void; container: React.RefObject<HTMLDivElement | null> }) {
+  const max = () => Math.max(SPLIT_MIN, (container.current?.getBoundingClientRect().width ?? 1200) - VIEWER_MIN);
+  const clamp = (x: number) => Math.min(max(), Math.max(SPLIT_MIN, x));
+  return (
+    <div
+      className="rv-split"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the project and the document"
+      aria-valuemin={SPLIT_MIN}
+      aria-valuemax={Math.round(max())}
+      aria-valuenow={Math.round(width)}
+      tabIndex={0}
+      title="Drag to resize · double-click to reset"
+      onDoubleClick={() => onWidth(SPLIT_DEFAULT)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 96 : 32;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); onWidth(clamp(width - step)); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); onWidth(clamp(width + step)); }
+        if (e.key === 'Home') { e.preventDefault(); onWidth(SPLIT_MIN); }
+        if (e.key === 'End') { e.preventDefault(); onWidth(max()); }
+      }}
+      onPointerDown={(e) => {
+        const box = container.current;
+        if (!box || e.button !== 0) return;
+        e.preventDefault();
+        const left = box.getBoundingClientRect().left;
+        const el = e.currentTarget;
+        el.setPointerCapture(e.pointerId);
+        box.classList.add('is-resizing');
+        const move = (ev: PointerEvent) => onWidth(clamp(ev.clientX - left));
+        const up = () => {
+          box.classList.remove('is-resizing');
+          el.removeEventListener('pointermove', move);
+          el.removeEventListener('pointerup', up);
+          el.removeEventListener('pointercancel', up);
+        };
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      }}
+    />
+  );
+}
+
+function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPrev, onNext, tab, onTab, split, onSplit }: {
   project: ReviewProject;
   index: ReviewIndex;
   mine: CaseReview | undefined;
@@ -570,10 +634,15 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
   inlineViewer: boolean;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
+  tab: PaneTab;
+  onTab: (t: PaneTab) => void;
+  split: number;
+  onSplit: (w: number) => void;
 }) {
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<DetailFile | null>(null);
+  const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Keyed by project in the parent, so state starts empty for each project.
     let live = true;
@@ -587,34 +656,60 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
   }, [project.hgabId, project.seq, inlineViewer]);
   const o = project.office;
   const filesByType = (t: string) => (detail?.files ?? []).filter((f) => f[2] === t);
+  const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
+  const tabs: { key: PaneTab; label: string; count?: string }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'documents', label: 'Documents', count: detail ? String(detail.files.length) : undefined },
+    { key: 'flags', label: 'Red flags', count: detail ? String(detail.flags.length) : undefined },
+    { key: 'review', label: 'Review', count: mine ? (mine.case_stage === 'in_independent_review' ? '✓' : String(outcomes)) : undefined },
+  ];
+  const tabId = (t: PaneTab) => `rv-tab-${t}`;
+  const panel = (t: PaneTab, body: ReactNode) => (
+    <div role="tabpanel" id={`${tabId(t)}-panel`} aria-labelledby={tabId(t)} hidden={tab !== t} className="rv-tabpanel">{body}</div>
+  );
   return (
-    <div className={`rv-project ${inlineViewer ? 'has-viewer' : ''}`}>
+    <div ref={box} className={`rv-project ${inlineViewer ? 'has-viewer' : ''}`} style={inlineViewer ? { gridTemplateColumns: `${split}px 8px minmax(${VIEWER_MIN}px, 1fr)` } : undefined}>
       <div className="rv-project-info">
-        <div className="rv-project-nav">
-          <button type="button" onClick={onPrev ?? undefined} disabled={!onPrev} aria-label="Previous project (k)">‹ Prev</button>
-          <span className="rv-muted">{project.hgabId}</span>
-          <button type="button" onClick={onNext ?? undefined} disabled={!onNext} aria-label="Next project (j)">Next ›</button>
+        <div className="rv-project-top">
+          <div className="rv-project-nav">
+            <button type="button" onClick={onPrev ?? undefined} disabled={!onPrev} aria-label="Previous project (k)">‹ Prev</button>
+            <span className="rv-muted">{project.hgabId}</span>
+            <button type="button" onClick={onNext ?? undefined} disabled={!onNext} aria-label="Next project (j)">Next ›</button>
+          </div>
+          <h2 className="rv-project-title">{project.title}</h2>
+          <p className="rv-project-sub"><b>{pesoFull(project.amount)}</b> · {o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`} · {project.region}</p>
+          <div className="rv-ptabs" role="tablist" aria-label="Project"
+            onKeyDown={(e) => {
+              const i = PANE_TABS.indexOf(tab);
+              const next = e.key === 'ArrowRight' ? PANE_TABS[(i + 1) % PANE_TABS.length] : e.key === 'ArrowLeft' ? PANE_TABS[(i + PANE_TABS.length - 1) % PANE_TABS.length] : null;
+              if (next) { e.preventDefault(); onTab(next); document.getElementById(tabId(next))?.focus(); }
+            }}>
+            {tabs.map((t, i) => (
+              <button key={t.key} id={tabId(t.key)} type="button" role="tab" aria-selected={tab === t.key} aria-controls={`${tabId(t.key)}-panel`}
+                tabIndex={tab === t.key ? 0 : -1} className={tab === t.key ? 'is-on' : ''} onClick={() => onTab(t.key)} title={`${t.label} (${i + 1})`}>
+                {t.label}{t.count != null && <small>{t.count}</small>}
+              </button>
+            ))}
+          </div>
         </div>
-        <h2 className="rv-project-title">{project.title}</h2>
-        <dl className="rv-facts">
-          <div><dt>House bill</dt><dd><b>{pesoFull(project.amount)}</b></dd></div>
-          <div><dt>Office</dt><dd>{o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`}</dd></div>
-          <div><dt>Legislative {o.districts.length === 1 ? 'district' : 'districts'}</dt><dd>{o.districts.length ? <>{o.districts.join(' · ')} <small>{o.tier === 'A' ? 'Lone · only this district' : `Shared by ${o.districts.length} districts`}</small></> : 'No single district (Central Office)'}</dd></div>
-          <div><dt>Region</dt><dd>{project.region}</dd></div>
-          <div><dt>Program</dt><dd>{project.program}{detail?.pap ? <small>{detail.pap}</small> : null}</dd></div>
-        </dl>
-        <p className="rv-links">
-          {detail?.bill_doc && <a href={pdfUrl(detail.bill_doc, detail.bill_page)} target="_blank" rel="noopener noreferrer">See it in the House bill, page {detail.bill_page}</a>}
-          <Link to={recordPath('dpwh', project.projectId)}>Project page: NEP and House bill</Link>
-        </p>
 
-        {error && <p className="rv-error">{error}</p>}
-        {!detail && !error && <p className="rv-muted" role="status">Loading the documents…</p>}
-        {detail && (
-          <>
-            <section className="rv-sec">
-              <h3 className="rv-h">Documents · {docCount(project.docs)} of 5 key types found</h3>
-              <ul className="rv-checklist">
+        <div className="rv-project-body">
+          {error && <p className="rv-error">{error}</p>}
+          {panel('overview', (
+            <>
+              <dl className="rv-facts">
+                <div><dt>House bill</dt><dd><b>{pesoFull(project.amount)}</b></dd></div>
+                <div><dt>Office</dt><dd>{o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`}</dd></div>
+                <div><dt>Legislative {o.districts.length === 1 ? 'district' : 'districts'}</dt><dd>{o.districts.length ? <>{o.districts.join(' · ')} <small>{o.tier === 'A' ? 'Lone · only this district' : `Shared by ${o.districts.length} districts`}</small></> : 'No single district (Central Office)'}</dd></div>
+                <div><dt>Region</dt><dd>{project.region}</dd></div>
+                <div><dt>Program</dt><dd>{project.program}{detail?.pap ? <small>{detail.pap}</small> : null}</dd></div>
+                <div><dt>House bill row</dt><dd>{project.hgabId}<small>Page {project.page} of Volume I-C</small></dd></div>
+              </dl>
+              <p className="rv-links">
+                {detail?.bill_doc && <a href={pdfUrl(detail.bill_doc, detail.bill_page)} target="_blank" rel="noopener noreferrer">See it in the House bill, page {detail.bill_page}</a>}
+                <Link to={recordPath('dpwh', project.projectId)}>Project page: NEP and House bill</Link>
+              </p>
+              <ul className="rv-checklist" aria-label="The 5 key documents">
                 {NAMED_TYPES.map((t, i) => (
                   <li key={t} className={hasDoc(project.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
                     <span aria-hidden="true">{hasDoc(project.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}
@@ -622,30 +717,48 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                   </li>
                 ))}
               </ul>
-              {detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
-              {!detail.files.length && <p className="rv-muted">We found no files for this project.</p>}
-              {[...NAMED_TYPES, 'Other'].map((t) => {
-                const fs = filesByType(t);
-                if (!fs.length) return null;
-                return (
-                  <div key={t} className="rv-filegroup">
-                    <h4>{t === 'Other' ? 'Other files' : t} <small>{fs.length}</small></h4>
-                    <ul>{fs.map((f) => <FileButton key={f[5]} f={f} on={open?.[5] === f[5]} onOpen={() => (isPdf(f) ? setOpen(f) : window.open(f[5], '_blank', 'noopener'))} />)}</ul>
-                  </div>
-                );
-              })}
-              <p className="rv-hint">A file being here doesn’t confirm what it says. Our matches can be wrong; say so in your review.</p>
-            </section>
-            <section className="rv-sec">
-              <h3 className="rv-h">{detail.flags.length} red {detail.flags.length === 1 ? 'flag' : 'flags'} from research.bettergov.ph</h3>
-              <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
-              <FlagList detail={detail} index={index} />
-            </section>
-            <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />
-            <DisclaimerNotice compact className="rv-disclaimer" />
-          </>
-        )}
+              {detail && detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
+              <div className="rv-next">
+                <button type="button" className="rv-btn" onClick={() => onTab('documents')}>Read the documents</button>
+                <button type="button" className="rv-btn" onClick={() => onTab('flags')}>See the red flags</button>
+                <button type="button" className="rv-btn is-primary" onClick={() => onTab('review')}>Start the review</button>
+              </div>
+              <DisclaimerNotice compact className="rv-disclaimer" />
+            </>
+          ))}
+          {!detail && !error && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
+          {detail && (
+            <>
+              {panel('documents', (
+                <>
+                  <h3 className="rv-h">{detail.files.length} {detail.files.length === 1 ? 'file' : 'files'} · {docCount(project.docs)} of 5 key types found</h3>
+                  {!detail.files.length && <p className="rv-muted">We found no files for this project.</p>}
+                  {[...NAMED_TYPES, 'Other'].map((t) => {
+                    const fs = filesByType(t);
+                    if (!fs.length) return null;
+                    return (
+                      <div key={t} className="rv-filegroup">
+                        <h4>{t === 'Other' ? 'Other files' : t} <small>{fs.length}</small></h4>
+                        <ul>{fs.map((f) => <FileButton key={f[5]} f={f} on={open?.[5] === f[5]} onOpen={() => (isPdf(f) ? setOpen(f) : window.open(f[5], '_blank', 'noopener'))} />)}</ul>
+                      </div>
+                    );
+                  })}
+                  <p className="rv-hint">A file being here doesn’t confirm what it says. Our matches can be wrong; say so in your review.</p>
+                </>
+              ))}
+              {panel('flags', (
+                <>
+                  <h3 className="rv-h">{detail.flags.length} red {detail.flags.length === 1 ? 'flag' : 'flags'} from research.bettergov.ph</h3>
+                  <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
+                  <FlagList detail={detail} index={index} />
+                </>
+              ))}
+              {panel('review', <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
+            </>
+          )}
+        </div>
       </div>
+      {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
       {open && <Viewer file={open} inline={inlineViewer} onClose={() => setOpen(null)} />}
       {inlineViewer && !open && detail && <div className="rv-viewer rv-viewer-empty"><p>Pick a document to read it here.</p></div>}
     </div>
@@ -699,9 +812,9 @@ export default function HgabReview() {
   const { cases: reviews, save, profile, migrate } = useCases();
   const [about, setAbout] = useState(false);
   const [pane, setPane] = useState<Pane>('list');
-  const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1600px)').matches);
+  const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1600px)');
+    const mq = window.matchMedia('(min-width: 1280px)');
     const on = () => setInlineViewer(mq.matches);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
@@ -722,6 +835,9 @@ export default function HgabReview() {
   const current = levels[levels.length - 1].projects;
   const listed = useMemo(() => sortProjects(current, sort), [current, sort]);
   const selectedId = params.get('p');
+  // The project's tab stays as you move between projects; it is in the URL so a link opens on it.
+  const tab = paneTab(params.get('tab'));
+  const [split, setSplit] = useSplit();
   const selected = useMemo(() => all.find((p) => p.hgabId === selectedId) ?? null, [all, selectedId]);
 
   const update = useCallback((fn: (p: URLSearchParams) => void, replace = false) => {
@@ -736,6 +852,7 @@ export default function HgabReview() {
     stepsRef.current = next;
     update((p) => { p.delete('s'); next.forEach((s) => p.append('s', stepToParam(s))); });
   };
+  const setTab = useCallback((t: PaneTab) => update((q) => { if (t === 'overview') q.delete('tab'); else q.set('tab', t); }, true), [update]);
   const open = useCallback((p: ReviewProject) => { update((q) => q.set('p', p.hgabId), true); setPane('project'); }, [update]);
   const at = listed.findIndex((p) => p.hgabId === selectedId);
   const prev = useMemo(() => (at > 0 ? () => open(listed[at - 1]) : null), [at, listed, open]);
@@ -748,10 +865,13 @@ export default function HgabReview() {
       if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
       if (e.key === 'j' && next) { e.preventDefault(); next(); }
       if (e.key === 'k' && prev) { e.preventDefault(); prev(); }
+      // 1–4 switch the project's tabs.
+      const k = PANE_TABS[Number(e.key) - 1];
+      if (k && selectedId) { e.preventDefault(); setTab(k); }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, [next, prev]);
+  }, [next, prev, selectedId, setTab]);
 
   const myList = Object.values(reviews);
   const presets = PRESETS.filter((p) => p.steps.every((s) => s.kind !== 'flag' || flagIndex.has(s.code)));
@@ -816,7 +936,7 @@ export default function HgabReview() {
           <section className="rv-detail" aria-label="Project">
             {selected
               ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} profile={profile} onSave={save}
-                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} />
+                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} tab={tab} onTab={setTab} split={split} onSplit={setSplit} />
               : (
                 <div className="rv-welcome">
                   <h2>Pick a project to review</h2>

@@ -1,6 +1,7 @@
 /* The project reviewer (/hgab/2027/review): .rv-* only. A full-height workspace, not the section's article
    layout: a slim bar; a filter bar of checkbox dropdowns with the funnel strip under it; then two columns
-   (projects · project). The project column splits into the project and a document viewer at 1600px and wider;
+   (projects · project). The project column splits into the project and a document viewer at 1280px and wider,
+   with a divider to resize them;
    below that the viewer opens over the page. Under 900px one column shows at a time, switched from a bar at the
    bottom, and the filter bar scrolls sideways. */
 
@@ -76,6 +77,9 @@
   min-height: 0;
 }
 .rv-list, .rv-detail { min-height: 0; overflow: auto; }
+/* Scroll containers are positioned, so absolutely positioned bits inside them (hidden radio inputs, screen-reader
+   text) are clipped with them instead of stretching the page. */
+.rv-list, .rv-detail, .rv-items, .rv-project-body { position: relative; }
 .rv-list { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--rule); }
 .rv-detail { background: var(--paper); }
 .rv-panes { display: none; }
@@ -182,13 +186,15 @@
 kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; background: var(--paper-2); }
 
 .rv-project { height: 100%; }
-.rv-project.has-viewer { display: grid; grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); }
-.rv-project-info { padding: 14px 20px 32px; overflow: auto; min-height: 0; }
-.rv-project.has-viewer .rv-project-info { border-right: 1px solid var(--rule); }
-.rv-project-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-family: var(--font-mono); font-size: 11px; }
+/* Columns come from the page (the divider's width): project · divider · document. */
+.rv-project.has-viewer { display: grid; grid-template-rows: minmax(0, 1fr); }
+.rv-project-info { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
+.rv-project-top { flex: none; padding: 12px 20px 0; background: var(--paper); border-bottom: 1px solid var(--rule); }
+.rv-project-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 20px 32px; }
+.rv-project-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-family: var(--font-mono); font-size: 11px; }
 .rv-project-nav button { padding: 3px 8px; border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); font-size: 12px; cursor: pointer; }
 .rv-project-nav button:disabled { opacity: 0.4; cursor: default; }
-.rv-project-title { margin: 0 0 12px; font-family: var(--font-hero); font-size: 19px; font-weight: 700; line-height: 1.25; }
+.rv-project-title { margin: 0 0 4px; font-family: var(--font-hero); font-size: 19px; font-weight: 700; line-height: 1.25; }
 .rv-facts { display: grid; grid-template-columns: 1fr; gap: 6px; margin: 0 0 10px; }
 .rv-facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; }
 .rv-facts dt { font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); padding-top: 2px; }
@@ -233,6 +239,40 @@ kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; b
 .rv-flaggroup li { margin: 0 0 4px; font-size: 13px; }
 .rv-flaggroup summary { cursor: pointer; }
 .rv-flaggroup details p { margin: 4px 0 6px 16px; font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
+
+.rv-project-sub { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-3); }
+.rv-project-sub b { font-family: var(--font-mono); color: var(--ink); }
+
+/* --- the project's tabs ----------------------------------------------------------- */
+.rv-ptabs { display: flex; gap: 2px; margin-bottom: -1px; overflow-x: auto; }
+.rv-ptabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--ink-3);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rv-ptabs button:hover { color: var(--ink); }
+.rv-ptabs button.is-on { border-color: var(--rule); background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 0 var(--paper); }
+.rv-ptabs small { min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--paper-3); font-family: var(--font-mono); font-size: 10.5px; font-weight: 400; text-align: center; }
+.rv-ptabs button.is-on small { background: var(--accent-soft); color: var(--accent-deep); }
+.rv-tabpanel[hidden] { display: none; }
+.rv-next { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+
+/* --- the divider between the project and the document ----------------------------------- */
+.rv-split { position: relative; cursor: col-resize; background: var(--paper-2); border-left: 1px solid var(--rule); border-right: 1px solid var(--rule); touch-action: none; }
+.rv-split::after { content: ""; position: absolute; top: 50%; left: 2px; width: 2px; height: 36px; margin-top: -18px; border-radius: 1px; background: var(--ink-mute); opacity: 0.6; }
+.rv-split:hover, .rv-split:focus-visible, .rv-project.is-resizing .rv-split { background: var(--accent-soft); outline: none; }
+.rv-split:hover::after, .rv-split:focus-visible::after, .rv-project.is-resizing .rv-split::after { background: var(--accent); opacity: 1; }
+.rv-project.is-resizing { cursor: col-resize; user-select: none; }
+.rv-project.is-resizing iframe { pointer-events: none; }
 
 /* --- the review form: the team's red-flag checklist (.rf-*) ----------------------------------- */
 .rf-form { padding: 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper-2); }
@@ -287,7 +327,7 @@ textarea.rf-input { resize: vertical; }
 .rf-field > span small { display: block; font-weight: 400; color: var(--ink-mute); font-size: 11px; }
 .rf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 10px; }
 .rf-seg { display: flex; flex-wrap: wrap; gap: 4px; font-weight: 400; }
-.rf-seg label { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); font-size: 12px; cursor: pointer; }
+.rf-seg label { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); font-size: 12px; cursor: pointer; }
 .rf-seg label.is-on { border-color: var(--ink); background: var(--ink); color: #fff; }
 .rf-seg input { position: absolute; opacity: 0; pointer-events: none; }
 .rf-evidence-list { margin-top: 6px; }
