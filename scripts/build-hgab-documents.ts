@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  AMOUNT_FLAG_RE, AUTO_REVIEW, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  AMOUNT_FLAG_RE, AUTO_REVIEW, FROM_PROPOSAL, FROM_SENATE, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
   PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
   type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
   type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
@@ -610,6 +610,7 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
     uniq([...p.review_flags.map((f) => flagAt(f.code)), ...ourNep(p).map(flagAt), ...p.missing_flags.map((l) => flagAt(flagCode(l).code))]),
     NAMED_TYPES.reduce((m, t, i) => (p.named_present.includes(t) ? m | (1 << i) : m), 0),
     filesBy.get(p.hgab_id)?.length ?? 0,
+    (p.senate_files > 0 ? FROM_SENATE : 0) | (p.proposal_files > 0 ? FROM_PROPOSAL : 0),
   ]);
   // Automatic review (AUTO_REVIEW): every rule each row meets, and its score.
   const autoRows: Record<string, { r: number[]; s: number }> = {};

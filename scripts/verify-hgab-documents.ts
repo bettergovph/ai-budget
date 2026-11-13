@@ -187,16 +187,17 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     };
     check("review.json: every row once, in bill order", ix.rows.length === pFull.length && new Set(ix.rows.map((r) => r[0])).size === ix.rows.length
       && ix.rows.every((r, i) => i === 0 || parseHgabId(r[0])!.seq > parseHgabId(ix.rows[i - 1][0])!.seq));
-    const rowOff = ix.rows.filter(([h, pid, title, oi, ri, , amt, fi, mask, nf]) => {
+    const rowOff = ix.rows.filter(([h, pid, title, oi, ri, , amt, fi, mask, nf, from]) => {
       const m = meta.get(h), p = pBy.get(h);
       if (!m || !p) return true;
       const research = p.review_flags.map((f) => f.code);
       const codes = [...research, ...ourNep(h, research), ...p.missing_flags.map((l) => flagCode(l).code)];
       return m.project_id !== pid || m.title !== title || ix.offices[oi]?.name !== m.office || ix.regions[ri] !== m.region || String(amt) !== m.amount_php
         || [...new Set(codes)].sort().join() !== fi.map((i) => ix.flags[i].code).sort().join()
-        || NAMED_TYPES.filter((_, i) => mask & (1 << i)).join() !== p.named_present.join() || nf !== p.senate_files + p.proposal_files;
+        || NAMED_TYPES.filter((_, i) => mask & (1 << i)).join() !== p.named_present.join() || nf !== p.senate_files + p.proposal_files
+        || from !== ((p.senate_files > 0 ? 1 : 0) | (p.proposal_files > 0 ? 2 : 0));
     });
-    check("review.json: each row's ids, title, office, region, amount, flags, documents and file count are the Parquet's", rowOff.length === 0, rowOff.slice(0, 3).map((r) => r[0]).join(", "));
+    check("review.json: each row's ids, title, office, region, amount, flags, documents, file count and sources are the Parquet's", rowOff.length === 0, rowOff.slice(0, 3).map((r) => r[0]).join(", "));
     const nOff = ix.flags.filter((f, i) => f.n !== ix.rows.filter((r) => r[7].includes(i)).length || flagFamily(f.code) !== f.family);
     check(`review.json: all ${ix.flags.length} flags' counts and families hold`, nOff.length === 0, nOff.map((f) => f.code).join(", "));
     const nOf = (code: string) => ix.flags.find((f) => f.code === code)?.n ?? -1;

@@ -311,6 +311,22 @@ When the team settles the method, answers in members' reviews can add weighted c
 - **Removed from the form:** the role field, "Next action", and the hint about the review committee. "Referred with approval" is still not offered, because it belongs to the committee (workflow step 8). Existing values stay in the review.
 - **Save draft** and **Ready for independent review** stay pinned at the bottom of the review.
 
+## Review progress (2026-11-13)
+
+Beside the funnel strip, **Review progress** counts every project, whatever the funnel, auto-reviewed ones included (`reviewProgress`, `PROGRESS_GROUPS`).
+
+| Card | Bill lines | Budget | Who they are |
+| --- | ---: | ---: | --- |
+| **House insertions** | 6,192 | ₱171.3B | In the House bill only by our comparison (`house-bill-only-our-comparison`), as our House bill pages count them; 1,795 are auto-reviewed |
+| **NEP only** | 9,787 | ₱369.5B | Matched to an NEP line by our comparison; 324 auto-reviewed |
+| All projects | 15,979 | ₱541B | Every DPWH line in the House bill |
+
+Each card is compact: its name, a bar, then pending of total, % reviewed and the pending budget. Hovering gives the full description and the breakdown. The bar shows auto-reviewed (red), reviewed by members (with a verifier or completed, green) and started (in progress or on hold, sand). Clicking a card lists its pending projects: the insertion flag, or its negation for NEP only, then "Not yet reviewed". The funnel step reads "House insertions" or "NEP only". The funnel's steps are cards of the same height (`--rv-card-h`).
+
+The Documents filter has "Where the documents come from" (`SOURCE_GROUPS`). `review.json` row element 10 is a bitmask: 1 for Senate copies, 2 for DPWH Transparency. The groups are Senate copies (4,253; nearly all House insertions), DPWH Transparency (9,299), both (90) and no file found (2,337; 2,119 auto-reviewed).
+
+The filter bar starts with a "Filter" label.
+
 ## Not taken in
 
 - The 24 draft indicators. Promoting any of them is the team's decision.

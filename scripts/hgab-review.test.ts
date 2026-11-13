@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, autoScore, scoreBand, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
+  INSERTION_FLAG, NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, reviewProgress, sourceGroup, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -61,6 +61,40 @@ test("automatic review: no key document and no file, a red flag the list can hid
   const byScore = sortProjects(all, "score");
   assert.ok(byScore.slice(0, auto.length).every((p) => p.auto));
   assert.deepEqual(stepFromParam("status:auto_red_flag"), { kind: "status", values: ["auto_red_flag"] });
+});
+
+test("review progress: House insertions and NEP only, auto-reviewed included; the document source filter", { skip: !ix && "review.json not built" }, () => {
+  const all = decodeIndex(ix!);
+  const ins = all.filter((p) => p.insertion);
+  assert.equal(ins.length, ix!.flags.find((f) => f.code === INSERTION_FLAG)!.n, "House insertions are the lines our comparison finds in the House bill only");
+  const autoSet = new Set(all.filter((p) => p.auto).map((p) => p.hgabId));
+  const done = new Set(ins.filter((p) => !p.auto).slice(0, 5).map((p) => p.hgabId));
+  const statusOf = (h: string) => (done.has(h) ? "completed" as const : listStatus("not_started", autoSet.has(h)));
+  const { groups, total } = reviewProgress(all, statusOf);
+  assert.equal(groups.insertion.projects, ins.length);
+  assert.equal(groups.insertion.projects + groups.nep.projects, all.length);
+  // The auto-reviewed House insertions count as reviewed in their group.
+  assert.equal(groups.insertion.auto, ins.filter((p) => p.auto).length);
+  assert.ok(groups.insertion.auto > 1500, "most auto-reviewed projects are House insertions");
+  assert.equal(groups.insertion.members, 5);
+  assert.equal(groups.insertion.pending, ins.length - groups.insertion.auto - 5);
+  assert.equal(total.auto, autoSet.size);
+  assert.equal(total.pending + total.reviewed, total.projects);
+  assert.equal(groups.insertion.php + groups.nep.php, total.php);
+  // A card's funnel: the insertion flag (or its negation), then not yet reviewed.
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf };
+  const pend = (not: boolean) => runFunnel(all, [{ kind: "flag", code: INSERTION_FLAG, not }, { kind: "status", values: [...NOT_REVIEWED_STATUSES] }], ctx)[2].projects.length;
+  assert.equal(pend(false), groups.insertion.pending);
+  assert.equal(pend(true), groups.nep.pending);
+  assert.equal(stepLabel({ kind: "flag", code: INSERTION_FLAG }, ix!.flags), "House insertions");
+  assert.equal(stepLabel({ kind: "flag", code: INSERTION_FLAG, not: true }, ix!.flags), "NEP only");
+  // Document source groups (the Documents filter).
+  const by = (g: string) => all.filter((p) => p.source === g).length;
+  assert.equal(by("senate") + by("nep") + by("both") + by("none"), all.length);
+  assert.equal(sourceGroup(1), "senate"); assert.equal(sourceGroup(2), "nep"); assert.equal(sourceGroup(3), "both"); assert.equal(sourceGroup(0), "none");
+  assert.ok(all.filter((p) => p.auto).every((p) => p.source === "none"));
+  assert.equal(runFunnel(all, [{ kind: "source", values: ["senate"] }], ctx)[1].projects.length, by("senate"));
+  assert.deepEqual(stepFromParam(stepToParam({ kind: "source", values: ["senate", "nep"] })), { kind: "source", values: ["senate", "nep"] });
 });
 
 test("pages", () => {

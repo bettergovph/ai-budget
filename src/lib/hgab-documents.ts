@@ -304,12 +304,16 @@ export interface ReviewIndexAuto {
   rows: Record<string, { r: number[]; s: number }>;
 }
 
+/** Where a project's files come from (review.json row element 10): Senate copies, DPWH Transparency (the NEP proposal). */
+export const FROM_SENATE = 1, FROM_PROPOSAL = 2;
+
 /**
  * One row of review.json `rows`, positional to keep the file small:
  * [hgab_id, project_id, title, office index, region index, program index, amount_php, flag indexes, named-type
- *  bitmask (bit i = NAMED_TYPES[i] present, with our links), files (Senate + Proposal)]
+ *  bitmask (bit i = NAMED_TYPES[i] present, with our links), files (Senate + Proposal), sources bitmask
+ *  (FROM_SENATE | FROM_PROPOSAL; absent in files built before it)]
  */
-export type ReviewIndexRow = [string, string, string, number, number, number, number, number[], number, number];
+export type ReviewIndexRow = [string, string, string, number, number, number, number, number[], number, number, number?];
 export interface ReviewIndex {
   schema: number;
   built_at: string;
