@@ -239,6 +239,12 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
   - **Data:** `npm run build:mpb-population` → `mpb-years/population.json` (schema 2) and `population.csv`. **Upload both (`upload:hgab -- --only=mpb-years/population.json,mpb-years/population.csv --skip-verify`) before #75 merges.**
   - **Carousel:** `npm run build:hgab-poster-mpb-people` renders five slides in the dark NEP vs House bill figure style; the fifth, "Too many multi-purpose buildings?", compares MPBs with flood control and with school and health facilities. The slides are not yet in the campaign gallery or on R2.
 
+### Senate copies: signature redaction
+
+- The House bill's Senate copies carry officials' handwritten signatures, so they are redacted before publishing (Jason, 2026-11-13). Scripts in `scripts/senate-redact/`, docs in `docs/senate-redaction.md`.
+- PDFs of 19 pages or fewer, one region at a time, black bars. Two Z.ai vision models find the marks, scans are flattened, and a second model pass catches tails left outside the bars.
+- The full run writes to `/data/senate-redact/` on the dev VM, with a Tailscale-only before | after gallery on port 38118. Nothing is uploaded yet: where the redacted copies go is still open.
+
 ### Outside this repo
 
 - **Philippine Statistics Explorer:** [statistics.bettergov.ph](https://statistics.bettergov.ph), code in `~/projects/psa`. It mirrors 3,660+ PSA OpenSTAT tables, with REST and MCP. It feeds the Indicators section (PR #75, `docs/indicators.md`).
