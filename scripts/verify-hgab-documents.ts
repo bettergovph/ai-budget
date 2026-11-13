@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, LINK_METHODS, NAMED_TYPES, PROPOSAL_TYPE_MAP,
-  HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
+  AUTO_REVIEW, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoScore, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
 } from "../src/lib/hgab-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -204,6 +204,13 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     const both = ix.rows.filter((r) => { const cs = r[7].map((i) => ix.flags[i].code); return cs.includes('potential-nep-insertion') && cs.includes(OUR_NEP_FLAGS.houseOnly.code); }).length;
     check(`our NEP comparison beside the research site's: ${ours.toLocaleString('en-US')} House-only lines, ${theirs.toLocaleString('en-US')} research insertion flags, ${dis.toLocaleString('en-US')} where they disagree (= ours + theirs − 2 × both)`,
       ours > 6_000 && dis === ours + theirs - 2 * both && ix.flags.filter((f) => f.source === 'bettergov').every((f) => f.code.startsWith('missing-') || f.note), `both ${both}`);
+    // Automatic review, recomputed here from each row's documents and files.
+    const auto = ix.auto;
+    const want = ix.rows.filter((r) => r[8] === 0 && r[9] === 0).map((r) => r[0]);
+    const autoOk = !!auto && auto.method === AUTO_REVIEW.method && Object.keys(auto.rows).length === want.length
+      && want.every((h) => auto.rows[h]?.r.length === 1 && auto.rows[h].s === autoScore(['no-key-documents']))
+      && auto.rules.length === AUTO_REVIEW.rules.length && auto.rules.every((r) => r.team_flags.every((id) => /^RF-\d{3}$/.test(id)));
+    check(`automatic review: the ${want.length.toLocaleString('en-US')} lines with none of the 5 key documents and no file are auto-reviewed, score ${autoScore(['no-key-documents'])}, and no others`, autoOk);
     const deo = ix.offices.filter((x) => /Engineering Office/i.test(x.name) && (!x.districts.length || x.tier !== (x.districts.length === 1 ? "A" : "B")));
     check("review.json: every DPWH engineering office names the legislative districts it serves, lone or shared", deo.length === 0, deo.map((x) => x.name).join(", "));
     // Detail shards: every row in its shard, with exactly its files and flags.

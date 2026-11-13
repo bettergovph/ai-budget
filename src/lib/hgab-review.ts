@@ -30,12 +30,16 @@ export interface ReviewProject {
   /** Bit i = NAMED_TYPES[i] present (Senate or Proposal files, or the research site's types). */
   docs: number;
   files: number;
+  /** Automatic review (review.json `auto`): the rules it met and its provisional score; null when not auto-reviewed. */
+  auto: { rules: string[]; score: number } | null;
 }
 
 export function decodeIndex(ix: ReviewIndex): ReviewProject[] {
   return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
-    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files };
+    const a = ix.auto?.rows[hgabId];
+    const auto = a ? { rules: a.r.map((i) => ix.auto!.rules[i]?.code).filter(Boolean), score: a.s } : null;
+    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, auto };
   });
 }
 
@@ -57,8 +61,8 @@ export type Step =
   | { kind: 'team'; values: string[] }
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
-  /** Review status (REVIEW_STATUSES): from every member's reviews. */
-  | { kind: 'status'; values: ReviewStatus[] };
+  /** Review status (LIST_STATUSES): from every member's reviews, and the automatic review. */
+  | { kind: 'status'; values: ListStatus[] };
 
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
 
@@ -75,6 +79,21 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   in_independent_review: 'In independent review',
   completed: 'Completed',
 };
+/**
+ * What the list shows and filters on: the members' review status, or "Auto-reviewed: red flag" when nobody has
+ * reviewed a project the automatic review marked (review.json `auto`). Kept apart from ReviewStatus, which is what
+ * members' reviews store in D1. Ordered for the review-status sort: work still to do first, reviewed last.
+ */
+export const LIST_STATUSES = [...REVIEW_STATUSES, 'auto_red_flag'] as const;
+export type ListStatus = (typeof LIST_STATUSES)[number];
+export const LIST_STATUS_LABEL: Record<ListStatus, string> = { ...REVIEW_STATUS_LABEL, auto_red_flag: 'Auto-reviewed: red flag' };
+/** Statuses that count as reviewed, for "Hide reviewed" and the faded rows in the list. */
+export const REVIEWED_STATUSES: readonly ListStatus[] = ['auto_red_flag', 'in_independent_review', 'completed'];
+export const NOT_REVIEWED_STATUSES: readonly ListStatus[] = LIST_STATUSES.filter((v) => !REVIEWED_STATUSES.includes(v));
+export const isReviewed = (s: ListStatus) => REVIEWED_STATUSES.includes(s);
+/** A project's list status: the members' status, unless nobody has started and the automatic review marked it. */
+export const listStatus = (members: ReviewStatus, auto: boolean): ListStatus => (members === 'not_started' && auto ? 'auto_red_flag' : members);
+
 /**
  * Every project's review status across members, from `GET /api/hgab/2027/reviews/status` (src/worker/hgab-reviews.ts):
  * the furthest status any member's review has reached, how many members have a review, and the last save. Projects
@@ -146,13 +165,13 @@ export function stepFromParam(p: string): Step | null {
     case 'q': return value.trim() ? { kind, value } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'status': {
-      const ok = values.filter((v): v is ReviewStatus => (REVIEW_STATUSES as readonly string[]).includes(v));
+      const ok = values.filter((v): v is ListStatus => (LIST_STATUSES as readonly string[]).includes(v));
       return ok.length ? { kind, values: ok } : null;
     }
     // Links from before review statuses: "reviewed by me" or not.
     case 'reviewed':
       return value === 'no' ? { kind: 'status', values: ['not_started'] }
-        : value === 'yes' ? { kind: 'status', values: REVIEW_STATUSES.filter((v) => v !== 'not_started') } : null;
+        : value === 'yes' ? { kind: 'status', values: LIST_STATUSES.filter((v) => v !== 'not_started') } : null;
     default: return null;
   }
 }
@@ -190,8 +209,8 @@ export const foldText = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '')
 
 export interface StepContext {
   flagIndex: ReadonlyMap<string, number>;
-  /** A project's review status (REVIEW_STATUSES). */
-  statusOf: (hgabId: string) => ReviewStatus;
+  /** A project's list status (LIST_STATUSES). */
+  statusOf: (hgabId: string) => ListStatus;
   /** Team check → the review.json flag indexes of the detector flags that suggest it. */
   teamIndex?: ReadonlyMap<string, readonly number[]>;
 }
@@ -256,15 +275,16 @@ export function flagYields(projects: readonly ReviewProject[], nFlags: number): 
  * Bill order is the default: most red flags first would put the projects most likely to be ruled out at the top.
  * Review status puts what still needs a reviewer first, then bill order.
  */
-export type SortKey = 'bill' | 'status' | 'amount' | 'flags';
-export const SORT_LABEL: Record<SortKey, string> = { bill: 'Bill order', status: 'Review status', amount: 'Largest budget', flags: 'Most flags' };
+export type SortKey = 'bill' | 'status' | 'score' | 'amount' | 'flags';
+export const SORT_LABEL: Record<SortKey, string> = { bill: 'Bill order', status: 'Review status', score: 'Red flag score', amount: 'Largest budget', flags: 'Most flags' };
 export const DEFAULT_SORT: SortKey = 'bill';
-export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusOf?: (hgabId: string) => ReviewStatus): ReviewProject[] {
+export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusOf?: (hgabId: string) => ListStatus): ReviewProject[] {
   const out = [...xs];
   if (key === 'status') {
-    const rank = (p: ReviewProject) => REVIEW_STATUSES.indexOf(statusOf ? statusOf(p.hgabId) : 'not_started');
+    const rank = (p: ReviewProject) => LIST_STATUSES.indexOf(statusOf ? statusOf(p.hgabId) : 'not_started');
     out.sort((a, b) => rank(a) - rank(b) || a.seq - b.seq);
-  } else if (key === 'flags') out.sort((a, b) => b.flags.length - a.flags.length || b.amount - a.amount || a.seq - b.seq);
+  } else if (key === 'score') out.sort((a, b) => (b.auto?.score ?? 0) - (a.auto?.score ?? 0) || a.seq - b.seq);
+  else if (key === 'flags') out.sort((a, b) => b.flags.length - a.flags.length || b.amount - a.amount || a.seq - b.seq);
   else if (key === 'amount') out.sort((a, b) => b.amount - a.amount || a.seq - b.seq);
   else out.sort((a, b) => a.seq - b.seq);
   return out;
@@ -287,6 +307,18 @@ export function pageWindow(page: number, total: number): (number | null)[] {
 
 /** Ready-made funnels for volunteers to start from. Every flag code must exist in review.json (the page drops any that don't). */
 export const PRESETS: readonly { key: string; label: string; note: string; steps: Step[] }[] = [
+  {
+    key: 'not-reviewed',
+    label: 'Not yet reviewed',
+    note: 'Leaves out auto-reviewed red flags and reviews that are done or with a verifier.',
+    steps: [{ kind: 'status', values: [...NOT_REVIEWED_STATUSES] }],
+  },
+  {
+    key: 'auto-red-flags',
+    label: 'Auto-reviewed red flags',
+    note: 'No key document and no file found: marked red flag without a review.',
+    steps: [{ kind: 'status', values: ['auto_red_flag'] }],
+  },
   {
     key: 'not-taken',
     label: 'Nobody has started',
@@ -366,7 +398,9 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     case 'team': return s.values.length === 1 ? `Team check ${s.values[0]}: ${teamTitles.get(s.values[0]) ?? ''}`.replace(/: $/, '') : `Team checks ${s.values.join(', ')}`;
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
-    case 'status': return `Review: ${s.values.map((v) => REVIEW_STATUS_LABEL[v]).join(' or ')}`;
+    case 'status':
+      if (s.values.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => s.values.includes(v))) return 'Not yet reviewed';
+      return `Review: ${s.values.map((v) => LIST_STATUS_LABEL[v]).join(' or ')}`;
   }
 }
 

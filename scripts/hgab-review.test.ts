@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "node:test";
-import { REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
+import { REVIEW_INDEX_PATH, autoScore, scoreBand, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  PRESETS, buildStatusIndex, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
+  NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -42,6 +42,27 @@ test("filters keep their place in the funnel", () => {
   assert.deepEqual(toggleFlag(a, "z").map(stepToParam), ["flag:x", "region:NCR", "flag:y", "flag:z"]);
 });
 
+test("automatic review: no key document and no file, a red flag the list can hide", { skip: !ix && "review.json not built" }, () => {
+  const all = decodeIndex(ix!);
+  const auto = all.filter((p) => p.auto);
+  assert.equal(auto.length, all.filter((p) => p.docs === 0 && p.files === 0).length);
+  assert.ok(auto.length > 1000 && auto.every((p) => p.auto!.score === autoScore(["no-key-documents"]) && p.auto!.rules[0] === "no-key-documents"));
+  assert.equal(scoreBand(100), "High");
+  // A member's review takes over the status; nobody's review leaves the automatic one.
+  assert.equal(listStatus("not_started", true), "auto_red_flag");
+  assert.equal(listStatus("in_progress", true), "in_progress");
+  assert.equal(listStatus("not_started", false), "not_started");
+  assert.ok(isReviewed("auto_red_flag") && isReviewed("completed") && !isReviewed("in_progress"));
+  const autoSet = new Set(auto.map((p) => p.hgabId));
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: (h: string) => listStatus("not_started", autoSet.has(h)) };
+  const hidden = runFunnel(all, [{ kind: "status", values: [...NOT_REVIEWED_STATUSES] }], ctx)[1].projects;
+  assert.equal(hidden.length, all.length - auto.length, "Hide reviewed leaves out the auto-reviewed");
+  assert.equal(stepLabel({ kind: "status", values: [...NOT_REVIEWED_STATUSES] }, ix!.flags), "Not yet reviewed");
+  const byScore = sortProjects(all, "score");
+  assert.ok(byScore.slice(0, auto.length).every((p) => p.auto));
+  assert.deepEqual(stepFromParam("status:auto_red_flag"), { kind: "status", values: ["auto_red_flag"] });
+});
+
 test("pages", () => {
   assert.equal(pageCount(0), 1);
   assert.equal(pageCount(15_979), 320);
@@ -63,7 +84,9 @@ test("the funnel on review.json", { skip: !ix && "review.json not built" }, () =
   const all = decodeIndex(ix!);
   assert.equal(all.length, 15_979);
   const flagIndex = new Map(ix!.flags.map((f, i) => [f.code, i]));
-  const ctx = { flagIndex, statusOf: () => "not_started" as const };
+  // List status as the page has it with no member reviews: auto-reviewed where review.json marks it, else not started.
+  const autoSet = new Set(Object.keys(ix!.auto?.rows ?? {}));
+  const ctx = { flagIndex, statusOf: (h: string) => listStatus("not_started", autoSet.has(h)) };
   // Level 0 is everything; each level is a subset of the one before; amounts add up.
   const steps: Step[] = [{ kind: "flag", code: "potential-nep-insertion" }, { kind: "docs", values: ["incomplete"] }, { kind: "region", values: ["Region IV-A"] }];
   const L = runFunnel(all, steps, ctx);

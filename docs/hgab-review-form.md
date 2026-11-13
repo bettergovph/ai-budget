@@ -288,6 +288,20 @@ The documents DPWH gave the Senate ("Senate copies", 22,748 files on 6,000-odd p
 
 Earlier versions kept reviews in the browser: first-version reviews (`hgab-review:v1`), cases (`hgab-review:v2`) and the volunteer's profile (`hgab-review:reviewer`). Since 2026-11-13 reviewing needs a sign-in and the page removes those keys on load, without sending or migrating them. The reviewer was never public, so only preview drafts were affected.
 
+## Automatic review and the red flag score (provisional)
+
+Some projects are red flags plainly enough that volunteers need not open them first. `build:hgab-documents` applies the rules in `AUTO_REVIEW` (`src/lib/hgab-documents.ts`) to every row. It writes the result to `review.json` `auto` (method, rules, bands, and each project's rule indexes and score) and puts the counts in the manifest's `reviewer.auto_review`. `verify:hgab` recomputes it.
+
+- **Rule `no-key-documents`, weight 100:** none of the five key documents and no other file, in the Senate copies or on DPWH Transparency. This covers 2,119 bill lines, ₱63.5B. It points to team checks RF-033 (Incomplete documents) and RF-021 (Project not ready for implementation).
+- **Score:** the sum of the matched rules' weights, capped at 100. Bands: High from 70, Medium from 40, Low from 1. A project the rules mark has the status "red flag".
+- **In the reviewer:** the project shows "Red flag · auto-reviewed · score 100" in the list and a banner on its Overview. It counts as reviewed: faded in the list, left out by **Hide reviewed**, last in the review-status sort, first in the red-flag-score sort. The **Review status** filter has the list statuses: the members' five, plus "Auto-reviewed: red flag".
+- **A member's review takes over.** Once anyone saves a review of an auto-reviewed project, the list shows that review's status (`listStatus`); the banner stays.
+- **Kept apart from member reviews.** The automatic review is static data, the same for everyone; nothing is written to D1. `ListStatus` adds `auto_red_flag` to the members' `ReviewStatus`, which is all the API stores.
+
+**Provisional.** The team has not approved a scoring method, and its workflow says "no unapproved thresholds or weights" (step 6). Its own safeguard for RF-033 says "Do not score missing optional/later-stage records as violation". This rule only marks projects where *nothing at all* was found; the label, the banner and the note say the score is provisional.
+
+When the team settles the method, answers in members' reviews can add weighted components: outcomes per check, document availability, priority. Members' scores would join the rules here under a new `method`. Projects keep their rule codes, so earlier scores can be explained.
+
 ## Not taken in
 
 - The 24 draft indicators. Promoting any of them is the team's decision.
