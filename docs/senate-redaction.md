@@ -26,7 +26,7 @@ Per region (`run_regions.sh ROOT "Region VII" …`):
 
 ## Facts worth knowing
 
-- **Concurrency (2026-11-13):** glm-4.6v refuses an 11th call at once (429, code 1302). glm-5v-turbo never refused up to 30, but on real pages it runs at about 1.1–1.2 pages a second whatever the concurrency. Defaults: `glm-5v-turbo=20,glm-4.6v=10`.
+- **Concurrency (2026-11-13):** glm-4.6v refuses an 11th call at once (429, code 1302). glm-5v-turbo never refused up to 30, but on real pages it runs at about 1.1–1.2 pages a second whatever the concurrency. Defaults: `glm-5v-turbo=10,glm-4.6v=10`. At 20 (with 4.6v at 10) Z.ai started refusing 5v-turbo calls in bulk (2,347 429s in Region II); rate-limit retries back off up to about 2 minutes.
 - **Prompt:** both models skipped long diagonal "slash" signatures until the prompt named them (`PROMPT_VERSION` 2; cache folders are `<model>.p2`).
 - **Saving:** PyMuPDF `garbage=3` or higher merges duplicate objects and looped the `/Pages` tree of some Cebu 7th DEO files; save with `garbage=2`.
 - **Scans made of layers** (a photo plus 1-bit text masks) give striped artifacts with pixel redaction; that is why scan pages are flattened.

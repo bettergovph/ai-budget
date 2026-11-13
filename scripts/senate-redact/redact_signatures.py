@@ -32,6 +32,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -61,7 +62,7 @@ SWEEP_PROMPT = ("Black bars on this page hide signatures. Find any handwriting s
 DPI = 150
 JPEG_QUALITY = 85
 MAX_TOKENS = 2000
-RETRIES = 4
+RETRIES = 6                   # with backoff up to ~2 min: Z.ai throttles in bursts (429, code 1302)
 
 # box filters (from model_scan_boxes.py)
 MAX_BOX_PAGE_FRAC = 0.35      # a "signature" covering a third of the page is a miss
@@ -134,7 +135,7 @@ def call_glm(model, jpeg, prompt, max_tokens=MAX_TOKENS):
                 break
         except Exception as e:  # noqa: BLE001 - network errors retry
             last = f"{type(e).__name__}: {e}"
-        time.sleep(3 * (attempt + 1))
+        time.sleep(min(120, 4 * 2 ** attempt) * (0.5 + random.random()))
     return None, last
 
 
@@ -783,8 +784,8 @@ def main():
     models = opt(args, "--models", "glm-5v-turbo,glm-4.6v").split(",")
     verifier = opt(args, "--verifier", "glm-5v-turbo")
     # --concurrency 10, or per model: glm-5v-turbo=10,glm-4.6v=10 (Z.ai: 4.6v refuses an 11th call with 429;
-    # 5v-turbo never refused up to 30 but stops getting faster past ~10)
-    cspec = opt(args, "--concurrency", "glm-5v-turbo=20,glm-4.6v=10")
+    # 5v-turbo is no faster past ~10, and 20 alongside 4.6v's 10 drew 2,347 429s in Region II on 2026-11-13)
+    cspec = opt(args, "--concurrency", "glm-5v-turbo=10,glm-4.6v=10")
     limits = {k: int(v) for k, v in (x.split("=") for x in cspec.split(",") if "=" in x)}
     conc = int(cspec) if cspec.isdigit() else max(limits.values())
     dpi = int(opt(args, "--dpi", str(DPI)))
