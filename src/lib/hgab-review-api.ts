@@ -35,7 +35,7 @@ async function call<T>(path: string, init: RequestInit = {}, token?: string | nu
 }
 
 export const fetchStatus = () =>
-  call<{ meta: { generated_at: string; reviews: number; projects: number }; data: ReviewStatusIndex }>(`${REVIEWS_API}/status`);
+  call<{ meta: { generated_at: string; reviews: number; auto?: number; projects: number }; data: ReviewStatusIndex }>(`${REVIEWS_API}/status`);
 export const fetchMine = (token: string | null) =>
   call<{ member: { member_id: string; display_name: string }; data: CaseReview[] }>(`${REVIEWS_API}/mine`, {}, token);
 export const sendReview = (review: CaseReview, token: string | null) =>
