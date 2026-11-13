@@ -22,7 +22,7 @@ Per region (`run_regions.sh ROOT "Region VII" …`):
 5. `sweep` + `apply --sweep glm-5v-turbo` → `redacted/`: glm-5v-turbo looks at each redacted page again for handwriting left outside the bars (loop tails, strokes between bars) and those get bars too.
 6. `check_outputs.py`, then `build_gallery.py`: before | after images of every changed page, for a person to check.
 
-`redo_files.sh REGION_DIR file…` re-runs steps 4–6 for some files. `probe_limits.py` measures a model's concurrency.
+`SWEEP=0 run_regions.sh …` defers step 5: `redacted/` starts as a hard-linked copy of `pass1/` and the region gets a `SWEEP_PENDING` marker; `sweep_regions.sh ROOT` later sweeps every marked region and replaces `redacted/` (Jason, 2026-11-13: sweep at the end, so regions finish faster). `redo_files.sh REGION_DIR file…` re-runs steps 4–6 for some files. `probe_limits.py` measures a model's concurrency.
 
 ## Facts worth knowing
 
