@@ -21,7 +21,12 @@ function Bridge({ children }: { children: ReactNode }) {
     userId: userId ?? null,
     email,
     getToken: () => getToken(),
-    signIn: () => clerk.openSignIn({ withSignUp: true }),
+    // Back to this page (the project, its tab and the funnel) after signing in or up, by email or Google. Forced,
+    // because the production instance's own "after sign-in" address is the home page.
+    signIn: () => {
+      const here = window.location.href;
+      clerk.openSignIn({ withSignUp: true, forceRedirectUrl: here, signUpForceRedirectUrl: here });
+    },
     // Back to the same project and funnel, reloaded so nothing of the member's stays on screen (shared computers).
     signOut: () => { const here = window.location.href; void signOut({ redirectUrl: here }).then(() => window.location.reload()); },
   }), [isLoaded, userId, email, getToken, signOut, clerk]);
