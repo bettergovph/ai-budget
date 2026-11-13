@@ -226,7 +226,7 @@ Columns for later workflow steps stay blank: independent verifier, the budget-or
 
 ## Sending reviews
 
-Members sign in with Clerk using their email and a one-time code, with no password (set in the Clerk dashboard). Only the reviewer page loads Clerk (`HgabReviewMember.tsx`). Signed out, the Review tab, "Start the review" and the bar ask the visitor to sign in; the projects, documents, red flags and everyone's status stay open to all. Signed in, **Save draft** and **Ready for independent review** send the review.
+Members sign in with Clerk using their email and a one-time code, with no password (set in the Clerk dashboard). Only the reviewer page loads Clerk (`HgabReviewMember.tsx`). After signing in or up, Clerk returns to the page it was opened from, with the same project, tab and funnel. The page forces this, because the production instance's "after sign-in" address is the home page. Signed out, the Review tab, "Start the review" and the bar ask the visitor to sign in; the projects, documents, red flags and everyone's status stay open to all. Signed in, **Save draft** and **Ready for independent review** send the review.
 
 Routes (`src/worker/hgab-reviews.ts`). These are internal to the site, like `/api/hearings`, and not part of the read-only, CORS-open `/api/v1`:
 
