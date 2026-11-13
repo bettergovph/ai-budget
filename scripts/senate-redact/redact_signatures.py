@@ -343,7 +343,10 @@ def candidates(path, models):
         for m, by_page in dets:
             e = by_page.get(pno + 1) or {}
             if e.get("error"):
-                raise RuntimeError(f"{m} page {pno + 1}: {e['error']}")
+                if m == models[0]:  # no answer from the primary model: hold the file back
+                    raise RuntimeError(f"{m} page {pno + 1}: {e['error']}")
+                raws.append((m, e, []))  # second model failed (e.g. 400 code 1210): primary's boxes, flagged
+                continue
             raws.append((m, e, [] if e.get("skipped") else parse_boxes(e.get("raw"))))
         if not any(b for _m, _e, b in raws):
             continue
@@ -414,13 +417,13 @@ def sweep_cands(path, model):
 
 
 def unreadable_pages(path, models):
-    """Pages where a model's reply stayed unreadable after retries: the other model's boxes still apply, but a
-    person should look."""
+    """Pages where a model's reply stayed unreadable or failed after retries: the other model's boxes still apply,
+    but a person should look."""
     digest, out = sha256(path), set()
     for m in models:
         with open(os.path.join(CACHE, f"{m}.p{PROMPT_VERSION}", digest + ".json")) as fh:
             for e in json.load(fh)["pages"]:
-                if not e.get("skipped") and not e.get("error") and parse_boxes(e.get("raw")) is None:
+                if not e.get("skipped") and (e.get("error") or parse_boxes(e.get("raw")) is None):
                     out.add(e["page"])
     return sorted(out)
 
