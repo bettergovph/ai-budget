@@ -482,24 +482,30 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
 function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statusOf: (h: string) => ListStatus; onPick: (g: SourceGroup | null) => void }) {
   const { groups, total } = useMemo(() => reviewProgress(all, statusOf), [all, statusOf]);
   const pct = (r: ProgressRow) => (r.projects ? Math.round((r.reviewed / r.projects) * 100) : 0);
-  const card = (g: SourceGroup | null, r: ProgressRow, main: boolean) => (
-    <li key={g ?? 'all'} className={`rv-prog ${main ? 'is-main' : ''}`}>
-      <button type="button" onClick={() => onPick(g)} disabled={!r.pending}
-        title={`${g ? SOURCE_GROUP_NOTE[g] : 'Every DPWH project in the House bill'}. Click to list the pending ones.`}>
-        <span className="rv-prog-head"><b>{g ? SOURCE_GROUP_LABEL[g] : 'All projects'}</b>{g && main && <small>{SOURCE_GROUP_NOTE[g].split(',')[0]}</small>}</span>
-        <span className="rv-prog-figs"><b>{n(r.pending)}</b> pending <span>of {n(r.projects)}</span></span>
-        <span className="rv-prog-bar" aria-hidden="true">
-          <span className="is-auto" style={{ width: `${(r.auto / Math.max(1, r.projects)) * 100}%` }} />
-          <span className="is-members" style={{ width: `${(r.members / Math.max(1, r.projects)) * 100}%` }} />
-          <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
-        </span>
-        <span className="rv-prog-foot">
-          {pct(r)}% reviewed{r.members > 0 && <> · {n(r.members)} by members</>}{r.auto > 0 && <> · {n(r.auto)} auto</>}{r.started > 0 && <> · {n(r.started)} started</>}
-          <span>{pesoShort(r.pending_php)} pending</span>
-        </span>
-      </button>
-    </li>
-  );
+  const card = (g: SourceGroup | null, r: ProgressRow, main: boolean) => {
+    const name = g ? SOURCE_GROUP_LABEL[g] : 'All projects';
+    const detail = [
+      g ? SOURCE_GROUP_NOTE[g] : 'Every DPWH project in the House bill',
+      `${n(r.pending)} pending of ${n(r.projects)} (${pesoShort(r.pending_php)})`,
+      r.members ? `${n(r.members)} reviewed by members` : '',
+      r.auto ? `${n(r.auto)} auto-reviewed` : '',
+      r.started ? `${n(r.started)} started` : '',
+      'Click to list the pending ones.',
+    ].filter(Boolean).join('\n');
+    return (
+      <li key={g ?? 'all'} className={`rv-prog ${main ? 'is-main' : ''}`}>
+        <button type="button" onClick={() => onPick(g)} disabled={!r.pending} title={detail} aria-label={detail.replace(/\n/g, '. ')}>
+          <span className="rv-prog-head"><b>{name}</b></span>
+          <span className="rv-prog-bar" aria-hidden="true">
+            <span className="is-auto" style={{ width: `${(r.auto / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-members" style={{ width: `${(r.members / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
+          </span>
+          <span className="rv-prog-foot"><span><b>{n(r.pending)}</b>/{n(r.projects)} · {pct(r)}%</span><span>{pesoShort(r.pending_php)}</span></span>
+        </button>
+      </li>
+    );
+  };
   return (
     <section className="rv-progress" aria-label="Review progress">
       <h2 className="rv-h">Review progress</h2>

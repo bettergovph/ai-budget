@@ -322,7 +322,7 @@ Beside the funnel strip, **Review progress** counts every project, whatever the 
 | No documents | 2,337 | ₱70.2B | No file found; 2,119 are auto-reviewed |
 | Both sources | 90 | ₱5.7B | Senate copies and DPWH Transparency |
 
-Each card shows how many are pending of the group's total and the pending budget. Its bar shows auto-reviewed (red), reviewed by members (with a verifier or completed, green) and started (in progress or on hold, sand). Clicking a card lists that group's pending projects (source + "Not yet reviewed"); "All projects" lists every pending one. The Documents filter has the same groups under "Where the documents come from". Logic: `reviewProgress` and `SOURCE_GROUPS` in `src/lib/hgab-review.ts`.
+Each card is compact: the group's name, a bar, then pending of total, % reviewed and the pending budget; hovering gives the full description and the breakdown. The bar shows auto-reviewed (red), reviewed by members (with a verifier or completed, green) and started (in progress or on hold, sand). Clicking a card lists that group's pending projects (source + "Not yet reviewed"); "All projects" lists every pending one. The Documents filter has the same groups under "Where the documents come from". Logic: `reviewProgress` and `SOURCE_GROUPS` in `src/lib/hgab-review.ts`.
 
 The filter bar starts with a "Filter" label.
 
