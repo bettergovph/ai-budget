@@ -26,6 +26,9 @@
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
+    "build:hgab-documents": "tsx scripts/build-hgab-documents.ts",
+    "build:hgab-redflag-registry": "bash scripts/hgab-review/run.sh",
+    "db:hgab-reviews": "wrangler d1 execute budget --local --file=scripts/hgab-review/reviews-schema.sql",
     "build:hgab-mpb-years": "bash scripts/hgab-mpb-years/run.sh",
     "build:hgab-flood-compare": "bash scripts/hgab-flood-compare/run.sh",
     "build:hgab-congress-seats": "tsx scripts/build-hgab-congress-seats.ts",
@@ -36,6 +39,7 @@
     "build:gaa-summaries": "tsx scripts/build-gaa-summaries.ts",
     "build:gaa-series": "tsx scripts/build-gaa-series.ts",
     "test:gaa-series": "tsx --test scripts/gaa-series.test.ts",
+    "test:hgab-review": "tsx --test scripts/hgab-review.test.ts scripts/hgab-redflags-team.test.ts",
     "fetch:psa": "node scripts/stats-psa/fetch-psa.mjs",
     "build:indicators": "node scripts/stats-psa/build.mjs && tsx scripts/build-indicators.ts",
     "verify:indicators": "tsx scripts/verify-indicators.ts",
@@ -62,6 +66,8 @@
     "upload:gaa-explorer": "tsx scripts/gaa-explorer/upload.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.28.0",
+    "@clerk/react": "^6.18.7",
     "@duckdb/duckdb-wasm": "^1.33.1-dev45.0",
     "maplibre-gl": "^6.16.0",
     "react": "^19.2.5",

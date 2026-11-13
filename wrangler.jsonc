@@ -24,5 +24,13 @@
       "database_name": "budget",
       "database_id": "2c4d338d-10a5-4cc7-a34f-21ca74edab9a"
     }
+  ],
+  // The bucket behind budget-assets.bettergov.ph. The Worker reads only the House bill's Senate copies from it, for
+  // signed-in members of the project reviewer (src/worker/hgab-senate-copies.ts).
+  "r2_buckets": [
+    {
+      "binding": "DATA_BUCKET",
+      "bucket_name": "budget"
+    }
   ]
 }

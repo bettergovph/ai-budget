@@ -1,0 +1,8 @@
+# Worker secrets for local dev (`npm run dev`); copy to .dev.vars, which git ignores.
+# Production: `npx wrangler secret put CLERK_SECRET_KEY` on the budget Worker.
+
+# Clerk (sign-in for sending reviews from /hgab/2027/review). Dashboard → API keys → Secret key.
+# Without it the reviews API answers 503 and there is no reviewing (projects can still be browsed).
+CLERK_SECRET_KEY=
+# Optional: origins allowed to have issued the session token, comma-separated. Default: the request's own origin.
+# CLERK_AUTHORIZED_PARTIES=https://budget.bettergov.ph

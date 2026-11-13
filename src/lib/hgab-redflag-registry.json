@@ -1,0 +1,2369 @@
+{
+ "schema": 1,
+ "source": {
+  "file": "red-flag-volunteer-crosswalk-v2.xlsx",
+  "sha256": "d6fb880dc7f89cb657a80f6927b80f884abf7a34ddef18210d60e6b0ae1398d3",
+  "version": "Volunteer-ready draft v2 — 12 November 2026",
+  "note": "The team's proposal; role assignments and the registry are pending group review."
+ },
+ "flags": [
+  {
+   "id": "RF-001",
+   "source_row": 2,
+   "category": "Applicable to all",
+   "title": "Overlapping project locations",
+   "investigate": "Two or more projects cover the same road section / KM stations / coordinates do not match the stated barangay, municipality or province.",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T17",
+   "lead_skill": "GIS / Geospatial Specialist",
+   "support_tasks": [
+    "T13",
+    "T03"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Compare coordinates/chainages and boundaries across project records, then inspect any shared physical scope.",
+   "minimum_evidence": [
+    "Geotags",
+    "plans",
+    "location/chainage maps",
+    "previous appropriations"
+   ],
+   "automation": "Candidate GIS overlap",
+   "safeguard": "A shared coordinate does not prove duplicate funding.",
+   "related": "Related: row 22, 41",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-002",
+   "source_row": 3,
+   "category": "Roads Construction / Asphalt",
+   "title": "Questionable project length",
+   "investigate": "Cost per lane km",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T13",
+    "T17"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "GIS / Geospatial Specialist"
+   ],
+   "instructions": "Verify proposed lane-kilometers, pavement width and unit cost using actual scope and chainages.",
+   "minimum_evidence": [
+    "BOQ",
+    "road plans",
+    "chainage",
+    "unit-price support"
+   ],
+   "automation": "Unit-cost calculation",
+   "safeguard": "Normalize to lanes, scope and pavement type.",
+   "related": "Related: row 22, 42",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-003",
+   "source_row": 4,
+   "category": "Bridge",
+   "title": "Repeated rehabilitation",
+   "investigate": "Clear engineering justification",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T15",
+    "T10"
+   ],
+   "support_skills": [
+    "Structural Engineer",
+    "Government Budget Specialist"
+   ],
+   "instructions": "Review past bridge works, condition reports and reason for renewed rehabilitation.",
+   "minimum_evidence": [
+    "Bridge inventory",
+    "condition assessment",
+    "previous projects",
+    "design"
+   ],
+   "automation": "Repeat-project search",
+   "safeguard": "Rehabilitation may be legitimately staged or due to new damage.",
+   "related": "Related: row 24",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-004",
+   "source_row": 5,
+   "category": "Flood Control & Drainage",
+   "title": "No watershed or drainage master plan",
+   "investigate": "Project is not demonstrably aligned with the area's overall flood management plan",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T14",
+   "lead_skill": "Hydraulic / Drainage Engineer",
+   "support_tasks": [
+    "T13",
+    "T03"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Check project catchment and drainage connectivity against any applicable flood/watershed plan.",
+   "minimum_evidence": [
+    "Flood master plan",
+    "hydrology",
+    "location",
+    "design"
+   ],
+   "automation": "Plan title/keyword search",
+   "safeguard": "First establish whether plan is required or exists.",
+   "related": "Related: row 50",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-005",
+   "source_row": 6,
+   "category": "Applicable to all",
+   "title": "Edited geotagged photos",
+   "investigate": "Verify the coordinates",
+   "continuation": "Verify the coordinates, capture date, original photo metadata, visible landmarks and consistency with the proposed project location. Assess any evidence of alteration using the original files, not just screenshots or exported PDFs.",
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T17",
+   "lead_skill": "GIS / Geospatial Specialist",
+   "support_tasks": [
+    "T08",
+    "T13"
+   ],
+   "support_skills": [
+    "Document Verification Specialist",
+    "Civil Engineer"
+   ],
+   "instructions": "Check original geotag metadata, capture location, timestamps and visible scene against project site.",
+   "minimum_evidence": [
+    "Original photo files",
+    "coordinates",
+    "site map",
+    "project docs"
+   ],
+   "automation": "Metadata coordinate/date checks",
+   "safeguard": "No conclusion of editing without forensics or original evidence.",
+   "related": "Related: row 48",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-006",
+   "source_row": 8,
+   "category": "Buildings & Multi-Purpose Facilities",
+   "title": "Not complete set of plans",
+   "investigate": "NBCP, NSCP compliance",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T15",
+    "T07"
+   ],
+   "support_skills": [
+    "Structural Engineer",
+    "Compliance Specialist"
+   ],
+   "instructions": "Determine design-stage plan requirements and review completeness and relevant code compliance.",
+   "minimum_evidence": [
+    "Approved plans",
+    "project phase",
+    "NBCP/NSCP references"
+   ],
+   "automation": "Document presence check",
+   "safeguard": "Missing final designs may be normal at early budget stage.",
+   "related": "Related: row 33",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-007",
+   "source_row": 9,
+   "category": "Water Supply System",
+   "title": "No identified water source",
+   "investigate": "Feasibility study",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T03",
+    "T18"
+   ],
+   "support_skills": [
+    "Research Assistant",
+    "Environmental / ROW Specialist"
+   ],
+   "instructions": "Identify proposed source and assess feasibility, yield, demand and water rights as applicable.",
+   "minimum_evidence": [
+    "Water source assessment",
+    "feasibility study",
+    "permits"
+   ],
+   "automation": "Document field checks",
+   "safeguard": "Confirm project type and applicable project stage.",
+   "related": "Related: Draft WAT-01",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-008",
+   "source_row": 10,
+   "category": "Rainwater Collector System",
+   "title": "No identified purpose",
+   "investigate": "No clear intended users or utilization plan.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T03",
+    "T07"
+   ],
+   "support_skills": [
+    "Research Assistant",
+    "Compliance Specialist"
+   ],
+   "instructions": "Confirm intended users, collection volume and usage/maintenance plan.",
+   "minimum_evidence": [
+    "Feasibility/scope",
+    "beneficiary and demand records"
+   ],
+   "automation": "Missing-purpose text flag",
+   "safeguard": "Policy/need determination is human judgement.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-009",
+   "source_row": 11,
+   "category": "Applicable to all",
+   "title": "Unfinished previous projects",
+   "investigate": "Repeated annual funding",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T10",
+   "lead_skill": "Government Budget Specialist",
+   "support_tasks": [
+    "T09",
+    "T21"
+   ],
+   "support_skills": [
+    "Government Auditor",
+    "Contract Administrator"
+   ],
+   "instructions": "Reconcile current funding with unfinished prior contracts and accomplishments.",
+   "minimum_evidence": [
+    "Previous GAA",
+    "contracts",
+    "accomplishment and fund records"
+   ],
+   "automation": "Repeat funding candidate",
+   "safeguard": "Repeated appropriations may be authorized and justified.",
+   "related": "Related: row 41",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-010",
+   "source_row": 13,
+   "category": "Buildings & Multi-Purpose Facilities",
+   "title": "Unsupported building cost per square meter",
+   "investigate": "Compare gross floor area, specification level, site constraints, building systems, and normalized costs.",
+   "continuation": "Project seems to be at an acceptable cost/area but might be multi-phased, effectively putting the project at a higher actual cost/area.\n\nCheck if:\n1. All works needed to complete the project are present in the BOQ.\n2. The quantities of the BOQ line-items are as expected to complete the project. Line-items which are consistently \"1 lot\" both in BOQ and DUPA or in any way have no supporting documents to support the estimated line-item cost have a high chance of being improperly cost estimated.",
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T13",
+    "T11"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "CPA / Government Auditor"
+   ],
+   "instructions": "Normalize cost per square meter by gross area, scope, systems and site; reconcile all phases.",
+   "minimum_evidence": [
+    "Floor plans",
+    "phased budgets",
+    "BOQ",
+    "specifications"
+   ],
+   "automation": "Cost/sq.m formula",
+   "safeguard": "Compare like-for-like building specs and phases.",
+   "related": "Continuation note in row 14; related rows 25,35,36,42",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-011",
+   "source_row": 15,
+   "category": "Applicable to all",
+   "title": "Repeated awards to the same contractor",
+   "investigate": "Analyze award concentration by district engineering office, project category, year, and contract value.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T20",
+   "lead_skill": "Procurement Specialist",
+   "support_tasks": [
+    "T09",
+    "T04"
+   ],
+   "support_skills": [
+    "Government Auditor",
+    "Data Analyst"
+   ],
+   "instructions": "Summarize repeat awards by contractor, geography, year and value after verifying procurement exists.",
+   "minimum_evidence": [
+    "Bid/award notices",
+    "contractor identifiers",
+    "contract values"
+   ],
+   "automation": "Award concentration report",
+   "safeguard": "Concentration alone is not evidence of wrongdoing.",
+   "related": "Related: row 17; Draft PRO-02",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-012",
+   "source_row": 17,
+   "category": "Applicable to all",
+   "title": "Repeated awards despite poor performance",
+   "investigate": "Compare contractor performance ratings, defects, prior terminations, penalties, and applicable eligibility requirements.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T20",
+   "lead_skill": "Procurement Specialist",
+   "support_tasks": [
+    "T09",
+    "T21"
+   ],
+   "support_skills": [
+    "Government Auditor",
+    "Contract Administrator"
+   ],
+   "instructions": "Reconcile repeat awards with verified past ratings, defects and relevant eligibility rules.",
+   "minimum_evidence": [
+    "Award records",
+    "performance reports",
+    "sanctions",
+    "contracts"
+   ],
+   "automation": "Repeat awards/performance screening",
+   "safeguard": "Applicable only when contractor awarded work.",
+   "related": "Related: row 15",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-013",
+   "source_row": 18,
+   "category": "Flood Control & Drainage",
+   "title": "Unsubstantiated pumping capacity",
+   "investigate": "Verify number of pumps, discharge capacity, drainage catchment and hydraulic design against the intended flood-control objective.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T14",
+   "lead_skill": "Hydraulic / Drainage Engineer",
+   "support_tasks": [
+    "T13",
+    "T12"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Quantity Surveyor / Cost Engineer"
+   ],
+   "instructions": "Check number of pumps and design capacity against catchment flows and flood target.",
+   "minimum_evidence": [
+    "Pump schedule",
+    "hydrology",
+    "flood design",
+    "POW"
+   ],
+   "automation": "Extract equipment/capacity fields",
+   "safeguard": "Hydraulic design interpretation by professional.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-014",
+   "source_row": 19,
+   "category": "Applicable to all",
+   "title": "Inconsistent or unsupported project quantities",
+   "investigate": "Compare BOQ quantities against approved plans, surveys, structural dimensions, station limits and quantity takeoffs. Identify unexplained differences between reported and calculated quantities.",
+   "continuation": "Inconsistent BOQ line-items' specifications and quantities vs design plans.\n\nCheck if the specifications and quantities of materials indicated in the plans are consistent with the BOQ line-items.\n\nFor example, the concrete strength of structural members might mostly be at 4000psi but the BOQ line-items are mostly at 3000psi. In cases with concern like this, the project will surely have a substantial amount of additional cost even before starting. \n\nAnother example, electrical or electronic wirings are mostly at 'this' indicated specs but the BOQ line-items have most of the quantities at a thicker/costlier material. Projects with this case are improperly cost estimated and might actually be substantially cheaper.\n\nTo note, DPWH might be strict in following their standard material costs but might have issues if the actual item as per design specs is not in the DPWH list of standard costs. They might have added another item in the list to replace the design item specs instead of securing quotations to support the cost of the item.",
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T13",
+    "T15"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Structural Engineer"
+   ],
+   "instructions": "Compare BOQ and specifications with plans, quantity takeoffs and station limits.",
+   "minimum_evidence": [
+    "BOQ",
+    "drawings",
+    "DUPA",
+    "measured quantities"
+   ],
+   "automation": "Quantity/reconciliation differences",
+   "safeguard": "No inferred deviation if scope differs.",
+   "related": "Continuation note in row 20; related rows 28,47",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-015",
+   "source_row": 21,
+   "category": "Flood Control & Drainage",
+   "title": "Unclear discharge or outfall arrangement",
+   "investigate": "Check where pumped water will be discharged, receiving-water levels, backflow protection and hydraulic feasibility.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T14",
+   "lead_skill": "Hydraulic / Drainage Engineer",
+   "support_tasks": [
+    "T13",
+    "T17"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "GIS / Geospatial Specialist"
+   ],
+   "instructions": "Trace receiving waterway, water levels, backflow control and pump operating conditions.",
+   "minimum_evidence": [
+    "Hydraulic design",
+    "drainage map",
+    "outfall profile"
+   ],
+   "automation": "Missing-outfall clue",
+   "safeguard": "Site/hydraulic confirmation needed.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-016",
+   "source_row": 22,
+   "category": "Roads Construction / Asphalt",
+   "title": "Overlapping road chainages",
+   "investigate": "Compare station limits, road identifiers, lanes and proposed work types across contracts and fiscal years.",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T17",
+   "lead_skill": "GIS / Geospatial Specialist",
+   "support_tasks": [
+    "T13",
+    "T10"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Government Budget Specialist"
+   ],
+   "instructions": "Map road chainages and work types across years and agreements.",
+   "minimum_evidence": [
+    "Chainage",
+    "road IDs",
+    "project maps",
+    "budgets"
+   ],
+   "automation": "Chainage overlap candidate",
+   "safeguard": "Different lanes or types of work can legitimately overlap.",
+   "related": "Related: rows 2,41",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-017",
+   "source_row": 23,
+   "category": "Roads Construction / Asphalt",
+   "title": "Unsupported pavement treatment",
+   "investigate": "Check whether asphalt overlay, rehabilitation or reconstruction is supported by pavement condition assessments and design criteria.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T12",
+    "T03"
+   ],
+   "support_skills": [
+    "Quantity Surveyor / Cost Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Compare selected pavement treatment with documented pavement condition and design.",
+   "minimum_evidence": [
+    "Pavement study",
+    "design",
+    "maintenance history"
+   ],
+   "automation": "Scope keyword check",
+   "safeguard": "Judgment needs condition assessment.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-018",
+   "source_row": 24,
+   "category": "Bridge",
+   "title": "Unsubstantiated structural condition",
+   "investigate": "Verify bridge condition assessments, load requirements and engineering justification for proposed rehabilitation.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T15",
+   "lead_skill": "Structural Engineer",
+   "support_tasks": [
+    "T13",
+    "T03"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Test rehabilitation scope against assessed structural condition and service demands.",
+   "minimum_evidence": [
+    "Inspection",
+    "loads",
+    "design",
+    "photos"
+   ],
+   "automation": "Repeated condition document check",
+   "safeguard": "Do not conclude unsafe bridge from budget documents.",
+   "related": "Related: row 4",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-019",
+   "source_row": 25,
+   "category": "Buildings & Multi-Purpose Facilities",
+   "title": "Unclear physical scope and capacity",
+   "investigate": "Verify gross floor area, number of floors, facility purpose, drawings, and intended users against the proposed budget.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T12",
+    "T03"
+   ],
+   "support_skills": [
+    "Quantity Surveyor / Cost Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Verify floor area, number of floors, purpose, users and deliverable against budget.",
+   "minimum_evidence": [
+    "Architectural plans",
+    "scopes",
+    "BOQ",
+    "BP202"
+   ],
+   "automation": "Field inconsistency extraction",
+   "safeguard": "No fair unit comparison without phase and MEP scope.",
+   "related": "Related: rows 13,35,36",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-020",
+   "source_row": 26,
+   "category": "Applicable to all",
+   "title": "Unrealistic construction duration",
+   "investigate": "Compare schedule with work quantities, equipment availability, procurement lead times, site constraints and commissioning requirements.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T21",
+    "T12"
+   ],
+   "support_skills": [
+    "Contract Administrator",
+    "Quantity Surveyor / Cost Engineer"
+   ],
+   "instructions": "Compare duration with work quantities, staging, weather, lead times and commissioning.",
+   "minimum_evidence": [
+    "Schedule",
+    "BOQ",
+    "site notes",
+    "equipment lead times"
+   ],
+   "automation": "Schedule vs quantities check",
+   "safeguard": "Duration risk needs construction sequencing.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-021",
+   "source_row": 27,
+   "category": "Applicable to all",
+   "title": "Project not ready for implementation",
+   "investigate": "Verify site availability, right-of-way status, applicable approvals, studies and supporting readiness documentation.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T07",
+   "lead_skill": "Compliance Specialist",
+   "support_tasks": [
+    "T18",
+    "T13"
+   ],
+   "support_skills": [
+    "Environmental / ROW Specialist",
+    "Civil Engineer"
+   ],
+   "instructions": "Check readiness evidence and site access against legally required project stage.",
+   "minimum_evidence": [
+    "ROW",
+    "permits",
+    "studies",
+    "work programme"
+   ],
+   "automation": "Missing-document detection",
+   "safeguard": "Not yet due is not a defect.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-022",
+   "source_row": 28,
+   "category": "Applicable to all",
+   "title": "Identical cost breakdowns across different projects",
+   "investigate": "Compare POW, BOQ, DUPA, labor, materials, equipment, overhead and total estimated costs across different project IDs. Verify whether identical estimates are supported by separate engineering designs.",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T11",
+    "T23"
+   ],
+   "support_skills": [
+    "CPA / Government Auditor",
+    "Independent Cost Reviewer"
+   ],
+   "instructions": "Compare detailed labor/material/equipment/overhead entries; assess equivalence of actual scope.",
+   "minimum_evidence": [
+    "POW",
+    "BOQ",
+    "DUPA",
+    "plans",
+    "proposed scopes"
+   ],
+   "automation": "D13 exact-breakdown match",
+   "safeguard": "Identical breakdown is a review trigger, not proof.",
+   "related": "BudgetWatch D13 demonstrated on pilot",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-023",
+   "source_row": 29,
+   "category": "Applicable to all",
+   "title": "Inconsistent project costs across documents",
+   "investigate": "Compare NEP allocation, BP 202, POW, estimated component costs and detailed cost schedules. Investigate unexplained discrepancies.",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T11",
+   "lead_skill": "CPA / Government Auditor",
+   "support_tasks": [
+    "T10",
+    "T12"
+   ],
+   "support_skills": [
+    "Government Budget Specialist",
+    "Quantity Surveyor / Cost Engineer"
+   ],
+   "instructions": "Reconcile NEP, BP202, POW, subcomponents and project naming/version.",
+   "minimum_evidence": [
+    "NEP",
+    "GAB",
+    "BP202",
+    "POW",
+    "totals"
+   ],
+   "automation": "Cross-document amount differences",
+   "safeguard": "Distinguish component estimate from allocation.",
+   "related": "Related: rows 46,47",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-024",
+   "source_row": 30,
+   "category": "Applicable to all",
+   "title": "New or increased budget allocations requiring justification",
+   "investigate": "Compare the original FY 2027 NEP against the House GAB. Identify newly added projects, increased allocations, changes in project scope and corresponding supporting justifications.",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T10",
+   "lead_skill": "Government Budget Specialist",
+   "support_tasks": [
+    "T05",
+    "T24"
+   ],
+   "support_skills": [
+    "Budget Analyst",
+    "Independent Budget / Audit Reviewer"
+   ],
+   "instructions": "Match NEP and GAB projects, reconcile renaming/splits/transfers, quantify differences.",
+   "minimum_evidence": [
+    "Official NEP/GAB page references",
+    "matching log"
+   ],
+   "automation": "Candidate NEP–GAB comparison",
+   "safeguard": "No automatic insertion allegation for unmatched entry.",
+   "related": "BudgetWatch matcher not yet validated",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-025",
+   "source_row": 31,
+   "category": "Applicable to all",
+   "title": "Physical target inconsistent with project description",
+   "investigate": "Compare stated physical targets (linear meters, structures or units) against project scope, engineering drawings, quantities and expected deliverables.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T12",
+    "T02"
+   ],
+   "support_skills": [
+    "Quantity Surveyor / Cost Engineer",
+    "Data Encoder"
+   ],
+   "instructions": "Check units and physical target against documented scope, design and measurable deliverables.",
+   "minimum_evidence": [
+    "BP202",
+    "POW",
+    "designs",
+    "physical target"
+   ],
+   "automation": "Field/unit discrepancy",
+   "safeguard": "Program output units may be administrative proxies.",
+   "related": "Related: row 47",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-026",
+   "source_row": 32,
+   "category": "Applicable to all",
+   "title": "Conflicting document dates",
+   "investigate": "Compare preparation, approval, certification, implementation and project schedule dates. Verify inconsistencies against original documents.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T08",
+   "lead_skill": "Document Verification Specialist",
+   "support_tasks": [
+    "T07",
+    "T03"
+   ],
+   "support_skills": [
+    "Compliance Specialist",
+    "Research Assistant"
+   ],
+   "instructions": "Compare chronology of preparation, approval, certifications and implementation.",
+   "minimum_evidence": [
+    "Date-bearing original documents",
+    "stage timeline"
+   ],
+   "automation": "Date chronology screening",
+   "safeguard": "Metadata creation dates may differ from approval dates.",
+   "related": "Related: row 43",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-027",
+   "source_row": 33,
+   "category": "Applicable to all",
+   "title": "Project plans are not signed and sealed.",
+   "investigate": "Ensure that every page of the project plans is signed by the designer and includes their professional license information.",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T08",
+   "lead_skill": "Document Verification Specialist",
+   "support_tasks": [
+    "T13",
+    "T19"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Legal Counsel"
+   ],
+   "instructions": "Review whether signatures/seals are required for each plan at current stage and check legibility.",
+   "minimum_evidence": [
+    "Original approved plans",
+    "stage requirements"
+   ],
+   "automation": "Missing seal field",
+   "safeguard": "Don't assume every sheet requires identical signatures.",
+   "related": "Related: row 34",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-028",
+   "source_row": 34,
+   "category": "Applicable to all",
+   "title": "At least one of the professionals who signed and sealed the plans are not in the database of PRC.",
+   "investigate": "If every page of the project plans is signed by the designer and includes their professional license information, check if the credentials can be verified through https://verification.prc.gov.ph/ .",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T08",
+   "lead_skill": "Document Verification Specialist",
+   "support_tasks": [
+    "T19",
+    "T03"
+   ],
+   "support_skills": [
+    "Legal Counsel",
+    "Research Assistant"
+   ],
+   "instructions": "Verify apparent practitioner credentials with official PRC records where lawful.",
+   "minimum_evidence": [
+    "Plan signatories",
+    "PRC verification"
+   ],
+   "automation": "Name/license checklist",
+   "safeguard": "Registry mismatch may be formatting; do not allege fraud.",
+   "related": "Related: row 33",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-029",
+   "source_row": 35,
+   "category": "Applicable to all",
+   "title": "Apparent multi-phased project might be improperly phased.",
+   "investigate": "Check if all prerequisite works of the BOQ line-items are also in the BOQ. For example, if the phase already includes floor finish works, the phase must already have roofing and ceiling works included. If not included, it is high possible for the line-item to be damaged when prerequisite works are contracted after and thus, incur additional cost for the repair/replacement.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T12",
+    "T21"
+   ],
+   "support_skills": [
+    "Quantity Surveyor / Cost Engineer",
+    "Contract Administrator"
+   ],
+   "instructions": "Check whether the proposed phase includes prerequisites and a usable deliverable.",
+   "minimum_evidence": [
+    "Phasing plan",
+    "BOQ",
+    "drawings",
+    "contract sequence"
+   ],
+   "automation": "Phase-prerequisite checklist",
+   "safeguard": "Project staging may be valid with other funded works.",
+   "related": "Related: rows 13,36",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-030",
+   "source_row": 36,
+   "category": "Applicable to all",
+   "title": "Apparent multi-phased project might have issues.",
+   "investigate": null,
+   "continuation": "Multi-phased projects have the concerns of:\n1. Legality of making the project multi-phased. Why was it not funded (or why will it not be put for bidding) as a whole finished project? Are the reason/s among the acceptable reasons indicated in RA12009?\n2. If different phases of the project happened to have different contractors, there will be conflict in liabilities and warranties. Aside from that, warranties of the initial phase might lapse during the implementation of the 2nd phase.\n3. If the succeeding phase will be awarded to the same contractor through a contiguous or adjacent contract, have all the requirements for doing so been met?\n\n(for improvement, will continue later)",
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T10",
+   "lead_skill": "Government Budget Specialist",
+   "support_tasks": [
+    "T19",
+    "T13"
+   ],
+   "support_skills": [
+    "Legal Counsel",
+    "Civil Engineer"
+   ],
+   "instructions": "Review legal and budget justification for project phasing, cost and intended outputs.",
+   "minimum_evidence": [
+    "Full multi-year budgets",
+    "phase scopes",
+    "authorizations"
+   ],
+   "automation": "Cross-year phase/amount review",
+   "safeguard": "Full text to be confirmed; avoid blanket illegality.",
+   "related": "Related: rows 13,35",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-031",
+   "source_row": 37,
+   "category": "Flood Control & Drainage",
+   "title": "Unjustified embankment boulder-fill quantities",
+   "investigate": "Where boulder fill is specified, compare BOQ volume, rock-size specifications and unit rates with approved design cross-sections, geotechnical/hydraulic conditions, quantity takeoffs and applicable DPWH specifications. Look for unexplained high volumes or identical quantities at materially different sites. Request site-specific calculations; do not assume irregularity from similarity alone.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T14",
+    "T16"
+   ],
+   "support_skills": [
+    "Hydraulic / Drainage Engineer",
+    "Geotechnical Engineer"
+   ],
+   "instructions": "Reconcile boulder-fill volume/specifications with sections, hydraulics and geological assumptions.",
+   "minimum_evidence": [
+    "POW/BOQ",
+    "cross-sections",
+    "material specs",
+    "design"
+   ],
+   "automation": "BOQ quantity/rate outlier",
+   "safeguard": "Geotechnical and site validation essential.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-032",
+   "source_row": 38,
+   "category": "Flood Control & Drainage",
+   "title": "Unsubstantiated quarry sources and hauling  costs",
+   "investigate": "Identify the proposed quarry or supplier, material availability, actual haul route and distance, delivery method, and haulage assumptions. Reconcile unit rates and claimed trips/volumes with DUPA, supplier quotations, delivery records (where construction has occurred) and applicable DPWH cost references. Flag unsupported or duplicated hauling charges, not merely long distances.",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T16",
+    "T03"
+   ],
+   "support_skills": [
+    "Geotechnical Engineer",
+    "Research Assistant"
+   ],
+   "instructions": "Check source availability, assumed hauling distances and rates against route and specification.",
+   "minimum_evidence": [
+    "Quarry records",
+    "haul routes",
+    "DUPA",
+    "permits"
+   ],
+   "automation": "Haulage cost consistency",
+   "safeguard": "Quarry/haul terms depend on procurement stage.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-033",
+   "source_row": 40,
+   "category": "Applicable to all",
+   "title": "Incomplete documents",
+   "investigate": "Check the main 5 requirements: BP 202, POW, Geottaged photos, Cert of Implementability, Master Plan/Feasib Study/No objection/etc. related",
+   "continuation": null,
+   "steps": [
+    3,
+    5
+   ],
+   "lead_task": "T07",
+   "lead_skill": "Compliance Specialist",
+   "support_tasks": [
+    "T01",
+    "T08"
+   ],
+   "support_skills": [
+    "Document Controller",
+    "Document Verification Specialist"
+   ],
+   "instructions": "Stage-gate each requested document: required now, later, not applicable or available.",
+   "minimum_evidence": [
+    "BP202",
+    "POW",
+    "photos",
+    "certs",
+    "studies"
+   ],
+   "automation": "Completeness checklist",
+   "safeguard": "Do not score missing optional/later-stage records as violation.",
+   "related": "Master category: document check; related 46–52",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-034",
+   "source_row": 41,
+   "category": "Applicable to all",
+   "title": "Project Duplication",
+   "investigate": "Project name, location, geotagged coordinates vs Previous GAA projects",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T10",
+   "lead_skill": "Government Budget Specialist",
+   "support_tasks": [
+    "T17",
+    "T09"
+   ],
+   "support_skills": [
+    "GIS / Geospatial Specialist",
+    "Government Auditor"
+   ],
+   "instructions": "Cross-check same names, locations and targets across fiscal years and contract scopes.",
+   "minimum_evidence": [
+    "Previous GAA",
+    "proposals",
+    "coordinates",
+    "contracts"
+   ],
+   "automation": "Candidate duplicate project search",
+   "safeguard": "Avoid confusion between renewal and duplication.",
+   "related": "Related: rows 2,11,22",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-035",
+   "source_row": 42,
+   "category": "Applicable to all",
+   "title": "Project Cost per Unit",
+   "investigate": "POW vs Atlas 2026",
+   "continuation": null,
+   "steps": [
+    2,
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T11",
+    "T13"
+   ],
+   "support_skills": [
+    "CPA / Government Auditor",
+    "Civil Engineer"
+   ],
+   "instructions": "Compare like-for-like scope-adjusted unit cost with documented reference rates.",
+   "minimum_evidence": [
+    "POW",
+    "BOQ",
+    "DPWH Atlas 2026",
+    "specs"
+   ],
+   "automation": "Normalized unit-cost alert",
+   "safeguard": "Confirm official reference version and comparability.",
+   "related": "Related: rows 3,13",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-036",
+   "source_row": 43,
+   "category": "Applicable to all",
+   "title": "Conflicting document dates",
+   "investigate": "Document dates vs Geotagged Photos dates (must be prior date)",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T08",
+   "lead_skill": "Document Verification Specialist",
+   "support_tasks": [
+    "T17",
+    "T07"
+   ],
+   "support_skills": [
+    "GIS / Geospatial Specialist",
+    "Compliance Specialist"
+   ],
+   "instructions": "Compare document dates and original photo timestamps; check plausible timeline.",
+   "minimum_evidence": [
+    "Original images",
+    "document date fields"
+   ],
+   "automation": "Date comparison rule",
+   "safeguard": "Do not require a rigid sequence without policy basis.",
+   "related": "Near duplicate: row 32",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-037",
+   "source_row": 44,
+   "category": "Applicable to all",
+   "title": "Uncommon pay item",
+   "investigate": "POW vs DPWH Standard Pay Item List 2024",
+   "continuation": null,
+   "steps": [
+    4,
+    5
+   ],
+   "lead_task": "T12",
+   "lead_skill": "Quantity Surveyor / Cost Engineer",
+   "support_tasks": [
+    "T13",
+    "T08"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Document Verification Specialist"
+   ],
+   "instructions": "Reconcile pay item codes/descriptions with relevant standard list and approved alternatives.",
+   "minimum_evidence": [
+    "POW",
+    "DPWH Standard Pay Item List 2024"
+   ],
+   "automation": "Unrecognized code candidate",
+   "safeguard": "Later standard versions and special items may apply.",
+   "related": null,
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-038",
+   "source_row": 46,
+   "category": "Applicable to all",
+   "title": "BP 202",
+   "investigate": "Check if BP 202 and POW details align",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T11",
+   "lead_skill": "CPA / Government Auditor",
+   "support_tasks": [
+    "T08",
+    "T10"
+   ],
+   "support_skills": [
+    "Document Verification Specialist",
+    "Government Budget Specialist"
+   ],
+   "instructions": "Reconcile BP202 scope, quantities, amounts and identifiers against POW.",
+   "minimum_evidence": [
+    "BP202",
+    "POW",
+    "supporting docs"
+   ],
+   "automation": "BP202–POW difference alert",
+   "safeguard": "Cross-document review, not standalone allegation.",
+   "related": "Document-specific review; related row 29",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-039",
+   "source_row": 47,
+   "category": "Applicable to all",
+   "title": "Program of Work (POW)",
+   "investigate": "Check the numbers (Acct), Check the Pay Items (Engr)",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T11",
+   "lead_skill": "CPA / Government Auditor",
+   "support_tasks": [
+    "T12",
+    "T13"
+   ],
+   "support_skills": [
+    "Quantity Surveyor / Cost Engineer",
+    "Civil Engineer"
+   ],
+   "instructions": "Recompute POW amounts; check pay item codes, scope, arithmetic and work units.",
+   "minimum_evidence": [
+    "POW",
+    "BOQ",
+    "DUPA",
+    "plans"
+   ],
+   "automation": "Arithmetic and pay item checks",
+   "safeguard": "Human engineering review required for suitability.",
+   "related": "Document-specific review; related rows 19,28,31",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-040",
+   "source_row": 48,
+   "category": "Applicable to all",
+   "title": "Geottaged photos",
+   "investigate": "Check the alterations, if any and verify the exact location",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T17",
+   "lead_skill": "GIS / Geospatial Specialist",
+   "support_tasks": [
+    "T08",
+    "T03"
+   ],
+   "support_skills": [
+    "Document Verification Specialist",
+    "Research Assistant"
+   ],
+   "instructions": "Check image metadata, original capture coordinates and map location.",
+   "minimum_evidence": [
+    "Original geotags",
+    "official maps"
+   ],
+   "automation": "Metadata consistency check",
+   "safeguard": "Edited-image conclusion needs original files/forensics.",
+   "related": "Document-specific review; related row 6",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-041",
+   "source_row": 49,
+   "category": "Applicable to all",
+   "title": "Cert. of Implementability",
+   "investigate": "Check any problems that will occur prior and during the implementation",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T07",
+   "lead_skill": "Compliance Specialist",
+   "support_tasks": [
+    "T19",
+    "T13"
+   ],
+   "support_skills": [
+    "Legal Counsel",
+    "Civil Engineer"
+   ],
+   "instructions": "Check whether certification relates to specific project, timing and actual implementation barriers.",
+   "minimum_evidence": [
+    "Implementability certificate",
+    "stage",
+    "access/permits"
+   ],
+   "automation": "Certificate credibility checklist",
+   "safeguard": "Certificate alone neither proves readiness nor wrongdoing.",
+   "related": "Document-specific review",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-042",
+   "source_row": 50,
+   "category": "Applicable to all",
+   "title": "Master Plan",
+   "investigate": "Check the compliance to all standards",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T14",
+   "lead_skill": "Hydraulic / Drainage Engineer",
+   "support_tasks": [
+    "T13",
+    "T07"
+   ],
+   "support_skills": [
+    "Civil Engineer",
+    "Compliance Specialist"
+   ],
+   "instructions": "Determine applicability of master plan and assess technical alignment when required.",
+   "minimum_evidence": [
+    "Relevant master plan",
+    "design",
+    "catchment map"
+   ],
+   "automation": "Plan comparison checklist",
+   "safeguard": "Standards require explicit identification.",
+   "related": "Document-specific review; related row 5",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-043",
+   "source_row": 51,
+   "category": "Applicable to all",
+   "title": "Feasibility Study",
+   "investigate": "Check the feasibility and history of project location / residences",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T13",
+   "lead_skill": "Civil Engineer",
+   "support_tasks": [
+    "T03",
+    "T18"
+   ],
+   "support_skills": [
+    "Research Assistant",
+    "Environmental / ROW Specialist"
+   ],
+   "instructions": "Check applicability and content of feasibility assessment, local needs and site history.",
+   "minimum_evidence": [
+    "Feasibility study",
+    "site/history",
+    "census data"
+   ],
+   "automation": "Feasibility evidence schedule",
+   "safeguard": "No study requirement presumed at every budget stage.",
+   "related": "Document-specific review",
+   "status": "Proposed — review required"
+  },
+  {
+   "id": "RF-044",
+   "source_row": 52,
+   "category": "Applicable to all",
+   "title": "Cert. of No Objection / Region/LGU Endorsement",
+   "investigate": "Check the legitimacy",
+   "continuation": null,
+   "steps": [
+    3,
+    4,
+    5
+   ],
+   "lead_task": "T19",
+   "lead_skill": "Legal Counsel",
+   "support_tasks": [
+    "T08",
+    "T03"
+   ],
+   "support_skills": [
+    "Document Verification Specialist",
+    "Research Assistant"
+   ],
+   "instructions": "Confirm endorsement authenticity, project specificity, signatory authority and effective dates.",
+   "minimum_evidence": [
+    "No-objection/endorsement",
+    "government records"
+   ],
+   "automation": "Endorsement validation notes",
+   "safeguard": "Approval/endorsement requirements may vary.",
+   "related": "Document-specific review",
+   "status": "Proposed — review required"
+  }
+ ],
+ "drafts": [
+  {
+   "code": "DUP-01",
+   "category": "Duplication",
+   "indicator": "Overlapping project locations",
+   "verification": "Compare coordinates and chainage",
+   "linked_flags": [
+    "RF-001",
+    "RF-016",
+    "RF-034"
+   ],
+   "linkage": "RF-001; RF-016; RF-034",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "DUP-02",
+   "category": "Duplication",
+   "indicator": "Repeated project funding",
+   "verification": "Compare previous and current appropriations",
+   "linked_flags": [
+    "RF-009",
+    "RF-034"
+   ],
+   "linkage": "RF-009; RF-034",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "FIN-01",
+   "category": "Financial",
+   "indicator": "Unusually high cost per unit",
+   "verification": "Compare engineering estimates",
+   "linked_flags": [
+    "RF-002",
+    "RF-010",
+    "RF-035"
+   ],
+   "linkage": "RF-002; RF-010; RF-035",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "FIN-02",
+   "category": "Financial",
+   "indicator": "Contract amount above ABC",
+   "verification": "Check approved procurement records",
+   "linked_flags": [],
+   "linkage": "No direct main entry; procurement-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "FIN-03",
+   "category": "Financial",
+   "indicator": "Unjustified budget increase",
+   "verification": "Compare scope and quantities",
+   "linked_flags": [
+    "RF-024"
+   ],
+   "linkage": "RF-024",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "ENG-01",
+   "category": "Engineering",
+   "indicator": "Incomplete plans",
+   "verification": "Check approved plans and specifications",
+   "linked_flags": [
+    "RF-006",
+    "RF-026"
+   ],
+   "linkage": "RF-006; RF-026",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "ENG-02",
+   "category": "Engineering",
+   "indicator": "Questionable project length",
+   "verification": "Verify actual measurements",
+   "linked_flags": [
+    "RF-002"
+   ],
+   "linkage": "RF-002",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "ENG-03",
+   "category": "Engineering",
+   "indicator": "Repeated bridge rehabilitation",
+   "verification": "Review structural assessment",
+   "linked_flags": [
+    "RF-003",
+    "RF-018"
+   ],
+   "linkage": "RF-003; RF-018",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "GEO-01",
+   "category": "Geographic",
+   "indicator": "Incorrect coordinates",
+   "verification": "Verify administrative boundaries",
+   "linked_flags": [
+    "RF-001",
+    "RF-005"
+   ],
+   "linkage": "RF-001; RF-005",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "GEO-02",
+   "category": "Geographic",
+   "indicator": "Edited or reused geotagged photos",
+   "verification": "Inspect original files and field evidence",
+   "linked_flags": [
+    "RF-005",
+    "RF-041"
+   ],
+   "linkage": "RF-005; RF-041",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "DOC-01",
+   "category": "Documentation",
+   "indicator": "Missing BP 202",
+   "verification": "Verify required document",
+   "linked_flags": [
+    "RF-033",
+    "RF-038"
+   ],
+   "linkage": "RF-033; RF-038",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "DOC-02",
+   "category": "Documentation",
+   "indicator": "Missing POW",
+   "verification": "Verify approved program of work",
+   "linked_flags": [
+    "RF-033",
+    "RF-039"
+   ],
+   "linkage": "RF-033; RF-039",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "DOC-03",
+   "category": "Documentation",
+   "indicator": "Missing feasibility study",
+   "verification": "Check applicability and approval",
+   "linked_flags": [
+    "RF-033",
+    "RF-043"
+   ],
+   "linkage": "RF-033; RF-043",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "PRO-01",
+   "category": "Procurement",
+   "indicator": "Suspicious bidding patterns",
+   "verification": "Review procurement records",
+   "linked_flags": [],
+   "linkage": "No direct main entry; procurement-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "PRO-02",
+   "category": "Procurement",
+   "indicator": "Repeated contractor awards",
+   "verification": "Analyze award concentration",
+   "linked_flags": [
+    "RF-011",
+    "RF-012"
+   ],
+   "linkage": "RF-011; RF-012",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "CON-01",
+   "category": "Construction",
+   "indicator": "Unverified physical accomplishment",
+   "verification": "Conduct field inspection",
+   "linked_flags": [],
+   "linkage": "No direct main entry; implementation-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "CON-02",
+   "category": "Construction",
+   "indicator": "Repeated contract extensions",
+   "verification": "Review delay justification",
+   "linked_flags": [],
+   "linkage": "No direct main entry; implementation-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "CON-03",
+   "category": "Construction",
+   "indicator": "Substandard materials",
+   "verification": "Verify laboratory test results",
+   "linked_flags": [],
+   "linkage": "No direct main entry; implementation-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "PAY-01",
+   "category": "Payment",
+   "indicator": "Payment without verified accomplishment",
+   "verification": "Reconcile billing and inspection",
+   "linked_flags": [],
+   "linkage": "No direct main entry; payment-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "PAY-02",
+   "category": "Payment",
+   "indicator": "Duplicate billing",
+   "verification": "Compare invoices and payment references",
+   "linked_flags": [],
+   "linkage": "No direct main entry; payment-stage only",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "FLO-01",
+   "category": "Flood control",
+   "indicator": "No downstream impact assessment",
+   "verification": "Review hydraulic assessment",
+   "linked_flags": [
+    "RF-004",
+    "RF-017"
+   ],
+   "linkage": "RF-004; RF-017",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "FLO-02",
+   "category": "Flood control",
+   "indicator": "No drainage connectivity",
+   "verification": "Verify outfall and receiving waterway",
+   "linked_flags": [
+    "RF-015"
+   ],
+   "linkage": "RF-015",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "BLD-01",
+   "category": "Buildings",
+   "indicator": "No geotechnical investigation",
+   "verification": "Review soil investigation",
+   "linked_flags": [],
+   "linkage": "No direct main entry; stage-specific geotechnical review",
+   "status": "Draft only — not automatically added to main registry"
+  },
+  {
+   "code": "WAT-01",
+   "category": "Water supply",
+   "indicator": "No identified water source",
+   "verification": "Verify source yield and feasibility",
+   "linked_flags": [
+    "RF-007"
+   ],
+   "linkage": "RF-007",
+   "status": "Draft only — not automatically added to main registry"
+  }
+ ],
+ "tasks": [
+  {
+   "id": "T01",
+   "step": 1,
+   "role": "Document Controller",
+   "checks": "Assign stable project ID; preserve originals; capture version, URL, date and SHA-256; record file limitations",
+   "sources": "Official NEP/GAB, portal URLs, project files",
+   "deliverable": "Project register; immutable source manifest",
+   "qa": "Each project links to an intact source and version",
+   "handoff": "QA / Evidence Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T02",
+   "step": 1,
+   "role": "Data Encoder",
+   "checks": "Enter exact project name, office, location, target, cost and identifiers; mark blanks as missing, not zero",
+   "sources": "Register template; official tables",
+   "deliverable": "Structured project record",
+   "qa": "Double-check amounts, units and source reference",
+   "handoff": "Data QA Reviewer",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T03",
+   "step": 1,
+   "role": "Research Assistant",
+   "checks": "Locate primary government records; note source hierarchy and document publication/approval dates",
+   "sources": "DBM/House/Senate/DPWH portals",
+   "deliverable": "Source log and document request list",
+   "qa": "Official provenance confirmed; no unsupported substitutions",
+   "handoff": "Document Controller",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T04",
+   "step": 2,
+   "role": "Data Analyst",
+   "checks": "Run eligibility filters; group by sector, area and budget band; identify unusual changes without alleging wrongdoing",
+   "sources": "Registered records; NEP/GAB extracts",
+   "deliverable": "Initial exception queue",
+   "qa": "Reproducible filters and source-backed calculations",
+   "handoff": "Budget Analyst",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T05",
+   "step": 2,
+   "role": "Budget Analyst",
+   "checks": "Check magnitude and direction of allocation changes; separate additions from renamed/reclassified projects",
+   "sources": "Version-aligned allocations and project IDs",
+   "deliverable": "Budget change shortlist",
+   "qa": "All claimed changes checked against both versions",
+   "handoff": "Senior Budget Analyst",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T06",
+   "step": 2,
+   "role": "AI / Automation Specialist",
+   "checks": "Run screened rules; record extraction confidence and unsupported layouts; withhold ambiguous results",
+   "sources": "BudgetWatch logs; extracted records",
+   "deliverable": "Machine-screening log and exceptions",
+   "qa": "No auto-escalation; human validation; failures visible",
+   "handoff": "Data QA Reviewer",
+   "recruitment": "Support"
+  },
+  {
+   "id": "T07",
+   "step": 3,
+   "role": "Compliance Specialist",
+   "checks": "Create stage-gated document checklist; mark required, not required or not yet due with reasons",
+   "sources": "Budget stage, statutory and agency requirements",
+   "deliverable": "Document applicability checklist",
+   "qa": "Absence not treated as breach without stage-based requirement",
+   "handoff": "Legal Reviewer",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T08",
+   "step": 3,
+   "role": "Document Verification Specialist",
+   "checks": "Check identifiers, signatures, dates, authenticity indicators, and whether certification actually names the project",
+   "sources": "Official forms, certificates, signatories",
+   "deliverable": "Document credibility notes",
+   "qa": "Unclear authenticity referred; no forgery conclusion",
+   "handoff": "Compliance Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T09",
+   "step": 3,
+   "role": "Government Auditor",
+   "checks": "Reconcile stated authorization and document trail; distinguish incomplete file from noncompliance",
+   "sources": "Approvals, fund records, certifications",
+   "deliverable": "Evidence-gap schedule",
+   "qa": "Requirement and timing independently established",
+   "handoff": "Senior Auditor",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T10",
+   "step": 4,
+   "role": "Government Budget Specialist",
+   "checks": "Compare NEP/GAB line items; test project identity, funding origin, reclassification, splits/merges, duplicate allocations",
+   "sources": "Budget books, project details, official amendments",
+   "deliverable": "Budget-origin finding with pesos and evidence",
+   "qa": "Version/date/appropriation basis validated",
+   "handoff": "Senior Budget Analyst",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T11",
+   "step": 4,
+   "role": "CPA / Government Auditor",
+   "checks": "Trace totals, allocations and arithmetic; identify inconsistent supporting financial schedules",
+   "sources": "POW, budget schedules, official costing",
+   "deliverable": "Financial reconciliation",
+   "qa": "Mathematical check and basis documented",
+   "handoff": "Audit Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T12",
+   "step": 4,
+   "role": "Quantity Surveyor / Cost Engineer",
+   "checks": "Review BOQ/POW quantities and DUPA; normalize cost by measurable scope; check identical breakdowns with context",
+   "sources": "POW, BOQ, DUPA, plans, scope",
+   "deliverable": "Cost variance worksheet",
+   "qa": "Comparable units, assumptions and market dates recorded",
+   "handoff": "Independent Cost Reviewer",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T13",
+   "step": 4,
+   "role": "Civil Engineer",
+   "checks": "Check design scope, physical targets, chainages, constructability, site feasibility and durations",
+   "sources": "Plans, specifications, geotags, schedules",
+   "deliverable": "Technical issue sheet",
+   "qa": "Evidence and engineering standards cited",
+   "handoff": "Senior Engineer",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T14",
+   "step": 4,
+   "role": "Hydraulic / Drainage Engineer",
+   "checks": "For flood/drainage works, test capacity assumptions, pump performance, outfall, water levels and hydrologic basis",
+   "sources": "Hydrology, hydraulic design, pump schedules",
+   "deliverable": "Hydraulic review notes",
+   "qa": "Applicable only to relevant project types; assumptions visible",
+   "handoff": "Civil Engineering Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T15",
+   "step": 4,
+   "role": "Structural Engineer",
+   "checks": "Review foundation/structural adequacy and supporting studies where required",
+   "sources": "Design calculations, plans, investigation",
+   "deliverable": "Structural review notes",
+   "qa": "Do not infer failure from absent later-stage studies",
+   "handoff": "Senior Engineer",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T16",
+   "step": 4,
+   "role": "Geotechnical Engineer",
+   "checks": "Check soil and foundation assumptions, subsurface investigations and suitability of proposed methods",
+   "sources": "Geotech report, boreholes, design",
+   "deliverable": "Ground-risk review",
+   "qa": "Stage-specific evidence requirements",
+   "handoff": "Senior Engineer",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T17",
+   "step": 4,
+   "role": "GIS / Geospatial Specialist",
+   "checks": "Validate coordinates, project footprints, geographic overlaps, proximity and chainage consistency",
+   "sources": "Coordinates, basemaps, geotags",
+   "deliverable": "Geospatial evidence map",
+   "qa": "Datum, coordinate accuracy and map sources noted",
+   "handoff": "Engineering Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T18",
+   "step": 4,
+   "role": "Environmental / ROW Specialist",
+   "checks": "Check relevant environmental clearances, land ownership and right-of-way status against budget stage",
+   "sources": "Project location, EIA/ROW records",
+   "deliverable": "Permit/ROW status note",
+   "qa": "Document stage and applicability established",
+   "handoff": "Legal/Compliance Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T19",
+   "step": 4,
+   "role": "Legal Counsel",
+   "checks": "Assess legal authority and documentary obligations; distinguish allegation from verifiable legal concern",
+   "sources": "Applicable statutes, documents, project stage",
+   "deliverable": "Legal issues memorandum",
+   "qa": "No unsupported legal conclusions; privilege handled if applicable",
+   "handoff": "Legal Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T20",
+   "step": 4,
+   "role": "Procurement Specialist",
+   "checks": "Only for tendered/awarded works, review bidding compliance, contract scope and award patterns",
+   "sources": "Bids, notices, awards, contracts",
+   "deliverable": "Procurement exceptions sheet",
+   "qa": "Mark not applicable if procurement not started",
+   "handoff": "Procurement Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T21",
+   "step": 4,
+   "role": "Contract Administrator",
+   "checks": "Where implemented, review variation orders, completion milestones and scope changes",
+   "sources": "Contracts, variation orders, progress",
+   "deliverable": "Contract-performance issues",
+   "qa": "Apply only to implementation-stage projects",
+   "handoff": "Procurement Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T22",
+   "step": 5,
+   "role": "Independent Engineer",
+   "checks": "Re-check technical anomaly and possible benign explanations; approve, reject or request field verification",
+   "sources": "Technical issue sheet and sources",
+   "deliverable": "Signed technical review decision",
+   "qa": "Reviewer independent of initial flagger",
+   "handoff": "QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T23",
+   "step": 5,
+   "role": "Independent Cost Reviewer",
+   "checks": "Recalculate price/quantity anomalies and assess comparability and uncertainty",
+   "sources": "Cost worksheets, BOQ, references",
+   "deliverable": "Signed cost-review decision",
+   "qa": "Method replicates and assumptions explicit",
+   "handoff": "QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T24",
+   "step": 5,
+   "role": "Independent Budget / Audit Reviewer",
+   "checks": "Reconcile both budget entries and confirm exact evidence of any alleged new/increased item",
+   "sources": "NEP, GAB, match logs",
+   "deliverable": "Verified budget-change decision",
+   "qa": "No inference solely from unmatched names",
+   "handoff": "QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T25",
+   "step": 5,
+   "role": "Legal / Compliance Reviewer",
+   "checks": "Validate interpretation of required documents and proposed escalation language",
+   "sources": "Legal/compliance findings, applicable rules",
+   "deliverable": "Legal sufficiency review",
+   "qa": "Finding appropriately qualified and evidence backed",
+   "handoff": "Review Chair",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T26",
+   "step": 6,
+   "role": "Senior Budget Analyst",
+   "checks": "Assign Budget-Origin Concern score using approved rubric only; record reasoning and evidence",
+   "sources": "Validated budget findings; approved criteria",
+   "deliverable": "Budget-origin scoring worksheet",
+   "qa": "Weighting approved; uncertainty explicitly recorded",
+   "handoff": "Scoring QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T27",
+   "step": 6,
+   "role": "Senior Engineer / Cost Lead",
+   "checks": "Assign Readiness & Value-for-Money Concern score under separate approved rubric",
+   "sources": "Verified technical/cost findings; approved criteria",
+   "deliverable": "Readiness/value scoring worksheet",
+   "qa": "No conflation with budget-origin score",
+   "handoff": "Scoring QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T28",
+   "step": 7,
+   "role": "Risk Analyst / Audit Lead",
+   "checks": "Prioritize verified cases by severity, financial impact and urgency; document justified overrides",
+   "sources": "Verified cases, scores, materiality rubric",
+   "deliverable": "Prioritized review queue",
+   "qa": "Unverified flags never promoted as established",
+   "handoff": "Review Chair",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T29",
+   "step": 7,
+   "role": "Case Manager / Review Coordinator",
+   "checks": "Assign case owner, deadline, next action and escalation route; track blockers and review capacity",
+   "sources": "Prioritized queue",
+   "deliverable": "Case work plan",
+   "qa": "Ownership and deadlines complete",
+   "handoff": "Review Chair",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T30",
+   "step": 8,
+   "role": "Review Committee Chair",
+   "checks": "Choose response: clarification request, independent check, site visit, budget reconsideration or legal referral",
+   "sources": "Verified case pack, risk assessment",
+   "deliverable": "Authorized route decision",
+   "qa": "Human approval and rationale recorded",
+   "handoff": "Committee quorum / governance lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T31",
+   "step": 8,
+   "role": "Legal Counsel / Communications Reviewer",
+   "checks": "Review factual wording and privacy considerations before external queries or referrals",
+   "sources": "Approved finding, evidence excerpts",
+   "deliverable": "Cleared correspondence / referral",
+   "qa": "Avoid premature accusation and personal-data disclosure",
+   "handoff": "Review Chair",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T32",
+   "step": 8,
+   "role": "Field Verification Lead",
+   "checks": "Scope practical site verification, permissions, safety and chain of custody if approved",
+   "sources": "Approved technical query, maps",
+   "deliverable": "Site-check plan and observation record",
+   "qa": "No unauthorized access; photographs attributed",
+   "handoff": "Engineering Lead",
+   "recruitment": "Specialist"
+  },
+  {
+   "id": "T33",
+   "step": 9,
+   "role": "Documentation / Evidence Officer",
+   "checks": "Log actions, originals, reviewer comments, correspondence and decision timeline",
+   "sources": "All case documents",
+   "deliverable": "Complete auditable case file",
+   "qa": "Every decision/source has a traceable record",
+   "handoff": "QA Lead",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T34",
+   "step": 9,
+   "role": "Quality Assurance Reviewer",
+   "checks": "Check missing evidence, reversals, false positives, and consistent closure categories",
+   "sources": "Case file, review decisions",
+   "deliverable": "QA closure checklist",
+   "qa": "Second-person sign-off where possible",
+   "handoff": "Review Chair",
+   "recruitment": "Essential"
+  },
+  {
+   "id": "T35",
+   "step": 9,
+   "role": "Data Analyst / Learning Lead",
+   "checks": "Summarize outcomes and rule performance; feed validated errors back to screening team",
+   "sources": "Closed cases, classifications",
+   "deliverable": "Lessons-learned register",
+   "qa": "Changes approved and tested before rule updates",
+   "handoff": "QA / Automation Lead",
+   "recruitment": "Support"
+  }
+ ],
+ "workflow": [
+  {
+   "step": 1,
+   "stage": "Register",
+   "purpose": "Source/version control",
+   "roles": "Document controller, data encoder",
+   "handoff": "Trace every review to an official preserved source",
+   "safeguard": "No unsupported document substitution"
+  },
+  {
+   "step": 2,
+   "stage": "Fast-pass triage",
+   "purpose": "Candidate exception detection",
+   "roles": "Data analyst, budget analyst",
+   "handoff": "Queue; machine rule and limitation noted",
+   "safeguard": "A machine flag is not a finding"
+  },
+  {
+   "step": 3,
+   "stage": "Document applicability",
+   "purpose": "Requirements by budget/project stage",
+   "roles": "Compliance, auditor, document reviewer",
+   "handoff": "Required / not required / not yet due / missing",
+   "safeguard": "Do not penalize not-yet-due documents"
+  },
+  {
+   "step": 4,
+   "stage": "Cross-check",
+   "purpose": "Budget; pricing; engineering; GIS; legal; procurement",
+   "roles": "Relevant licensed / qualified specialists",
+   "handoff": "Technical/financial/evidence findings",
+   "safeguard": "Procurement stage and sector limitations apply"
+  },
+  {
+   "step": 5,
+   "stage": "Human verification",
+   "purpose": "Independent verification",
+   "roles": "Second professional reviewer",
+   "handoff": "Accept/reject/needs-evidence signed decision",
+   "safeguard": "Reviewer independent of original flagger"
+  },
+  {
+   "step": 6,
+   "stage": "Assess concerns",
+   "purpose": "Two separate scores",
+   "roles": "Senior budget and senior engineering/cost leads",
+   "handoff": "Budget-Origin and Readiness/VFM concerns",
+   "safeguard": "No unapproved thresholds or weights"
+  },
+  {
+   "step": 7,
+   "stage": "Prioritize",
+   "purpose": "Verified severity and impact",
+   "roles": "Risk analyst and case coordinator",
+   "handoff": "Prioritized case queue with override reasons",
+   "safeguard": "Do not outrank by unverified machine confidence"
+  },
+  {
+   "step": 8,
+   "stage": "Route",
+   "purpose": "Query / technical check / reconsideration / referral",
+   "roles": "Authorized review committee",
+   "handoff": "Documented authorized decision",
+   "safeguard": "No automatic accusations or referrals"
+  },
+  {
+   "step": 9,
+   "stage": "Record",
+   "purpose": "Evidence and closure",
+   "roles": "Evidence officer, QA",
+   "handoff": "Complete case log, corrective learning",
+   "safeguard": "Record false positives and cleared cases"
+  }
+ ],
+ "case_columns": [
+  "Case ID",
+  "Project / proposal ID",
+  "Budget source version",
+  "Flag ID",
+  "Flag description (lookup)",
+  "Lead skill (lookup)",
+  "Project name / location",
+  "Initial screening source",
+  "Evidence page / cell / URL",
+  "Observed discrepancy (facts only)",
+  "Case stage",
+  "Assigned volunteer",
+  "Independent verifier",
+  "Evidence applicability",
+  "Budget-origin assessment",
+  "Readiness/value assessment",
+  "Risk priority",
+  "Due date",
+  "Last update (date)",
+  "Human outcome",
+  "Disposition approval / authority",
+  "Notes / next action"
+ ],
+ "evidence_columns": [
+  "Case ID",
+  "Flag ID",
+  "Source institution",
+  "Official document title + version",
+  "Document URL or local path",
+  "Page / table / cell",
+  "Extracted fact (verbatim / amount)",
+  "Reviewer observation",
+  "Applicable at current project stage?",
+  "Document availability",
+  "Human verifier",
+  "Check date",
+  "Verification state",
+  "Notes / explanation"
+ ],
+ "vocabularies": {
+  "case_stage": [
+   "Not started",
+   "AI candidate",
+   "Assigned for review",
+   "Evidence requested",
+   "In independent review",
+   "Completed",
+   "On hold"
+  ],
+  "evidence_applicability": [
+   "Not assessed",
+   "Required now",
+   "Not yet due",
+   "Not applicable",
+   "Missing required record"
+  ],
+  "risk_priority": [
+   "Not prioritized",
+   "High",
+   "Medium",
+   "Low"
+  ],
+  "human_outcome": [
+   "Not reviewed",
+   "Pending technical review",
+   "Verified concern",
+   "Cleared / explained",
+   "Unresolved / evidence gap",
+   "Referred with approval"
+  ],
+  "evidence_applicable_at_stage": [
+   "Not assessed",
+   "Yes",
+   "No",
+   "Not yet due"
+  ],
+  "document_availability": [
+   "Unknown",
+   "Available",
+   "Not available",
+   "Not required",
+   "Not yet due"
+  ],
+  "verification_state": [
+   "Not reviewed",
+   "Verified",
+   "Incorrect extract",
+   "Ambiguous",
+   "Needs more records"
+  ],
+  "routing_status": [
+   "Not assigned",
+   "Assigned",
+   "In progress",
+   "Awaiting evidence",
+   "For independent review",
+   "Completed",
+   "On hold"
+  ],
+  "group_approval": [
+   "Pending group review",
+   "Approved",
+   "Needs revision",
+   "Not applicable"
+  ]
+ },
+ "integration_spec": [
+  {
+   "Proposed field": "flag_id",
+   "Expected content": "RF-001 through RF-044",
+   "Meaning": "Definition key from source registry; never assign a different meaning",
+   "Current readiness": "Proposed / not implemented",
+   "Implementation guardrail": "Registry owner approves list"
+  },
+  {
+   "Proposed field": "project_id",
+   "Expected content": "DPWH proposal ID or source-specific key",
+   "Meaning": "May be absent in GAB; never force an ID match",
+   "Current readiness": "Existing partial intake",
+   "Implementation guardrail": "Provenance fields mandatory"
+  },
+  {
+   "Proposed field": "budget_source_version",
+   "Expected content": "NEP FY 2027 / House-approved HB10858 3rd reading",
+   "Meaning": "Budget version for any comparison",
+   "Current readiness": "Under validation",
+   "Implementation guardrail": "Version must be explicit"
+  },
+  {
+   "Proposed field": "detector_rule_id",
+   "Expected content": "e.g. D13; others only when implemented",
+   "Meaning": "Link to machine detector, NOT identical to volunteer Flag ID",
+   "Current readiness": "Partially available",
+   "Implementation guardrail": "Require formal mapping & validation"
+  },
+  {
+   "Proposed field": "flag_status",
+   "Expected content": "AI candidate / under human review / human outcome",
+   "Meaning": "Display verification stage separately from matching classification",
+   "Current readiness": "Proposed / not implemented",
+   "Implementation guardrail": "AI candidate is not a finding"
+  },
+  {
+   "Proposed field": "source_locator",
+   "Expected content": "Official URL, PDF page, row/column",
+   "Meaning": "Precise source references per observation",
+   "Current readiness": "Partially available",
+   "Implementation guardrail": "No unsupported source claims"
+  },
+  {
+   "Proposed field": "lead_task_id",
+   "Expected content": "T01–T35",
+   "Meaning": "Human responsibility cross-reference",
+   "Current readiness": "Workbook mapping only",
+   "Implementation guardrail": "Lead role to be approved"
+  },
+  {
+   "Proposed field": "reviewer_id",
+   "Expected content": "Volunteer name / local reviewer reference",
+   "Meaning": "Attributable independent verification",
+   "Current readiness": "Workbook only",
+   "Implementation guardrail": "Avoid sensitive details in public circulation"
+  },
+  {
+   "Proposed field": "document_stage",
+   "Expected content": "Required now / not yet due / not applicable",
+   "Meaning": "Apply documentary gates before findings",
+   "Current readiness": "Proposed / not implemented",
+   "Implementation guardrail": "Do not score absent later-stage documents"
+  },
+  {
+   "Proposed field": "decision_approval",
+   "Expected content": "Human approval, approver, date",
+   "Meaning": "Escalation authorization and audit trail",
+   "Current readiness": "Proposed / not implemented",
+   "Implementation guardrail": "Do not auto-publish or auto-escalate"
+  }
+ ]
+}

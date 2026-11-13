@@ -37,6 +37,8 @@
 import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
 import { handleHearings } from "./hearings";
+import { REVIEWS_API, handleReviews } from "./hgab-reviews";
+import { SENATE_COPIES_API, handleSenateCopies } from "./hgab-senate-copies";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
 import { serveStaticPage, staticPageFor } from "./static-pages";
@@ -1470,6 +1472,15 @@ export default {
       if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
       try { return await handleProgramsPage(env, deptId, url); }
       catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+
+    // ---- Project reviewer: reviews sent by signed-in members (D1) ----
+    if (url.pathname === REVIEWS_API || url.pathname.startsWith(`${REVIEWS_API}/`)) {
+      return handleReviews(request, env, url);
+    }
+    // The House bill's Senate copies, for signed-in members only.
+    if (url.pathname.startsWith(`${SENATE_COPIES_API}/`)) {
+      return handleSenateCopies(request, env, url);
     }
 
     // ---- Budget Briefing/Hearings index ----
