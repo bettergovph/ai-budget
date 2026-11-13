@@ -1173,7 +1173,8 @@ function Reviewer() {
   const statusOf = useCallback((h: string): ListStatus => {
     const own = reviewStatusFromStage(reviews[h]?.case_stage);
     const members: ReviewStatus = shared ? furthestStatus([shared[h]?.status ?? 'not_started', own]) : own;
-    return listStatus(members, !!autoRows?.[h]);
+    // The automatic review: D1's (review_auto, through the status API) or, where D1 hasn't been synced, review.json's.
+    return listStatus(members, !!shared?.[h]?.auto || !!autoRows?.[h]);
   }, [reviews, shared, autoRows]);
   const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.

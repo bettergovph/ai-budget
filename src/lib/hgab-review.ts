@@ -143,7 +143,21 @@ export const listStatus = (members: ReviewStatus, auto: boolean): ListStatus => 
  * the furthest status any member's review has reached, how many members have a review, and the last save. Projects
  * nobody has reviewed are left out. The page's `statusOf` reads it.
  */
-export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: number; updated_at: string }>;
+export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: number; updated_at: string; auto?: { score: number; method: string } }>;
+
+/**
+ * Adds D1's automatic reviews (review_auto, kept in step with review.json `auto` by sync:hgab-auto-reviews) to a
+ * status index: each project's entry carries `auto`, and a project with only an automatic review gets an entry with
+ * no member reviews ("not_started", 0). Members' statuses are untouched; the page's list status lets them take over.
+ */
+export function withAutoReviews(index: ReviewStatusIndex, auto: Iterable<{ hgab_id: string; score: number; method: string; updated_at: string }>): ReviewStatusIndex {
+  const out: ReviewStatusIndex = { ...index };
+  for (const a of auto) {
+    const cur = out[a.hgab_id] ?? { status: 'not_started' as const, reviews: 0, updated_at: a.updated_at };
+    out[a.hgab_id] = { ...cur, auto: { score: a.score, method: a.method } };
+  }
+  return out;
+}
 
 /**
  * How far a review has gone, so a project shows the furthest of its reviews: on hold counts below in progress, as

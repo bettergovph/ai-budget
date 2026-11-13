@@ -2,7 +2,8 @@
  * Reviews from the project reviewer (`/hgab/2027/review`), sent by members who signed in with Clerk (email code, no
  * password). Internal to the site, like /api/hearings: not part of the read-only, CORS-open /api/v1.
  *
- *   GET    /api/hgab/2027/reviews/status     every project with a review: the furthest status, how many, last save
+ *   GET    /api/hgab/2027/reviews/status     every project with a review: the furthest status, how many, last save;
+ *                                            and the automatic review (review_auto) where there is one
  *   GET    /api/hgab/2027/reviews/mine       the signed-in member's reviews
  *   POST   /api/hgab/2027/reviews            send a review (a CaseReview); one per member per project, kept editable
  *   DELETE /api/hgab/2027/reviews/:case_id   withdraw one of your reviews (it is kept, and comes back if you send it again)
@@ -22,7 +23,7 @@
  */
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import { READY_STAGE, newId, readCaseReview, validateCaseReview, type CaseReview } from "../lib/hgab-redflags-team";
-import { buildStatusIndex, reviewStatusFromStage, type ReviewStatus } from "../lib/hgab-review";
+import { buildStatusIndex, reviewStatusFromStage, withAutoReviews, type ReviewStatus } from "../lib/hgab-review";
 
 export type ReviewEnv = Env & { CLERK_SECRET_KEY?: string; CLERK_AUTHORIZED_PARTIES?: string };
 interface Login { issuer: string; subject: string }
@@ -96,15 +97,30 @@ const LIVE_REVIEWS = "SELECT hgab_id, status, updated_at FROM review_cases WHERE
 type StatusRow = { hgab_id: string; status: ReviewStatus; updated_at: string };
 
 /** One project's entry in the status list, after a change. */
+const LIVE_AUTO = "SELECT hgab_id, score, method, updated_at FROM review_auto WHERE withdrawn_at IS NULL";
+type AutoRow = { hgab_id: string; score: number; method: string; updated_at: string };
+/**
+ * The automatic reviews (review_auto, from sync:hgab-auto-reviews). None when the table isn't there yet (the schema
+ * not applied to this D1), so the status list keeps working without them.
+ */
+async function autoReviews(env: ReviewEnv, hgabId?: string): Promise<AutoRow[]> {
+  try {
+    const q = hgabId ? env.DB.prepare(`${LIVE_AUTO} AND hgab_id = ?1`).bind(hgabId) : env.DB.prepare(LIVE_AUTO);
+    return (await q.all<AutoRow>()).results ?? [];
+  } catch {
+    return [];
+  }
+}
+
 async function projectStatus(env: ReviewEnv, hgabId: string) {
-  const { results } = await env.DB.prepare(`${LIVE_REVIEWS} AND hgab_id = ?1`).bind(hgabId).all<StatusRow>();
-  return buildStatusIndex(results ?? [])[hgabId] ?? null;
+  const [{ results }, auto] = await Promise.all([env.DB.prepare(`${LIVE_REVIEWS} AND hgab_id = ?1`).bind(hgabId).all<StatusRow>(), autoReviews(env, hgabId)]);
+  return withAutoReviews(buildStatusIndex(results ?? []), auto)[hgabId] ?? null;
 }
 
 async function statusList(env: ReviewEnv) {
-  const { results } = await env.DB.prepare(LIVE_REVIEWS).all<StatusRow>();
-  const data = buildStatusIndex(results ?? []);
-  return reply({ meta: { generated_at: new Date().toISOString(), reviews: results?.length ?? 0, projects: Object.keys(data).length }, data });
+  const [{ results }, auto] = await Promise.all([env.DB.prepare(LIVE_REVIEWS).all<StatusRow>(), autoReviews(env)]);
+  const data = withAutoReviews(buildStatusIndex(results ?? []), auto);
+  return reply({ meta: { generated_at: new Date().toISOString(), reviews: results?.length ?? 0, auto: auto.length, projects: Object.keys(data).length }, data });
 }
 
 /** The member (their id and the name they last gave) and their reviews, newest first. */
