@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  AMOUNT_FLAG_RE, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  AMOUNT_FLAG_RE, AUTO_REVIEW, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
   PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
   type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
   type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
@@ -611,9 +611,19 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
     NAMED_TYPES.reduce((m, t, i) => (p.named_present.includes(t) ? m | (1 << i) : m), 0),
     filesBy.get(p.hgab_id)?.length ?? 0,
   ]);
+  // Automatic review (AUTO_REVIEW): every rule each row meets, and its score.
+  const autoRows: Record<string, { r: number[]; s: number }> = {};
+  for (const r of rows) {
+    const codes = autoRules({ docs: r[8], files: r[9] });
+    if (codes.length) autoRows[r[0]] = { r: codes.map((c) => AUTO_REVIEW.rules.findIndex((x) => x.code === c)), s: autoScore(codes) };
+  }
   const index: ReviewIndex = {
     schema: DOCUMENTS_SCHEMA, built_at: new Date().toISOString(), source_generated_at: generated, named_types: NAMED_TYPES,
     flags: flagsIdx, offices, regions, programs, rows,
+    auto: {
+      method: AUTO_REVIEW.method, status: AUTO_REVIEW.status, note: AUTO_REVIEW.note,
+      rules: AUTO_REVIEW.rules.map((x) => ({ ...x, team_flags: [...x.team_flags] })), bands: AUTO_REVIEW.bands.map((b) => ({ ...b })), rows: autoRows,
+    },
   };
   writeFileSync(resolve(out, REVIEW_INDEX_PATH), JSON.stringify(index));
 
@@ -634,6 +644,12 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
   mkdirSync(resolve(out, DOCUMENTS_DIR, "detail"), { recursive: true });
   for (const [path, shard] of shards) writeFileSync(resolve(out, path), JSON.stringify(shard));
   return {
+    auto_review: {
+      method: AUTO_REVIEW.method,
+      projects: Object.keys(index.auto!.rows).length,
+      php: rows.filter((r) => index.auto!.rows[r[0]]).reduce((s, r) => s + r[6], 0),
+      by_rule: Object.fromEntries(AUTO_REVIEW.rules.map((x, i) => [x.code, Object.values(index.auto!.rows).filter((a) => a.r.includes(i)).length])),
+    },
     nep_comparison: {
       ours_house_only: projects.filter(ourHouseOnly).length,
       research_potential_insertion: projects.filter(researchInsertion).length,

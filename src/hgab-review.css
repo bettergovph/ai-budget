@@ -620,3 +620,58 @@ textarea.rf-input { resize: vertical; }
   .rv-filter-search { flex: 0 0 200px; }
   .rv-stage { width: 160px; }
 }
+
+/* --- reviewed projects: the automatic review and finished reviews ------------------------- */
+.rv-hide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rv-hide span { display: inline-block; width: 12px; text-align: center; color: #fff; }
+.rv-hide small { padding: 0 6px; border-radius: 9px; background: var(--paper-3); color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; }
+.rv-hide:hover { border-color: var(--ink-3); }
+.rv-hide.is-on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.rv-hide.is-on small { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* A reviewed row: a strip saying so, and the rest faded, so volunteers can skip it at a glance. */
+.rv-item.is-reviewed { background: var(--paper-2); }
+.rv-item.is-reviewed .rv-item-title, .rv-item.is-reviewed .rv-item-meta, .rv-item.is-reviewed .rv-item-foot { opacity: 0.55; }
+.rv-item.is-reviewed:hover .rv-item-title, .rv-item.is-reviewed.is-on .rv-item-title { opacity: 0.9; }
+.rv-item-badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.rv-item-badge b { font-family: var(--font-mono); font-weight: 600; }
+.rv-item-badge.is-auto_red_flag { background: var(--rv-flag); color: #fff; }
+.rv-item-badge.is-completed { background: #e7f0e7; color: var(--positive); }
+.rv-item-badge.is-in_independent_review { background: var(--accent-soft); color: var(--accent-deep); }
+.rv-item.is-auto_red_flag { border-left: 3px solid var(--rv-flag); }
+
+/* Status dots in the Review status filter. */
+.rv-status-dot::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--ink-mute); vertical-align: 1px; }
+.rv-status-dot.is-in_progress::before, .rv-status-dot.is-on_hold::before { background: #b08d3a; }
+.rv-status-dot.is-in_independent_review::before { background: var(--accent); }
+.rv-status-dot.is-completed::before { background: var(--positive); }
+.rv-status-dot.is-auto_red_flag::before { background: var(--rv-flag); }
+
+/* The banner on an auto-reviewed project. */
+.rv-autobanner { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--rv-flag); border-left-width: 4px; border-radius: 6px; background: #fdf3f1; }
+.rv-autobanner p { margin: 0 0 6px; font-size: 13px; line-height: 1.45; }
+.rv-autobanner p:last-child { margin-bottom: 0; }
+.rv-autobanner small { color: var(--ink-3); }
+.rv-autobanner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--rv-flag); font-size: 14px !important; }
+.rv-score { padding: 1px 8px; border-radius: 10px; background: var(--rv-flag); color: #fff; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.rv-score small { color: #fff; opacity: 0.85; }

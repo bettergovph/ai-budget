@@ -19,16 +19,16 @@ import { DisclaimerNotice } from '../components/HgabBits';
 import { cached, getJson, HGAB_ROOT, pdfUrl, recordPath } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import {
-  NAMED_TYPES, REVIEW_INDEX_PATH, detailShardPath, type DetailFile, type FlagFamily, type ReviewDetail, type ReviewDetailShard,
+  NAMED_TYPES, REVIEW_INDEX_PATH, scoreBand, detailShardPath, type DetailFile, type FlagFamily, type ReviewDetail, type ReviewDetailShard,
   type ReviewIndex, type ReviewIndexFlag,
 } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  DEFAULT_SORT, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
-  decodeIndex, docCount, furthestStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
+  DEFAULT_SORT, LIST_STATUSES, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
+  decodeIndex, docCount, furthestStatus, isReviewed, listStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type MultiKind, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
+  type ListStatus, type MultiKind, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
@@ -333,7 +333,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
     );
   });
   const flagCount = steps.filter((s) => s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed).length;
-  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs' || s.kind === 'status').length;
+  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs').length;
 
   const docs = multi('docs', () => '');
   const docsBase = projectsWithout(all, steps, 'docs', ctx);
@@ -343,6 +343,9 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
   const minStep = steps.find((s) => s.kind === 'min');
   const minBase = projectsWithout(all, steps, 'min', ctx);
   const status = multi('status', (p) => ctx.statusOf(p.hgabId));
+  // "Hide reviewed" is the status step with exactly the not-yet-reviewed statuses.
+  const hideOn = status.checked.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => status.checked.includes(v));
+  const hiddenCount = [...status.counts].filter(([k]) => isReviewed(k as ListStatus)).reduce((a, [, v]) => a + v, 0);
 
   return (
     <div className="rv-filters" role="toolbar" aria-label="Filters">
@@ -377,12 +380,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
               const k = docsBase.filter(stepTest({ kind: 'docs', values: [v] }, ctx)).length;
               return <Check key={v} checked={docs.checked.includes(v)} onChange={() => toggleValue('docs', v)} label={DOCS_FILTER_LABEL[v]} k={k} max={Math.max(1, docsBase.length)} />;
             })}
-            <h3>Review status</h3>
-            {REVIEW_STATUSES.map((v) => (
-              <Check key={v} checked={status.checked.includes(v)} onChange={() => toggleValue('status', v)} label={REVIEW_STATUS_LABEL[v]}
-                k={status.counts.get(v) ?? 0} max={status.base} />
-            ))}
-            <p className="rv-dd-note">{shared ? 'From every member’s reviews.' : 'Reviewing isn’t open yet.'}</p>
+
           </div>
           <div className="rv-dd-group">
             <h3>Missing, after our matching</h3>
@@ -390,6 +388,25 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
             {flagChecks(['documents'], true)}
           </div>
         </div>
+      </Dropdown>
+
+      <button type="button" className={`rv-hide ${hideOn ? 'is-on' : ''}`} aria-pressed={hideOn}
+        title="Leave out auto-reviewed red flags and reviews that are done or with a verifier"
+        onClick={() => onSteps((cur) => setValues(cur, 'status', hideOn ? [] : [...NOT_REVIEWED_STATUSES]))}>
+        <span aria-hidden="true">{hideOn ? '✓' : ''}</span> Hide reviewed{hiddenCount > 0 && <small>{n(hiddenCount)}</small>}
+      </button>
+
+      <Dropdown label="Review status" count={status.checked.length} active={status.checked.length > 0}>
+        {LIST_STATUSES.map((v) => (
+          <Check key={v} checked={status.checked.includes(v)} onChange={() => toggleValue('status', v)}
+            label={<span className={`rv-status-dot is-${v}`}>{LIST_STATUS_LABEL[v]}</span>}
+            note={v === 'auto_red_flag' ? 'No key document and no file: marked without a review' : isReviewed(v) ? 'Counts as reviewed' : undefined}
+            k={status.counts.get(v) ?? 0} max={status.base} />
+        ))}
+        <PanelFoot>
+          <span>{shared ? 'From every member’s reviews and the automatic review.' : 'Reviewing isn’t open yet; the automatic review shows.'}</span>
+          {status.checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'status', []))}>Clear</button>}
+        </PanelFoot>
       </Dropdown>
 
       <Dropdown label="Region" count={region.checked.length} active={region.checked.length > 0}>
@@ -503,7 +520,7 @@ function DocDots({ mask }: { mask: number }) {
 function ProjectList({ projects, selected, statusOf, reviewsOf, mine, onOpen }: {
   projects: ReviewProject[];
   selected: string | null;
-  statusOf: (hgabId: string) => ReviewStatus;
+  statusOf: (hgabId: string) => ListStatus;
   /** How many members have a review of a project (0 when only this browser's reviews are known). */
   reviewsOf: (hgabId: string) => number;
   mine: Readonly<Record<string, CaseReview>>;
@@ -518,16 +535,21 @@ function ProjectList({ projects, selected, statusOf, reviewsOf, mine, onOpen }: 
         const st = statusOf(p.hgabId);
         return (
           <li key={p.hgabId} id={`rv-item-${p.hgabId}`}>
-            <button type="button" className={`rv-item ${p.hgabId === selected ? 'is-on' : ''}`} onClick={() => onOpen(p)} aria-current={p.hgabId === selected ? 'true' : undefined}>
+            <button type="button" className={`rv-item ${p.hgabId === selected ? 'is-on' : ''} ${isReviewed(st) ? `is-reviewed is-${st}` : ''}`} onClick={() => onOpen(p)} aria-current={p.hgabId === selected ? 'true' : undefined}>
+              {isReviewed(st) && (
+                <span className={`rv-item-badge is-${st}`}>
+                  {st === 'auto_red_flag' ? <>Red flag · auto-reviewed{p.auto && <b> · score {p.auto.score}</b>}</> : st === 'completed' ? 'Reviewed' : 'Reviewed · with a verifier'}
+                </span>
+              )}
               <span className="rv-item-title">{p.title}</span>
               <span className="rv-item-meta" title={officeLine(p.office, 99)}>{officeLine(p.office, 1)} · {p.region}</span>
               <span className="rv-item-foot">
                 <b>{pesoShort(p.amount)}</b>
                 <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
                 <DocDots mask={p.docs} />
-                {st !== 'not_started' && (
+                {st !== 'not_started' && !isReviewed(st) && (
                   <span className={`rv-status is-${st}`} title={reviewsOf(p.hgabId) ? `${n(reviewsOf(p.hgabId))} ${reviewsOf(p.hgabId) === 1 ? 'member has' : 'members have'} a review` : undefined}>
-                    {REVIEW_STATUS_LABEL[st]}{reviewsOf(p.hgabId) > 1 && <small> · {n(reviewsOf(p.hgabId))}</small>}
+                    {LIST_STATUS_LABEL[st]}{reviewsOf(p.hgabId) > 1 && <small> · {n(reviewsOf(p.hgabId))}</small>}
                   </span>
                 )}
                 {mine[p.hgabId] && <span className="rv-yours">Yours</span>}
@@ -950,6 +972,19 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
           <TakenNote entry={entry} mineSent={!!mine} />
           {panel('overview', (
             <>
+              {project.auto && index.auto && (
+                <section className="rv-autobanner" aria-label="Automatic review">
+                  <p className="rv-autobanner-head">
+                    <b>Red flag · auto-reviewed</b>
+                    <span className="rv-score">Score {project.auto.score}{scoreBand(project.auto.score) && <small> · {scoreBand(project.auto.score)}</small>}</span>
+                  </p>
+                  {project.auto.rules.map((code) => {
+                    const r = index.auto!.rules.find((x) => x.code === code);
+                    return r ? <p key={code}><b>{r.label}.</b> {r.note} <small>Team checks {r.team_flags.join(', ')}.</small></p> : null;
+                  })}
+                  <p className="rv-muted">{index.auto.note} A member can still review this project; their review then sets its status.</p>
+                </section>
+              )}
               <dl className="rv-facts">
                 <div><dt>House bill</dt><dd><b>{pesoFull(project.amount)}</b></dd></div>
                 <div><dt>Office</dt><dd>{o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`}</dd></div>
@@ -1084,10 +1119,13 @@ function Reviewer() {
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
   // A project's review status: the furthest of every member's reviews and the member's own (just saved, say).
-  const statusOf = useCallback((h: string): ReviewStatus => {
+  // …and "Auto-reviewed: red flag" when nobody has started a project the automatic review marked (review.json `auto`).
+  const autoRows = index?.auto?.rows;
+  const statusOf = useCallback((h: string): ListStatus => {
     const own = reviewStatusFromStage(reviews[h]?.case_stage);
-    return shared ? furthestStatus([shared[h]?.status ?? 'not_started', own]) : own;
-  }, [reviews, shared]);
+    const members: ReviewStatus = shared ? furthestStatus([shared[h]?.status ?? 'not_started', own]) : own;
+    return listStatus(members, !!autoRows?.[h]);
+  }, [reviews, shared, autoRows]);
   const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
   const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);

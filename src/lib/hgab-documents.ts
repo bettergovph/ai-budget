@@ -258,6 +258,53 @@ export const OUR_NEP_FLAGS = {
 } as const;
 
 /**
+ * Automatic review: projects so plainly red-flagged that a person need not open them first. The builder applies the
+ * rules to every row and writes the result to review.json `auto`; the reviewer shows those projects as
+ * "Auto-reviewed: red flag" until a member reviews them, and lets volunteers skip them.
+ *
+ * The score is provisional. The team has not approved a scoring rubric (workflow step 6 says "no unapproved thresholds
+ * or weights"), so there is one rule, at full weight, and the scale is ours to change: score = the sum of the matched
+ * rules' weights, capped at 100. Answers in members' reviews will add to it once the team settles the method.
+ */
+export const AUTO_REVIEW = {
+  method: "auto-1",
+  status: "red_flag",
+  note: "Provisional score: one automatic rule so far; the team has not yet approved a scoring method.",
+  rules: [
+    {
+      code: "no-key-documents",
+      label: "No key document found",
+      weight: 100,
+      team_flags: ["RF-033", "RF-021"],
+      note: "None of the five key documents (program of work, BP 202, development council endorsement, geotagged photos, certificate of implementability), and no other file, in the Senate copies or on DPWH Transparency.",
+    },
+  ],
+  /** Score bands for labels; the red-flag status starts at "High". */
+  bands: [
+    { min: 70, label: "High" },
+    { min: 40, label: "Medium" },
+    { min: 1, label: "Low" },
+  ],
+} as const;
+export type AutoRuleCode = (typeof AUTO_REVIEW.rules)[number]["code"];
+export const autoScore = (rules: readonly AutoRuleCode[]) =>
+  Math.min(100, rules.reduce((s, c) => s + (AUTO_REVIEW.rules.find((r) => r.code === c)?.weight ?? 0), 0));
+export const scoreBand = (score: number) => AUTO_REVIEW.bands.find((b) => score >= b.min)?.label ?? null;
+/** The rules a project meets, from its review.json row: none of the five key documents and no file at all. */
+export function autoRules(row: { docs: number; files: number }): AutoRuleCode[] {
+  return row.docs === 0 && row.files === 0 ? ["no-key-documents"] : [];
+}
+/** review.json `auto`: the method, its rules, and each auto-reviewed project's rule indexes and score. */
+export interface ReviewIndexAuto {
+  method: string;
+  status: string;
+  note: string;
+  rules: { code: string; label: string; weight: number; team_flags: readonly string[]; note: string }[];
+  bands: { min: number; label: string }[];
+  rows: Record<string, { r: number[]; s: number }>;
+}
+
+/**
  * One row of review.json `rows`, positional to keep the file small:
  * [hgab_id, project_id, title, office index, region index, program index, amount_php, flag indexes, named-type
  *  bitmask (bit i = NAMED_TYPES[i] present, with our links), files (Senate + Proposal)]
@@ -273,6 +320,8 @@ export interface ReviewIndex {
   regions: string[];
   programs: string[];
   rows: ReviewIndexRow[];
+  /** Automatic review (AUTO_REVIEW); absent in files built before it. */
+  auto?: ReviewIndexAuto;
 }
 
 /** One file in a detail shard: [source, link_method, doc_type, source_type, name, url, bytes | null, archived, folder code]. */
