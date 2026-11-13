@@ -13,6 +13,8 @@ export interface Member {
   loaded: boolean;
   userId: string | null;
   email: string | null;
+  /** The name on the sign-in account (full name, else username), for the review; null when there is none. */
+  name: string | null;
   getToken: () => Promise<string | null>;
   /** Opens the sign-in (or sign-up) dialog: email, then a code; no password. */
   signIn: () => void;
@@ -20,10 +22,12 @@ export interface Member {
 }
 
 export const SIGNED_OUT: Member = {
-  enabled: false, loaded: true, userId: null, email: null, getToken: async () => null, signIn: () => {}, signOut: () => {},
+  enabled: false, loaded: true, userId: null, email: null, name: null, getToken: async () => null, signIn: () => {}, signOut: () => {},
 };
 export const MemberContext = createContext<Member>(SIGNED_OUT);
 export const useMember = () => useContext(MemberContext);
+/** How a member shows to the team: the account's name, else the part of the email before "@". */
+export const memberLabel = (m: Pick<Member, 'name' | 'email'>) => m.name?.trim() || m.email?.split('@')[0] || '';
 
 /**
  * Where to open a document, by its address in the data: Senate copies only with the signed-in member's grant (null

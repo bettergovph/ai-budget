@@ -15,11 +15,13 @@ function Bridge({ children }: { children: ReactNode }) {
   const { user } = useUser();
   const clerk = useClerk();
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
+  const name = user?.fullName?.trim() || user?.username || null;
   const value = useMemo<Member>(() => ({
     enabled: true,
     loaded: isLoaded,
     userId: userId ?? null,
     email,
+    name,
     getToken: () => getToken(),
     // Back to this page (the project, its tab and the funnel) after signing in or up, by email or Google. Forced,
     // because the production instance's own "after sign-in" address is the home page.
@@ -29,7 +31,7 @@ function Bridge({ children }: { children: ReactNode }) {
     },
     // Back to the same project and funnel, reloaded so nothing of the member's stays on screen (shared computers).
     signOut: () => { const here = window.location.href; void signOut({ redirectUrl: here }).then(() => window.location.reload()); },
-  }), [isLoaded, userId, email, getToken, signOut, clerk]);
+  }), [isLoaded, userId, email, name, getToken, signOut, clerk]);
   return <MemberContext.Provider value={value}>{children}</MemberContext.Provider>;
 }
 

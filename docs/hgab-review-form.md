@@ -302,6 +302,15 @@ Some projects are red flags plainly enough that volunteers need not open them fi
 
 When the team settles the method, answers in members' reviews can add weighted components: outcomes per check, document availability, priority. Members' scores would join the rules here under a new `method`. Projects keep their rule codes, so earlier scores can be explained.
 
+## Fewer clicks (2026-11-13)
+
+- **Choices are buttons, not dropdowns:** outcome, applicability, the three evidence questions, case stage and suggested priority (`Seg` in `HgabReviewForm.tsx`). Clicking the chosen button again clears it. The buttons use plain words ("Needs an expert", "Concern confirmed", "Cleared", "Evidence missing"; "Working on it", "Waiting for evidence", "On hold"). Each button's tooltip, the payload and the exports keep the workbook's own labels and codes.
+- **Outcome buttons sit on every check**, visible without opening it, so a check can take one click. Choosing an outcome that needs facts or evidence opens the check and says what is missing, by the same rules the API applies.
+- **Evidence is one click:** a button per file of the project, and one for any other document or link.
+- **The name comes from the sign-in.** It is the account's full name or username, else the part of the email before "@" (`memberLabel`), and is sent as `reviewer.display_name` with every save. There is no name field.
+- **Removed from the form:** the role field, "Next action", and the hint about the review committee. "Referred with approval" is still not offered, because it belongs to the committee (workflow step 8). Existing values stay in the review.
+- **Save draft** and **Ready for independent review** stay pinned at the bottom of the review.
+
 ## Not taken in
 
 - The 24 draft indicators. Promoting any of them is the team's decision.
