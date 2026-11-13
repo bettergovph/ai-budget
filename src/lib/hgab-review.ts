@@ -32,16 +32,19 @@ export interface ReviewProject {
   files: number;
   /** Where its documents come from (SOURCE_GROUPS). */
   source: SourceGroup;
+  /** In the House bill only, by our comparison (INSERTION_FLAG). */
+  insertion: boolean;
   /** Automatic review (review.json `auto`): the rules it met and its provisional score; null when not auto-reviewed. */
   auto: { rules: string[]; score: number } | null;
 }
 
 export function decodeIndex(ix: ReviewIndex): ReviewProject[] {
+  const ins = ix.flags.findIndex((f) => f.code === INSERTION_FLAG);
   return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
     const a = ix.auto?.rows[hgabId];
     const auto = a ? { rules: a.r.map((i) => ix.auto!.rules[i]?.code).filter(Boolean), score: a.s } : null;
-    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), auto };
+    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto };
   });
 }
 
@@ -71,24 +74,39 @@ export type Step =
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
 
 /**
- * Where a project's documents come from. Senate copies are DPWH's documents for the House bill's additions (98% of
- * the lines with only Senate copies are House-only in our comparison); DPWH Transparency documents are the NEP
- * proposal's (none of the lines with only those are House-only). Review progress is counted by these groups.
+ * Where a project's documents come from: Senate copies (DPWH's documents for the House bill's additions; 98% of the
+ * lines with only Senate copies are House-only in our comparison), DPWH Transparency (the NEP proposal's), both, or
+ * no file. A filter under Documents; review progress is counted by PROGRESS_GROUPS instead.
  */
 export const SOURCE_GROUPS = ['senate', 'nep', 'both', 'none'] as const;
 export type SourceGroup = (typeof SOURCE_GROUPS)[number];
 export const SOURCE_GROUP_LABEL: Record<SourceGroup, string> = {
-  senate: 'Senate documents',
-  nep: 'NEP only',
-  both: 'Both sources',
-  none: 'No documents',
+  senate: 'Senate copies',
+  nep: 'DPWH Transparency',
+  both: 'Both',
+  none: 'No file found',
 };
 export const SOURCE_GROUP_NOTE: Record<SourceGroup, string> = {
-  senate: 'House insertions, with Senate copies of DPWH’s documents',
-  nep: 'In the NEP, with DPWH Transparency documents only',
+  senate: 'Senate copies of DPWH’s documents only; nearly all are House insertions',
+  nep: 'DPWH Transparency documents only (the NEP proposal’s)',
   both: 'Senate copies and DPWH Transparency documents',
   none: 'No file found; most are auto-reviewed',
 };
+/**
+ * Review progress is counted by what a project is: a House insertion (in the House bill only, by our comparison, as
+ * our House bill pages count them) or a project matched to an NEP line ("NEP only"). Every project is one or the
+ * other, auto-reviewed ones included.
+ */
+export const PROGRESS_GROUPS = ['insertion', 'nep'] as const;
+export type ProgressGroup = (typeof PROGRESS_GROUPS)[number];
+export const PROGRESS_GROUP_LABEL: Record<ProgressGroup, string> = { insertion: 'House insertions', nep: 'NEP only' };
+export const PROGRESS_GROUP_NOTE: Record<ProgressGroup, string> = {
+  insertion: 'Insertion candidates: in the House bill only, by our comparison (as our House bill pages count them)',
+  nep: 'Matched to an NEP line by our comparison',
+};
+/** The flag that marks a House insertion (our comparison), for the progress groups and their filter steps. */
+export const INSERTION_FLAG = 'house-bill-only-our-comparison';
+
 /** The group from a review.json row's sources bitmask (1 Senate copies, 2 DPWH Transparency). */
 export const sourceGroup = (mask: number): SourceGroup => (mask === 3 ? 'both' : mask === 1 ? 'senate' : mask === 2 ? 'nep' : 'none');
 
@@ -333,14 +351,14 @@ export interface ProgressRow {
   pending: number;
   pending_php: number;
 }
-/** Review progress by where the documents come from, and in all: what is reviewed, started and still pending. */
-export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId: string) => ListStatus): { groups: Record<SourceGroup, ProgressRow>; total: ProgressRow } {
+/** Review progress for House insertions, NEP only, and in all: what is reviewed, started and still pending. */
+export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId: string) => ListStatus): { groups: Record<ProgressGroup, ProgressRow>; total: ProgressRow } {
   const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, members: 0, started: 0, pending: 0, pending_php: 0 });
-  const groups = Object.fromEntries(SOURCE_GROUPS.map((g) => [g, blank()])) as Record<SourceGroup, ProgressRow>;
+  const groups = Object.fromEntries(PROGRESS_GROUPS.map((g) => [g, blank()])) as Record<ProgressGroup, ProgressRow>;
   const total = blank();
   for (const p of all) {
     const st = statusOf(p.hgabId);
-    for (const r of [groups[p.source], total]) {
+    for (const r of [groups[p.insertion ? 'insertion' : 'nep'], total]) {
       r.projects++; r.php += p.amount;
       if (isReviewed(st)) { r.reviewed++; if (st === 'auto_red_flag') r.auto++; else r.members++; }
       else { r.pending++; r.pending_php += p.amount; if (st === 'in_progress' || st === 'on_hold') r.started++; }
@@ -439,6 +457,8 @@ export const FAMILY_ORDER: readonly FlagFamily[] = FLAG_FAMILIES.map((f) => f.ke
 export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: readonly ReviewIndexOffice[] = [], teamTitles: ReadonlyMap<string, string> = new Map()): string {
   switch (s.kind) {
     case 'flag': {
+      // Our House-only flag reads as the progress groups do.
+      if (s.code === INSERTION_FLAG) return s.not ? PROGRESS_GROUP_LABEL.nep : PROGRESS_GROUP_LABEL.insertion;
       const f = flags.find((x) => x.code === s.code);
       const l = f ? readerText(f.label) : s.code;
       return s.not ? `Not: ${l}` : l;

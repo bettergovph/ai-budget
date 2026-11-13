@@ -24,11 +24,11 @@ import {
 } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  DEFAULT_SORT, LIST_STATUSES, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
+  DEFAULT_SORT, INSERTION_FLAG, LIST_STATUSES, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
   decodeIndex, docCount, furthestStatus, isReviewed, listStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type ListStatus, type MultiKind, type ProgressRow, type SourceGroup, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
+  type ListStatus, type MultiKind, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
@@ -475,17 +475,16 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
 }
 
 /**
- * How far the review has gone, by where the documents come from: Senate documents (House insertions) and NEP only
- * first, then the rest and the total. Counted over every project, whatever the funnel. A group opens its pending
- * projects in the funnel.
+ * How far the review has gone: House insertions (our comparison), NEP only, and all projects. Counted over every
+ * project, whatever the funnel, auto-reviewed ones included. A card opens its pending projects in the funnel.
  */
-function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statusOf: (h: string) => ListStatus; onPick: (g: SourceGroup | null) => void }) {
+function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statusOf: (h: string) => ListStatus; onPick: (g: ProgressGroup | null) => void }) {
   const { groups, total } = useMemo(() => reviewProgress(all, statusOf), [all, statusOf]);
   const pct = (r: ProgressRow) => (r.projects ? Math.round((r.reviewed / r.projects) * 100) : 0);
-  const card = (g: SourceGroup | null, r: ProgressRow, main: boolean) => {
-    const name = g ? SOURCE_GROUP_LABEL[g] : 'All projects';
+  const card = (g: ProgressGroup | null, r: ProgressRow, main: boolean) => {
+    const name = g ? PROGRESS_GROUP_LABEL[g] : 'All projects';
     const detail = [
-      g ? SOURCE_GROUP_NOTE[g] : 'Every DPWH project in the House bill',
+      g ? PROGRESS_GROUP_NOTE[g] : 'Every DPWH project in the House bill',
       `${n(r.pending)} pending of ${n(r.projects)} (${pesoShort(r.pending_php)})`,
       r.members ? `${n(r.members)} reviewed by members` : '',
       r.auto ? `${n(r.auto)} auto-reviewed` : '',
@@ -510,10 +509,8 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
     <section className="rv-progress" aria-label="Review progress">
       <h2 className="rv-h">Review progress</h2>
       <ul>
-        {card('senate', groups.senate, true)}
+        {card('insertion', groups.insertion, true)}
         {card('nep', groups.nep, true)}
-        {card('none', groups.none, false)}
-        {card('both', groups.both, false)}
         {card(null, total, false)}
       </ul>
     </section>
@@ -540,18 +537,17 @@ function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
           <li key={i} className={`rv-stage ${i === levels.length - 1 ? 'is-last' : ''}`}>
             <div className="rv-stage-head">
               <span className="rv-stage-label" title={label}>{label}</span>
-              {L.step && <button type="button" className="rv-stage-x" onClick={() => onRemove(i - 1)} aria-label={`Remove: ${label}`}>×</button>}
-            </div>
-            <div className="rv-stage-figs">
-              <b>{n(L.projects.length)}</b><span>{pesoShort(L.amount)}</span>
-              {prev != null && prev !== L.projects.length && <em>−{n(prev - L.projects.length)}</em>}
+              {L.step?.kind === 'flag' && (
+                <button type="button" className="rv-stage-btn" onClick={() => onFlip(i - 1)}
+                  title={L.step.not ? 'Keep these instead' : 'Leave these out instead'} aria-label={L.step.not ? `Keep: ${label}` : `Leave out: ${label}`}>⇄</button>
+              )}
+              {L.step && <button type="button" className="rv-stage-btn" onClick={() => onRemove(i - 1)} aria-label={`Remove: ${label}`} title="Remove this step">×</button>}
             </div>
             <div className="rv-stage-bar" aria-hidden="true"><span style={{ width: `${Math.max((L.projects.length / total) * 100, L.projects.length ? 0.8 : 0)}%` }} /></div>
-            {L.step?.kind === 'flag' && (
-              <button type="button" className="rv-stage-flip" onClick={() => onFlip(i - 1)}>
-                {L.step.not ? 'Keep these instead' : 'Leave these out instead'}
-              </button>
-            )}
+            <div className="rv-stage-figs">
+              <span><b>{n(L.projects.length)}</b> · {pesoShort(L.amount)}</span>
+              {prev != null && prev !== L.projects.length && <em>−{n(prev - L.projects.length)}</em>}
+            </div>
           </li>
         );
       })}
@@ -1290,7 +1286,10 @@ function Reviewer() {
             onFlip={(i) => applySteps((cur) => cur.map((s, j) => (j === i && s.kind === 'flag' ? { ...s, not: !s.not } : s)))}
           />
           <ReviewProgress all={all} statusOf={statusOf}
-            onPick={(g) => applySteps(() => [...(g ? [{ kind: 'source', values: [g] } as Step] : []), { kind: 'status', values: [...NOT_REVIEWED_STATUSES] }])} />
+            onPick={(g) => applySteps(() => [
+              ...(g ? [{ kind: 'flag', code: INSERTION_FLAG, not: g === 'nep' } as Step] : []),
+              { kind: 'status', values: [...NOT_REVIEWED_STATUSES] },
+            ])} />
         </div>
         <div className={`rv-cols show-${pane}`}>
           <section className="rv-list" aria-label="Projects">
