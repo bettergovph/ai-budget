@@ -24,11 +24,11 @@ import {
 } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  DEFAULT_SORT, LIST_STATUSES, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
+  DEFAULT_SORT, LIST_STATUSES, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
   decodeIndex, docCount, furthestStatus, isReviewed, listStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type ListStatus, type MultiKind, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
+  type ListStatus, type MultiKind, type ProgressRow, type SourceGroup, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
@@ -333,9 +333,10 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
     );
   });
   const flagCount = steps.filter((s) => s.kind === 'flag' && !ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed).length;
-  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs').length;
+  const docsCount = steps.filter((s) => (s.kind === 'flag' && ix.flags[ctx.flagIndex.get(s.code) ?? -1]?.computed) || s.kind === 'docs' || s.kind === 'source').length;
 
   const docs = multi('docs', () => '');
+  const source = multi('source', (p) => p.source);
   const docsBase = projectsWithout(all, steps, 'docs', ctx);
   const region = multi('region', (p) => p.region);
   const office = multi('office', (p) => p.office.name);
@@ -349,6 +350,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
 
   return (
     <div className="rv-filters" role="toolbar" aria-label="Filters">
+      <span className="rv-filters-label" aria-hidden="true">Filter</span>
       <Dropdown label="Start from" wide>
         <p className="rv-dd-note">A ready-made funnel. It replaces your filters.</p>
         {presets.map((p) => (
@@ -375,6 +377,11 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
       <Dropdown label="Documents" count={docsCount} active={docsCount > 0} wide>
         <div className="rv-dd-cols">
           <div className="rv-dd-group">
+            <h3>Where the documents come from</h3>
+            {SOURCE_GROUPS.map((v) => (
+              <Check key={v} checked={source.checked.includes(v)} onChange={() => toggleValue('source', v)} label={SOURCE_GROUP_LABEL[v]} note={SOURCE_GROUP_NOTE[v]}
+                k={source.counts.get(v) ?? 0} max={source.base} />
+            ))}
             <h3>How many of the 5 key documents</h3>
             {DOCS_FILTERS.map((v) => {
               const k = docsBase.filter(stepTest({ kind: 'docs', values: [v] }, ctx)).length;
@@ -464,6 +471,46 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
 
       {steps.length > 0 && <button type="button" className="rv-clear" onClick={() => { setQ(''); onSteps(() => []); }}>Clear all</button>}
     </div>
+  );
+}
+
+/**
+ * How far the review has gone, by where the documents come from: Senate documents (House insertions) and NEP only
+ * first, then the rest and the total. Counted over every project, whatever the funnel. A group opens its pending
+ * projects in the funnel.
+ */
+function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statusOf: (h: string) => ListStatus; onPick: (g: SourceGroup | null) => void }) {
+  const { groups, total } = useMemo(() => reviewProgress(all, statusOf), [all, statusOf]);
+  const pct = (r: ProgressRow) => (r.projects ? Math.round((r.reviewed / r.projects) * 100) : 0);
+  const card = (g: SourceGroup | null, r: ProgressRow, main: boolean) => (
+    <li key={g ?? 'all'} className={`rv-prog ${main ? 'is-main' : ''}`}>
+      <button type="button" onClick={() => onPick(g)} disabled={!r.pending}
+        title={`${g ? SOURCE_GROUP_NOTE[g] : 'Every DPWH project in the House bill'}. Click to list the pending ones.`}>
+        <span className="rv-prog-head"><b>{g ? SOURCE_GROUP_LABEL[g] : 'All projects'}</b>{g && main && <small>{SOURCE_GROUP_NOTE[g].split(',')[0]}</small>}</span>
+        <span className="rv-prog-figs"><b>{n(r.pending)}</b> pending <span>of {n(r.projects)}</span></span>
+        <span className="rv-prog-bar" aria-hidden="true">
+          <span className="is-auto" style={{ width: `${(r.auto / Math.max(1, r.projects)) * 100}%` }} />
+          <span className="is-members" style={{ width: `${(r.members / Math.max(1, r.projects)) * 100}%` }} />
+          <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
+        </span>
+        <span className="rv-prog-foot">
+          {pct(r)}% reviewed{r.members > 0 && <> · {n(r.members)} by members</>}{r.auto > 0 && <> · {n(r.auto)} auto</>}{r.started > 0 && <> · {n(r.started)} started</>}
+          <span>{pesoShort(r.pending_php)} pending</span>
+        </span>
+      </button>
+    </li>
+  );
+  return (
+    <section className="rv-progress" aria-label="Review progress">
+      <h2 className="rv-h">Review progress</h2>
+      <ul>
+        {card('senate', groups.senate, true)}
+        {card('nep', groups.nep, true)}
+        {card('none', groups.none, false)}
+        {card('both', groups.both, false)}
+        {card(null, total, false)}
+      </ul>
+    </section>
   );
 }
 
@@ -1236,6 +1283,8 @@ function Reviewer() {
             onRemove={(i) => applySteps((cur) => cur.filter((_, j) => j !== i))}
             onFlip={(i) => applySteps((cur) => cur.map((s, j) => (j === i && s.kind === 'flag' ? { ...s, not: !s.not } : s)))}
           />
+          <ReviewProgress all={all} statusOf={statusOf}
+            onPick={(g) => applySteps(() => [...(g ? [{ kind: 'source', values: [g] } as Step] : []), { kind: 'status', values: [...NOT_REVIEWED_STATUSES] }])} />
         </div>
         <div className={`rv-cols show-${pane}`}>
           <section className="rv-list" aria-label="Projects">

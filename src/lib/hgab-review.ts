@@ -30,16 +30,18 @@ export interface ReviewProject {
   /** Bit i = NAMED_TYPES[i] present (Senate or Proposal files, or the research site's types). */
   docs: number;
   files: number;
+  /** Where its documents come from (SOURCE_GROUPS). */
+  source: SourceGroup;
   /** Automatic review (review.json `auto`): the rules it met and its provisional score; null when not auto-reviewed. */
   auto: { rules: string[]; score: number } | null;
 }
 
 export function decodeIndex(ix: ReviewIndex): ReviewProject[] {
-  return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files]) => {
+  return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
     const a = ix.auto?.rows[hgabId];
     const auto = a ? { rules: a.r.map((i) => ix.auto!.rules[i]?.code).filter(Boolean), score: a.s } : null;
-    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, auto };
+    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), auto };
   });
 }
 
@@ -50,7 +52,7 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 
 export type DocsFilter = 'none' | 'incomplete' | 'complete';
 /** Filters where checking several values keeps projects matching any of them (one funnel step each). */
-export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status';
+export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status' | 'source';
 export type Step =
   | { kind: 'flag'; code: string; not?: boolean }
   | { kind: 'region'; values: string[] }
@@ -62,9 +64,33 @@ export type Step =
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
   /** Review status (LIST_STATUSES): from every member's reviews, and the automatic review. */
-  | { kind: 'status'; values: ListStatus[] };
+  | { kind: 'status'; values: ListStatus[] }
+  /** Where the documents come from (SOURCE_GROUPS). */
+  | { kind: 'source'; values: SourceGroup[] };
 
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
+
+/**
+ * Where a project's documents come from. Senate copies are DPWH's documents for the House bill's additions (98% of
+ * the lines with only Senate copies are House-only in our comparison); DPWH Transparency documents are the NEP
+ * proposal's (none of the lines with only those are House-only). Review progress is counted by these groups.
+ */
+export const SOURCE_GROUPS = ['senate', 'nep', 'both', 'none'] as const;
+export type SourceGroup = (typeof SOURCE_GROUPS)[number];
+export const SOURCE_GROUP_LABEL: Record<SourceGroup, string> = {
+  senate: 'Senate documents',
+  nep: 'NEP only',
+  both: 'Both sources',
+  none: 'No documents',
+};
+export const SOURCE_GROUP_NOTE: Record<SourceGroup, string> = {
+  senate: 'House insertions, with Senate copies of DPWH’s documents',
+  nep: 'In the NEP, with DPWH Transparency documents only',
+  both: 'Senate copies and DPWH Transparency documents',
+  none: 'No file found; most are auto-reviewed',
+};
+/** The group from a review.json row's sources bitmask (1 Senate copies, 2 DPWH Transparency). */
+export const sourceGroup = (mask: number): SourceGroup => (mask === 3 ? 'both' : mask === 1 ? 'senate' : mask === 2 ? 'nep' : 'none');
 
 /**
  * Where a project's review stands, from every member's reviews (`ReviewStatusIndex`). Ordered as work goes: what still
@@ -145,7 +171,7 @@ const SEP = '|';
 export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
-    case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': return `${s.kind}:${s.values.join(SEP)}`;
+    case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': case 'source': return `${s.kind}:${s.values.join(SEP)}`;
     default: return `${s.kind}:${s.value}`;
   }
 }
@@ -162,6 +188,7 @@ export function stepFromParam(p: string): Step | null {
       return ok.length ? { kind, values: ok } : null;
     }
     case 'team': { const ok = values.filter((v) => /^RF-\d{3}$/.test(v)); return ok.length ? { kind, values: ok } : null; }
+    case 'source': { const ok = values.filter((v): v is SourceGroup => (SOURCE_GROUPS as readonly string[]).includes(v)); return ok.length ? { kind, values: ok } : null; }
     case 'q': return value.trim() ? { kind, value } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'status': {
@@ -236,6 +263,7 @@ export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boole
       return (p) => { const t = foldText(`${p.title} ${p.office.name} ${p.office.districts.join(' ')} ${p.hgabId}`); return words.every((w) => t.includes(w)); };
     }
     case 'status': { const v = new Set<string>(s.values); return (p) => v.has(ctx.statusOf(p.hgabId)); }
+    case 'source': { const v = new Set<string>(s.values); return (p) => v.has(p.source); }
   }
 }
 
@@ -288,6 +316,37 @@ export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusO
   else if (key === 'amount') out.sort((a, b) => b.amount - a.amount || a.seq - b.seq);
   else out.sort((a, b) => a.seq - b.seq);
   return out;
+}
+
+// --- Review progress ---------------------------------------------------------------------------------------------
+
+export interface ProgressRow {
+  projects: number;
+  php: number;
+  /** Counted as reviewed (REVIEWED_STATUSES): auto-reviewed red flags, with a verifier, completed. */
+  reviewed: number;
+  auto: number;
+  /** A member's review is with a verifier or completed. */
+  members: number;
+  /** A member has started (in progress or on hold), not yet reviewed. */
+  started: number;
+  pending: number;
+  pending_php: number;
+}
+/** Review progress by where the documents come from, and in all: what is reviewed, started and still pending. */
+export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId: string) => ListStatus): { groups: Record<SourceGroup, ProgressRow>; total: ProgressRow } {
+  const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, members: 0, started: 0, pending: 0, pending_php: 0 });
+  const groups = Object.fromEntries(SOURCE_GROUPS.map((g) => [g, blank()])) as Record<SourceGroup, ProgressRow>;
+  const total = blank();
+  for (const p of all) {
+    const st = statusOf(p.hgabId);
+    for (const r of [groups[p.source], total]) {
+      r.projects++; r.php += p.amount;
+      if (isReviewed(st)) { r.reviewed++; if (st === 'auto_red_flag') r.auto++; else r.members++; }
+      else { r.pending++; r.pending_php += p.amount; if (st === 'in_progress' || st === 'on_hold') r.started++; }
+    }
+  }
+  return { groups, total };
 }
 
 // --- Pages ------------------------------------------------------------------------------------------------------
@@ -398,6 +457,7 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     case 'team': return s.values.length === 1 ? `Team check ${s.values[0]}: ${teamTitles.get(s.values[0]) ?? ''}`.replace(/: $/, '') : `Team checks ${s.values.join(', ')}`;
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
+    case 'source': return s.values.map((v) => SOURCE_GROUP_LABEL[v]).join(' or ');
     case 'status':
       if (s.values.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => s.values.includes(v))) return 'Not yet reviewed';
       return `Review: ${s.values.map((v) => LIST_STATUS_LABEL[v]).join(' or ')}`;

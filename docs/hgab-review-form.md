@@ -311,6 +311,21 @@ When the team settles the method, answers in members' reviews can add weighted c
 - **Removed from the form:** the role field, "Next action", and the hint about the review committee. "Referred with approval" is still not offered, because it belongs to the committee (workflow step 8). Existing values stay in the review.
 - **Save draft** and **Ready for independent review** stay pinned at the bottom of the review.
 
+## Review progress (2026-11-13)
+
+Beside the funnel strip, **Review progress** counts every project, whatever the funnel, by where its documents come from. `review.json` row element 10 is a bitmask: 1 for Senate copies, 2 for DPWH Transparency (NEP proposal) files.
+
+| Group | Bill lines | Budget | Who they are |
+| --- | ---: | ---: | --- |
+| **Senate documents** | 4,253 | ₱120.9B | House insertions: 98% are House-only in our comparison |
+| **NEP only** | 9,299 | ₱344.0B | In the NEP, with DPWH Transparency documents only |
+| No documents | 2,337 | ₱70.2B | No file found; 2,119 are auto-reviewed |
+| Both sources | 90 | ₱5.7B | Senate copies and DPWH Transparency |
+
+Each card shows how many are pending of the group's total and the pending budget. Its bar shows auto-reviewed (red), reviewed by members (with a verifier or completed, green) and started (in progress or on hold, sand). Clicking a card lists that group's pending projects (source + "Not yet reviewed"); "All projects" lists every pending one. The Documents filter has the same groups under "Where the documents come from". Logic: `reviewProgress` and `SOURCE_GROUPS` in `src/lib/hgab-review.ts`.
+
+The filter bar starts with a "Filter" label.
+
 ## Not taken in
 
 - The 24 draft indicators. Promoting any of them is the team's decision.

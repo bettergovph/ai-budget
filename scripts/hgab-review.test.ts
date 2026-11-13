@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, autoScore, scoreBand, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
+  NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, reviewProgress, sourceGroup, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -61,6 +61,31 @@ test("automatic review: no key document and no file, a red flag the list can hid
   const byScore = sortProjects(all, "score");
   assert.ok(byScore.slice(0, auto.length).every((p) => p.auto));
   assert.deepEqual(stepFromParam("status:auto_red_flag"), { kind: "status", values: ["auto_red_flag"] });
+});
+
+test("review progress by where the documents come from", { skip: !ix && "review.json not built" }, () => {
+  const all = decodeIndex(ix!);
+  const by = (g: string) => all.filter((p) => p.source === g).length;
+  assert.equal(by("senate") + by("nep") + by("both") + by("none"), all.length);
+  assert.ok(by("senate") > 4000 && by("nep") > 9000, "Senate copies and DPWH Transparency groups are the big two");
+  assert.equal(sourceGroup(1), "senate"); assert.equal(sourceGroup(2), "nep"); assert.equal(sourceGroup(3), "both"); assert.equal(sourceGroup(0), "none");
+  // Auto-reviewed projects have no files, so they are all in "No documents".
+  assert.ok(all.filter((p) => p.auto).every((p) => p.source === "none"));
+  const autoSet = new Set(all.filter((p) => p.auto).map((p) => p.hgabId));
+  const done = new Set(all.filter((p) => p.source === "senate").slice(0, 5).map((p) => p.hgabId));
+  const statusOf = (h: string) => (done.has(h) ? "completed" as const : listStatus("not_started", autoSet.has(h)));
+  const { groups, total } = reviewProgress(all, statusOf);
+  assert.equal(total.projects, all.length);
+  assert.equal(groups.senate.members, 5);
+  assert.equal(groups.senate.pending, by("senate") - 5);
+  assert.equal(groups.none.auto, autoSet.size);
+  assert.equal(total.reviewed, autoSet.size + 5);
+  assert.equal(total.pending + total.reviewed, total.projects);
+  assert.equal(Object.values(groups).reduce((a, r) => a + r.php, 0), total.php);
+  // The source filter keeps a group; the URL form round-trips.
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf };
+  assert.equal(runFunnel(all, [{ kind: "source", values: ["senate"] }], ctx)[1].projects.length, by("senate"));
+  assert.deepEqual(stepFromParam(stepToParam({ kind: "source", values: ["senate", "nep"] })), { kind: "source", values: ["senate", "nep"] });
 });
 
 test("pages", () => {
