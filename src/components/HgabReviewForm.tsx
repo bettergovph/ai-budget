@@ -1,19 +1,23 @@
 /**
  * The review form in the project reviewer (`/hgab/2027/review`): the team's red-flag checklist (RF-001…RF-044) for one
- * project, with evidence per check and the case details. It edits a `CaseReview`
- * (src/lib/hgab-redflags-team.ts), the payload a future API will accept; for now the page keeps it in the browser.
+ * project, with evidence per check and the case details. It edits a `CaseReview` (src/lib/hgab-redflags-team.ts),
+ * which the page sends to the team when it is saved (src/worker/hgab-reviews.ts). Shown only to signed-in members.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { type DetailFile, type ReviewDetail, type ReviewIndexFlag } from '../lib/hgab-documents';
 import { readerText } from '../lib/hgab-review';
+import { useDocLink } from '../lib/hgab-review-member';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
   CHECKLIST_GROUP_LABEL, READY_STAGE, REGISTRY, STAGE_GATED, VOLUNTEER_OUTCOMES, VOLUNTEER_STAGES,
-  checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, validateCaseReview, vocab,
+  checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, newId, validateCaseReview, vocab,
   vocabLabel, type CaseReview, type CategoryKey, type ChecklistGroup, type ChecklistItem, type EvidenceItem, type FlagCheck,
+  type ValidationIssue,
 } from '../lib/hgab-redflags-team';
 
-const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+/** What saving did: `review` is what to keep editing (the stored copy when it was sent). */
+export interface SaveResult { ok: boolean; review: CaseReview; error?: string; issues?: ValidationIssue[] }
+
 const now = () => new Date().toISOString();
 const STATUS_LABEL = { not_started: 'Not started', ai_candidate: '', under_human_review: 'In review', human_outcome: '' } as const;
 
@@ -34,11 +38,13 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 /** One piece of evidence: a document (one of the project's files, or any link), where in it, and what it says. */
 function EvidenceRow({ e, onChange, onRemove, fromFile }: { e: EvidenceItem; onChange: (e: EvidenceItem) => void; onRemove: () => void; fromFile: boolean }) {
   const set = (patch: Partial<EvidenceItem>) => onChange({ ...e, ...patch });
+  // The review keeps the document's address from the data; Senate copies open through the member's grant.
+  const href = useDocLink()(e.url);
   return (
     <div className="rf-evidence">
       <div className="rf-evidence-doc">
         {fromFile
-          ? <a href={e.url} target="_blank" rel="noopener noreferrer">{e.document_title}</a>
+          ? (href ? <a href={href} target="_blank" rel="noopener noreferrer">{e.document_title}</a> : <span>{e.document_title}</span>)
           : (
             <>
               <input className="rf-input" placeholder="Document title and version" value={e.document_title} onChange={(x) => set({ document_title: x.target.value })} aria-label="Document title and version" />
@@ -160,9 +166,11 @@ export interface ReviewFormProps {
   onChange: (r: CaseReview) => void;
   onSave: (r: CaseReview) => void;
   saved: boolean;
+  /** Whether a save is on its way, and how the last one went. */
+  sending: { busy: boolean; result: SaveResult | null };
 }
 
-export default function HgabReviewForm({ review, detail, categories, detectorCodes, flags, onChange, onSave, saved }: ReviewFormProps) {
+export default function HgabReviewForm({ review, detail, categories, detectorCodes, flags, onChange, onSave, saved, sending }: ReviewFormProps) {
   const files = detail.files;
   const items = useMemo(() => checklistFor({
     categories,
@@ -242,9 +250,15 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
           {issues.map((i) => <li key={i.path + i.message} className={`is-${i.level}`}>{i.path}: {i.message}</li>)}
         </ul>
       )}
+      {sending.result && !sending.result.ok && (
+        <div className="rf-issues is-send" role="alert">
+          <p>Couldn’t save it: {sending.result.error} Your changes are still here; save again to retry.</p>
+          {!!sending.result.issues?.length && <ul>{sending.result.issues.map((i) => <li key={i.path + i.message}>{i.path}: {i.message}</li>)}</ul>}
+        </div>
+      )}
       <div className="rf-actions">
-        <button type="submit" className="rv-btn" disabled={saved}>{saved ? 'Saved' : 'Save draft'}</button>
-        <button type="button" className="rv-btn is-primary" onClick={() => {
+        <button type="submit" className="rv-btn" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save draft'}</button>
+        <button type="button" className="rv-btn is-primary" disabled={sending.busy} onClick={() => {
           setTried(true);
           if (!errors.length) onSave({ ...review, case_stage: READY_STAGE, updated_at: now() });
         }} title="Checks the review, then marks it ready for a second reviewer">Ready for independent review</button>
@@ -255,7 +269,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
           {' · '}<button type="button" onClick={() => downloadCases([review], 'evidence', `review-${review.project.hgab_id}`)}>evidence rows</button>
         </span>
       </div>
-      <p className="rv-hint">Saved in this browser until reviews can be sent. The case and evidence rows paste into the team’s workbook.</p>
+      <p className="rv-hint">Saving sends your review to the team and shows the project as taken. You can keep editing it; clear it to withdraw it.</p>
     </form>
   );
 }

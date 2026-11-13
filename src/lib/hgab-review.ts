@@ -57,15 +57,14 @@ export type Step =
   | { kind: 'team'; values: string[] }
   | { kind: 'min'; value: number }
   | { kind: 'q'; value: string }
-  /** Review status (REVIEW_STATUSES): today from this browser's reviews, later from the API. */
+  /** Review status (REVIEW_STATUSES): from every member's reviews. */
   | { kind: 'status'; values: ReviewStatus[] };
 
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
 
 /**
- * Where a project's review stands. Today it comes from the reviews saved in this browser (`reviewStatusOf` in the
- * page, from the case stage); once reviews are sent to the API, the API supplies it for every volunteer's work and
- * the page passes that in instead. Ordered as work goes: what still needs a reviewer first.
+ * Where a project's review stands, from every member's reviews (`ReviewStatusIndex`). Ordered as work goes: what still
+ * needs a reviewer first.
  */
 export const REVIEW_STATUSES = ['not_started', 'in_progress', 'on_hold', 'in_independent_review', 'completed'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
@@ -77,10 +76,34 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   completed: 'Completed',
 };
 /**
- * What the API will return for the list (`GET /api/v1/hgab/2027/reviews/status`, not built): every project's
- * review status across volunteers. The page's `statusOf` reads this when it exists, else this browser's reviews.
+ * Every project's review status across members, from `GET /api/hgab/2027/reviews/status` (src/worker/hgab-reviews.ts):
+ * the furthest status any member's review has reached, how many members have a review, and the last save. Projects
+ * nobody has reviewed are left out. The page's `statusOf` reads it.
  */
 export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: number; updated_at: string }>;
+
+/**
+ * How far a review has gone, so a project shows the furthest of its reviews: on hold counts below in progress, as
+ * another member may still be working on it.
+ */
+const STATUS_RANK: Record<ReviewStatus, number> = { not_started: 0, on_hold: 1, in_progress: 2, in_independent_review: 3, completed: 4 };
+export function furthestStatus(statuses: Iterable<ReviewStatus>): ReviewStatus {
+  let out: ReviewStatus = 'not_started';
+  for (const s of statuses) if (STATUS_RANK[s] > STATUS_RANK[out]) out = s;
+  return out;
+}
+
+/** The status index from each review's project, status and last save (the API's query, and the tests'). */
+export function buildStatusIndex(rows: Iterable<{ hgab_id: string; status: ReviewStatus; updated_at: string }>): ReviewStatusIndex {
+  const out: ReviewStatusIndex = {};
+  for (const r of rows) {
+    const cur = out[r.hgab_id];
+    out[r.hgab_id] = cur
+      ? { status: furthestStatus([cur.status, r.status]), reviews: cur.reviews + 1, updated_at: r.updated_at > cur.updated_at ? r.updated_at : cur.updated_at }
+      : { status: r.status, reviews: 1, updated_at: r.updated_at };
+  }
+  return out;
+}
 
 /**
  * A review's case stage (the team workbook's vocabulary) as a status. No review is "not started"; a saved draft is
@@ -264,6 +287,12 @@ export function pageWindow(page: number, total: number): (number | null)[] {
 
 /** Ready-made funnels for volunteers to start from. Every flag code must exist in review.json (the page drops any that don't). */
 export const PRESETS: readonly { key: string; label: string; note: string; steps: Step[] }[] = [
+  {
+    key: 'not-taken',
+    label: 'Nobody has started',
+    note: 'Projects no member has a review for yet, so two people don’t review the same one.',
+    steps: [{ kind: 'status', values: ['not_started'] }],
+  },
   {
     key: 'inserted-no-docs',
     label: 'House additions without documents',

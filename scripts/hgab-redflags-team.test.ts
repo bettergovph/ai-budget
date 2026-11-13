@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { NAMED_TYPES, REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
   CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES, caseEvidenceRows,
-  caseIntakeRows, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, toCsv,
+  caseIntakeRows, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv,
   validateCaseReview, vocab, vocabCode,
 } from "../src/lib/hgab-redflags-team";
 
@@ -118,6 +118,88 @@ test("validation follows the workbook's safeguards", () => {
   assert.match(validateCaseReview(r2).map((i) => i.message).join(), /independent review/);
   r.case_stage = "nonsense";
   assert.match(msgs(), /case stage/);
+});
+
+test("the API's intake keeps a well-formed review as is and refuses anything else", () => {
+  const r = fresh();
+  r.case_id = "2b1f0c9e-5d1a-4c51-9a58-1f0c2d3e4f5a";
+  r.flags.push({
+    ...emptyFlagCheck("RF-024", ["potential-nep-insertion"], "2026-11-12T00:00:00Z"), human_outcome: "verified_concern", observed_discrepancy: "Not in the NEP.",
+    evidence: [{ ...emptyEvidence("e1"), document_title: "HB 10858 Vol I-C", url: "https://example.org/hb.pdf", locator: "p. 546", availability: "available" }],
+  });
+  const ok = readCaseReview(JSON.parse(JSON.stringify(r)));
+  assert.deepEqual(ok.problems, []);
+  assert.deepEqual(ok.review, r);
+  // Unknown fields are dropped, not stored.
+  assert.equal("extra" in readCaseReview({ ...r, extra: "x" }).review!, false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a free-form copy, to break on purpose
+  const refuse = (patch: (x: any) => void, why: RegExp) => {
+    const x = JSON.parse(JSON.stringify(r));
+    patch(x);
+    const out = readCaseReview(x);
+    assert.equal(out.review, null, String(why));
+    assert.match(out.problems.join(" | "), why);
+  };
+  refuse((x) => { x.schema = "v0"; }, /schema/);
+  refuse((x) => { x.case_id = "a b"; }, /case_id/);
+  refuse((x) => { x.project.hgab_id = "HB-1"; }, /hgab_id/);
+  refuse((x) => { x.project.amount_php = "10"; }, /amount_php/);
+  refuse((x) => { x.notes = 5; }, /notes: expected text/);
+  refuse((x) => { x.notes = "x".repeat(20_001); }, /notes: longer/);
+  refuse((x) => { x.case_stage = "approved"; }, /case_stage/);
+  refuse((x) => { x.flags[0].flag_id = "24"; }, /team check id/);
+  refuse((x) => { x.flags.push(x.flags[0]); }, /listed twice/);
+  refuse((x) => { x.flags[0].evidence.push({ ...x.flags[0].evidence[0] }); }, /used twice/);
+  refuse((x) => { x.flags[0].evidence[0].evidence_id = ""; }, /evidence_id/);
+  refuse((x) => { x.kind = "audit"; }, /kind/);
+  refuse((x) => { x.verifies_case_id = "x"; }, /verifies_case_id/);
+  refuse((x) => { x.flags[0].evidence[0].url = "javascript:alert(1)"; }, /http/);
+  refuse((x) => { x.flags[0].evidence[0].availability = "maybe"; }, /availability/);
+  refuse((x) => { x.flags[0].evidence = Array.from({ length: 41 }, () => x.flags[0].evidence[0]); }, /more than 40/);
+  refuse((x) => { x.documents[0].matches_project = "perhaps"; }, /matches_project/);
+  refuse((x) => { x.reviewer.task_id = "T99"; }, /role catalog/);
+  refuse((x) => { x.updated_at = "yesterday"; }, /updated_at/);
+  assert.equal(readCaseReview(null).review, null);
+  assert.equal(readCaseReview([r]).review, null);
+});
+
+test("ids are kept: old reviews, retired checks, the API's own fields", () => {
+  const r = fresh();
+  r.case_id = "1794542748782-u50k0m4cm1b"; // an id from before newId made UUIDs: kept as is
+  // A review saved before kind, verifies_case_id and revision existed is a review of its project.
+  const old = JSON.parse(JSON.stringify(r));
+  delete old.kind; delete old.verifies_case_id; delete old.revision;
+  const read = readCaseReview(old);
+  assert.deepEqual(read.problems, []);
+  assert.equal(read.review!.case_id, "1794542748782-u50k0m4cm1b");
+  assert.equal(read.review!.kind, "review");
+  assert.equal(read.review!.verifies_case_id, null);
+  // A check the registry no longer has stays in a draft; only sending it for independent review is blocked.
+  const retired = { ...JSON.parse(JSON.stringify(r)), flags: [emptyFlagCheck("RF-099", [], "2026-11-12T00:00:00Z")] };
+  const kept = readCaseReview(retired);
+  assert.deepEqual(kept.review!.flags.map((f) => f.flag_id), ["RF-099"]);
+  assert.match(validateCaseReview(kept.review!).map((i) => i.message).join(), /Not in the team registry/);
+  // The API sets revision and submitted_at; a client can't.
+  assert.equal(readCaseReview({ ...r, revision: 7, submitted_at: "2026-11-13T00:00:00Z" }).review!.revision, null);
+  assert.equal(readCaseReview({ ...r, revision: 7, submitted_at: "2026-11-13T00:00:00Z" }).review!.submitted_at, null);
+  // A verification names the case it checks; a review names none.
+  assert.match(validateCaseReview({ ...r, kind: "verification" }).map((i) => i.message).join(), /names the case/);
+  assert.match(validateCaseReview({ ...r, verifies_case_id: "2b1f0c9e-5d1a-4c51-9a58-1f0c2d3e4f5a" }).map((i) => i.message).join(), /Only a verification/);
+});
+
+test("new ids are random UUIDs, with or without randomUUID", () => {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  assert.match(newId(), uuid);
+  const real = globalThis.crypto.randomUUID;
+  try {
+    // @ts-expect-error: as on an http:// page, where randomUUID is missing
+    globalThis.crypto.randomUUID = undefined;
+    const ids = new Set(Array.from({ length: 1000 }, newId));
+    assert.equal(ids.size, 1000);
+    for (const id of ids) assert.match(id, uuid);
+  } finally {
+    globalThis.crypto.randomUUID = real;
+  }
 });
 
 test("workbook rows match the team's columns", () => {

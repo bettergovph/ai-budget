@@ -10,10 +10,10 @@
  * DETECTOR_TO_TEAM says which team checks a detector flag suggests. It is our proposal for the team to review: a
  * detector flag makes a team check an "AI candidate", never a finding.
  *
- * The review (`CaseReview`) is shaped for an API: stable codes, the registry version its flag ids mean, provenance
- * for every piece of evidence, and the workbook's own vocabularies (labels kept for display and CSV). Until there is
- * a backend it lives in the browser and exports as JSON (the API payload) or as rows of the workbook's CASE INTAKE &
- * TRACKER and CASE EVIDENCE TEMPLATE sheets.
+ * The review (`CaseReview`) is what the API stores (src/worker/hgab-reviews.ts): stable codes, the registry version
+ * its flag ids mean, provenance for every piece of evidence, and the workbook's own vocabularies (labels kept for
+ * display and CSV). It also exports as JSON or as rows of the workbook's CASE INTAKE & TRACKER and CASE EVIDENCE
+ * TEMPLATE sheets.
  */
 import registryJson from './hgab-redflag-registry.json';
 import { NAMED_TYPES, OUR_NEP_FLAGS, type NamedType } from './hgab-documents';
@@ -253,6 +253,29 @@ export function detectorsFor(teamFlagId: string): string[] {
 export const CASE_REVIEW_SCHEMA = 'bettergov.hgab-review/1';
 export const BUDGET_SOURCE_VERSION = 'House bill HB 10858, 3rd reading (FY2027)';
 
+/**
+ * A new id for a case or a piece of evidence: a random UUID. Ids are kept for life, never rewritten (older ids made
+ * another way stay as they are).
+ */
+export function newId(): string {
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === 'function') return c.randomUUID();
+  // randomUUID needs a secure context (https); getRandomValues doesn't.
+  const b = c.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+/** Case and evidence ids: what newId makes, and the older `<time>-<random>` ids. */
+export const CASE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+export const EVIDENCE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** Team check ids, in any registry version: a review keeps its checks when the registry changes. */
+export const FLAG_ID_RE = /^RF-\d{3}$/;
+/** A review of a project, or a check of another member's review of it (workflow step 5; not open yet). */
+export const CASE_KINDS = ['review', 'verification'] as const;
+export type CaseKind = (typeof CASE_KINDS)[number];
+
 export interface EvidenceItem {
   evidence_id: string;
   /** "Senate (DPWH submission)", "DPWH Transparency", "House of Representatives", … */
@@ -287,7 +310,7 @@ export interface DocumentCheck {
   matches_project: 'unknown' | 'yes' | 'no';
 }
 export interface Reviewer {
-  /** A random id kept in this browser; a name only if the volunteer gives one. */
+  /** The member's id (ours; the API sets it). A name only if the volunteer gives one. */
   reviewer_id: string;
   display_name: string;
   /** Task id from the registry's role catalog (T01…T35), or "" */
@@ -295,7 +318,13 @@ export interface Reviewer {
 }
 export interface CaseReview {
   schema: typeof CASE_REVIEW_SCHEMA;
+  /** Made once, by the page, and kept for life; the API keeps a member's first case id for a project. */
   case_id: string;
+  kind: CaseKind;
+  /** For a verification: the case it checks. */
+  verifies_case_id: string | null;
+  /** Set by the API: the number of the save that produced this copy (1, 2, …); null before the first save. */
+  revision: number | null;
   registry: { version: string; sha256: string; mapping: string };
   project: {
     hgab_id: string;
@@ -317,7 +346,7 @@ export interface CaseReview {
   next_action: string;
   created_at: string;
   updated_at: string;
-  /** Set by the API when it accepts the review. */
+  /** Set by the API each time it accepts the review; null before the first save. */
   submitted_at: string | null;
   client: { app: string; data_built_at: string };
 }
@@ -332,6 +361,9 @@ export function newCaseReview(input: {
   return {
     schema: CASE_REVIEW_SCHEMA,
     case_id: input.caseId,
+    kind: 'review',
+    verifies_case_id: null,
+    revision: null,
     registry: { version: REGISTRY.source.version, sha256: REGISTRY.source.sha256, mapping: MAPPING_STATUS },
     project: input.project,
     reviewer: input.reviewer,
@@ -390,6 +422,8 @@ export function validateCaseReview(r: CaseReview): ValidationIssue[] {
   if (r.registry.sha256 !== REGISTRY.source.sha256) err('registry', 'Made with another version of the team registry.');
   if (!/^HB10858-3-\d{4}-\d{6}$/.test(r.project.hgab_id)) err('project.hgab_id', 'Not a House bill row id.');
   if (!r.case_id) err('case_id', 'Missing.');
+  if (r.kind === 'verification' && !r.verifies_case_id) err('verifies_case_id', 'A verification names the case it checks.');
+  if (r.kind !== 'verification' && r.verifies_case_id) err('verifies_case_id', 'Only a verification checks another case.');
   if (!r.reviewer.reviewer_id) err('reviewer.reviewer_id', 'Missing.');
   if (r.reviewer.task_id && !REGISTRY.tasks.some((t) => t.id === r.reviewer.task_id)) err('reviewer.task_id', 'Not in the role catalog.');
   if (!codes('case_stage').has(r.case_stage)) err('case_stage', 'Unknown case stage.');
@@ -430,6 +464,152 @@ export function validateCaseReview(r: CaseReview): ValidationIssue[] {
   if ((r.case_stage === READY_STAGE || r.case_stage === 'completed') && !r.flags.some((f) => f.human_outcome !== 'not_reviewed'))
     err('case_stage', 'Record an outcome for at least one check before sending the case for independent review.');
   return out;
+}
+
+/**
+ * The API's intake (src/worker/hgab-reviews.ts): rebuilds a `CaseReview` from a request body, keeping only the fields
+ * above, with their types, vocabularies, ids and lengths checked. Anything else is a problem and the review is
+ * refused. `revision` and `submitted_at` are the API's to set. The workbook's rules (`validateCaseReview`) are
+ * separate: a draft may break them, a case sent for independent review may not.
+ */
+export const INTAKE_LIMITS = { text: 20_000, line: 600, url: 2_000, evidence: 40, detectors: 200 } as const;
+export function readCaseReview(raw: unknown): { review: CaseReview | null; problems: string[] } {
+  const problems: string[] = [];
+  const bad = (path: string, why: string) => { problems.push(`${path}: ${why}`); };
+  const obj = (v: unknown, path: string): Record<string, unknown> => {
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+    bad(path, 'expected an object'); return {};
+  };
+  const str = (v: unknown, path: string, max: number = INTAKE_LIMITS.line): string => {
+    if (typeof v !== 'string') { bad(path, 'expected text'); return ''; }
+    if (v.length > max) bad(path, `longer than ${max} characters`);
+    return v;
+  };
+  const list = (v: unknown, path: string, max: number): unknown[] => {
+    if (!Array.isArray(v)) { bad(path, 'expected a list'); return []; }
+    if (v.length > max) bad(path, `more than ${max} items`);
+    return v.slice(0, max);
+  };
+  const code = (v: unknown, path: string, key: VocabKey): string => {
+    const c = str(v, path, 80);
+    if (c && !codes(key).has(c)) bad(path, `not a ${key} code`);
+    return c;
+  };
+  const link = (v: unknown, path: string): string => {
+    const u = str(v, path, INTAKE_LIMITS.url).trim();
+    if (u && !/^https?:\/\/[^\s]+$/i.test(u)) bad(path, 'links start with http:// or https://');
+    return u;
+  };
+  const time = (v: unknown, path: string): string => {
+    const t = str(v, path, 40);
+    if (Number.isNaN(Date.parse(t))) bad(path, 'expected a date and time');
+    return t;
+  };
+  const nullable = <T>(v: unknown, read: (x: unknown) => T): T | null => (v == null ? null : read(v));
+
+  const r = obj(raw, 'review');
+  if (r.schema !== CASE_REVIEW_SCHEMA) bad('schema', `expected ${CASE_REVIEW_SCHEMA}`);
+  const caseId = str(r.case_id, 'case_id', 64);
+  if (!CASE_ID_RE.test(caseId)) bad('case_id', 'expected 8 to 64 letters, digits, - or _');
+  // Reviews saved before these fields existed are reviews of a project.
+  const kind = r.kind ?? 'review';
+  if (!(CASE_KINDS as readonly unknown[]).includes(kind)) bad('kind', 'expected review or verification');
+  const verifies = nullable(r.verifies_case_id, (v) => str(v, 'verifies_case_id', 64));
+  if (verifies != null && !CASE_ID_RE.test(verifies)) bad('verifies_case_id', 'not a case id');
+  const reg = obj(r.registry, 'registry'), proj = obj(r.project, 'project'), who = obj(r.reviewer, 'reviewer'), client = obj(r.client, 'client');
+  const hgabId = str(proj.hgab_id, 'project.hgab_id', 40);
+  if (!/^HB10858-3-\d{4}-\d{6}$/.test(hgabId)) bad('project.hgab_id', 'not a House bill row id');
+  const amount = proj.amount_php;
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0) bad('project.amount_php', 'expected pesos');
+  const categories = list(proj.categories, 'project.categories', Object.keys(CATEGORY).length).map((c, i) => {
+    if (typeof c !== 'string' || !(c in CATEGORY)) bad(`project.categories[${i}]`, 'not a project type');
+    return c as CategoryKey;
+  });
+  const detectorIds = (v: unknown, path: string) => list(v, path, INTAKE_LIMITS.detectors).map((c, i) => str(c, `${path}[${i}]`, 200));
+  const taskId = str(who.task_id, 'reviewer.task_id', 20);
+  if (taskId && !REGISTRY.tasks.some((t) => t.id === taskId)) bad('reviewer.task_id', 'not in the role catalog');
+
+  // Whether a check is in today's registry is one of the workbook's rules (validateCaseReview), not the intake's: a
+  // draft keeps its checks when the registry changes.
+  const seen = new Set<string>(), evidenceIds = new Set<string>();
+  const flags = list(r.flags, 'flags', 100).map((x, i): FlagCheck => {
+    const f = obj(x, `flags[${i}]`), p = `flags[${i}]`;
+    const id = str(f.flag_id, `${p}.flag_id`, 20);
+    if (!FLAG_ID_RE.test(id)) bad(`${p}.flag_id`, 'not a team check id (RF-000)');
+    if (seen.has(id)) bad(`${p}.flag_id`, 'listed twice');
+    seen.add(id);
+    return {
+      flag_id: id,
+      detector_rule_ids: detectorIds(f.detector_rule_ids, `${p}.detector_rule_ids`),
+      applicability: code(f.applicability, `${p}.applicability`, 'evidence_applicability'),
+      observed_discrepancy: str(f.observed_discrepancy, `${p}.observed_discrepancy`, INTAKE_LIMITS.text),
+      human_outcome: code(f.human_outcome, `${p}.human_outcome`, 'human_outcome'),
+      evidence: list(f.evidence, `${p}.evidence`, INTAKE_LIMITS.evidence).map((y, j): EvidenceItem => {
+        const e = obj(y, `${p}.evidence[${j}]`), q = `${p}.evidence[${j}]`;
+        const fileId = e.file_link_id;
+        if (fileId != null && !Number.isInteger(fileId)) bad(`${q}.file_link_id`, 'expected a whole number');
+        const evidenceId = str(e.evidence_id, `${q}.evidence_id`, 64);
+        if (!EVIDENCE_ID_RE.test(evidenceId)) bad(`${q}.evidence_id`, 'expected 1 to 64 letters, digits, - or _');
+        if (evidenceIds.has(evidenceId)) bad(`${q}.evidence_id`, 'used twice in this case');
+        evidenceIds.add(evidenceId);
+        return {
+          evidence_id: evidenceId,
+          source_institution: str(e.source_institution, `${q}.source_institution`),
+          document_title: str(e.document_title, `${q}.document_title`),
+          url: link(e.url, `${q}.url`),
+          file_link_id: fileId == null ? null : (fileId as number),
+          file_sha256: nullable(e.file_sha256, (v) => str(v, `${q}.file_sha256`, 64)),
+          locator: str(e.locator, `${q}.locator`),
+          extracted_fact: str(e.extracted_fact, `${q}.extracted_fact`, INTAKE_LIMITS.text),
+          reviewer_observation: str(e.reviewer_observation, `${q}.reviewer_observation`, INTAKE_LIMITS.text),
+          applicable_at_stage: code(e.applicable_at_stage, `${q}.applicable_at_stage`, 'evidence_applicable_at_stage'),
+          availability: code(e.availability, `${q}.availability`, 'document_availability'),
+          verification_state: code(e.verification_state, `${q}.verification_state`, 'verification_state'),
+        };
+      }),
+      updated_at: time(f.updated_at, `${p}.updated_at`),
+    };
+  });
+  const documents = list(r.documents, 'documents', NAMED_TYPES.length).map((x, i): DocumentCheck => {
+    const d = obj(x, `documents[${i}]`);
+    const t = str(d.named_type, `documents[${i}].named_type`, 40);
+    if (!(NAMED_TYPES as readonly string[]).includes(t)) bad(`documents[${i}].named_type`, 'not one of the 5 key documents');
+    const m = d.matches_project;
+    if (m !== 'unknown' && m !== 'yes' && m !== 'no') bad(`documents[${i}].matches_project`, 'expected unknown, yes or no');
+    return { named_type: t as NamedType, availability: code(d.availability, `documents[${i}].availability`, 'document_availability'), matches_project: m as DocumentCheck['matches_project'] };
+  });
+
+  const review: CaseReview = {
+    schema: CASE_REVIEW_SCHEMA,
+    case_id: caseId,
+    kind: kind as CaseKind,
+    verifies_case_id: verifies,
+    revision: null,
+    registry: { version: str(reg.version, 'registry.version', 80), sha256: str(reg.sha256, 'registry.sha256', 64), mapping: str(reg.mapping, 'registry.mapping') },
+    project: {
+      hgab_id: hgabId,
+      project_id: str(proj.project_id, 'project.project_id', 80),
+      budget_source_version: str(proj.budget_source_version, 'project.budget_source_version'),
+      title: str(proj.title, 'project.title', INTAKE_LIMITS.text),
+      office: str(proj.office, 'project.office'),
+      region: str(proj.region, 'project.region'),
+      amount_php: typeof amount === 'number' ? amount : 0,
+      categories,
+      detector_rule_ids: detectorIds(proj.detector_rule_ids, 'project.detector_rule_ids'),
+    },
+    reviewer: { reviewer_id: str(who.reviewer_id, 'reviewer.reviewer_id', 80), display_name: str(who.display_name, 'reviewer.display_name', 120).trim(), task_id: taskId },
+    case_stage: code(r.case_stage, 'case_stage', 'case_stage'),
+    risk_priority: code(r.risk_priority, 'risk_priority', 'risk_priority'),
+    documents,
+    flags,
+    notes: str(r.notes, 'notes', INTAKE_LIMITS.text),
+    next_action: str(r.next_action, 'next_action', INTAKE_LIMITS.line),
+    created_at: time(r.created_at, 'created_at'),
+    updated_at: time(r.updated_at, 'updated_at'),
+    submitted_at: null,
+    client: { app: str(client.app, 'client.app', 80), data_built_at: str(client.data_built_at, 'client.data_built_at', 40) },
+  };
+  return problems.length ? { review: null, problems: problems.slice(0, 50) } : { review, problems };
 }
 
 // --- The team's workbook rows -------------------------------------------------------------------------------------
@@ -507,44 +687,10 @@ export function toCsv(head: readonly string[], rows: readonly string[][]): strin
   return `\uFEFF${[head, ...rows].map((r) => r.map(cell).join(',')).join('\n')}\n`;
 }
 
-// --- Reviews saved by the first version of the reviewer ----------------------------------------------------------
+// --- Browser storage, retired -------------------------------------------------------------------------------------
 
-/** localStorage keys: first-version reviews, these reviews, and the volunteer's profile. */
-export const STORE_V1 = 'hgab-review:v1';
-export const STORE_CASES = 'hgab-review:v2';
-export const STORE_PROFILE = 'hgab-review:reviewer';
-
-/** A review from the reviewer's first version: one verdict per document, an overall answer and notes. */
-export interface ReviewV1 {
-  hgabId: string;
-  projectId: string;
-  title: string;
-  docs: Partial<Record<NamedType, '' | 'matches' | 'other-project' | 'unreadable' | 'absent'>>;
-  overall: '' | 'yes' | 'partly' | 'no';
-  notes: string;
-  savedAt: string;
-}
-const V1_DOC: Record<string, Pick<CaseReview['documents'][number], 'availability' | 'matches_project'>> = {
-  matches: { availability: 'available', matches_project: 'yes' },
-  'other-project': { availability: 'available', matches_project: 'no' },
-  unreadable: { availability: 'available', matches_project: 'unknown' },
-  absent: { availability: 'not_available', matches_project: 'unknown' },
-};
-const V1_OVERALL = { yes: 'yes', partly: 'partly', no: 'no' } as const;
-
-/** Carries a first-version review into a new case: document answers move over, the rest goes into the notes. */
-export function fromV1(v1: ReviewV1, base: CaseReview): CaseReview {
-  const unreadable = NAMED_TYPES.filter((t) => v1.docs[t] === 'unreadable');
-  const notes = [
-    v1.overall ? `Earlier review: the documents support the project: ${V1_OVERALL[v1.overall]}.` : '',
-    unreadable.length ? `Unreadable: ${unreadable.join(', ')}.` : '',
-    v1.notes.trim(),
-  ].filter(Boolean).join('\n');
-  return {
-    ...base,
-    documents: base.documents.map((d) => ({ ...d, ...(V1_DOC[v1.docs[d.named_type] ?? ''] ?? {}) })),
-    notes,
-    created_at: v1.savedAt || base.created_at,
-    updated_at: v1.savedAt || base.updated_at,
-  };
-}
+/**
+ * Keys earlier versions of the reviewer kept reviews under in the browser: first-version reviews, cases and the
+ * volunteer's profile. Reviewing now needs a sign-in and reviews live only on the server; the page removes these.
+ */
+export const RETIRED_STORES = ['hgab-review:v1', 'hgab-review:v2', 'hgab-review:reviewer'] as const;

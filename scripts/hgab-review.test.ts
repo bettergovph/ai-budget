@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  PRESETS, checkedValues, countBy, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
+  PRESETS, buildStatusIndex, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -111,4 +111,19 @@ test("the funnel on review.json", { skip: !ix && "review.json not built" }, () =
   assert.ok(byStatus.slice(0, -3).every((p, i, a) => i === 0 || a[i - 1].seq < p.seq));
   assert.equal(runFunnel(all, [{ kind: "status", values: ["completed"] }], { ...ctx, statusOf: (h: string) => (done.has(h) ? "completed" : "not_started") })[1].projects.length, 3);
   assert.ok(sortProjects(all, "bill").every((p, i, a) => i === 0 || a[i - 1].seq < p.seq));
+});
+
+test("a project shows the furthest of its members' reviews", () => {
+  assert.equal(furthestStatus([]), "not_started");
+  assert.equal(furthestStatus(["on_hold", "in_progress"]), "in_progress");
+  assert.equal(furthestStatus(["in_independent_review", "in_progress", "on_hold"]), "in_independent_review");
+  const ix = buildStatusIndex([
+    { hgab_id: "HB10858-3-0001-000001", status: "in_progress", updated_at: "2026-11-13T01:00:00Z" },
+    { hgab_id: "HB10858-3-0001-000001", status: "in_independent_review", updated_at: "2026-11-13T00:00:00Z" },
+    { hgab_id: "HB10858-3-0002-000004", status: "on_hold", updated_at: "2026-11-12T00:00:00Z" },
+  ]);
+  assert.deepEqual(ix, {
+    "HB10858-3-0001-000001": { status: "in_independent_review", reviews: 2, updated_at: "2026-11-13T01:00:00Z" },
+    "HB10858-3-0002-000004": { status: "on_hold", reviews: 1, updated_at: "2026-11-12T00:00:00Z" },
+  });
 });

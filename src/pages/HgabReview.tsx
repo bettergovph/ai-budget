@@ -7,7 +7,10 @@
  * loaded when a project opens), from `npm run build:hgab-documents`. Logic: src/lib/hgab-review.ts. State lives in
  * the URL (`s=` funnel steps, `p=` open project, `sort=`), so a funnel or a project can be shared.
  *
- * Reviews stay in this browser (localStorage) until submissions open; volunteers can download them as CSV.
+ * Anyone can browse the projects, their documents and red flags. Reviewing needs a sign-in (Clerk, email code;
+ * HgabReviewMember.tsx): saving sends the review to the team (src/worker/hgab-reviews.ts, D1), and nothing of it is
+ * kept in the browser. Every project shows the furthest status of all members' reviews, so members can split the work
+ * without reviewing the same project twice. Reviews also download as JSON or as rows for the team's workbook.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
@@ -22,17 +25,22 @@ import {
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
   DEFAULT_SORT, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
-  decodeIndex, docCount, pageCount, pageOf, pageWindow, reviewStatusFromStage,
+  decodeIndex, docCount, furthestStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type MultiKind, type ReviewProject, type ReviewStatus, type SortKey, type Step, type StepContext,
+  type MultiKind, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
 } from '../lib/hgab-review';
 import {
-  BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, STORE_CASES, STORE_PROFILE, STORE_V1, TEAM_FLAGS, caseTouched, classifyProject,
-  detectorsFor, fromV1, newCaseReview, type CaseReview, type Reviewer, type ReviewV1,
+  BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
+  detectorsFor, newCaseReview, newId, type CaseReview, type Reviewer,
 } from '../lib/hgab-redflags-team';
-import HgabReviewForm from '../components/HgabReviewForm';
+import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
+import MemberProvider from '../components/HgabReviewMember';
 import { downloadCases } from '../lib/hgab-review-export';
+import {
+  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
+} from '../lib/hgab-review-api';
+import { DocLinkContext, useDocLink, useMember, type Member } from '../lib/hgab-review-member';
 import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
@@ -58,23 +66,9 @@ function officeLine(o: ReviewProject['office'], max: number): string {
 }
 const isPdf = (f: DetailFile) => /\.pdf$/i.test(f[4]) || /\.pdf(\?|$)/i.test(f[5]);
 
-// --- My reviews (in this browser until reviews can be sent) ------------------------------------------------------
+// --- My reviews (on the server: reviewing needs a sign-in) ----------------------------------------------------
 
-const newId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-function readJsonStore<T>(key: string, fallback: T): T {
-  try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
-}
-function writeJsonStore(key: string, v: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage full or blocked: keep in memory */ }
-}
-/** The volunteer's random id, and the name and role they last gave; prefills each new review. */
-function readProfile(): Reviewer {
-  const p = readJsonStore<Partial<Reviewer>>(STORE_PROFILE, {});
-  const out = { reviewer_id: p.reviewer_id || newId(), display_name: p.display_name ?? '', task_id: p.task_id ?? '' };
-  if (!p.reviewer_id) writeJsonStore(STORE_PROFILE, out);
-  return out;
-}
-/** A fresh review for a project, for this volunteer. */
+/** A fresh review of a project by this member. */
 function caseFor(p: ReviewProject, ix: ReviewIndex, reviewer: Reviewer, pap?: string | null): CaseReview {
   const n = new Date().toISOString();
   const c = newCaseReview({
@@ -88,38 +82,125 @@ function caseFor(p: ReviewProject, ix: ReviewIndex, reviewer: Reviewer, pap?: st
   // Whether each key document is on file is what we detected, not something a volunteer sets.
   return { ...c, documents: c.documents.map((d, i) => (hasDoc(p.docs, i) ? { ...d, availability: 'available' } : d)) };
 }
-function useCases() {
-  const [cases, setCases] = useState<Record<string, CaseReview>>(() => readJsonStore(STORE_CASES, {}));
-  const [profile, setProfile] = useState<Reviewer>(readProfile);
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Whether reviewing is open: sign-in set up in this build, and the API taking reviews. */
+type Opening = 'loading' | 'open' | 'closed' | 'unreachable';
+
+/**
+ * Everyone's review status (`ReviewStatusIndex`): loaded with the page, again when the tab comes back into view and
+ * every two minutes while it is in view, so members see what others have taken.
+ */
+function useStatusIndex(enabled: boolean) {
+  const [index, setIndex] = useState<ReviewStatusIndex | null>(null);
+  const [opening, setOpening] = useState<Opening>(enabled ? 'loading' : 'closed');
   useEffect(() => {
-    const on = (e: StorageEvent) => { if (e.key === STORE_CASES) setCases(readJsonStore(STORE_CASES, {})); };
-    window.addEventListener('storage', on);
-    return () => window.removeEventListener('storage', on);
+    if (!enabled) return;
+    let live = true;
+    const load = () => fetchStatus()
+      .then((r) => { if (live) { setIndex(r.data); setOpening('open'); } })
+      .catch((e: unknown) => {
+        if (!live) return;
+        if (e instanceof ReviewsApiError && e.status === 503) { setIndex(null); setOpening('closed'); }
+        else setOpening((o) => (o === 'open' ? o : 'unreachable'));
+      });
+    void load();
+    const onVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 120_000);
+    return () => { live = false; document.removeEventListener('visibilitychange', onVisible); window.clearInterval(timer); };
+  }, [enabled]);
+  const patch = useCallback((hgabId: string, entry: ProjectStatus | null) => setIndex((prev) => {
+    if (!prev) return prev;
+    const next = { ...prev };
+    if (entry) next[hgabId] = entry; else delete next[hgabId];
+    return next;
+  }), []);
+  return { index, opening, patch };
+}
+
+/**
+ * The signed-in member's reviews and profile (their id, and the name and role they last gave, to prefill a new
+ * review), from the API; saving sends. Nothing is kept in the browser: the keys earlier versions kept reviews under
+ * (RETIRED_STORES) are removed.
+ */
+function useCases(member: Member, onStatus: (hgabId: string, entry: ProjectStatus | null) => void) {
+  const [state, setState] = useState<{ userId: string; cases: Record<string, CaseReview>; profile: Reviewer } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  useEffect(() => {
+    try { for (const k of RETIRED_STORES) localStorage.removeItem(k); } catch { /* storage blocked: nothing was kept */ }
   }, []);
-  /** First-version reviews become cases once the project list is here; the old store is then cleared. */
-  const migrate = useCallback((index: ReviewIndex, all: ReviewProject[]) => {
-    const v1 = readJsonStore<Record<string, ReviewV1>>(STORE_V1, {});
-    if (!Object.keys(v1).length) return;
-    const byId = new Map(all.map((p) => [p.hgabId, p]));
-    const moved: Record<string, CaseReview> = {};
-    for (const [id, r] of Object.entries(v1)) { const p = byId.get(id); if (p) moved[id] = fromV1(r, caseFor(p, index, profile)); }
-    setCases((prev) => { const next = { ...moved, ...prev }; writeJsonStore(STORE_CASES, next); return next; });
-    try { localStorage.removeItem(STORE_V1); } catch { /* ignore */ }
-  }, [profile]);
-  const save = useCallback((r: CaseReview) => {
-    setCases((prev) => {
-      const next = { ...prev };
-      if (caseTouched(r)) next[r.project.hgab_id] = r; else delete next[r.project.hgab_id];
-      writeJsonStore(STORE_CASES, next);
-      return next;
-    });
-    if (r.reviewer.display_name !== profile.display_name || r.reviewer.task_id !== profile.task_id) {
-      const p = { ...profile, display_name: r.reviewer.display_name, task_id: r.reviewer.task_id };
-      setProfile(p);
-      writeJsonStore(STORE_PROFILE, p);
+  const { userId, getToken } = member;
+  // Tagged with whose they are, so signing out (or in as someone else) drops them.
+  const mine = state && state.userId === userId ? state : null;
+  useEffect(() => {
+    if (!userId) return;
+    let live = true;
+    getToken().then(fetchMine).then((r) => {
+      if (!live) return;
+      // Newest first: the role comes from the member's last review.
+      const profile = { reviewer_id: r.member.member_id, display_name: r.member.display_name, task_id: r.data[0]?.reviewer.task_id ?? '' };
+      setState({ userId, cases: Object.fromEntries(r.data.map((c) => [c.project.hgab_id, c])), profile });
+      setLoadError(null);
+    }).catch((e: unknown) => { if (live) setLoadError(errorText(e)); });
+    return () => { live = false; };
+  }, [userId, getToken]);
+
+  /** Sends a review, or withdraws it once emptied, so the project no longer shows as taken. */
+  const save = useCallback(async (r: CaseReview): Promise<SaveResult> => {
+    const h = r.project.hgab_id;
+    if (!userId || !mine) return { ok: false, review: r, error: 'Sign in to save your review.' };
+    try {
+      const token = await getToken();
+      if (caseTouched(r)) {
+        const res = await sendReview(r, token);
+        setState((s) => s && {
+          ...s, cases: { ...s.cases, [h]: res.data }, profile: { ...s.profile, display_name: r.reviewer.display_name, task_id: r.reviewer.task_id },
+        });
+        onStatus(h, res.project);
+        return { ok: true, review: res.data };
+      }
+      const sent = mine.cases[h];
+      if (sent) {
+        const res = await withdrawReview(sent.case_id, token);
+        setState((s) => { if (!s) return s; const cases = { ...s.cases }; delete cases[h]; return { ...s, cases }; });
+        onStatus(h, res.project);
+      }
+      return { ok: true, review: r };
+    } catch (e) {
+      return { ok: false, review: r, error: errorText(e), issues: e instanceof ReviewsApiError ? e.issues : [] };
     }
-  }, [profile]);
-  return { cases, save, profile, migrate };
+  }, [userId, mine, getToken, onStatus]);
+
+  return { cases: mine?.cases ?? {}, profile: mine?.profile ?? null, save, loadError };
+}
+
+/**
+ * The signed-in member's grant to read the Senate copies (an hour each), renewed five minutes before it runs out and
+ * whenever the tab comes back into view near the end. Null when signed out or reviewing isn't open.
+ */
+function useSenateGrant(member: Member, open: boolean): string | null {
+  const [state, setState] = useState<{ userId: string; grant: string; expires: number } | null>(null);
+  const { userId, getToken } = member;
+  useEffect(() => {
+    if (!userId || !open) return;
+    let live = true, timer = 0, expires = 0;
+    const load = () => {
+      window.clearTimeout(timer);
+      getToken().then(fetchSenateGrant).then((g) => {
+        if (!live) return;
+        expires = Date.parse(g.expires_at);
+        setState({ userId, grant: g.grant, expires });
+        timer = window.setTimeout(load, Math.max(60_000, expires - Date.now() - 300_000));
+      }).catch(() => { if (live) timer = window.setTimeout(load, 60_000); });
+    };
+    // Timers sleep in background tabs: renew on return if the grant is near its end.
+    const onVisible = () => { if (document.visibilityState === 'visible' && expires - Date.now() < 300_000) load(); };
+    load();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { live = false; window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [userId, getToken, open]);
+  return state && state.userId === userId ? state.grant : null;
 }
 
 // --- Filters and the funnel -------------------------------------------------------------------------------------
@@ -202,8 +283,10 @@ function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: 
   );
 }
 
-function FilterBar({ ix, all, steps, current, ctx, presets, onSteps }: {
+function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
   ix: ReviewIndex;
+  /** Whether review status comes from every member's reviews, not just this browser's. */
+  shared: boolean;
   all: ReviewProject[];
   steps: Step[];
   current: ReviewProject[];
@@ -299,7 +382,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, onSteps }: {
               <Check key={v} checked={status.checked.includes(v)} onChange={() => toggleValue('status', v)} label={REVIEW_STATUS_LABEL[v]}
                 k={status.counts.get(v) ?? 0} max={status.base} />
             ))}
-            <p className="rv-dd-note">For now, from the reviews saved in this browser.</p>
+            <p className="rv-dd-note">{shared ? 'From every member’s reviews.' : 'Reviewing isn’t open yet.'}</p>
           </div>
           <div className="rv-dd-group">
             <h3>Missing, after our matching</h3>
@@ -417,10 +500,13 @@ function DocDots({ mask }: { mask: number }) {
 }
 
 /** One page of the list. The parent keys it by funnel, sort and page, so each page starts at the top. */
-function ProjectList({ projects, selected, statusOf, onOpen }: {
+function ProjectList({ projects, selected, statusOf, reviewsOf, mine, onOpen }: {
   projects: ReviewProject[];
   selected: string | null;
   statusOf: (hgabId: string) => ReviewStatus;
+  /** How many members have a review of a project (0 when only this browser's reviews are known). */
+  reviewsOf: (hgabId: string) => number;
+  mine: Readonly<Record<string, CaseReview>>;
   onOpen: (p: ReviewProject) => void;
 }) {
   // Keep the open project in view when it moves (keyboard).
@@ -439,7 +525,12 @@ function ProjectList({ projects, selected, statusOf, onOpen }: {
                 <b>{pesoShort(p.amount)}</b>
                 <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
                 <DocDots mask={p.docs} />
-                {st !== 'not_started' && <span className={`rv-status is-${st}`}>{REVIEW_STATUS_LABEL[st]}</span>}
+                {st !== 'not_started' && (
+                  <span className={`rv-status is-${st}`} title={reviewsOf(p.hgabId) ? `${n(reviewsOf(p.hgabId))} ${reviewsOf(p.hgabId) === 1 ? 'member has' : 'members have'} a review` : undefined}>
+                    {REVIEW_STATUS_LABEL[st]}{reviewsOf(p.hgabId) > 1 && <small> · {n(reviewsOf(p.hgabId))}</small>}
+                  </span>
+                )}
+                {mine[p.hgabId] && <span className="rv-yours">Yours</span>}
               </span>
             </button>
           </li>
@@ -518,6 +609,7 @@ function viewOrder(files: readonly DetailFile[]): DetailFile[] {
  * and previous / next through every file ([ and ] on the keyboard).
  */
 function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; file: DetailFile | null; onPick: (f: DetailFile) => void }) {
+  const link = useDocLink();
   const ordered = viewOrder(files);
   const groups = [...NAMED_TYPES, 'Other'].map((t) => ({ t, fs: ordered.filter((f) => f[2] === t) })).filter((g) => g.fs.length);
   const at = file ? ordered.findIndex((f) => f[5] === file[5]) : -1;
@@ -554,6 +646,7 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
                 <span className={`rv-src is-${f[0]}`}>{SOURCE_LABEL[f[0]]}</span>
                 <span className="rv-docfiles-name">{f[2] === 'Other' && f[3] ? f[3] : f[4]}</span>
                 {f[7] && <span className="rv-tag">earlier copy</span>}
+                {!link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
               </button>
             </li>
           ))}
@@ -563,14 +656,37 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
   );
 }
 
-function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
+/** A Senate copy before signing in: what it is and how to read it. */
+function LockedDoc({ opening }: { opening: Opening }) {
+  const member = useMember();
+  const canSignIn = opening === 'open' && member.loaded && !member.userId;
+  return (
+    <div className="rv-viewer-empty rv-locked">
+      <p><b>Senate copies are for signed-in members.</b></p>
+      {canSignIn
+        ? <button type="button" className="rv-btn is-primary" onClick={member.signIn}>Sign in to read it</button>
+        : <p>{member.userId ? 'Getting your access…' : opening === 'loading' ? 'Loading…' : 'Reading them isn’t open yet.'}</p>}
+      <p className="rv-muted">DPWH Transparency files are open to everyone.</p>
+    </div>
+  );
+}
+
+/** The document in a frame, at the address it was opened with: a renewed grant doesn't reload it. */
+function DocFrame({ src, title }: { src: string; title: string }) {
+  const [opened] = useState(src);
+  return <iframe src={`${opened}#view=FitH`} title={title} />;
+}
+
+function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
   files: readonly DetailFile[];
   keyTypes: number;
   file: DetailFile | null;
   onPick: (f: DetailFile) => void;
   onClose: () => void;
   inline: boolean;
+  opening: Opening;
 }) {
+  const href = useDocLink()(file?.[5] ?? '');
   const body = (
     <div className="rv-viewer">
       <p className="rv-viewer-count">{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</p>
@@ -580,32 +696,47 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
           <span className={`rv-src is-${file[0]}`}>{SOURCE_LABEL[file[0]]}</span>
           <span className="rv-viewer-name" title={file[4]}>{file[4]}</span>
           <span className={`rv-file-how ${LINK_WEAK.has(file[1]) ? 'is-weak' : ''}`}>{LINK_LABEL[file[1]]}</span>
-          <a href={file[5]} target="_blank" rel="noopener noreferrer">Open in a new tab</a>
+          {href && <a href={href} target="_blank" rel="noopener noreferrer">Open in a new tab</a>}
           <button type="button" onClick={onClose} aria-label="Close the document">×</button>
         </div>
       )}
       {!file
         ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
-        : isPdf(file)
-          ? <iframe key={file[5]} src={`${file[5]}#view=FitH`} title={file[4]} />
-          : <p className="rv-empty">This file can’t be shown here. <a href={file[5]} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
+        : !href
+          ? <LockedDoc opening={opening} />
+          : isPdf(file)
+            ? <DocFrame key={file[5]} src={href} title={file[4]} />
+            : <p className="rv-empty">This file can’t be shown here. <a href={href} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
     </div>
   );
   return inline ? body : <div className="rv-viewer-modal" role="dialog" aria-label={file?.[4] ?? 'Documents'}>{body}</div>;
 }
 
-/** The review form for one project, holding the draft until it is saved. */
+/**
+ * The review form for one project, for a signed-in member, holding the draft until it is saved. Edits made while a
+ * save is on its way are kept. Nothing is kept in the browser, so leaving the page with unsaved edits asks first.
+ */
 function CasePanel({ project, detail, index, mine, profile, onSave }: {
   project: ReviewProject;
   detail: ReviewDetail;
   index: ReviewIndex;
   mine: CaseReview | undefined;
   profile: Reviewer;
-  onSave: (r: CaseReview) => void;
+  onSave: (r: CaseReview) => Promise<SaveResult>;
 }) {
-  // ProjectPane is keyed by project, so the draft starts fresh for each one.
   const [draft, setDraft] = useState<CaseReview>(() => mine ?? caseFor(project, index, profile, detail.pap));
+  const latest = useRef(draft);
   const [saved, setSaved] = useState(!!mine);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SaveResult | null>(null);
+  const dirty = !saved && caseTouched(draft);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const change = (r: CaseReview) => { latest.current = r; setDraft(r); setSaved(false); };
   return (
     <HgabReviewForm
       review={draft}
@@ -614,9 +745,49 @@ function CasePanel({ project, detail, index, mine, profile, onSave }: {
       detectorCodes={draft.project.detector_rule_ids}
       flags={index.flags}
       saved={saved}
-      onChange={(r) => { setDraft(r); setSaved(false); }}
-      onSave={(r) => { setDraft(r); onSave(r); setSaved(true); }}
+      sending={{ busy, result }}
+      onChange={change}
+      onSave={async (r) => {
+        change(r);
+        setBusy(true);
+        const res = await onSave(r);
+        setBusy(false);
+        setResult(res);
+        if (latest.current === r) { latest.current = res.review; setDraft(res.review); setSaved(res.ok); }
+        else if (res.ok) change({ ...latest.current, case_id: res.review.case_id });
+      }}
     />
+  );
+}
+
+/** The Review tab until the member has signed in and their reviews have loaded. */
+function ReviewGate({ opening, loadError }: { opening: Opening; loadError: string | null }) {
+  const member = useMember();
+  if (opening === 'closed') return <p className="rv-muted">Reviewing isn’t open yet. You can still read each project’s documents and red flags.</p>;
+  if (opening === 'unreachable') return <p className="rv-error">We couldn’t reach the reviews service. Try again in a moment.</p>;
+  if (opening === 'loading' || !member.loaded) return <p className="rv-muted" role="status">Loading…</p>;
+  if (member.userId) {
+    return loadError ? <p className="rv-error">Couldn’t load your reviews: {loadError}</p> : <p className="rv-muted" role="status">Loading your reviews…</p>;
+  }
+  return (
+    <div className="rv-signin">
+      <h3 className="rv-h">Sign in to review</h3>
+      <p>Enter your email and we send you a code. There is no password.</p>
+      <p>Your review goes to the team, and the project shows as taken so others can pick another.</p>
+      <button type="button" className="rv-btn is-primary" onClick={member.signIn}>Sign in</button>
+    </div>
+  );
+}
+
+/** Whether other members have a review of this project, so two people don't do the same one. */
+function TakenNote({ entry, mineSent }: { entry: ProjectStatus | undefined; mineSent: boolean }) {
+  const others = (entry?.reviews ?? 0) - (mineSent ? 1 : 0);
+  if (!entry || others <= 0) return null;
+  return (
+    <p className="rv-note rv-taken">
+      {others === 1 ? 'Another member has' : `${n(others)} other members have`} a review of this project ({REVIEW_STATUS_LABEL[entry.status].toLowerCase()}).
+      {' '}You can add yours, or pick a project nobody has started.
+    </p>
   );
 }
 
@@ -683,12 +854,18 @@ function SplitHandle({ width, onWidth, container }: { width: number; onWidth: (w
   );
 }
 
-function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPrev, onNext, tab, onTab, split, onSplit }: {
+function ProjectPane({ project, index, mine, entry, opening, profile, loadError, onSave, inlineViewer, onPrev, onNext, tab, onTab, split, onSplit }: {
   project: ReviewProject;
   index: ReviewIndex;
+  /** The signed-in member's review of this project. */
   mine: CaseReview | undefined;
-  profile: Reviewer;
-  onSave: (r: CaseReview) => void;
+  /** Every member's reviews of this project. */
+  entry: ProjectStatus | undefined;
+  opening: Opening;
+  /** The signed-in member, once their reviews have loaded; null until then (or signed out). */
+  profile: Reviewer | null;
+  loadError: string | null;
+  onSave: (r: CaseReview) => Promise<SaveResult>;
   inlineViewer: boolean;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
@@ -697,6 +874,7 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
   split: number;
   onSplit: (w: number) => void;
 }) {
+  const member = useMember();
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<DetailFile | null>(null);
@@ -769,6 +947,7 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
 
         <div className="rv-project-body">
           {error && <p className="rv-error">{error}</p>}
+          <TakenNote entry={entry} mineSent={!!mine} />
           {panel('overview', (
             <>
               <dl className="rv-facts">
@@ -809,17 +988,22 @@ function ProjectPane({ project, index, mine, profile, onSave, inlineViewer, onPr
                 {!inlineViewer && detail && detail.files.length > 0 && (
                   <button type="button" className="rv-btn" onClick={() => setOpen(viewOrder(detail.files)[0])}>Read the documents</button>
                 )}
-                <button type="button" className="rv-btn is-primary" onClick={() => onTab('review')}>Start the review</button>
+                <button type="button" className="rv-btn is-primary" onClick={() => {
+                  onTab('review');
+                  if (opening === 'open' && member.loaded && !member.userId) member.signIn();
+                }}>{opening === 'open' && member.loaded && !member.userId ? 'Sign in to review' : 'Start the review'}</button>
               </div>
               <DisclaimerNotice compact className="rv-disclaimer" />
             </>
           ))}
-          {!detail && !error && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
-          {detail && panel('review', <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
+          {!detail && !error && profile && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
+          {panel('review', !profile
+            ? <ReviewGate opening={opening} loadError={loadError} />
+            : detail && <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
+      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} opening={opening} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
   );
 }
@@ -839,7 +1023,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Beside every option is how many projects it would keep. Share the page address to share your funnel.</p>
         <h3>Where the documents come from</h3>
         <ul>
-          <li><b>Senate copies:</b> documents DPWH gave the Senate for the House bill’s projects.</li>
+          <li><b>Senate copies:</b> documents DPWH gave the Senate for the House bill’s projects. Sign in to read them.</li>
           <li><b>DPWH Transparency:</b> documents DPWH published for its proposals, paired with the project.</li>
         </ul>
         <p>research.bettergov.ph matched most of them; we added more. Each file says how it was matched.</p>
@@ -848,6 +1032,10 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Each project has the volunteer team’s red-flag checks that fit it ({REGISTRY.flags.length} in all, {REGISTRY.source.version}).</p>
         <p>Red flags suggest which checks to start with. A suggested check is a candidate, not a finding.</p>
         <p>Each check says who should lead it, what evidence it needs, and what not to conclude.</p>
+        <h3>Sending reviews</h3>
+        <p>Sign in with your email (we send a code; there is no password). Saving sends your review to the team, and you can keep editing it.</p>
+        <p>Each project shows the furthest any member’s review has got, so you can pick projects nobody has started. More than one member can review a project.</p>
+        <p>Anyone can browse the projects. Reviewing needs a sign-in, and nothing of your review is kept in your browser.</p>
         <h3>The 5 key documents</h3>
         <ul>{NAMED_TYPES.map((t) => <li key={t}><b>{t}:</b> {NAMED_MEANING[t]}</li>)}</ul>
         <p className="rv-muted">
@@ -865,10 +1053,20 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
 type Pane = 'list' | 'project';
 
 export default function HgabReview() {
+  return <MemberProvider><Reviewer /></MemberProvider>;
+}
+
+function Reviewer() {
   const [index, setIndex] = useState<ReviewIndex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
-  const { cases: reviews, save, profile, migrate } = useCases();
+  const member = useMember();
+  // Everyone's review status, and whether reviewing is open (sign-in set up and the API taking reviews).
+  const { index: shared, opening, patch: patchStatus } = useStatusIndex(member.enabled);
+  const { cases: reviews, profile, save, loadError } = useCases(member, patchStatus);
+  // Senate copies open only with a signed-in member's grant; DPWH Transparency files open for all.
+  const grant = useSenateGrant(member, opening === 'open');
+  const docLink = useCallback((url: string) => documentHref(url, grant), [grant]);
   const [about, setAbout] = useState(false);
   const [pane, setPane] = useState<Pane>('list');
   const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
@@ -879,14 +1077,18 @@ export default function HgabReview() {
     return () => mq.removeEventListener('change', on);
   }, []);
   useEffect(() => {
-    loadIndex().then((ix) => { setIndex(ix); migrate(ix, decodeIndex(ix)); }).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, [migrate]);
+    loadIndex().then(setIndex).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
 
   const all = useMemo(() => (index ? decodeIndex(index) : []), [index]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
-  // A project's review status: from this browser's reviews for now; the API will supply everyone's later.
-  const statusOf = useCallback((h: string): ReviewStatus => reviewStatusFromStage(reviews[h]?.case_stage), [reviews]);
+  // A project's review status: the furthest of every member's reviews and the member's own (just saved, say).
+  const statusOf = useCallback((h: string): ReviewStatus => {
+    const own = reviewStatusFromStage(reviews[h]?.case_stage);
+    return shared ? furthestStatus([shared[h]?.status ?? 'not_started', own]) : own;
+  }, [reviews, shared]);
+  const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
   const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
   const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex }), [flagIndex, statusOf, teamIndex]);
@@ -948,6 +1150,7 @@ export default function HgabReview() {
   const presets = PRESETS.filter((p) => p.steps.every((s) => s.kind !== 'flag' || flagIndex.has(s.code)));
 
   return (
+    <DocLinkContext.Provider value={docLink}>
     <div className="rv-app">
       <header className="rv-bar">
         <Link to="/" className="rv-brand"><img src="https://assets.bettergov.ph/logos/png/horizontal-primary.png" alt="BetterGov.ph" /></Link>
@@ -957,20 +1160,26 @@ export default function HgabReview() {
         </div>
         <nav className="rv-bar-links" aria-label="Reviewer">
           <button type="button" onClick={() => setAbout(true)}>How it works</button>
-          <details className="rv-mine">
-            <summary>My reviews <b>{myList.length}</b></summary>
-            <div className="rv-mine-menu">
-              {myList.length ? (
-                <>
-                  <p>{myList.length} {myList.length === 1 ? 'review' : 'reviews'} saved in this browser.</p>
-                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
-                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
-                  <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
-                  <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', REVIEW_STATUSES.filter((v) => v !== 'not_started')))}>Show them</button>
-                </>
-              ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
-            </div>
-          </details>
+          {opening === 'open' && member.loaded && !member.userId && <button type="button" onClick={member.signIn}>Sign in to review</button>}
+          {member.userId && (
+            <details className="rv-mine">
+              <summary>My reviews <b>{myList.length}</b></summary>
+              <div className="rv-mine-menu">
+                <p className="rv-mine-who">Signed in as <b>{member.email ?? 'a member'}</b></p>
+                {loadError && <p className="rv-error">Couldn’t load your reviews: {loadError}</p>}
+                {myList.length ? (
+                  <>
+                    <p>{n(myList.length)} {myList.length === 1 ? 'review' : 'reviews'} sent to the team.</p>
+                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
+                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
+                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
+                    <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', REVIEW_STATUSES.filter((v) => v !== 'not_started')))}>Show projects with a review</button>
+                  </>
+                ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
+                <button type="button" className="rv-btn" onClick={member.signOut}>Sign out</button>
+              </div>
+            </details>
+          )}
           <Link to={`${HGAB_ROOT}/overview`}>House bill analysis</Link>
         </nav>
       </header>
@@ -981,7 +1190,7 @@ export default function HgabReview() {
         <>
         <div className="rv-filterbar">
           <FilterBar key={params.getAll('s').filter((x) => x.startsWith('q:')).join()} ix={index} all={all} steps={steps} current={current} ctx={ctx}
-            presets={presets} onSteps={(fn) => { applySteps(fn); setPane('list'); }} />
+            presets={presets} shared={!!shared} onSteps={(fn) => { applySteps(fn); setPane('list'); }} />
           <FunnelStrip
             levels={levels}
             flags={index.flags}
@@ -1001,13 +1210,14 @@ export default function HgabReview() {
                 </select>
               </label>
             </div>
-            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}|${page}`} projects={pageItems} selected={selectedId} statusOf={statusOf} onOpen={open} />
+            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}|${page}`} projects={pageItems} selected={selectedId} statusOf={statusOf} reviewsOf={reviewsOf} mine={reviews} onOpen={open} />
             <Pager page={page} total={pages} items={listed.length} onPage={(x) => update((q) => q.set('pg', String(x)))} />
           </section>
 
           <section className="rv-detail" aria-label="Project">
             {selected
               ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} profile={profile} onSave={save}
+                  entry={shared?.[selected.hgabId]} opening={opening} loadError={loadError}
                   inlineViewer={inlineViewer} onPrev={prev} onNext={next} tab={tab} onTab={setTab} split={split} onSplit={setSplit} />
               : (
                 <div className="rv-welcome">
@@ -1029,5 +1239,6 @@ export default function HgabReview() {
       )}
       {about && index && <About index={index} onClose={() => setAbout(false)} />}
     </div>
+    </DocLinkContext.Provider>
   );
 }

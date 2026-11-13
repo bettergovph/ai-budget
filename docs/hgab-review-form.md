@@ -1,8 +1,8 @@
 # The review form: the volunteer team's red-flag checklist
 
-The project reviewer (`/hgab/2027/review`) asks volunteers to work through the volunteer team's red-flag registry for each project. A review is a `CaseReview`, shaped for a future API. There is no backend yet: reviews stay in the browser (localStorage) and download as JSON (the API payload) or as rows for the team's workbook.
+The project reviewer (`/hgab/2027/review`) asks volunteers to work through the volunteer team's red-flag registry for each project. A review is a `CaseReview`. Anyone can browse the projects. **Reviewing needs a sign-in**, and reviews are kept only on the server (D1; see "Sending reviews" below), never in the browser. Members can download their reviews as JSON or as rows for the team's workbook.
 
-Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, payload, validation, workbook rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads). Tests: `npm run test:hgab-review`.
+Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, payload, intake, validation, workbook rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads), `src/worker/hgab-reviews.ts` (the API), `src/components/HgabReviewMember.tsx` (sign-in). Tests: `npm run test:hgab-review`.
 
 ## The team's workbook
 
@@ -116,6 +116,9 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
 {
  "schema": "bettergov.hgab-review/1",
  "case_id": "6f1c…",
+ "kind": "review",
+ "verifies_case_id": null,
+ "revision": null,
  "registry": {
   "version": "Volunteer-ready draft v2 — 12 November 2026",
   "sha256": "d6fb880d…",
@@ -195,9 +198,11 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
 - Codes are the workbook's labels in snake case (`vocabCode`: "Cleared / explained" → `cleared_explained`). `vocab(key)` gives code and label for every dropdown.
 - `registry.sha256` pins which registry the `flag_id`s mean.
 - `project.hgab_id` is the stable key. `project_id` is ours and positional, so treat it as a hint.
-- `reviewer_id` is a random id kept in the browser (`hgab-review:reviewer`); `display_name` is optional.
+- `case_id` and each `evidence_id` are random UUIDs (`newId`), made once by the page and kept for life. Older ids in the `<time>-<random>` form stay as they are.
+- `kind` is `review`, or `verification` for a check of another member's case (`verifies_case_id`; not open yet). Reviews saved before these fields existed are read as reviews.
+- `reviewer_id` is the member's id (ours), set by the API. `display_name` is optional.
 - Only checks a volunteer touched are in `flags`.
-- `submitted_at` is for the API to set.
+- `revision` and `submitted_at` are set by the API on each accepted save: the save's number (1, 2, …) and its time. Both are null before the first save.
 
 ## Validation (`validateCaseReview`; the API should run the same)
 
@@ -219,20 +224,72 @@ Errors block "Ready for independent review". The rules come from the workbook's 
 
 Columns for later workflow steps stay blank: independent verifier, the budget-origin and readiness/value assessments (step 6), due date and disposition approval (step 8). The rows download as CSV (UTF-8 with BOM) and paste into the workbook.
 
-## For the API (not built)
+## Sending reviews
 
-- `POST /api/v1/hgab/2027/reviews` takes a `CaseReview`, runs `validateCaseReview` on the server, sets `submitted_at` and returns the stored case. It is idempotent on `case_id`.
-- `GET /api/v1/hgab/2027/reviews?hgab_id=…` lists a project's reviews, for the independent verifier.
-- `GET /api/v1/hgab/2027/reviews/status` returns a `ReviewStatusIndex` (`hgab_id` → status, number of reviews, last update; `src/lib/hgab-review.ts`). It feeds the list's status chips, the review-status filter and the review-status sort, which today read this browser's reviews.
-- Storage could be a D1 table per case plus one per check and per piece of evidence, matching the workbook rows. A D1 table needs the maintainer's go-ahead.
-- Before reviews go public, decide what is shown. The workbook asks that case notes and personal data stay with authorized reviewers.
+Members sign in with Clerk using their email and a one-time code, with no password (set in the Clerk dashboard). Only the reviewer page loads Clerk (`HgabReviewMember.tsx`). Signed out, the Review tab, "Start the review" and the bar ask the visitor to sign in; the projects, documents, red flags and everyone's status stay open to all. Signed in, **Save draft** and **Ready for independent review** send the review.
 
-## Migration
+Routes (`src/worker/hgab-reviews.ts`). These are internal to the site, like `/api/hearings`, and not part of the read-only, CORS-open `/api/v1`:
 
-Reviews from the reviewer's first version (`hgab-review:v1`: one verdict per document, an overall answer and notes) become cases on load (`fromV1`). The document answers carry over and the rest goes into the notes. The old key is then removed.
+- `GET /api/hgab/2027/reviews/status` is public. It returns a `ReviewStatusIndex` (`src/lib/hgab-review.ts`): for every project with a review, the furthest status any member's review has reached, how many members have one, and the last save. It names no one. It feeds the list's status chips, the review-status filter and sort, the "Nobody has started" preset, and the note on a project that others are reviewing. The page reloads it every two minutes while the tab is in view, and whenever the tab comes back into view.
+- `GET /api/hgab/2027/reviews/mine` returns the signed-in member's reviews.
+- `POST /api/hgab/2027/reviews` takes a `CaseReview` and returns the stored copy and the project's new status.
+- `DELETE /api/hgab/2027/reviews/:case_id` withdraws one of your reviews. The page calls it when you clear a review you had sent.
+
+Rules:
+
+- **Several members can review one project, but each member has one review per project**, which they keep editing. A review sent from a second window or device keeps the case id the first send got.
+- **Ids are preserved: never rewritten, reused or deleted.**
+  - A case keeps its id, project, member and kind for life.
+  - Withdrawing marks the case withdrawn. It isn't deleted, and sending it again brings it back under the same id.
+  - Every accepted save and withdrawal is a numbered, append-only revision.
+  - Database triggers enforce all of this.
+- **Members are ours** (`member_id`, a UUID), not Clerk's. Each sign-in account a member uses is recorded by issuer (the Clerk instance) and Clerk user id. A sign-in account we haven't seen is linked by its verified email to the member who already has that email. So moving to a Clerk production instance, or any new instance, keeps everyone's reviews.
+- **Two saves at the same moment:** each save only applies to the revision it read. If two land together, one wins and the other gets 409 ("reload and try again"). No revision is lost or doubled.
+- **Team check ids:** intake accepts any `RF-000`-style id, so a draft keeps its checks when the registry changes. Whether a check is in today's registry is a workbook rule: it blocks sending for independent review, not saving.
+- **Verification** (`kind: verification`) has its columns and rules, but the API refuses it (403) until the team sets up verifier roles and decides who may see others' reviews.
+- **The project's status is the furthest of its reviews:** completed > in independent review > in progress > on hold. A saved draft counts as in progress. That status is how members split the work: the status chip on each project, the "Nobody has started" preset, and the note on a project someone else is reviewing. Nothing is locked.
+- **Sign-in:** the page sends the Clerk session token as `Authorization: Bearer`. The Worker checks it with `CLERK_SECRET_KEY`. The token must have been issued to the site's own origin (its `azp` claim). `CLERK_AUTHORIZED_PARTIES` (comma-separated) overrides that. Tokens minted with the Backend API carry no `azp` and are refused.
+- **Intake** (`readCaseReview`) rebuilds the review from known fields only. It checks types, vocabularies, registry flag ids, http(s) links and lengths (20,000 characters of text, 40 pieces of evidence per check, 512 KB per request). Anything off is refused with 400, listing the problems.
+- **The workbook's rules** (`validateCaseReview`): a draft may break them. A case sent for independent review may not (422 with the issues). Volunteers can't set "AI candidate" or "Completed" (403).
+- **Withdrawing, or sending another member's case id:** you can only touch your own reviews (403/404).
+- **Status** counts reviews only (not verifications), and not withdrawn ones.
+- **Nothing is kept in the browser.** If a save fails, the edits stay in the open form with the error, ready to save again. Leaving the page with unsaved edits asks first. On load the page removes the keys earlier versions kept reviews under (`RETIRED_STORES`: `hgab-review:v1`, `hgab-review:v2`, `hgab-review:reviewer`); those drafts were never sent and are not migrated. The only reviewer key left in the browser is `hgab-review:split`, the width of the project beside the document.
+- **Privacy:** the members table keeps each member's email from Clerk for the team. No route returns another member's email or review. Before anyone else sees reviews (the independent verifier, say), decide who may see them. The workbook asks that case notes and personal data stay with authorized reviewers.
+
+Storage (`scripts/hgab-review/reviews-schema.sql`, additive and safe to re-run):
+
+- `review_members`: member id, verified email (unique, private), display name.
+- `review_member_logins`: issuer and subject of each sign-in account, and its member.
+- `review_cases`: one row per member, project and kind. It holds the status, stage, outcomes count, registry hash, `rev`, `withdrawn_at`, the verification link, and the `CaseReview` as `payload`. Its checks are `json_each(payload, '$.flags')`.
+- `review_case_revisions`: case id, revision number, member, action (create, update, withdraw or restore), and the case as it stood after the change.
+
+**These tables hold volunteers' work: never drop, rebuild or reload them.** They are named `review_*` on purpose. The `hgab_*` tables are House bill data that `build:hgab-d1` drops and reloads, and `verify:hgab` expects exactly 12 of them. Erasing anything is a deliberate act, such as a member's request under the Data Privacy Act or removing spam. Drop the trigger that blocks it, make the change, then recreate the trigger from the schema file.
+
+Setup:
+
+- Local: `.env.local` gets `VITE_CLERK_PUBLISHABLE_KEY` and `.dev.vars` gets `CLERK_SECRET_KEY` (see `.env.example`, `.dev.vars.example`). Then `npm run db:hgab-reviews` creates the tables in the local D1.
+- Production: run `npx wrangler secret put CLERK_SECRET_KEY` on the `budget` Worker; set `VITE_CLERK_PUBLISHABLE_KEY` in the Workers Builds build variables (it is public); and run `npx wrangler d1 execute budget --remote --file=scripts/hgab-review/reviews-schema.sql`. Use a Clerk production instance for `budget.bettergov.ph`: a development instance shows "Development mode" and caps its users.
+- Without the publishable key, the page has no sign-in and so no reviewing. Without the secret, or before the tables exist, the API answers 503 and the Review tab says reviewing isn't open yet. Browsing works either way.
+- Testing: Clerk test emails (`name+clerk_test@example.com`, code `424242`) sign in without sending email. Clerk's bot protection blocks sign-up in headless browsers, so create test users with the Backend API first.
+
+## Senate copies: signed-in members only
+
+The documents DPWH gave the Senate ("Senate copies", 22,748 files on 6,000-odd projects) open only for signed-in members. DPWH Transparency files are on `s3.infrawatch.ph` and stay open to everyone.
+
+- **Signed out:** the viewer lists the Senate copies, tagged "sign in". Picking one shows "Senate copies are for signed-in members" and a sign-in button instead of the document. There is no "Open in a new tab" link.
+- **Signed in:** the page gets a grant (`POST /api/hgab/2027/senate-copies/grant`), good for an hour and renewed before it ends. Each Senate copy then opens at `/api/hgab/2027/senate-copies/<path>?grant=…`. The Worker checks the grant and streams the file from R2 (binding `DATA_BUCKET`, bucket `budget`, key `hgab/2027/dpwh/supporting-documents/<path>`), with Range requests for the PDF viewer (`src/worker/hgab-senate-copies.ts`).
+- **The grant** is `<member_id>.<expiry>.<HMAC-SHA256>`. Its key is derived from `CLERK_SECRET_KEY`, so there is no other secret, and rotating that one voids every grant. The grant goes in the address, so the frame, a new tab and a download all work. Responses are `Cache-Control: private` and `noindex`, with no referrer. A copied link stops working within the hour.
+- **Without a good grant** (none, expired or altered), the file route answers with a short "sign in" page (401). Paths outside the folder are refused.
+- **What the data keeps:** the detail shards and the reviews keep each file's public address (`budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/…`) as its id. The page turns it into the gated address (`documentHref` in `src/lib/hgab-review-api.ts`), and evidence links in the form do the same.
+- **The same files are still public on budget-assets.bettergov.ph** until that path is blocked there, so for now the gate covers our page only. research.bettergov.ph's `hgab-document-coverage.json` links 20,647 of them, and `supporting-documents-file-links.jsonl` (public, beside them) lists all 34,424. Blocking the path, for example with a WAF rule on `/hgab/2027/dpwh/supporting-documents/*`, would break those links. That is the maintainer's call. The Worker reads through the R2 binding, so a block on the domain doesn't affect it.
+- **Local preview:** the local R2 store has only the files you put in it. wrangler's `r2 object put --local` percent-encodes keys with spaces, so put test files with `getPlatformProxy` instead. Production keys have real spaces.
+
+## Browser storage, retired
+
+Earlier versions kept reviews in the browser: first-version reviews (`hgab-review:v1`), cases (`hgab-review:v2`) and the volunteer's profile (`hgab-review:reviewer`). Since 2026-11-13 reviewing needs a sign-in and the page removes those keys on load, without sending or migrating them. The reviewer was never public, so only preview drafts were affected.
 
 ## Not taken in
 
 - The 24 draft indicators. Promoting any of them is the team's decision.
 - Steps 6–9 (scoring, prioritising, routing, closing). They need approved rubrics and authority; the form only suggests a priority.
-- Assignment and routing status from LIVE FLAG ROUTING: there are no accounts yet.
+- Assignment and routing status from LIVE FLAG ROUTING. Members can now sign in, but there are no roles: anyone signed in is a volunteer, and the project status is how work is shared.

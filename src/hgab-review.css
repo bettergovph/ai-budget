@@ -58,7 +58,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 240px;
+  width: 260px;
   padding: 12px;
   background: var(--paper);
   border: 1px solid var(--rule);
@@ -66,6 +66,8 @@
   box-shadow: 0 8px 24px rgba(17, 21, 28, 0.12);
 }
 .rv-mine-menu p { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.rv-mine-menu .rv-mine-who { padding-bottom: 8px; border-bottom: 1px solid var(--rule); overflow-wrap: anywhere; }
+.rv-mine-menu .rv-mine-who b { color: var(--ink); font-weight: 600; }
 
 /* --- columns ------------------------------------------------------------------ */
 .rv-cols {
@@ -170,15 +172,17 @@
 .rv-item.is-on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .rv-item-title { font-size: 13px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .rv-item-meta { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rv-item-foot { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.rv-item-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .rv-item-foot b { color: var(--ink); font-size: 12px; }
-.rv-flagcount { padding: 0 5px; border-radius: 3px; background: #fbeae7; color: var(--rv-flag); }
+.rv-flagcount { padding: 0 5px; border-radius: 3px; background: #fbeae7; color: var(--rv-flag); white-space: nowrap; }
 .rv-flagcount.is-many { background: var(--rv-flag); color: #fff; }
 .rv-status { margin-left: auto; padding: 0 6px; border-radius: 8px; background: var(--paper-3); color: var(--ink-3); font-family: var(--font-body); font-size: 11px; white-space: nowrap; }
 .rv-status.is-in_progress { background: #f3eedf; color: #6b5a2e; }
 .rv-status.is-on_hold { background: var(--paper-3); color: var(--ink-3); }
 .rv-status.is-in_independent_review { background: var(--accent-soft); color: var(--accent-deep); }
 .rv-status.is-completed { background: #e7f0e7; color: var(--positive); }
+.rv-status small { font-family: var(--font-mono); font-size: 10px; }
+.rv-yours { padding: 0 6px; border-radius: 8px; border: 1px solid var(--accent-soft); color: var(--accent-deep); font-family: var(--font-body); font-size: 11px; white-space: nowrap; }
 /* Pages under the list. */
 .rv-pager { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 12px; background: var(--paper); border-top: 1px solid var(--rule); }
 .rv-pager-range { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
@@ -205,6 +209,12 @@
 
 /* --- one project -------------------------------------------------------------- */
 .rv-welcome { max-width: 420px; margin: 12vh auto 0; padding: 0 24px; text-align: center; color: var(--ink-3); }
+.rv-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.rv-locked p { margin: 0 0 6px; }
+.rv-tag.is-locked { background: var(--paper-3); color: var(--ink-3); }
+.rv-signin { margin: 4px 0 0; padding: 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper-2); }
+.rv-signin p { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); }
+.rv-signin .rv-btn { margin-top: 4px; }
 .rv-welcome h2 { color: var(--ink); font-family: var(--font-hero); font-size: 22px; }
 kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; background: var(--paper-2); }
 
@@ -371,6 +381,9 @@ textarea.rf-input { resize: vertical; }
 .rf-issues li.is-warning { color: #6b5a2e; }
 .rf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .rf-export { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.rf-issues.is-send { padding-left: 10px; border-color: var(--rv-flag); }
+.rf-issues.is-send p { margin: 0; color: var(--rv-flag); }
+.rf-issues.is-send ul { margin: 6px 0 0; padding-left: 16px; }
 .rf-export button { padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; cursor: pointer; }
 
 /* --- viewer ------------------------------------------------------------------- */
