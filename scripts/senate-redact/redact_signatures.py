@@ -668,12 +668,6 @@ def apply_file(src, dst, cands, qa_dir, rel, style="black", primary="glm-5v-turb
     if doc.needs_pass:
         raise RuntimeError("password-protected")
     plan, boxes_unrot, flat = {}, {}, {}
-    primary_blind = set()
-    pf = os.path.join(CACHE, f"{primary}.p{PROMPT_VERSION}", sha256(src) + ".json")
-    if os.path.exists(pf):
-        for e in json.load(open(pf))["pages"]:
-            if not e.get("skipped") and (e.get("error") or parse_boxes(e.get("raw")) is None):
-                primary_blind.add(e["page"])
     for pno, page in enumerate(doc):
         stats["pages"] += 1
         marks, objs = [], []
@@ -693,10 +687,7 @@ def apply_file(src, dst, cands, qa_dir, rel, style="black", primary="glm-5v-turb
                 marks.append(rect * page.rotation_matrix)
                 stats["sig_images"] += 1
         # 2. model boxes the verifier didn't reject
-        # no readable answer from the primary model on this page: the second model's boxes are all there is, so the
-        # verifier (which says NO to some real signatures) gets no veto
-        blind = (pno + 1) in primary_blind
-        keep = [blind or primary in c["by"] or len(set(c["by"])) > 1 or c.get("verdict") != "NO" for c in cs]
+        keep = [primary in c["by"] or len(set(c["by"])) > 1 or c.get("verdict") != "NO" for c in cs]
         kept = grow(page, [c["rect"] for c, k in zip(cs, keep) if k])
         rejected = [c["rect"] for c, k in zip(cs, keep) if not k]
         stats["verifier_no"] += len(rejected)
