@@ -100,12 +100,8 @@ For each project:
 2. **The checklist**, in groups: the checks this project's red flags suggest come first, without a heading; then the documents on file, other checks for this kind of project (collapsed), and not yet due (collapsed). A suggested check has no status label until a volunteer starts it. Each check shows:
    - its lead role, what to check, the minimum evidence and the **safeguard**;
    - then the volunteer's answers: does it apply now, what you found (facts only), evidence, and the outcome.
-3. **Evidence** is one of the project's files or any link. Each piece records:
-   - page, table or cell;
-   - availability and whether it applies at this stage;
-   - the volunteer's check of the extract;
-   - the verbatim fact, and the volunteer's observation.
-4. **The case**: suggested priority and notes. The name comes from the sign-in.
+3. **Evidence is picked, not filled in:** a toggle per file of the project ("POW · Senate", "BP 202 · DPWH"), and "+ Other link" for any other document. Each picked document can take optional **Details**, folded away: page, table or cell; what it says; your observation; availability; whether it applies at this stage; your check of the extract. Under the evidence comes one **What you found** for the check.
+4. The name comes from the sign-in. Since 2026-11-14 the form has no "The case" section (suggested priority, notes) and no lead line or registry note. Values already in a review stay in its data and exports.
 
 **Save** sends the review. Choosing a final status saves at once.
 
@@ -320,8 +316,8 @@ When the team settles the method, answers in members' reviews can add weighted c
 
 The maintainer asked for one status per review, the field the team reports: **Satisfactory** or **Unsatisfactory**, where unsatisfactory is the red flag.
 
-- **In the review:** two large buttons, first in the Review tab (`FinalStatus` in `HgabReviewForm.tsx`). Choosing one saves the review at once. A line under them says what was saved, and screen readers announce it. "Clear the final status" removes it; a review with nothing else in it is then withdrawn.
-- **Accessibility:** they are toggle buttons (`aria-pressed`), not radios, so moving between them with the keyboard never saves. Each is named by its label alone, with its hint as the description. Each target is at least 76 px tall, with text next to the colour and the icon. They sit side by side when each gets 240 px, else one per row. The focus ring is 3 px.
+- **In the review:** a compact pair of buttons, first in the Review tab (`FinalStatus` in `HgabReviewForm.tsx`). Choosing one saves the review at once. A line beside the heading says whether it is saved, and screen readers announce it. "Clear" removes it; a review with nothing else in it is then withdrawn.
+- **Accessibility:** they are toggle buttons (`aria-pressed`), not radios, so moving between them with the keyboard never saves. Each is named by its label alone. Its hint ("The documents support the project." / "Red flag: something is missing, wrong or doesn't add up.") is the description screen readers give and the tooltip, not shown on screen. Each target is 44 px tall, with text next to the colour and the icon, and a 3 px focus ring. They sit side by side when each gets 150 px. The Save button is 48 px tall.
 - **In the data:** `CaseReview.verdict` is `satisfactory`, `unsatisfactory` or null (`VERDICTS` in `src/lib/hgab-redflags-team.ts`). Reviews from before it was added read as null. A final status alone is enough to send a review (`caseTouched`). It is in the payload only, so D1 needed no change; the status API reads it with `json_extract(payload, '$.verdict')`.
 - **A project's final status** (`projectVerdict`): **unsatisfactory if any member found it unsatisfactory** (a red flag stands until it is resolved), satisfactory if every final status given is satisfactory. The status API returns `verdict` and `verdicts` (how many of each) per project.
 - **The list status** (`listStatus`), in sort order:
