@@ -272,6 +272,13 @@ export const CASE_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 export const EVIDENCE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /** Team check ids, in any registry version: a review keeps its checks when the registry changes. */
 export const FLAG_ID_RE = /^RF-\d{3}$/;
+/**
+ * The final status of a review: what the team reports. Satisfactory: the documents support the project.
+ * Unsatisfactory: a red flag. A project shows the final status of its reviews (src/lib/hgab-review.ts).
+ */
+export const VERDICTS = ['satisfactory', 'unsatisfactory'] as const;
+export type Verdict = (typeof VERDICTS)[number];
+export const VERDICT_LABEL: Record<Verdict, string> = { satisfactory: 'Satisfactory', unsatisfactory: 'Unsatisfactory' };
 /** A review of a project, or a check of another member's review of it (workflow step 5; not open yet). */
 export const CASE_KINDS = ['review', 'verification'] as const;
 export type CaseKind = (typeof CASE_KINDS)[number];
@@ -323,6 +330,8 @@ export interface CaseReview {
   kind: CaseKind;
   /** For a verification: the case it checks. */
   verifies_case_id: string | null;
+  /** The final status (VERDICTS), the one the team reports; null until the member gives it. */
+  verdict: Verdict | null;
   /** Set by the API: the number of the save that produced this copy (1, 2, …); null before the first save. */
   revision: number | null;
   registry: { version: string; sha256: string; mapping: string };
@@ -363,6 +372,7 @@ export function newCaseReview(input: {
     case_id: input.caseId,
     kind: 'review',
     verifies_case_id: null,
+    verdict: null,
     revision: null,
     registry: { version: REGISTRY.source.version, sha256: REGISTRY.source.sha256, mapping: MAPPING_STATUS },
     project: input.project,
@@ -396,9 +406,12 @@ export function emptyEvidence(id: string): EvidenceItem {
 /** Whether a check has anything a volunteer entered. */
 export const flagCheckTouched = (f: FlagCheck) =>
   f.applicability !== 'not_assessed' || f.human_outcome !== 'not_reviewed' || !!f.observed_discrepancy.trim() || f.evidence.length > 0;
-/** Document availability is filled in from what we detected, so it doesn't count as the volunteer's. */
+/**
+ * Whether a review has anything of the volunteer's, so it is worth sending (an untouched one is withdrawn). The final
+ * status alone is enough. Document availability is filled in from what we detected, so it doesn't count.
+ */
 export const caseTouched = (r: CaseReview) =>
-  r.flags.some(flagCheckTouched) || r.documents.some((d) => d.matches_project !== 'unknown')
+  r.verdict != null || r.flags.some(flagCheckTouched) || r.documents.some((d) => d.matches_project !== 'unknown')
   || !!r.notes.trim() || !!r.next_action.trim() || r.risk_priority !== 'not_prioritized' || r.case_stage !== 'not_started';
 
 /** The team's flag status: an AI candidate until a person looks, then under review, then an outcome. */
@@ -516,6 +529,9 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
   if (!(CASE_KINDS as readonly unknown[]).includes(kind)) bad('kind', 'expected review or verification');
   const verifies = nullable(r.verifies_case_id, (v) => str(v, 'verifies_case_id', 64));
   if (verifies != null && !CASE_ID_RE.test(verifies)) bad('verifies_case_id', 'not a case id');
+  // Reviews saved before the final status existed have none.
+  const verdict = r.verdict ?? null;
+  if (verdict != null && !(VERDICTS as readonly unknown[]).includes(verdict)) bad('verdict', 'expected satisfactory, unsatisfactory or none');
   const reg = obj(r.registry, 'registry'), proj = obj(r.project, 'project'), who = obj(r.reviewer, 'reviewer'), client = obj(r.client, 'client');
   const hgabId = str(proj.hgab_id, 'project.hgab_id', 40);
   if (!/^HB10858-3-\d{4}-\d{6}$/.test(hgabId)) bad('project.hgab_id', 'not a House bill row id');
@@ -584,6 +600,7 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
     case_id: caseId,
     kind: kind as CaseKind,
     verifies_case_id: verifies,
+    verdict: verdict as Verdict | null,
     revision: null,
     registry: { version: str(reg.version, 'registry.version', 80), sha256: str(reg.sha256, 'registry.sha256', 64), mapping: str(reg.mapping, 'registry.mapping') },
     project: {
@@ -622,6 +639,18 @@ function screeningSource(codes: readonly string[]): string {
     theirs.length ? `research.bettergov.ph flags: ${theirs.join(', ')}` : '',
     ours.length ? `BetterGov (our matching and NEP comparison): ${ours.join(', ')}` : '',
   ].filter(Boolean).join('; ') || 'Volunteer review';
+}
+
+/** The report: one row per review, with its final status (the field the team reports on). */
+export const VERDICT_COLUMNS = [
+  'House bill row', 'Project', 'DPWH office', 'Region', 'House bill amount (PHP)', 'Final status', 'Reviewer', 'Checks with an outcome', 'Notes', 'Last saved',
+] as const;
+export function verdictRows(r: CaseReview): string[][] {
+  return [[
+    r.project.hgab_id, r.project.title, r.project.office, r.project.region, String(r.project.amount_php),
+    r.verdict ? VERDICT_LABEL[r.verdict] : 'Not given', r.reviewer.display_name || r.reviewer.reviewer_id,
+    String(r.flags.filter((f) => f.human_outcome !== 'not_reviewed').length), r.notes, (r.submitted_at ?? r.updated_at).slice(0, 10),
+  ]];
 }
 
 /** One CASE INTAKE & TRACKER row per check a volunteer worked on, in the workbook's column order. */

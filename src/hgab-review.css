@@ -655,16 +655,17 @@ textarea.rf-input { resize: vertical; }
 }
 .rv-item-badge b { font-family: var(--font-mono); font-weight: 600; }
 .rv-item-badge.is-auto_red_flag { background: var(--rv-flag); color: #fff; }
-.rv-item-badge.is-completed { background: #e7f0e7; color: var(--positive); }
-.rv-item-badge.is-in_independent_review { background: var(--accent-soft); color: var(--accent-deep); }
-.rv-item.is-auto_red_flag { border-left: 3px solid var(--rv-flag); }
+.rv-item-badge.is-unsatisfactory { background: var(--rv-flag); color: #fff; }
+.rv-item-badge.is-satisfactory { background: #e7f0e7; color: var(--positive); }
+.rv-item.is-auto_red_flag, .rv-item.is-unsatisfactory { border-left: 3px solid var(--rv-flag); }
+.rv-item.is-satisfactory { border-left: 3px solid var(--positive); }
 
 /* Status dots in the Review status filter. */
 .rv-status-dot::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--ink-mute); vertical-align: 1px; }
-.rv-status-dot.is-in_progress::before, .rv-status-dot.is-on_hold::before { background: #b08d3a; }
-.rv-status-dot.is-in_independent_review::before { background: var(--accent); }
-.rv-status-dot.is-completed::before { background: var(--positive); }
-.rv-status-dot.is-auto_red_flag::before { background: var(--rv-flag); }
+.rv-status-dot.is-in_progress::before { background: #b08d3a; }
+.rv-status-dot.is-satisfactory::before { background: var(--positive); }
+.rv-status-dot.is-unsatisfactory::before, .rv-status-dot.is-auto_red_flag::before { background: var(--rv-flag); }
+.rv-status-dot.is-auto_red_flag::before { opacity: 0.6; }
 
 /* The banner on an auto-reviewed project. */
 .rv-autobanner { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--rv-flag); border-left-width: 4px; border-radius: 6px; background: #fdf3f1; }
@@ -747,8 +748,9 @@ textarea.rf-input { resize: vertical; }
 .rv-prog-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; font-size: 11.5px; line-height: 1.2; white-space: nowrap; }
 .rv-prog-head > b { overflow: hidden; text-overflow: ellipsis; }
 .rv-prog-bar { display: flex; height: 4px; border-radius: 2px; background: var(--paper-3); overflow: hidden; }
-.rv-prog-bar .is-auto { background: var(--rv-flag); }
-.rv-prog-bar .is-members { background: var(--positive); }
+.rv-prog-bar .is-auto { background: var(--rv-flag); opacity: 0.6; }
+.rv-prog-bar .is-unsatisfactory { background: var(--rv-flag); }
+.rv-prog-bar .is-satisfactory { background: var(--positive); }
 .rv-prog-bar .is-started { background: #d9c48f; }
 .rv-prog-foot { display: flex; justify-content: space-between; gap: 10px; font-family: var(--font-mono); font-size: 10px; line-height: 1.2; color: var(--ink-3); white-space: nowrap; }
 .rv-prog-foot b { font-size: 11.5px; color: var(--ink); }
@@ -759,3 +761,41 @@ textarea.rf-input { resize: vertical; }
 @media (max-width: 900px) {
   .rv-progress { display: none; }
 }
+
+/* The final status (satisfactory / unsatisfactory = red flag): the field the team reports, first in the review form.
+   Big targets, text beside the colour and the icon, a strong focus ring. */
+.rf-final { margin: 0 0 18px; padding: 16px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); }
+.rf-final-h { margin: 0; font-family: var(--font-hero); font-size: 20px; font-weight: 700; color: var(--ink); }
+.rf-final-d { margin: 4px 0 12px; font-size: 14px; color: var(--ink-2); }
+/* Side by side when each button gets 240px, else one per row (the pane is often narrower): nothing is cut off. */
+.rf-final-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.rf-final-btn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "icon label" "icon hint";
+  align-items: center;
+  column-gap: 12px;
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px 16px;
+  border: 2px solid currentColor;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rf-final-btn.is-satisfactory { color: var(--positive); }
+.rf-final-btn.is-unsatisfactory { color: var(--rv-flag); }
+.rf-final-icon { grid-area: icon; font-size: 30px; line-height: 1; }
+.rf-final-label { grid-area: label; font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.rf-final-hint { grid-area: hint; font-size: 13.5px; line-height: 1.35; color: var(--ink-2); }
+.rf-final-btn:hover:not(:disabled) { background: var(--paper-2); }
+.rf-final-btn.is-on { color: #fff; }
+.rf-final-btn.is-on.is-satisfactory { background: var(--positive); border-color: var(--positive); }
+.rf-final-btn.is-on.is-unsatisfactory { background: var(--rv-flag); border-color: var(--rv-flag); }
+.rf-final-btn.is-on .rf-final-hint { color: #fff; }
+.rf-final-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.rf-final-btn:disabled { cursor: progress; }
+.rf-final-state { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
+.rf-final-state b { color: var(--ink); }

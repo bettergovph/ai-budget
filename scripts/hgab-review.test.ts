@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, autoScore, scoreBand, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  INSERTION_FLAG, NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, reviewProgress, sourceGroup, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
+  INSERTION_FLAG, NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, projectVerdict, reviewProgress, sourceGroup, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
   sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
 } from "../src/lib/hgab-review";
 
@@ -18,13 +18,14 @@ test("steps round-trip through the URL", () => {
   const steps: Step[] = [
     { kind: "flag", code: "potential-nep-insertion" }, { kind: "flag", code: "repeated-allocation-amount", not: true },
     { kind: "region", values: ["Region IV-A", "NCR"] }, { kind: "office", values: ["Cavite 1st District Engineering Office"] },
-    { kind: "docs", values: ["none", "incomplete"] }, { kind: "min", value: 50_000_000 }, { kind: "q", value: "multi-purpose: Imus" }, { kind: "status", values: ["not_started", "on_hold"] },
+    { kind: "docs", values: ["none", "incomplete"] }, { kind: "min", value: 50_000_000 }, { kind: "q", value: "multi-purpose: Imus" }, { kind: "status", values: ["not_started", "unsatisfactory"] },
   ];
   for (const s of steps) assert.deepEqual(stepFromParam(stepToParam(s)), s.kind === "flag" && !s.not ? { ...s, not: false } : s);
   assert.equal(stepFromParam("flag:<script>"), null);
   assert.equal(stepFromParam("docs:all"), null);
   assert.deepEqual(stepFromParam("reviewed:no"), { kind: "status", values: ["not_started"] }, "old links still work");
   assert.equal(stepFromParam("status:done"), null);
+  assert.equal(stepFromParam("status:on_hold"), null, "case stages are no longer list statuses");
   assert.deepEqual(stepFromParam("docs:all|none"), { kind: "docs", values: ["none"] });
   assert.deepEqual(stepFromParam("region:NCR|NCR"), { kind: "region", values: ["NCR"] });
   assert.equal(stepFromParam("min:-5"), null);
@@ -48,13 +49,15 @@ test("automatic review: no key document and no file, a red flag the list can hid
   assert.equal(auto.length, all.filter((p) => p.docs === 0 && p.files === 0).length);
   assert.ok(auto.length > 1000 && auto.every((p) => p.auto!.score === autoScore(["no-key-documents"]) && p.auto!.rules[0] === "no-key-documents"));
   assert.equal(scoreBand(100), "High");
-  // A member's review takes over the status; nobody's review leaves the automatic one.
-  assert.equal(listStatus("not_started", true), "auto_red_flag");
-  assert.equal(listStatus("in_progress", true), "in_progress");
-  assert.equal(listStatus("not_started", false), "not_started");
-  assert.ok(isReviewed("auto_red_flag") && isReviewed("completed") && !isReviewed("in_progress"));
+  // A member's final status takes over; a review without one shows "in progress"; nobody's review leaves the automatic one.
+  assert.equal(listStatus(null, false, true), "auto_red_flag");
+  assert.equal(listStatus(null, true, true), "in_progress");
+  assert.equal(listStatus("satisfactory", true, true), "satisfactory");
+  assert.equal(listStatus("unsatisfactory", true, false), "unsatisfactory");
+  assert.equal(listStatus(null, false, false), "not_started");
+  assert.ok(isReviewed("auto_red_flag") && isReviewed("satisfactory") && isReviewed("unsatisfactory") && !isReviewed("in_progress"));
   const autoSet = new Set(auto.map((p) => p.hgabId));
-  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: (h: string) => listStatus("not_started", autoSet.has(h)) };
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: (h: string) => listStatus(null, false, autoSet.has(h)) };
   const hidden = runFunnel(all, [{ kind: "status", values: [...NOT_REVIEWED_STATUSES] }], ctx)[1].projects;
   assert.equal(hidden.length, all.length - auto.length, "Hide reviewed leaves out the auto-reviewed");
   assert.equal(stepLabel({ kind: "status", values: [...NOT_REVIEWED_STATUSES] }, ix!.flags), "Not yet reviewed");
@@ -69,14 +72,16 @@ test("review progress: House insertions and NEP only, auto-reviewed included; th
   assert.equal(ins.length, ix!.flags.find((f) => f.code === INSERTION_FLAG)!.n, "House insertions are the lines our comparison finds in the House bill only");
   const autoSet = new Set(all.filter((p) => p.auto).map((p) => p.hgabId));
   const done = new Set(ins.filter((p) => !p.auto).slice(0, 5).map((p) => p.hgabId));
-  const statusOf = (h: string) => (done.has(h) ? "completed" as const : listStatus("not_started", autoSet.has(h)));
+  const flagged = new Set(ins.filter((p) => !p.auto).slice(0, 2).map((p) => p.hgabId));
+  const statusOf = (h: string) => listStatus(flagged.has(h) ? "unsatisfactory" : done.has(h) ? "satisfactory" : null, done.has(h), autoSet.has(h));
   const { groups, total } = reviewProgress(all, statusOf);
   assert.equal(groups.insertion.projects, ins.length);
   assert.equal(groups.insertion.projects + groups.nep.projects, all.length);
   // The auto-reviewed House insertions count as reviewed in their group.
   assert.equal(groups.insertion.auto, ins.filter((p) => p.auto).length);
   assert.ok(groups.insertion.auto > 1500, "most auto-reviewed projects are House insertions");
-  assert.equal(groups.insertion.members, 5);
+  assert.equal(groups.insertion.unsatisfactory, 2);
+  assert.equal(groups.insertion.satisfactory, 3);
   assert.equal(groups.insertion.pending, ins.length - groups.insertion.auto - 5);
   assert.equal(total.auto, autoSet.size);
   assert.equal(total.pending + total.reviewed, total.projects);
@@ -120,7 +125,7 @@ test("the funnel on review.json", { skip: !ix && "review.json not built" }, () =
   const flagIndex = new Map(ix!.flags.map((f, i) => [f.code, i]));
   // List status as the page has it with no member reviews: auto-reviewed where review.json marks it, else not started.
   const autoSet = new Set(Object.keys(ix!.auto?.rows ?? {}));
-  const ctx = { flagIndex, statusOf: (h: string) => listStatus("not_started", autoSet.has(h)) };
+  const ctx = { flagIndex, statusOf: (h: string) => listStatus(null, false, autoSet.has(h)) };
   // Level 0 is everything; each level is a subset of the one before; amounts add up.
   const steps: Step[] = [{ kind: "flag", code: "potential-nep-insertion" }, { kind: "docs", values: ["incomplete"] }, { kind: "region", values: ["Region IV-A"] }];
   const L = runFunnel(all, steps, ctx);
@@ -163,11 +168,32 @@ test("the funnel on review.json", { skip: !ix && "review.json not built" }, () =
   for (const k of ["flags", "amount", "bill", "status"] as const) assert.equal(sortProjects(all, k).length, all.length);
   // Review status: what still needs a reviewer first, then bill order.
   const done = new Set(all.slice(0, 3).map((p) => p.hgabId));
-  const byStatus = sortProjects(all, "status", (h) => (done.has(h) ? "completed" : "not_started"));
+  const byStatus = sortProjects(all, "status", (h) => (done.has(h) ? "satisfactory" : "not_started"));
   assert.ok(byStatus.slice(-3).every((p) => done.has(p.hgabId)));
   assert.ok(byStatus.slice(0, -3).every((p, i, a) => i === 0 || a[i - 1].seq < p.seq));
-  assert.equal(runFunnel(all, [{ kind: "status", values: ["completed"] }], { ...ctx, statusOf: (h: string) => (done.has(h) ? "completed" : "not_started") })[1].projects.length, 3);
+  assert.equal(runFunnel(all, [{ kind: "status", values: ["satisfactory"] }], { ...ctx, statusOf: (h: string) => (done.has(h) ? "satisfactory" : "not_started") })[1].projects.length, 3);
+  // The red-flag preset lists members' unsatisfactory reviews and the automatic red flags: the report.
+  const red = PRESETS.find((p) => p.key === "red-flags")!;
+  assert.deepEqual(red.steps, [{ kind: "status", values: ["unsatisfactory", "auto_red_flag"] }]);
   assert.ok(sortProjects(all, "bill").every((p, i, a) => i === 0 || a[i - 1].seq < p.seq));
+});
+
+test("a project's final status: unsatisfactory if any member found a red flag, satisfactory if all did not", () => {
+  assert.equal(projectVerdict(undefined), null);
+  assert.equal(projectVerdict({ satisfactory: 0, unsatisfactory: 0 }), null);
+  assert.equal(projectVerdict({ satisfactory: 3, unsatisfactory: 0 }), "satisfactory");
+  assert.equal(projectVerdict({ satisfactory: 3, unsatisfactory: 1 }), "unsatisfactory");
+  const ix = buildStatusIndex([
+    { hgab_id: "HB10858-3-0001-000001", status: "in_progress", updated_at: "2026-11-14T01:00:00Z", verdict: "satisfactory" },
+    { hgab_id: "HB10858-3-0001-000001", status: "in_progress", updated_at: "2026-11-14T02:00:00Z", verdict: "unsatisfactory" },
+    { hgab_id: "HB10858-3-0002-000004", status: "in_progress", updated_at: "2026-11-14T00:00:00Z", verdict: null },
+    { hgab_id: "HB10858-3-0003-000009", status: "in_progress", updated_at: "2026-11-14T00:00:00Z", verdict: "maybe" },
+  ]);
+  assert.equal(ix["HB10858-3-0001-000001"].verdict, "unsatisfactory");
+  assert.deepEqual(ix["HB10858-3-0001-000001"].verdicts, { satisfactory: 1, unsatisfactory: 1 });
+  assert.equal(ix["HB10858-3-0002-000004"].verdict, null, "a review without a final status");
+  assert.equal(ix["HB10858-3-0003-000009"].verdict, null, "anything else isn't a final status");
+  assert.equal(listStatus(ix["HB10858-3-0002-000004"].verdict!, ix["HB10858-3-0002-000004"].reviews > 0, true), "in_progress");
 });
 
 test("a project shows the furthest of its members' reviews", () => {
@@ -179,8 +205,9 @@ test("a project shows the furthest of its members' reviews", () => {
     { hgab_id: "HB10858-3-0001-000001", status: "in_independent_review", updated_at: "2026-11-13T00:00:00Z" },
     { hgab_id: "HB10858-3-0002-000004", status: "on_hold", updated_at: "2026-11-12T00:00:00Z" },
   ]);
+  const none = { verdict: null, verdicts: { satisfactory: 0, unsatisfactory: 0 } };
   assert.deepEqual(ix, {
-    "HB10858-3-0001-000001": { status: "in_independent_review", reviews: 2, updated_at: "2026-11-13T01:00:00Z" },
-    "HB10858-3-0002-000004": { status: "on_hold", reviews: 1, updated_at: "2026-11-12T00:00:00Z" },
+    "HB10858-3-0001-000001": { status: "in_independent_review", reviews: 2, updated_at: "2026-11-13T01:00:00Z", ...none },
+    "HB10858-3-0002-000004": { status: "on_hold", reviews: 1, updated_at: "2026-11-12T00:00:00Z", ...none },
   });
 });

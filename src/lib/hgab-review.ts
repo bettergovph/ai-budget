@@ -11,6 +11,7 @@ import {
   FLAG_FAMILIES, NAMED_TYPES, parseHgabId, type FlagFamily, type LinkMethod, type ReviewIndex, type ReviewIndexFlag,
   type ReviewIndexOffice,
 } from './hgab-documents';
+import { VERDICT_LABEL, type Verdict } from './hgab-redflags-team';
 
 export const REVIEW_ROOT = '/hgab/2027/review';
 export const REVIEW_TITLE = 'Project reviewer';
@@ -124,26 +125,53 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   completed: 'Completed',
 };
 /**
- * What the list shows and filters on: the members' review status, or "Auto-reviewed: red flag" when nobody has
- * reviewed a project the automatic review marked (review.json `auto`). Kept apart from ReviewStatus, which is what
- * members' reviews store in D1. Ordered for the review-status sort: work still to do first, reviewed last.
+ * What the list shows and filters on: a project's final status, the one the team reports (src/lib/hgab-redflags-team.ts
+ * VERDICTS: satisfactory, or unsatisfactory = red flag). Before any member gives one: "In progress" when a member has a
+ * review, "Unsatisfactory · auto-reviewed" when the automatic review marked the project (review.json `auto`), else
+ * "Not started". The case stage members' reviews also store (ReviewStatus, D1 `status`) no longer shows here.
+ * Ordered for the review-status sort: work still to do first, then red flags, then satisfactory.
  */
-export const LIST_STATUSES = [...REVIEW_STATUSES, 'auto_red_flag'] as const;
+export const LIST_STATUSES = ['not_started', 'in_progress', 'unsatisfactory', 'auto_red_flag', 'satisfactory'] as const;
 export type ListStatus = (typeof LIST_STATUSES)[number];
-export const LIST_STATUS_LABEL: Record<ListStatus, string> = { ...REVIEW_STATUS_LABEL, auto_red_flag: 'Auto-reviewed: red flag' };
-/** Statuses that count as reviewed, for "Hide reviewed" and the faded rows in the list. */
-export const REVIEWED_STATUSES: readonly ListStatus[] = ['auto_red_flag', 'in_independent_review', 'completed'];
+export const LIST_STATUS_LABEL: Record<ListStatus, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  unsatisfactory: VERDICT_LABEL.unsatisfactory,
+  auto_red_flag: `${VERDICT_LABEL.unsatisfactory} · auto-reviewed`,
+  satisfactory: VERDICT_LABEL.satisfactory,
+};
+/** Statuses that count as reviewed (a final status, given or automatic), for "Hide reviewed" and the faded rows. */
+export const REVIEWED_STATUSES: readonly ListStatus[] = ['unsatisfactory', 'auto_red_flag', 'satisfactory'];
 export const NOT_REVIEWED_STATUSES: readonly ListStatus[] = LIST_STATUSES.filter((v) => !REVIEWED_STATUSES.includes(v));
 export const isReviewed = (s: ListStatus) => REVIEWED_STATUSES.includes(s);
-/** A project's list status: the members' status, unless nobody has started and the automatic review marked it. */
-export const listStatus = (members: ReviewStatus, auto: boolean): ListStatus => (members === 'not_started' && auto ? 'auto_red_flag' : members);
+/** Red flags, given by a member or automatic: what the team's report lists. */
+export const RED_FLAG_STATUSES: readonly ListStatus[] = ['unsatisfactory', 'auto_red_flag'];
+/** A project's list status from its final status, whether a member has a review, and the automatic review. */
+export function listStatus(verdict: Verdict | null, started: boolean, auto: boolean): ListStatus {
+  if (verdict) return verdict;
+  if (started) return 'in_progress';
+  return auto ? 'auto_red_flag' : 'not_started';
+}
+
+/** How many of a project's reviews gave each final status. */
+export interface VerdictCounts { satisfactory: number; unsatisfactory: number }
+/**
+ * A project's final status from its reviews': unsatisfactory if any member found a red flag (it stands until it is
+ * resolved), satisfactory if every final status given is satisfactory, none before any is given.
+ */
+export function projectVerdict(c: VerdictCounts | undefined): Verdict | null {
+  if (!c) return null;
+  return c.unsatisfactory > 0 ? 'unsatisfactory' : c.satisfactory > 0 ? 'satisfactory' : null;
+}
 
 /**
  * Every project's review status across members, from `GET /api/hgab/2027/reviews/status` (src/worker/hgab-reviews.ts):
- * the furthest status any member's review has reached, how many members have a review, and the last save. Projects
- * nobody has reviewed are left out. The page's `statusOf` reads it.
+ * the final status (`verdict`, with how many reviews gave each), the furthest case stage, how many members have a
+ * review, and the last save. Projects nobody has reviewed are left out. The page's `statusOf` reads it.
  */
-export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: number; updated_at: string; auto?: { score: number; method: string } }>;
+export type ReviewStatusIndex = Record<string, {
+  status: ReviewStatus; reviews: number; updated_at: string; verdict?: Verdict | null; verdicts?: VerdictCounts; auto?: { score: number; method: string };
+}>;
 
 /**
  * Adds D1's automatic reviews (review_auto, kept in step with review.json `auto` by sync:hgab-auto-reviews) to a
@@ -153,7 +181,7 @@ export type ReviewStatusIndex = Record<string, { status: ReviewStatus; reviews: 
 export function withAutoReviews(index: ReviewStatusIndex, auto: Iterable<{ hgab_id: string; score: number; method: string; updated_at: string }>): ReviewStatusIndex {
   const out: ReviewStatusIndex = { ...index };
   for (const a of auto) {
-    const cur = out[a.hgab_id] ?? { status: 'not_started' as const, reviews: 0, updated_at: a.updated_at };
+    const cur = out[a.hgab_id] ?? { status: 'not_started' as const, reviews: 0, updated_at: a.updated_at, verdict: null, verdicts: { satisfactory: 0, unsatisfactory: 0 } };
     out[a.hgab_id] = { ...cur, auto: { score: a.score, method: a.method } };
   }
   return out;
@@ -170,14 +198,16 @@ export function furthestStatus(statuses: Iterable<ReviewStatus>): ReviewStatus {
   return out;
 }
 
-/** The status index from each review's project, status and last save (the API's query, and the tests'). */
-export function buildStatusIndex(rows: Iterable<{ hgab_id: string; status: ReviewStatus; updated_at: string }>): ReviewStatusIndex {
+/** The status index from each review's project, case status, final status and last save (the API's query, and the tests'). */
+export function buildStatusIndex(rows: Iterable<{ hgab_id: string; status: ReviewStatus; updated_at: string; verdict?: string | null }>): ReviewStatusIndex {
   const out: ReviewStatusIndex = {};
   for (const r of rows) {
     const cur = out[r.hgab_id];
+    const verdicts = { ...(cur?.verdicts ?? { satisfactory: 0, unsatisfactory: 0 }) };
+    if (r.verdict === 'satisfactory' || r.verdict === 'unsatisfactory') verdicts[r.verdict]++;
     out[r.hgab_id] = cur
-      ? { status: furthestStatus([cur.status, r.status]), reviews: cur.reviews + 1, updated_at: r.updated_at > cur.updated_at ? r.updated_at : cur.updated_at }
-      : { status: r.status, reviews: 1, updated_at: r.updated_at };
+      ? { status: furthestStatus([cur.status, r.status]), reviews: cur.reviews + 1, updated_at: r.updated_at > cur.updated_at ? r.updated_at : cur.updated_at, verdict: projectVerdict(verdicts), verdicts }
+      : { status: r.status, reviews: 1, updated_at: r.updated_at, verdict: projectVerdict(verdicts), verdicts };
   }
   return out;
 }
@@ -355,27 +385,29 @@ export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusO
 export interface ProgressRow {
   projects: number;
   php: number;
-  /** Counted as reviewed (REVIEWED_STATUSES): auto-reviewed red flags, with a verifier, completed. */
+  /** With a final status (REVIEWED_STATUSES): given by members, or automatic. */
   reviewed: number;
   auto: number;
-  /** A member's review is with a verifier or completed. */
-  members: number;
-  /** A member has started (in progress or on hold), not yet reviewed. */
+  /** Members' final statuses: unsatisfactory (red flag) and satisfactory. */
+  unsatisfactory: number;
+  satisfactory: number;
+  /** A member has a review without a final status yet. */
   started: number;
   pending: number;
   pending_php: number;
 }
-/** Review progress for House insertions, NEP only, and in all: what is reviewed, started and still pending. */
+/** Review progress for House insertions, NEP only, and in all: final statuses, started and still pending. */
 export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId: string) => ListStatus): { groups: Record<ProgressGroup, ProgressRow>; total: ProgressRow } {
-  const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, members: 0, started: 0, pending: 0, pending_php: 0 });
+  const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, unsatisfactory: 0, satisfactory: 0, started: 0, pending: 0, pending_php: 0 });
   const groups = Object.fromEntries(PROGRESS_GROUPS.map((g) => [g, blank()])) as Record<ProgressGroup, ProgressRow>;
   const total = blank();
   for (const p of all) {
     const st = statusOf(p.hgabId);
     for (const r of [groups[p.insertion ? 'insertion' : 'nep'], total]) {
       r.projects++; r.php += p.amount;
-      if (isReviewed(st)) { r.reviewed++; if (st === 'auto_red_flag') r.auto++; else r.members++; }
-      else { r.pending++; r.pending_php += p.amount; if (st === 'in_progress' || st === 'on_hold') r.started++; }
+      if (st === 'auto_red_flag') { r.reviewed++; r.auto++; }
+      else if (st === 'unsatisfactory' || st === 'satisfactory') { r.reviewed++; r[st]++; }
+      else { r.pending++; r.pending_php += p.amount; if (st === 'in_progress') r.started++; }
     }
   }
   return { groups, total };
@@ -401,8 +433,14 @@ export const PRESETS: readonly { key: string; label: string; note: string; steps
   {
     key: 'not-reviewed',
     label: 'Not yet reviewed',
-    note: 'Leaves out auto-reviewed red flags and reviews that are done or with a verifier.',
+    note: 'Projects without a final status: leaves out satisfactory, unsatisfactory and auto-reviewed ones.',
     steps: [{ kind: 'status', values: [...NOT_REVIEWED_STATUSES] }],
+  },
+  {
+    key: 'red-flags',
+    label: 'Unsatisfactory: red flags',
+    note: 'Every project with an unsatisfactory final status, from members or the automatic review: the report.',
+    steps: [{ kind: 'status', values: [...RED_FLAG_STATUSES] }],
   },
   {
     key: 'auto-red-flags',

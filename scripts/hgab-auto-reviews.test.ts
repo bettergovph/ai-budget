@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
-import { listStatus, withAutoReviews } from "../src/lib/hgab-review";
+import { listStatus, projectVerdict, withAutoReviews } from "../src/lib/hgab-review";
 import { batches, planAutoSync, planSql, wantedFrom, type AutoRow } from "./hgab-review/sync-auto-reviews";
 
 const ixPath = resolve("data/hgab/2027", REVIEW_INDEX_PATH);
@@ -63,8 +63,12 @@ test("the status list carries D1's automatic reviews; members' reviews take over
     { A: { status: "in_progress", reviews: 1, updated_at: "t1" } },
     [{ hgab_id: "A", score: 100, method: "auto-1", updated_at: "t0" }, { hgab_id: "B", score: 100, method: "auto-1", updated_at: "t0" }],
   );
-  assert.deepEqual(idx.B, { status: "not_started", reviews: 0, updated_at: "t0", auto: { score: 100, method: "auto-1" } });
+  assert.deepEqual(idx.B, {
+    status: "not_started", reviews: 0, updated_at: "t0", verdict: null, verdicts: { satisfactory: 0, unsatisfactory: 0 }, auto: { score: 100, method: "auto-1" },
+  });
   assert.equal(idx.A.status, "in_progress");
-  assert.equal(listStatus(idx.A.status, !!idx.A.auto), "in_progress");
-  assert.equal(listStatus(idx.B.status, !!idx.B.auto), "auto_red_flag");
+  assert.equal(listStatus(projectVerdict(idx.A.verdicts), idx.A.reviews > 0, !!idx.A.auto), "in_progress");
+  assert.equal(listStatus(projectVerdict(idx.B.verdicts), idx.B.reviews > 0, !!idx.B.auto), "auto_red_flag");
+  // A member's final status takes over the automatic red flag, either way.
+  assert.equal(listStatus(projectVerdict({ satisfactory: 1, unsatisfactory: 0 }), true, true), "satisfactory");
 });

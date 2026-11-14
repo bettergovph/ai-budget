@@ -24,15 +24,15 @@ import {
 } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
-  DEFAULT_SORT, INSERTION_FLAG, LIST_STATUSES, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_STATUSES, REVIEW_STATUS_LABEL, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
-  decodeIndex, docCount, furthestStatus, isReviewed, listStatus, pageCount, pageOf, pageWindow, reviewStatusFromStage,
+  DEFAULT_SORT, INSERTION_FLAG, LIST_STATUSES, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
+  decodeIndex, docCount, isReviewed, listStatus, pageCount, pageOf, pageWindow, projectVerdict,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
   setValues, sortProjects, stepLabel, stepTest, stepToParam, stepsFromSearch, toggleFlag,
-  type ListStatus, type MultiKind, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatus, type ReviewStatusIndex, type SortKey, type Step, type StepContext,
+  type ListStatus, type MultiKind, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatusIndex, type SortKey, type Step, type StepContext, type VerdictCounts,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
-  detectorsFor, newCaseReview, newId, type CaseReview, type Reviewer,
+  VERDICT_LABEL, detectorsFor, newCaseReview, newId, type CaseReview, type Reviewer,
 } from '../lib/hgab-redflags-team';
 import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
@@ -486,8 +486,9 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
     const detail = [
       g ? PROGRESS_GROUP_NOTE[g] : 'Every DPWH project in the House bill',
       `${n(r.pending)} pending of ${n(r.projects)} (${pesoShort(r.pending_php)})`,
-      r.members ? `${n(r.members)} reviewed by members` : '',
-      r.auto ? `${n(r.auto)} auto-reviewed` : '',
+      r.unsatisfactory ? `${n(r.unsatisfactory)} unsatisfactory (members)` : '',
+      r.auto ? `${n(r.auto)} unsatisfactory, auto-reviewed` : '',
+      r.satisfactory ? `${n(r.satisfactory)} satisfactory` : '',
       r.started ? `${n(r.started)} started` : '',
       'Click to list the pending ones.',
     ].filter(Boolean).join('\n');
@@ -497,7 +498,8 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
           <span className="rv-prog-head"><b>{name}</b></span>
           <span className="rv-prog-bar" aria-hidden="true">
             <span className="is-auto" style={{ width: `${(r.auto / Math.max(1, r.projects)) * 100}%` }} />
-            <span className="is-members" style={{ width: `${(r.members / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-unsatisfactory" style={{ width: `${(r.unsatisfactory / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-satisfactory" style={{ width: `${(r.satisfactory / Math.max(1, r.projects)) * 100}%` }} />
             <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
           </span>
           <span className="rv-prog-foot"><span><b>{n(r.pending)}</b>/{n(r.projects)} · {pct(r)}%</span><span>{pesoShort(r.pending_php)}</span></span>
@@ -566,12 +568,14 @@ function DocDots({ mask }: { mask: number }) {
 }
 
 /** One page of the list. The parent keys it by funnel, sort and page, so each page starts at the top. */
-function ProjectList({ projects, selected, statusOf, reviewsOf, mine, onOpen }: {
+function ProjectList({ projects, selected, statusOf, reviewsOf, verdictsOf, mine, onOpen }: {
   projects: ReviewProject[];
   selected: string | null;
   statusOf: (hgabId: string) => ListStatus;
   /** How many members have a review of a project (0 when only this browser's reviews are known). */
   reviewsOf: (hgabId: string) => number;
+  /** How many reviews gave each final status. */
+  verdictsOf: (hgabId: string) => VerdictCounts | undefined;
   mine: Readonly<Record<string, CaseReview>>;
   onOpen: (p: ReviewProject) => void;
 }) {
@@ -586,8 +590,10 @@ function ProjectList({ projects, selected, statusOf, reviewsOf, mine, onOpen }: 
           <li key={p.hgabId} id={`rv-item-${p.hgabId}`}>
             <button type="button" className={`rv-item ${p.hgabId === selected ? 'is-on' : ''} ${isReviewed(st) ? `is-reviewed is-${st}` : ''}`} onClick={() => onOpen(p)} aria-current={p.hgabId === selected ? 'true' : undefined}>
               {isReviewed(st) && (
-                <span className={`rv-item-badge is-${st}`}>
-                  {st === 'auto_red_flag' ? <>Red flag · auto-reviewed{p.auto && <b> · score {p.auto.score}</b>}</> : st === 'completed' ? 'Reviewed' : 'Reviewed · with a verifier'}
+                <span className={`rv-item-badge is-${st}`} title={verdictNote(verdictsOf(p.hgabId))}>
+                  {st === 'auto_red_flag'
+                    ? <>{LIST_STATUS_LABEL.auto_red_flag}{p.auto && <b> · score {p.auto.score}</b>}</>
+                    : <>{LIST_STATUS_LABEL[st]}{reviewsOf(p.hgabId) > 1 && <> · {n(reviewsOf(p.hgabId))} reviews</>}</>}
                 </span>
               )}
               <span className="rv-item-title">{p.title}</span>
@@ -854,12 +860,20 @@ function ReviewGate({ opening, loadError }: { opening: Opening; loadError: strin
 function TakenNote({ entry, mineSent }: { entry: ProjectStatus | undefined; mineSent: boolean }) {
   const others = (entry?.reviews ?? 0) - (mineSent ? 1 : 0);
   if (!entry || others <= 0) return null;
+  const verdict = projectVerdict(entry.verdicts);
   return (
     <p className="rv-note rv-taken">
-      {others === 1 ? 'Another member has' : `${n(others)} other members have`} a review of this project ({REVIEW_STATUS_LABEL[entry.status].toLowerCase()}).
+      {others === 1 ? 'Another member has' : `${n(others)} other members have`} a review of this project
+      {verdict ? <> (final status: {VERDICT_LABEL[verdict].toLowerCase()}{entry.reviews > 1 ? `; ${verdictNote(entry.verdicts)}` : ''})</> : ' (no final status yet)'}.
       {' '}You can add yours, or pick a project nobody has started.
     </p>
   );
+}
+
+/** "1 satisfactory, 1 unsatisfactory": how a project's reviews split, for hover text. */
+function verdictNote(c: VerdictCounts | undefined): string | undefined {
+  if (!c || c.satisfactory + c.unsatisfactory === 0) return undefined;
+  return [c.unsatisfactory ? `${n(c.unsatisfactory)} unsatisfactory` : '', c.satisfactory ? `${n(c.satisfactory)} satisfactory` : ''].filter(Boolean).join(', ');
 }
 
 type PaneTab = 'overview' | 'review';
@@ -984,7 +998,8 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
   const tabs: { key: PaneTab; label: string; count?: string }[] = [
     { key: 'overview', label: 'Overview' },
-    { key: 'review', label: 'Review', count: mine ? (mine.case_stage === 'in_independent_review' ? '✓' : String(outcomes)) : undefined },
+    // The tab shows the member's final status once given (✓ satisfactory, ⚑ unsatisfactory), else how many checks have an outcome.
+    { key: 'review', label: 'Review', count: mine ? (mine.verdict === 'satisfactory' ? '✓' : mine.verdict === 'unsatisfactory' ? '⚑' : String(outcomes)) : undefined },
   ];
   const tabId = (t: PaneTab) => `rv-tab-${t}`;
   const panel = (t: PaneTab, body: ReactNode) => (
@@ -1118,7 +1133,9 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Each check says who should lead it, what evidence it needs, and what not to conclude.</p>
         <h3>Sending reviews</h3>
         <p>Sign in with your email (we send a code; there is no password). Saving sends your review to the team, and you can keep editing it.</p>
-        <p>Each project shows the furthest any member’s review has got, so you can pick projects nobody has started. More than one member can review a project.</p>
+        <p>Each review ends with a final status: <b>Satisfactory</b>, or <b>Unsatisfactory</b> for a red flag. It is what the team reports.</p>
+        <p>Each project shows its final status. If any member finds it unsatisfactory, it shows unsatisfactory. Projects with no key document and no file are unsatisfactory automatically until a member reviews them.</p>
+        <p>Projects without a final status show whether someone has started, so you can pick ones nobody has. More than one member can review a project.</p>
         <p>Anyone can browse the projects. Reviewing needs a sign-in, and nothing of your review is kept in your browser.</p>
         <h3>The 5 key documents</h3>
         <ul>{NAMED_TYPES.map((t) => <li key={t}><b>{t}:</b> {NAMED_MEANING[t]}</li>)}</ul>
@@ -1167,15 +1184,16 @@ function Reviewer() {
   const all = useMemo(() => (index ? decodeIndex(index) : []), [index]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
-  // A project's review status: the furthest of every member's reviews and the member's own (just saved, say).
-  // …and "Auto-reviewed: red flag" when nobody has started a project the automatic review marked (review.json `auto`).
+  // A project's status is its final status from every member's review (the status API, patched after each save; this
+  // member's own review until the list has it). Without one: in progress if a member has a review, else the automatic
+  // review's red flag (D1's review_auto through the status API, or review.json's where D1 hasn't been synced).
   const autoRows = index?.auto?.rows;
   const statusOf = useCallback((h: string): ListStatus => {
-    const own = reviewStatusFromStage(reviews[h]?.case_stage);
-    const members: ReviewStatus = shared ? furthestStatus([shared[h]?.status ?? 'not_started', own]) : own;
-    // The automatic review: D1's (review_auto, through the status API) or, where D1 hasn't been synced, review.json's.
-    return listStatus(members, !!shared?.[h]?.auto || !!autoRows?.[h]);
+    const entry = shared?.[h], own = reviews[h];
+    const verdict = entry ? projectVerdict(entry.verdicts) : own?.verdict ?? null;
+    return listStatus(verdict, (entry?.reviews ?? 0) > 0 || !!own, !!entry?.auto || !!autoRows?.[h]);
   }, [reviews, shared, autoRows]);
+  const verdictsOf = useCallback((h: string) => shared?.[h]?.verdicts, [shared]);
   const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
   const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
@@ -1258,10 +1276,11 @@ function Reviewer() {
                 {myList.length ? (
                   <>
                     <p>{n(myList.length)} {myList.length === 1 ? 'review' : 'reviews'} sent to the team.</p>
+                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'verdicts', 'bettergov-house-bill-reviews')}>Final status of each (CSV)</button>
                     <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
                     <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
                     <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
-                    <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', REVIEW_STATUSES.filter((v) => v !== 'not_started')))}>Show projects with a review</button>
+                    <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', ['in_progress', 'unsatisfactory', 'satisfactory']))}>Show projects with a review</button>
                   </>
                 ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
                 <button type="button" className="rv-btn" onClick={member.signOut}>Sign out</button>
@@ -1303,7 +1322,7 @@ function Reviewer() {
                 </select>
               </label>
             </div>
-            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}|${page}`} projects={pageItems} selected={selectedId} statusOf={statusOf} reviewsOf={reviewsOf} mine={reviews} onOpen={open} />
+            <ProjectList key={`${steps.map(stepToParam).join('|')}|${sort}|${page}`} projects={pageItems} selected={selectedId} statusOf={statusOf} reviewsOf={reviewsOf} verdictsOf={verdictsOf} mine={reviews} onOpen={open} />
             <Pager page={page} total={pages} items={listed.length} onPage={(x) => update((q) => q.set('pg', String(x)))} />
           </section>
 
