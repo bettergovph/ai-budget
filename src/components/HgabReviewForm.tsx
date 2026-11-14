@@ -1,7 +1,7 @@
 /**
  * The review form in the project reviewer (`/hgab/2027/review`): first the final status (satisfactory, or
- * unsatisfactory = red flag), the one field the team reports; then the team's red-flag checklist (RF-001…RF-044) with
- * evidence per check, and notes. It edits a `CaseReview` (src/lib/hgab-redflags-team.ts), which the page sends to the
+ * unsatisfactory = red flag), the one field the team reports; then the team's red-flag checklist (RF-001…RF-044):
+ * per check, an outcome, the documents picked as evidence (details optional) and what you found. It edits a `CaseReview` (src/lib/hgab-redflags-team.ts), which the page sends to the
  * team when it is saved (src/worker/hgab-reviews.ts). Shown only to signed-in members.
  */
 import { useMemo, useState, type ReactNode } from 'react';
@@ -10,7 +10,7 @@ import { readerText } from '../lib/hgab-review';
 import { memberLabel, useDocLink, useMember } from '../lib/hgab-review-member';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
-  CHECKLIST_GROUP_LABEL, REGISTRY, STAGE_GATED, VERDICT_LABEL, VOLUNTEER_OUTCOMES,
+  CHECKLIST_GROUP_LABEL, STAGE_GATED, VERDICT_LABEL, VOLUNTEER_OUTCOMES,
   checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, newId, vocab,
   type CaseReview, type CategoryKey, type ChecklistGroup, type ChecklistItem, type EvidenceItem, type FlagCheck,
   type ValidationIssue, type Verdict,
@@ -60,59 +60,80 @@ const OUTCOME_WORDS: Readonly<Record<string, string>> = {
   unresolved_evidence_gap: 'Evidence missing',
 };
 const OUTCOME_BUTTONS = VOLUNTEER_OUTCOMES.filter((o) => o.code !== 'not_reviewed');
-const PRIORITY_WORDS: Readonly<Record<string, string>> = { not_prioritized: 'None' };
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <label className="rf-field"><span>{label}{hint && <small>{hint}</small>}</span>{children}</label>;
 }
 
-/** One piece of evidence: a document (one of the project's files, or any link), where in it, and what it says. */
+/** A file's short name for the evidence picker: its kind, an earlier copy, and where it came from. */
+const fileChip = (f: DetailFile) => `${f[2] === 'Other' ? f[3] || 'Other' : f[2]}${f[7] ? ' (earlier)' : ''} · ${f[0] === 'senate' ? 'Senate' : 'DPWH'}`;
+
+/**
+ * The optional details of one piece of evidence (where in the document, what it says, the three workbook questions),
+ * folded away: picking the document is enough. A link of the volunteer's own needs its title or address.
+ */
 function EvidenceRow({ e, onChange, onRemove, fromFile }: { e: EvidenceItem; onChange: (e: EvidenceItem) => void; onRemove: () => void; fromFile: boolean }) {
   const set = (patch: Partial<EvidenceItem>) => onChange({ ...e, ...patch });
   // The review keeps the document's address from the data; Senate copies open through the member's grant.
   const href = useDocLink()(e.url);
   return (
-    <div className="rf-evidence">
+    <li className="rf-evidence">
       <div className="rf-evidence-doc">
         {fromFile
           ? (href ? <a href={href} target="_blank" rel="noopener noreferrer">{e.document_title}</a> : <span>{e.document_title}</span>)
           : (
             <>
-              <input className="rf-input" placeholder="Document title and version" value={e.document_title} onChange={(x) => set({ document_title: x.target.value })} aria-label="Document title and version" />
+              <input className="rf-input" placeholder="Document title" value={e.document_title} onChange={(x) => set({ document_title: x.target.value })} aria-label="Document title" />
               <input className="rf-input" placeholder="https://…" value={e.url} onChange={(x) => set({ url: x.target.value.trim() })} aria-label="Document link" />
             </>
           )}
-        <small>{e.source_institution}</small>
-        <button type="button" className="rf-x" onClick={onRemove} aria-label="Remove this evidence">×</button>
+        <button type="button" className="rf-x" onClick={onRemove} aria-label={`Remove ${e.document_title || 'this evidence'}`}>×</button>
       </div>
-      <Field label="Page, table or cell"><input className="rf-input" value={e.locator} onChange={(x) => set({ locator: x.target.value })} placeholder="p. 3, item 2.1" /></Field>
-      <div className="rf-q"><span>Available?</span><Seg className="is-small" label="Document availability" value={e.availability} onChange={(v) => set({ availability: v })} options={vocab('document_availability')} /></div>
-      <div className="rf-q"><span>Applies at this stage?</span><Seg className="is-small" label="Applicable at current project stage" value={e.applicable_at_stage} onChange={(v) => set({ applicable_at_stage: v })} options={vocab('evidence_applicable_at_stage')} labels={{ not_assessed: 'Not sure' }} /></div>
-      <div className="rf-q"><span>Your check of the extract</span><Seg className="is-small" label="Verification state" value={e.verification_state} onChange={(v) => set({ verification_state: v })} options={vocab('verification_state')} labels={{ not_reviewed: 'Not checked' }} /></div>
-      <Field label="What it says" hint="Verbatim text or amount"><textarea className="rf-input" rows={2} value={e.extracted_fact} onChange={(x) => set({ extracted_fact: x.target.value })} /></Field>
-      <Field label="Your observation"><textarea className="rf-input" rows={2} value={e.reviewer_observation} onChange={(x) => set({ reviewer_observation: x.target.value })} /></Field>
-    </div>
+      <details className="rf-evidence-more">
+        <summary>Details <small>optional</small></summary>
+        <Field label="Page, table or cell"><input className="rf-input" value={e.locator} onChange={(x) => set({ locator: x.target.value })} placeholder="p. 3, item 2.1" /></Field>
+        <Field label="What it says" hint="Verbatim text or amount"><textarea className="rf-input" rows={2} value={e.extracted_fact} onChange={(x) => set({ extracted_fact: x.target.value })} /></Field>
+        <Field label="Your observation"><textarea className="rf-input" rows={2} value={e.reviewer_observation} onChange={(x) => set({ reviewer_observation: x.target.value })} /></Field>
+        <div className="rf-q"><span>Available?</span><Seg className="is-small" label="Document availability" value={e.availability} onChange={(v) => set({ availability: v })} options={vocab('document_availability')} /></div>
+        <div className="rf-q"><span>Applies at this stage?</span><Seg className="is-small" label="Applicable at current project stage" value={e.applicable_at_stage} onChange={(v) => set({ applicable_at_stage: v })} options={vocab('evidence_applicable_at_stage')} labels={{ not_assessed: 'Not sure' }} /></div>
+        <div className="rf-q"><span>Your check of the extract</span><Seg className="is-small" label="Verification state" value={e.verification_state} onChange={(v) => set({ verification_state: v })} options={vocab('verification_state')} labels={{ not_reviewed: 'Not checked' }} /></div>
+      </details>
+    </li>
   );
 }
 
-/** Add evidence in one click: a button per file of the project, and one for any other document or link. */
-function AddEvidence({ files, used, onAdd }: { files: DetailFile[]; used: ReadonlySet<string>; onAdd: (e: EvidenceItem) => void }) {
-  const add = (f: DetailFile | null) => {
-    const base = emptyEvidence(newId());
-    onAdd(f ? {
-      ...base, document_title: f[4], url: f[5],
-      source_institution: f[0] === 'senate' ? 'Senate copy of DPWH’s documents' : 'DPWH Transparency', availability: 'available',
-    } : { ...base, source_institution: '' });
-  };
+/**
+ * Evidence is picked, not filled in: a toggle per file of the project (pressed = it's evidence for this check), and
+ * "Other link" for any other document. Each picked one can take optional details.
+ */
+function EvidencePicker({ id, files, evidence, onChange }: { id: string; files: DetailFile[]; evidence: EvidenceItem[]; onChange: (ev: EvidenceItem[]) => void }) {
+  const picked = new Set(evidence.map((e) => e.url));
+  const toggle = (f: DetailFile) => onChange(picked.has(f[5])
+    ? evidence.filter((e) => e.url !== f[5])
+    : [...evidence, {
+      ...emptyEvidence(newId()), document_title: f[4], url: f[5], availability: 'available',
+      source_institution: f[0] === 'senate' ? 'Senate copy of DPWH’s documents' : 'DPWH Transparency',
+    }]);
   return (
-    <div className="rf-add-evidence" role="group" aria-label="Add evidence">
-      <span>Add evidence:</span>
-      {files.filter((f) => !used.has(f[5])).map((f) => (
-        <button key={f[5]} type="button" onClick={() => add(f)} title={f[4]}>
-          + {f[2] === 'Other' ? f[3] || 'Other' : f[2]}{f[7] ? ' (earlier)' : ''}
-        </button>
-      ))}
-      <button type="button" onClick={() => add(null)}>+ Other document or link</button>
+    <div className="rf-evidence-list">
+      <h5 id={`rf-ev-${id}`}>Evidence <small>{evidence.length ? `${evidence.length} picked` : 'pick the documents that show it'}</small></h5>
+      <div className="rf-ev-chips" role="group" aria-labelledby={`rf-ev-${id}`}>
+        {files.map((f) => (
+          <button key={f[5]} type="button" className={`rf-ev-chip ${picked.has(f[5]) ? 'is-on' : ''}`} aria-pressed={picked.has(f[5])} title={f[4]} onClick={() => toggle(f)}>
+            {picked.has(f[5]) && <span aria-hidden="true">✓ </span>}{fileChip(f)}
+          </button>
+        ))}
+        <button type="button" className="rf-ev-chip is-add" onClick={() => onChange([...evidence, { ...emptyEvidence(newId()), source_institution: '' }])}>+ Other link</button>
+      </div>
+      {evidence.length > 0 && (
+        <ul className="rf-ev-picked" aria-label="Picked evidence">
+          {evidence.map((e, i) => (
+            <EvidenceRow key={e.evidence_id} e={e} fromFile={files.some((x) => x[5] === e.url)}
+              onChange={(x) => onChange(evidence.map((y, j) => (j === i ? x : y)))}
+              onRemove={() => onChange(evidence.filter((_, j) => j !== i))} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -161,7 +182,6 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
       )}
       {open && (
         <div className="rf-body">
-          <p className="rf-lead">Lead: <b>{f.lead_skill}</b>{f.support_skills.length > 0 && <> · with {f.support_skills.join(', ')}</>}</p>
           <h5>What to check</h5>
           <p>{f.instructions}</p>
           <h5>Minimum evidence</h5>
@@ -173,18 +193,10 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
             <Seg label="Does this check apply now?" value={check.applicability} onChange={(v) => set({ applicability: v })} options={vocab('evidence_applicability')}
               labels={{ not_assessed: 'Not sure' }} clearTo="not_assessed" />
           </div>
-          <Field label="What you found" hint="Facts only: what the documents say, not conclusions">
+          <EvidencePicker id={f.id} files={files} evidence={check.evidence} onChange={(evidence) => set({ evidence })} />
+          <Field label="What you found" hint="For this check, from the evidence: facts only, not conclusions">
             <textarea className="rf-input" rows={3} value={check.observed_discrepancy} onChange={(e) => set({ observed_discrepancy: e.target.value })} />
           </Field>
-          <div className="rf-evidence-list">
-            <h5>Evidence <small>{check.evidence.length}</small></h5>
-            {check.evidence.map((e, i) => (
-              <EvidenceRow key={e.evidence_id} e={e} fromFile={files.some((x) => x[5] === e.url)}
-                onChange={(x) => set({ evidence: check.evidence.map((y, j) => (j === i ? x : y)) })}
-                onRemove={() => set({ evidence: check.evidence.filter((_, j) => j !== i) })} />
-            ))}
-            <AddEvidence files={files} used={new Set(check.evidence.map((e) => e.url))} onAdd={(e) => set({ evidence: [...check.evidence, e] })} />
-          </div>
         </div>
       )}
     </li>
@@ -197,32 +209,33 @@ const FINAL: readonly { v: Verdict; icon: string; hint: string }[] = [
 ];
 
 /**
- * The final status, big: two buttons that each save the review at once, and a line saying what was saved (read out by
- * screen readers). Toggle buttons rather than radios, so moving between them with the keyboard never saves.
+ * The final status: two buttons that each save the review at once, and a line saying what was saved (read out by
+ * screen readers). Toggle buttons rather than radios, so moving between them with the keyboard never saves. Each is
+ * named by its label; its hint is the description screen readers give, and the tooltip.
  */
 function FinalStatus({ value, saved, busy, onPick }: { value: Verdict | null; saved: boolean; busy: boolean; onPick: (v: Verdict | null) => void }) {
   return (
     <section className="rf-final" aria-labelledby="rf-final-h">
-      <h3 id="rf-final-h" className="rf-final-h">Final status</h3>
-      <p id="rf-final-d" className="rf-final-d">What the team reports for this project. Choosing one saves your review.</p>
-      <div className="rf-final-opts" role="group" aria-labelledby="rf-final-h" aria-describedby="rf-final-d">
+      <div className="rf-final-top">
+        <h3 id="rf-final-h" className="rf-final-h">Final status</h3>
+        <p className="rf-final-state" role="status" aria-live="polite">
+          {busy ? 'Saving…' : !value ? 'Not given yet' : saved ? <>Saved</> : <>Not saved yet</>}
+          {value && !busy && <> · <button type="button" className="rf-link" onClick={() => onPick(null)}>Clear</button></>}
+        </p>
+      </div>
+      <div className="rf-final-opts" role="group" aria-labelledby="rf-final-h">
         {FINAL.map((o) => {
           const on = value === o.v;
           return (
-            // Named by its label alone ("Unsatisfactory"), with the hint as its description.
-            <button key={o.v} type="button" className={`rf-final-btn is-${o.v} ${on ? 'is-on' : ''}`} aria-pressed={on} disabled={busy}
+            <button key={o.v} type="button" className={`rf-final-btn is-${o.v} ${on ? 'is-on' : ''}`} aria-pressed={on} disabled={busy} title={o.hint}
               aria-labelledby={`rf-final-${o.v}-l`} aria-describedby={`rf-final-${o.v}-d`} onClick={() => { if (!on) onPick(o.v); }}>
               <span className="rf-final-icon" aria-hidden="true">{o.icon}</span>
               <span className="rf-final-label" id={`rf-final-${o.v}-l`}>{VERDICT_LABEL[o.v]}</span>
-              <span className="rf-final-hint" id={`rf-final-${o.v}-d`}>{o.hint}</span>
+              <span className="visually-hidden" id={`rf-final-${o.v}-d`}>{o.hint}</span>
             </button>
           );
         })}
       </div>
-      <p className="rf-final-state" role="status" aria-live="polite">
-        {busy ? 'Saving…' : !value ? 'No final status yet.' : saved ? <>Saved: <b>{VERDICT_LABEL[value]}</b>.</> : <>{VERDICT_LABEL[value]}, not saved yet.</>}
-        {value && !busy && <> <button type="button" className="rf-link" onClick={() => onPick(null)}>Clear the final status</button></>}
-      </p>
     </section>
   );
 }
@@ -256,9 +269,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
     const rest = review.flags.filter((x) => x.flag_id !== c.flag_id);
     onChange({ ...review, flags: flagCheckTouched(c) ? [...rest, c] : rest, updated_at: now() });
   };
-  const set = (patch: Partial<CaseReview>) => onChange({ ...review, ...patch, updated_at: now() });
   const groups = (['suggested', 'documents', 'category', 'later'] as ChecklistGroup[]).map((g) => ({ g, items: items.filter((x) => x.group === g) })).filter((x) => x.items.length);
-  const done = review.flags.filter((f) => f.human_outcome !== 'not_reviewed').length;
   // The member's name comes from their sign-in, not a field; it goes with every save.
   const who = memberLabel(useMember());
   const save = (r: CaseReview) => onSave({ ...r, reviewer: { ...r.reviewer, display_name: who }, updated_at: now() });
@@ -269,9 +280,6 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
 
       <div className="rf-head">
         <h3 className="rv-h">Review checklist</h3>
-        <p className="rv-muted">
-          The volunteer team’s red-flag registry ({REGISTRY.source.version}, proposed, pending group review). {done} of {items.length} checks have an outcome.
-        </p>
       </div>
 
       {groups.map(({ g, items: its }) => (
@@ -295,16 +303,6 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
         </section>
       ))}
 
-      <section className="rf-sec">
-        <h4>The case</h4>
-        <p className="rf-who">Reviewing as <b>{who || 'you'}</b>, from your sign-in.</p>
-        <div className="rf-q">
-          <span>Suggested priority <small>The team prioritises verified cases.</small></span>
-          <Seg label="Suggested priority" value={review.risk_priority} onChange={(v) => set({ risk_priority: v })} options={vocab('risk_priority')} labels={PRIORITY_WORDS} />
-        </div>
-        <Field label="Notes for the team"><textarea className="rf-input" rows={3} value={review.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="What doesn’t match, what to request next…" /></Field>
-      </section>
-
       {sending.result && !sending.result.ok && (
         <div className="rf-issues is-send" role="alert">
           <p>Couldn’t save it: {sending.result.error} Your changes are still here; save again to retry.</p>
@@ -312,7 +310,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
         </div>
       )}
       <div className="rf-actions">
-        <button type="submit" className="rv-btn is-primary" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save'}</button>
+        <button type="submit" className="rv-btn is-primary rf-save" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save'}</button>
         <span className="rf-export">
           Download:{' '}
           <button type="button" onClick={() => downloadCases([review], 'verdicts', `review-${review.project.hgab_id}`)}>final status</button>

@@ -358,7 +358,6 @@ textarea.rf-input { resize: vertical; }
 .rf-body h5 { margin: 10px 0 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
 .rf-body h5 small { font-family: var(--font-mono); font-weight: 400; color: var(--ink-mute); }
 .rf-body p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.45; }
-.rf-lead { margin-top: 8px !important; color: var(--ink-3); }
 .rf-more summary { cursor: pointer; font-size: 12px; color: var(--accent); }
 .rf-more p { white-space: pre-line; color: var(--ink-2); }
 .rf-chips { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0 0 8px; padding: 0; }
@@ -705,12 +704,8 @@ textarea.rf-input { resize: vertical; }
 .rf-q { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 0; }
 .rf-q > span { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .rf-q > span small { font-weight: 400; color: var(--ink-mute); margin-left: 6px; }
-.rf-who { margin: 0 0 4px; font-size: 12.5px; color: var(--ink-3); }
 .rf-ready { margin: 0; font-size: 12.5px; color: var(--accent-deep); }
 .rf-link { padding: 0; border: 0; background: none; color: var(--accent); font-size: 12px; text-decoration: underline; cursor: pointer; }
-.rf-add-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 4px; font-size: 12px; color: var(--ink-3); }
-.rf-add-evidence button { padding: 3px 9px; border: 1px dashed var(--accent); border-radius: 12px; background: var(--paper); color: var(--accent-deep); font-size: 11.5px; cursor: pointer; }
-.rf-add-evidence button:hover { background: var(--accent-soft); }
 
 /* --- the filter bar's label, and review progress beside the funnel ------------------------------ */
 .rv-filters-label {
@@ -763,39 +758,56 @@ textarea.rf-input { resize: vertical; }
 }
 
 /* The final status (satisfactory / unsatisfactory = red flag): the field the team reports, first in the review form.
-   Big targets, text beside the colour and the icon, a strong focus ring. */
-.rf-final { margin: 0 0 18px; padding: 16px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); }
-.rf-final-h { margin: 0; font-family: var(--font-hero); font-size: 20px; font-weight: 700; color: var(--ink); }
-.rf-final-d { margin: 4px 0 12px; font-size: 14px; color: var(--ink-2); }
-/* Side by side when each button gets 240px, else one per row (the pane is often narrower): nothing is cut off. */
-.rf-final-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+   A compact pair of toggle buttons: text beside the colour and the icon, 44px targets, a strong focus ring. */
+.rf-final { margin: 0 0 16px; padding: 12px 14px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); box-shadow: 0 1px 2px rgba(17, 21, 28, 0.05); }
+.rf-final-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.rf-final-h { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+.rf-final-state { margin: 0; font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
+.rf-final-state .rf-link { font-size: 12.5px; }
+.rf-final-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
 .rf-final-btn {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas: "icon label" "icon hint";
+  display: inline-flex;
   align-items: center;
-  column-gap: 12px;
+  justify-content: center;
+  gap: 8px;
   min-width: 0;
-  min-height: 76px;
-  padding: 12px 16px;
-  border: 2px solid currentColor;
-  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 8px;
   background: #fff;
   font: inherit;
-  text-align: left;
+  font-size: 15px;
+  font-weight: 650;
   cursor: pointer;
+  transition: background-color 0.12s, color 0.12s, box-shadow 0.12s;
 }
 .rf-final-btn.is-satisfactory { color: var(--positive); }
 .rf-final-btn.is-unsatisfactory { color: var(--rv-flag); }
-.rf-final-icon { grid-area: icon; font-size: 30px; line-height: 1; }
-.rf-final-label { grid-area: label; font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
-.rf-final-hint { grid-area: hint; font-size: 13.5px; line-height: 1.35; color: var(--ink-2); }
-.rf-final-btn:hover:not(:disabled) { background: var(--paper-2); }
-.rf-final-btn.is-on { color: #fff; }
+.rf-final-icon { font-size: 16px; line-height: 1; }
+.rf-final-label { overflow-wrap: anywhere; }
+.rf-final-btn.is-satisfactory:hover:not(:disabled):not(.is-on) { background: #eef5ee; }
+.rf-final-btn.is-unsatisfactory:hover:not(:disabled):not(.is-on) { background: #fbeeeb; }
+.rf-final-btn.is-on { color: #fff; box-shadow: 0 2px 6px rgba(17, 21, 28, 0.18); }
 .rf-final-btn.is-on.is-satisfactory { background: var(--positive); border-color: var(--positive); }
 .rf-final-btn.is-on.is-unsatisfactory { background: var(--rv-flag); border-color: var(--rv-flag); }
-.rf-final-btn.is-on .rf-final-hint { color: #fff; }
-.rf-final-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.rf-final-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .rf-final-btn:disabled { cursor: progress; }
-.rf-final-state { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
-.rf-final-state b { color: var(--ink); }
+/* Hints that only screen readers read (the stylesheet that defines this elsewhere may not load here). */
+.rv-app .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Evidence: pick documents (toggles), details folded away. */
+.rf-ev-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.rf-ev-chip { min-height: 30px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 15px; background: var(--paper); color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.rf-ev-chip:hover { border-color: var(--accent); color: var(--accent-deep); }
+.rf-ev-chip.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+.rf-ev-chip.is-add { border-style: dashed; color: var(--accent-deep); }
+.rf-ev-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rf-ev-picked { margin: 0 0 10px; padding: 0; list-style: none; }
+.rf-evidence-more { margin-top: 4px; font-size: 12px; }
+.rf-evidence-more > summary { color: var(--accent-deep); cursor: pointer; }
+.rf-evidence-more > summary small { color: var(--ink-3); }
+.rf-evidence-more[open] > summary { margin-bottom: 6px; }
+
+/* A save button you can't miss. */
+.rv-btn.rf-save { min-height: 48px; padding: 0 32px; border-radius: 8px; font-size: 16px; font-weight: 700; }
