@@ -72,3 +72,11 @@ export function documentHref(url: string, grant: string | null): string | null {
 }
 export const fetchSenateGrant = (token: string | null) =>
   call<{ grant: string; expires_at: string }>(`${SENATE_COPIES_API}/grant`, { method: 'POST' }, token);
+
+/**
+ * Which of a project's Senate copies can open (src/worker/hgab-senate-copies.ts): `available` only when the redaction
+ * has been applied to the file and its region isn't held back. `paths` as `senatePath` gives them.
+ */
+export type SenateCopyStatus = 'available' | 'held' | 'not_redacted' | 'missing';
+export const fetchSenateStatus = (paths: string[]) =>
+  call<{ data: Record<string, SenateCopyStatus> }>(`${SENATE_COPIES_API}/status`, { method: 'POST', body: JSON.stringify({ paths }) });

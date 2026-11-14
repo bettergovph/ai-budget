@@ -38,9 +38,12 @@ import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
-  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, senateHeldBack, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
+  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, fetchSenateStatus, senatePath, type SenateCopyStatus, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
 } from '../lib/hgab-review-api';
-import { DocLinkContext, useDocLink, useMember, type Member } from '../lib/hgab-review-member';
+import {
+  DocLinkContext, SenateBlockContext, senateRegion, useDocLink, useMember, useSenateBlock, type DocBlock, type Member,
+} from '../lib/hgab-review-member';
+import { heldBackRegion } from '../lib/senate-copies-held-back';
 import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
@@ -687,6 +690,7 @@ function viewOrder(files: readonly DetailFile[]): DetailFile[] {
  */
 function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; file: DetailFile | null; onPick: (f: DetailFile) => void }) {
   const link = useDocLink();
+  const block = useSenateBlock();
   const ordered = viewOrder(files);
   const groups = [...NAMED_TYPES, 'Other'].map((t) => ({ t, fs: ordered.filter((f) => f[2] === t) })).filter((g) => g.fs.length);
   const at = file ? ordered.findIndex((f) => f[5] === file[5]) : -1;
@@ -723,7 +727,7 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
                 <span className={`rv-src is-${f[0]}`}>{SOURCE_LABEL[f[0]]}</span>
                 <span className="rv-docfiles-name">{f[2] === 'Other' && f[3] ? f[3] : f[4]}</span>
                 {f[7] && <span className="rv-tag">earlier copy</span>}
-                {senateHeldBack(f[5]) ? <span className="rv-tag is-locked">not yet available</span> : !link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
+                {block(f[5]) ? <span className="rv-tag is-locked">{block(f[5])!.checking ? 'checking…' : 'not yet available'}</span> : !link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
               </button>
             </li>
           ))}
@@ -748,13 +752,17 @@ function LockedDoc({ opening }: { opening: Opening }) {
   );
 }
 
-/** A Senate copy from a region whose signatures aren't redacted yet (src/lib/senate-copies-held-back.ts). */
-function HeldBackDoc({ region }: { region: string }) {
+/**
+ * A Senate copy that can't open: not redacted yet, skipped by the redaction (20+ pages, damaged, not a PDF), or in a
+ * region held back by hand. It may show signatures and other personal information, so it stays closed.
+ */
+function HeldBackDoc({ block }: { block: DocBlock }) {
+  if (block.checking) return <div className="rv-viewer-empty rv-locked"><p role="status">Checking whether this Senate copy can open…</p></div>;
   return (
     <div className="rv-viewer-empty rv-locked">
       <p><b>This Senate copy isn’t available yet.</b></p>
-      <p>We are redacting the signatures in {region}’s Senate copies first, for privacy. It will open here once that is done.</p>
-      <p className="rv-muted">DPWH Transparency files, and Senate copies from other regions, open as usual.</p>
+      <p>We’re redacting signatures{block.region ? <> in {block.region}’s Senate copies</> : null} first, for privacy.</p>
+      <p className="rv-muted">DPWH Transparency files, and Senate copies already redacted, open as usual.</p>
     </div>
   );
 }
@@ -775,7 +783,7 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
   opening: Opening;
 }) {
   const href = useDocLink()(file?.[5] ?? '');
-  const held = file ? senateHeldBack(file[5]) : null;
+  const held = useSenateBlock()(file?.[5] ?? '');
   const body = (
     <div className="rv-viewer">
       <p className="rv-viewer-count">{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</p>
@@ -792,7 +800,7 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
       {!file
         ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
         : held
-          ? <HeldBackDoc region={held} />
+          ? <HeldBackDoc block={held} />
           : !href
           ? <LockedDoc opening={opening} />
           : isPdf(file)
@@ -977,20 +985,39 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<DetailFile | null>(null);
+  // Which of the project's Senate copies can open (the Worker reads each file's redaction mark); null while asking.
+  const [senate, setSenate] = useState<Record<string, SenateCopyStatus> | null>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     // Keyed by project in the parent, so state starts empty for each project.
     let live = true;
-    loadShard(project.seq).then((s) => {
+    loadShard(project.seq).then(async (s) => {
       if (!live) return;
       const d = s[project.hgabId] ?? null;
       setDetail(d);
-      // Open the POW first, from a file that can be shown (a held-back Senate copy only when there is nothing else).
-      const ok = d ? d.files.filter((f) => !senateHeldBack(f[5])) : [];
-      if (d && inlineViewer) setOpen(ok.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? ok.find(isPdf) ?? d.files.find(isPdf) ?? null);
+      if (!d) return;
+      const paths = [...new Set(d.files.map((f) => senatePath(f[5])).filter((p): p is string => p != null))];
+      // If the Worker can't say, no Senate copy opens.
+      const none: Record<string, SenateCopyStatus> = {};
+      const st = paths.length ? await fetchSenateStatus(paths).then((r) => r.data).catch(() => none) : none;
+      if (!live) return;
+      setSenate(st);
+      // Open the POW first, from a file that can be shown (one that can't only when there is nothing else).
+      const ok = d.files.filter((f) => { const p = senatePath(f[5]); return p == null || (st[p] === 'available' && !heldBackRegion(p)); });
+      if (inlineViewer) setOpen(ok.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? ok.find(isPdf) ?? d.files.find(isPdf) ?? null);
     }).catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)));
     return () => { live = false; };
   }, [project.hgabId, project.seq, inlineViewer]);
+  // Why a document can't open (null when it can), and its link only when it can: for the viewer, the file list and evidence.
+  const blockOf = useCallback((url: string): DocBlock | null => {
+    const p = senatePath(url);
+    if (p == null) return null;
+    if (heldBackRegion(p)) return { region: senateRegion(p), checking: false };
+    if (!senate) return { region: senateRegion(p), checking: true };
+    return senate[p] === 'available' ? null : { region: senateRegion(p), checking: false };
+  }, [senate]);
+  const parentLink = useDocLink();
+  const linkOf = useCallback((url: string) => (blockOf(url) ? null : parentLink(url)), [blockOf, parentLink]);
   // [ and ] step through the documents, as the arrows above the document do; not while typing.
   useEffect(() => {
     if (!detail?.files.length) return;
@@ -1022,6 +1049,8 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
     <div role="tabpanel" id={`${tabId(t)}-panel`} aria-labelledby={tabId(t)} hidden={tab !== t} className="rv-tabpanel">{body}</div>
   );
   return (
+    <SenateBlockContext.Provider value={blockOf}>
+    <DocLinkContext.Provider value={linkOf}>
     <div ref={box} className={`rv-project ${inlineViewer ? 'has-viewer' : ''}`} style={inlineViewer ? { gridTemplateColumns: `${split}px 8px minmax(${VIEWER_MIN}px, 1fr)` } : undefined}>
       <div className="rv-project-info">
         <div className="rv-project-top">
@@ -1120,6 +1149,8 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
       {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} opening={opening} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
+    </DocLinkContext.Provider>
+    </SenateBlockContext.Provider>
   );
 }
 
