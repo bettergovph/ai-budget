@@ -74,6 +74,8 @@ def main():
         try:
             with pymupdf.open(dst) as doc:
                 entry["pages"] = doc.page_count
+                for pg in doc:  # every page must load: a broken page tree crashed detection in CAR
+                    pg.get_image_info()
                 locked = doc.needs_pass
         except Exception as e:  # noqa: BLE001
             os.remove(dst)

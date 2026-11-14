@@ -804,7 +804,11 @@ def main():
             done = [0]
 
             def one(p):
-                r = detect_file(p, model, dpi, all_pages, pool)
+                try:
+                    r = detect_file(p, model, dpi, all_pages, pool)
+                except Exception as e:  # noqa: BLE001 - one damaged PDF must not stop the model's run
+                    print(f"  DETECT FAILED {os.path.relpath(p, src)}: {e}", flush=True)
+                    r = {"pages": []}
                 done[0] += 1
                 if done[0] % 25 == 0:
                     print(f"  {model}: {done[0]}/{len(files)} files ({time.time() - t0:.0f}s)", flush=True)
