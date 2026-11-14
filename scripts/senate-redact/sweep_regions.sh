@@ -15,6 +15,10 @@ for SLUG in "${SLUGS[@]}"; do
   if grep -q "^ERROR" "$D/apply-sweep.log"; then echo "errors: keeping the unswept redacted/ for $SLUG"; continue; fi
   rm -rf "$D/redacted" && mv "$D/redacted.new" "$D/redacted"
   "$PY" "$HERE/check_outputs.py" "$D" > "$D/check.log" 2>&1; tail -1 "$D/check.log"
+  # the gallery's "before" images need the originals; src may have been deleted for disk space
+  REGION=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['region'])" "$D/manifest.json")
+  [ -d "$D/src" ] || "$PY" "$HERE/census.py" "$REGION" "$D" > "$D/census-resweep.log" 2>&1
+  rm -rf "$D/gallery"  # rebuilt so swept pages show their final state
   "$PY" "$HERE/build_gallery.py" "$D"
   "$PY" - "$D" <<'PYEOF'
 import json, os, sys
