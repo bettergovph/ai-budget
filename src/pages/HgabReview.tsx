@@ -19,7 +19,7 @@ import { DisclaimerNotice } from '../components/HgabBits';
 import { cached, getJson, HGAB_ROOT, pdfUrl, recordPath } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import {
-  NAMED_TYPES, REVIEW_INDEX_PATH, scoreBand, detailShardPath, type DetailFile, type FlagFamily, type ReviewDetail, type ReviewDetailShard,
+  NAMED_TYPES, REVIEW_INDEX_PATH, detailShardPath, type DetailFile, type FlagFamily, type ReviewDetail, type ReviewDetailShard,
   type ReviewIndex, type ReviewIndexFlag,
 } from '../lib/hgab-documents';
 import {
@@ -898,10 +898,6 @@ function verdictNote(c: VerdictCounts | undefined): string | undefined {
   return [c.unsatisfactory ? `${n(c.unsatisfactory)} unsatisfactory` : '', c.satisfactory ? `${n(c.satisfactory)} satisfactory` : ''].filter(Boolean).join(', ');
 }
 
-type PaneTab = 'overview' | 'review';
-const PANE_TABS: readonly PaneTab[] = ['overview', 'review'];
-const paneTab = (v: string | null): PaneTab => (PANE_TABS as readonly string[]).includes(v ?? '') ? (v as PaneTab) : 'overview';
-
 /** Width of the project beside the document viewer, kept in this browser; the divider between them sets it. */
 const SPLIT_KEY = 'hgab-review:split';
 const SPLIT_DEFAULT = 460, SPLIT_MIN = 420, VIEWER_MIN = 320;
@@ -961,7 +957,7 @@ function SplitHandle({ width, onWidth, container }: { width: number; onWidth: (w
   );
 }
 
-function ProjectPane({ project, index, mine, entry, opening, profile, loadError, onSave, inlineViewer, onPrev, onNext, tab, onTab, split, onSplit }: {
+function ProjectPane({ project, index, mine, entry, opening, profile, loadError, onSave, inlineViewer, onPrev, onNext, split, onSplit }: {
   project: ReviewProject;
   index: ReviewIndex;
   /** The signed-in member's review of this project. */
@@ -976,12 +972,9 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   inlineViewer: boolean;
   onPrev: (() => void) | null;
   onNext: (() => void) | null;
-  tab: PaneTab;
-  onTab: (t: PaneTab) => void;
   split: number;
   onSplit: (w: number) => void;
 }) {
-  const member = useMember();
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<DetailFile | null>(null);
@@ -1038,16 +1031,8 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   const o = project.office;
   // Our own NEP comparison on this project (review.json), beside the research site's flags in the detail shard.
   const ourFlags = project.flags.map((i) => index.flags[i]).filter((f) => f.source === 'bettergov' && !f.computed);
-  const outcomes = mine?.flags.filter((f) => f.human_outcome !== 'not_reviewed').length ?? 0;
-  const tabs: { key: PaneTab; label: string; count?: string }[] = [
-    { key: 'overview', label: 'Overview' },
-    // The tab shows the member's final status once given (✓ satisfactory, ⚑ unsatisfactory), else how many checks have an outcome.
-    { key: 'review', label: 'Review', count: mine ? (mine.verdict === 'satisfactory' ? '✓' : mine.verdict === 'unsatisfactory' ? '⚑' : String(outcomes)) : undefined },
-  ];
-  const tabId = (t: PaneTab) => `rv-tab-${t}`;
-  const panel = (t: PaneTab, body: ReactNode) => (
-    <div role="tabpanel" id={`${tabId(t)}-panel`} aria-labelledby={tabId(t)} hidden={tab !== t} className="rv-tabpanel">{body}</div>
-  );
+  const officeName = o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`;
+  const nFlags = (detail?.flags.length ?? 0) + ourFlags.length;
   return (
     <SenateBlockContext.Provider value={blockOf}>
     <DocLinkContext.Provider value={linkOf}>
@@ -1060,90 +1045,60 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
             <button type="button" onClick={onNext ?? undefined} disabled={!onNext} aria-label="Next project (j)">Next ›</button>
           </div>
           <h2 className="rv-project-title">{project.title}</h2>
-          <p className="rv-project-sub"><b>{pesoFull(project.amount)}</b> · {o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`} · {project.region}</p>
-          <div className="rv-ptabs" role="tablist" aria-label="Project"
-            onKeyDown={(e) => {
-              const i = PANE_TABS.indexOf(tab);
-              const next = e.key === 'ArrowRight' ? PANE_TABS[(i + 1) % PANE_TABS.length] : e.key === 'ArrowLeft' ? PANE_TABS[(i + PANE_TABS.length - 1) % PANE_TABS.length] : null;
-              if (next) { e.preventDefault(); onTab(next); document.getElementById(tabId(next))?.focus(); }
-            }}>
-            {tabs.map((t, i) => (
-              <button key={t.key} id={tabId(t.key)} type="button" role="tab" aria-selected={tab === t.key} aria-controls={`${tabId(t.key)}-panel`}
-                tabIndex={tab === t.key ? 0 : -1} className={tab === t.key ? 'is-on' : ''} onClick={() => onTab(t.key)} title={`${t.label} (${i + 1})`}>
-                {t.label}{t.count != null && <small>{t.count}</small>}
-              </button>
-            ))}
-          </div>
+          <p className="rv-project-sub"><b>{pesoFull(project.amount)}</b> · {officeName} · {project.region}</p>
         </div>
 
         <div className="rv-project-body">
           {error && <p className="rv-error">{error}</p>}
           <TakenNote entry={entry} mineSent={!!mine} />
-          {panel('overview', (
-            <>
-              {project.auto && index.auto && (
-                <section className="rv-autobanner" aria-label="Automatic review">
-                  <p className="rv-autobanner-head">
-                    <b>Red flag · auto-reviewed</b>
-                    <span className="rv-score">Score {project.auto.score}{scoreBand(project.auto.score) && <small> · {scoreBand(project.auto.score)}</small>}</span>
-                  </p>
-                  {project.auto.rules.map((code) => {
-                    const r = index.auto!.rules.find((x) => x.code === code);
-                    return r ? <p key={code}><b>{r.label}.</b> {r.note} <small>Team checks {r.team_flags.join(', ')}.</small></p> : null;
-                  })}
-                  <p className="rv-muted">{index.auto.note} A member can still review this project; their review then sets its status.</p>
-                </section>
-              )}
-              <dl className="rv-facts">
-                <div><dt>House bill</dt><dd><b>{pesoFull(project.amount)}</b></dd></div>
-                <div><dt>Office</dt><dd>{o.name === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(o.name)}`}</dd></div>
-                <div><dt>Legislative {o.districts.length === 1 ? 'district' : 'districts'}</dt><dd>{o.districts.length ? <>{o.districts.join(' · ')} <small>{o.tier === 'A' ? 'Lone · only this district' : `Shared by ${o.districts.length} districts`}</small></> : 'No single district (Central Office)'}</dd></div>
-                <div><dt>Region</dt><dd>{project.region}</dd></div>
-                <div><dt>Program</dt><dd>{project.program}{detail?.pap ? <small>{detail.pap}</small> : null}</dd></div>
-                <div><dt>House bill row</dt><dd>{project.hgabId}<small>Page {project.page} of Volume I-C</small></dd></div>
-              </dl>
-              <p className="rv-links">
-                {detail?.bill_doc && <a href={pdfUrl(detail.bill_doc, detail.bill_page)} target="_blank" rel="noopener noreferrer">See it in the House bill, page {detail.bill_page}</a>}
-                <Link to={recordPath('dpwh', project.projectId)}>Project page: NEP and House bill</Link>
+          {/* The project, compact; the review follows on the same page. */}
+          <section className="rv-overview" aria-label="About the project">
+            {project.auto && index.auto && (
+              <p className="rv-autobanner is-compact" title={index.auto.note}>
+                <b>Red flag · auto-reviewed</b> · score {project.auto.score}
+                {project.auto.rules.map((code) => index.auto!.rules.find((x) => x.code === code)).filter(Boolean).map((r) => <span key={r!.code} title={r!.note}> · {r!.label}</span>)}
               </p>
-              <ul className="rv-checklist" aria-label="The 5 key documents">
-                {NAMED_TYPES.map((t, i) => (
-                  <li key={t} className={hasDoc(project.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
-                    <span aria-hidden="true">{hasDoc(project.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}
-                    <span className="visually-hidden">{hasDoc(project.docs, i) ? ' found' : ' not found'}</span>
-                  </li>
-                ))}
-              </ul>
-              {detail && detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
-              {detail && (
-                <>
-                  <h3 className="rv-h">{detail.flags.length} red {detail.flags.length === 1 ? 'flag' : 'flags'} from research.bettergov.ph</h3>
-                  <p className="rv-muted">A red flag is a reason to look, not a finding.</p>
-                  <FlagList detail={detail} index={index} />
-                  {ourFlags.length > 0 && (
-                    <div className="rv-flaggroup rv-ourflags">
-                      <h4>From our comparison</h4>
-                      <ul>{ourFlags.map((f) => <li key={f.code}><details open><summary>{f.label}</summary><p>{f.note}</p></details></li>)}</ul>
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="rv-next">
-                {!inlineViewer && detail && detail.files.length > 0 && (
-                  <button type="button" className="rv-btn" onClick={() => setOpen(viewOrder(detail.files)[0])}>Read the documents</button>
+            )}
+            <dl className="rv-facts is-compact">
+              <div><dt>Districts</dt><dd>{o.districts.length ? <>{o.districts.join(' · ')} <small>{o.tier === 'A' ? 'lone' : `shared by ${o.districts.length}`}</small></> : 'None (Central Office)'}</dd></div>
+              <div><dt>Program</dt><dd>{project.program}{detail?.pap ? <small>{detail.pap}</small> : null}</dd></div>
+              <div><dt>Bill</dt><dd>
+                {detail?.bill_doc ? <a href={pdfUrl(detail.bill_doc, detail.bill_page)} target="_blank" rel="noopener noreferrer">Vol. I-C p. {detail.bill_page}</a> : <>Vol. I-C p. {project.page}</>}
+                {' · '}<Link to={recordPath('dpwh', project.projectId)}>NEP and House bill</Link>
+              </dd></div>
+            </dl>
+            <ul className="rv-checklist" aria-label="The 5 key documents">
+              {NAMED_TYPES.map((t, i) => (
+                <li key={t} className={hasDoc(project.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
+                  <span aria-hidden="true">{hasDoc(project.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}
+                  <span className="visually-hidden">{hasDoc(project.docs, i) ? ' found' : ' not found'}</span>
+                </li>
+              ))}
+            </ul>
+            {detail && detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
+            {detail && nFlags > 0 && (
+              <details className="rv-flags">
+                <summary>{nFlags} red {nFlags === 1 ? 'flag' : 'flags'}</summary>
+                <FlagList detail={detail} index={index} />
+                {ourFlags.length > 0 && (
+                  <div className="rv-flaggroup rv-ourflags">
+                    <h4>From our comparison</h4>
+                    <ul>{ourFlags.map((f) => <li key={f.code}><details><summary>{f.label}</summary><p>{f.note}</p></details></li>)}</ul>
+                  </div>
                 )}
-                <button type="button" className="rv-btn is-primary" onClick={() => {
-                  onTab('review');
-                  if (opening === 'open' && member.loaded && !member.userId) member.signIn();
-                }}>{opening === 'open' && member.loaded && !member.userId ? 'Sign in to review' : 'Start the review'}</button>
-              </div>
-              <DisclaimerNotice compact className="rv-disclaimer" />
-            </>
-          ))}
-          {!detail && !error && profile && tab !== 'overview' && <p className="rv-muted" role="status">Loading the documents…</p>}
-          {panel('review', !profile
-            ? <ReviewGate opening={opening} loadError={loadError} />
-            : detail && <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />)}
+              </details>
+            )}
+            {!inlineViewer && detail && detail.files.length > 0 && (
+              <div className="rv-next"><button type="button" className="rv-btn" onClick={() => setOpen(viewOrder(detail.files)[0])}>Read the documents</button></div>
+            )}
+          </section>
+          <section className="rv-review" aria-label="Review">
+            {!profile
+              ? <ReviewGate opening={opening} loadError={loadError} />
+              : detail
+                ? <CasePanel project={project} detail={detail} index={index} mine={mine} profile={profile} onSave={onSave} />
+                : !error && <p className="rv-muted" role="status">Loading the documents…</p>}
+          </section>
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
@@ -1250,8 +1205,6 @@ function Reviewer() {
   const current = levels[levels.length - 1].projects;
   const listed = useMemo(() => sortProjects(current, sort, statusOf), [current, sort, statusOf]);
   const selectedId = params.get('p');
-  // The project's tab stays as you move between projects; it is in the URL so a link opens on it.
-  const tab = paneTab(params.get('tab'));
   const [split, setSplit] = useSplit();
   const selected = useMemo(() => all.find((p) => p.hgabId === selectedId) ?? null, [all, selectedId]);
   // Pages of PAGE_SIZE: `pg=` in the URL, else the page holding the open project.
@@ -1273,11 +1226,10 @@ function Reviewer() {
     stepsRef.current = next;
     update((p) => { p.delete('s'); p.delete('pg'); next.forEach((s) => p.append('s', stepToParam(s))); });
   };
-  const setTab = useCallback((t: PaneTab) => update((q) => { if (t === 'overview') q.delete('tab'); else q.set('tab', t); }, true), [update]);
   // Opening a project (j / k included) turns to the page it is on.
   const open = useCallback((p: ReviewProject) => {
     const i = listed.findIndex((x) => x.hgabId === p.hgabId);
-    update((q) => { q.set('p', p.hgabId); if (i >= 0) q.set('pg', String(pageOf(i))); }, true);
+    update((q) => { q.set('p', p.hgabId); q.delete('tab'); if (i >= 0) q.set('pg', String(pageOf(i))); }, true);
     setPane('project');
   }, [update, listed]);
   const at = listed.findIndex((p) => p.hgabId === selectedId);
@@ -1291,13 +1243,10 @@ function Reviewer() {
       if (e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
       if (e.key === 'j' && next) { e.preventDefault(); next(); }
       if (e.key === 'k' && prev) { e.preventDefault(); prev(); }
-      // 1 and 2 switch the project's tabs.
-      const k = PANE_TABS[Number(e.key) - 1];
-      if (k && selectedId) { e.preventDefault(); setTab(k); }
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
-  }, [next, prev, selectedId, setTab]);
+  }, [next, prev]);
 
   const myList = Object.values(reviews);
   const presets = PRESETS.filter((p) => p.steps.every((s) => s.kind !== 'flag' || flagIndex.has(s.code)));
@@ -1377,7 +1326,7 @@ function Reviewer() {
             {selected
               ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} profile={profile} onSave={save}
                   entry={shared?.[selected.hgabId]} opening={opening} loadError={loadError}
-                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} tab={tab} onTab={setTab} split={split} onSplit={setSplit} />
+                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} split={split} onSplit={setSplit} />
               : (
                 <div className="rv-welcome">
                   <h2>Pick a project to review</h2>
