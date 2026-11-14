@@ -16,6 +16,12 @@ d, t, rels = sys.argv[1], sys.argv[2], sys.argv[3:]
 for rel in rels:
     os.makedirs(os.path.dirname(os.path.join(d, "redacted", rel)), exist_ok=True)
     shutil.copy2(os.path.join(t, "redacted", rel), os.path.join(d, "redacted", rel))
+    if os.path.isdir(os.path.join(d, "pass1")):  # a later batch sweep reads pass1: give it the redone first pass
+        os.makedirs(os.path.dirname(os.path.join(d, "pass1", rel)), exist_ok=True)
+        dst = os.path.join(d, "pass1", rel)
+        if os.path.exists(dst):
+            os.remove(dst)  # pass1 and redacted share inodes (cp -al); never write through the link
+        shutil.copy2(os.path.join(t, "pass1", rel), dst)
 for stage in ("pass1", "redacted"):
     f, g = os.path.join(d, stage, "_changed.json"), os.path.join(t, stage, "_changed.json")
     cur = json.load(open(f)) if os.path.exists(f) else {}
