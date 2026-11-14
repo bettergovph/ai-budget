@@ -4,7 +4,7 @@
  * page has no reviewing; projects can still be browsed.
  */
 import { createContext, useContext } from 'react';
-import { documentHref } from './hgab-review-api';
+import { documentHref, senatePath } from './hgab-review-api';
 
 export interface Member {
   /** Whether sign-in is set up in this build. */
@@ -35,3 +35,19 @@ export const memberLabel = (m: Pick<Member, 'name' | 'email'>) => m.name?.trim()
  */
 export const DocLinkContext = createContext<(url: string) => string | null>((url) => documentHref(url, null));
 export const useDocLink = () => useContext(DocLinkContext);
+
+/**
+ * Why a document can't open, by its address in the data: a Senate copy not yet redacted (or skipped by the redaction,
+ * or in a region held back), or one still being checked. Null when it can open, and for every non-Senate file. The
+ * project pane provides it from the Worker's answer for its files; without that answer, no Senate copy opens.
+ */
+export interface DocBlock { region: string | null; checking: boolean }
+export const senateRegion = (path: string): string | null => {
+  const first = path.split('/')[0];
+  try { return decodeURIComponent(first) || null; } catch { return first || null; }
+};
+export const SenateBlockContext = createContext<(url: string) => DocBlock | null>((url) => {
+  const path = senatePath(url);
+  return path == null ? null : { region: senateRegion(path), checking: false };
+});
+export const useSenateBlock = () => useContext(SenateBlockContext);
