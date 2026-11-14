@@ -10,7 +10,7 @@ Ported from the NEP signature stripper on vm3-server (`~/projects/dpwh`: `strip_
 - **Black bars.** On typed pages the text under a bar is deleted too, so a hidden name can't be copied out.
 - One **region** at a time.
 - **Upload (Jason, 2026-11-14): the redacted copies overwrite the originals** on R2 (he keeps a backup of the originals). `upload_redacted.py ROOT slug…` writes every key of an identical-file group, only where R2 still holds the original or our earlier upload (logged in `<region>/upload.json`), then the CDN is purged by prefix (`budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/`, zone bettergov.ph, token in `~/.bettergov/.env`; edge cache is otherwise 4 hours). Object metadata: `sha256` (redacted), `original-sha256`, `redacted`.
-- Still public as originals: PDFs of 20+ pages, damaged files, non-PDFs (jpg, docx, zip, kmz, xlsx) and a few PDFs without a `.pdf` extension. `supporting-documents-file-links.jsonl` still lists the originals' bytes and hashes.
+- Still public as originals: PDFs of 20+ pages, damaged files, non-PDFs (jpg, docx, zip, kmz, xlsx) and a few PDFs without a `.pdf` extension. `update_links_jsonl.py ROOT` (Jason, 2026-11-14) rewrites `supporting-documents-file-links.jsonl` on R2 after each upload: uploaded rows get the redacted `bytes`/`sha256`/`md5`, `redacted: true` and `original_bytes`/`original_sha256`/`original_md5`; purge its URL afterwards. census reads the local copy in `scripts/senate-redact/cache/`, which keeps the originals' values.
 
 ## How it works
 
