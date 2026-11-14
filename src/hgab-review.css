@@ -301,30 +301,6 @@ kbd { padding: 0 5px; border: 1px solid var(--rule); border-bottom-width: 2px; b
 .rv-project-sub b { font-family: var(--font-mono); color: var(--ink); }
 
 /* --- the project's tabs ----------------------------------------------------------- */
-.rv-ptabs { display: flex; gap: 2px; margin-bottom: -1px; overflow-x: auto; }
-.rv-ptabs button {
-  display: inline-flex;
-  flex: 1 1 auto;
-  justify-content: center;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  min-height: 42px;
-  padding: 10px 10px;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
-  background: none;
-  color: var(--ink-3);
-  font-size: 15px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.rv-ptabs button:hover { color: var(--ink); }
-.rv-ptabs button.is-on { border-color: var(--rule); background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 0 var(--paper); }
-.rv-ptabs small { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--paper-3); font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; text-align: center; }
-.rv-ptabs button.is-on small { background: var(--accent-soft); color: var(--accent-deep); }
-.rv-tabpanel[hidden] { display: none; }
 .rv-next { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 
 /* --- the divider between the project and the document ----------------------------------- */
@@ -776,6 +752,22 @@ textarea.rf-input { resize: vertical; }
 @media (max-width: 900px) {
   .rv-progress { display: none; }
 }
+
+/* One pane: the project, compact, then the review. */
+.rv-overview { margin-bottom: 14px; }
+.rv-facts.is-compact { gap: 3px; margin-bottom: 8px; }
+.rv-facts.is-compact > div { grid-template-columns: 64px minmax(0, 1fr); }
+.rv-facts.is-compact dd { font-size: 12.5px; }
+.rv-facts.is-compact dd small { display: inline; margin-left: 4px; }
+.rv-facts.is-compact dd a { color: var(--accent); }
+.rv-autobanner.is-compact { padding: 6px 10px; font-size: 12.5px; }
+.rv-flags { margin: 6px 0 0; font-size: 13px; }
+.rv-flags > summary { color: var(--rv-flag); font-weight: 600; cursor: pointer; }
+.rv-flags[open] > summary { margin-bottom: 6px; }
+.rv-review { padding-top: 14px; border-top: 1px solid var(--rule); }
+.rf-needs-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px !important; font-size: 11.5px; }
+.rf-needs-list > span:first-child { color: var(--ink-3); }
+.rf-chip { padding: 1px 7px; border-radius: 10px; background: var(--paper-2); border: 1px solid var(--rule-soft); }
 
 /* The final status (satisfactory / unsatisfactory = red flag): the field the team reports, first in the review form.
    A compact pair of toggle buttons: text beside the colour and the icon, 44px targets, a strong focus ring. */

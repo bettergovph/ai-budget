@@ -223,7 +223,7 @@ Columns for later workflow steps stay blank: independent verifier, the budget-or
 
 ## Sending reviews
 
-Members sign in with Clerk using their email and a one-time code, with no password (set in the Clerk dashboard). Only the reviewer page loads Clerk (`HgabReviewMember.tsx`). After signing in or up, Clerk returns to the page it was opened from, with the same project, tab and funnel. The page forces this, because the production instance's "after sign-in" address is the home page. Signed out, the Review tab, "Start the review" and the bar ask the visitor to sign in; the projects, documents, red flags and everyone's status stay open to all. Signed in, **Save draft** and **Ready for independent review** send the review.
+Members sign in with Clerk using their email and a one-time code, with no password (set in the Clerk dashboard). Only the reviewer page loads Clerk (`HgabReviewMember.tsx`). After signing in or up, Clerk returns to the page it was opened from, with the same project and funnel. The page forces this, because the production instance's "after sign-in" address is the home page. Signed out, the Review tab, "Start the review" and the bar ask the visitor to sign in; the projects, documents, red flags and everyone's status stay open to all. Signed in, **Save draft** and **Ready for independent review** send the review.
 
 Routes (`src/worker/hgab-reviews.ts`). These are internal to the site, like `/api/hearings`, and not part of the read-only, CORS-open `/api/v1`:
 
@@ -266,7 +266,7 @@ Setup:
 
 - Local: `.env.local` gets `VITE_CLERK_PUBLISHABLE_KEY` and `.dev.vars` gets `CLERK_SECRET_KEY` (see `.env.example`, `.dev.vars.example`). Then `npm run db:hgab-reviews` creates the tables in the local D1.
 - Production: run `npx wrangler secret put CLERK_SECRET_KEY` on the `budget` Worker; set `VITE_CLERK_PUBLISHABLE_KEY` in the Workers Builds build variables (it is public); and run `npx wrangler d1 execute budget --remote --file=scripts/hgab-review/reviews-schema.sql`. Use a Clerk production instance for `budget.bettergov.ph`: a development instance shows "Development mode" and caps its users.
-- Without the publishable key, the page has no sign-in and so no reviewing. Without the secret, or before the tables exist, the API answers 503 and the Review tab says reviewing isn't open yet. Browsing works either way.
+- Without the publishable key, the page has no sign-in and so no reviewing. Without the secret, or before the tables exist, the API answers 503 and the review section says reviewing isn't open yet. Browsing works either way.
 - Testing: Clerk test emails (`name+clerk_test@example.com`, code `424242`) sign in without sending email. Clerk's bot protection blocks sign-up in headless browsers, so create test users with the Backend API first.
 
 ## Senate copies: signed-in members only
@@ -312,11 +312,25 @@ Querying D1: every project's status, members' and automatic, is `review_cases` (
 
 When the team settles the method, answers in members' reviews can add weighted components: outcomes per check, document availability, priority. Members' scores would join the rules here under a new `method`. Projects keep their rule codes, so earlier scores can be explained.
 
+## One pane, fewer words (2026-11-14)
+
+- **Overview and Review are one page:** the compact overview, then the review form (or the sign-in box). There are no tabs, no "Start the review" button and no disclaimer in the pane.
+- **Shorter form text:**
+  - "Checks" instead of "Review checklist".
+  - Group names: "Documents", "More checks", "Not yet due".
+  - "Applies now?" instead of "Does this check apply to the project now?".
+  - "Needs:" with the minimum evidence as chips; the "What to check" heading is gone, and its text stays.
+  - "Flags:" without the "On file" line.
+  - "Still needed:" for what an outcome lacks.
+  - "What you found" has a "Facts only" placeholder instead of a description.
+  - Short labels in the evidence details.
+  - No hint under Save; "Export:" for the downloads.
+
 ## The final status (2026-11-14)
 
 The maintainer asked for one status per review, the field the team reports: **Satisfactory** or **Unsatisfactory**, where unsatisfactory is the red flag.
 
-- **In the review:** a compact pair of buttons, first in the Review tab (`FinalStatus` in `HgabReviewForm.tsx`). Choosing one saves the review at once. A line beside the heading says whether it is saved, and screen readers announce it. "Clear" removes it; a review with nothing else in it is then withdrawn.
+- **In the review:** a compact pair of buttons, first in the review section (`FinalStatus` in `HgabReviewForm.tsx`). Choosing one saves the review at once. A line beside the heading says whether it is saved, and screen readers announce it. "Clear" removes it; a review with nothing else in it is then withdrawn.
 - **Accessibility:** they are toggle buttons (`aria-pressed`), not radios, so moving between them with the keyboard never saves. Each is named by its label alone. Its hint ("The documents support the project." / "Red flag: something is missing, wrong or doesn't add up.") is the description screen readers give and the tooltip, not shown on screen. Each target is 44 px tall, with text next to the colour and the icon, and a 3 px focus ring. They sit side by side when each gets 150 px. The Save button is 48 px tall.
 - **In the data:** `CaseReview.verdict` is `satisfactory`, `unsatisfactory` or null (`VERDICTS` in `src/lib/hgab-redflags-team.ts`). Reviews from before it was added read as null. A final status alone is enough to send a review (`caseTouched`). It is in the payload only, so D1 needed no change; the status API reads it with `json_extract(payload, '$.verdict')`.
 - **A project's final status** (`projectVerdict`): **unsatisfactory if any member found it unsatisfactory** (a red flag stands until it is resolved), satisfactory if every final status given is satisfactory. The status API returns `verdict` and `verdicts` (how many of each) per project.

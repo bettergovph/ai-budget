@@ -90,13 +90,13 @@ function EvidenceRow({ e, onChange, onRemove, fromFile }: { e: EvidenceItem; onC
         <button type="button" className="rf-x" onClick={onRemove} aria-label={`Remove ${e.document_title || 'this evidence'}`}>×</button>
       </div>
       <details className="rf-evidence-more">
-        <summary>Details <small>optional</small></summary>
-        <Field label="Page, table or cell"><input className="rf-input" value={e.locator} onChange={(x) => set({ locator: x.target.value })} placeholder="p. 3, item 2.1" /></Field>
-        <Field label="What it says" hint="Verbatim text or amount"><textarea className="rf-input" rows={2} value={e.extracted_fact} onChange={(x) => set({ extracted_fact: x.target.value })} /></Field>
-        <Field label="Your observation"><textarea className="rf-input" rows={2} value={e.reviewer_observation} onChange={(x) => set({ reviewer_observation: x.target.value })} /></Field>
-        <div className="rf-q"><span>Available?</span><Seg className="is-small" label="Document availability" value={e.availability} onChange={(v) => set({ availability: v })} options={vocab('document_availability')} /></div>
-        <div className="rf-q"><span>Applies at this stage?</span><Seg className="is-small" label="Applicable at current project stage" value={e.applicable_at_stage} onChange={(v) => set({ applicable_at_stage: v })} options={vocab('evidence_applicable_at_stage')} labels={{ not_assessed: 'Not sure' }} /></div>
-        <div className="rf-q"><span>Your check of the extract</span><Seg className="is-small" label="Verification state" value={e.verification_state} onChange={(v) => set({ verification_state: v })} options={vocab('verification_state')} labels={{ not_reviewed: 'Not checked' }} /></div>
+        <summary>Details</summary>
+        <Field label="Page or cell"><input className="rf-input" value={e.locator} onChange={(x) => set({ locator: x.target.value })} placeholder="p. 3, item 2.1" /></Field>
+        <Field label="What it says"><textarea className="rf-input" rows={2} value={e.extracted_fact} onChange={(x) => set({ extracted_fact: x.target.value })} placeholder="Verbatim text or amount" /></Field>
+        <Field label="Observation"><textarea className="rf-input" rows={2} value={e.reviewer_observation} onChange={(x) => set({ reviewer_observation: x.target.value })} /></Field>
+        <div className="rf-q"><span>Available</span><Seg className="is-small" label="Document availability" value={e.availability} onChange={(v) => set({ availability: v })} options={vocab('document_availability')} /></div>
+        <div className="rf-q"><span>Applies now</span><Seg className="is-small" label="Applicable at current project stage" value={e.applicable_at_stage} onChange={(v) => set({ applicable_at_stage: v })} options={vocab('evidence_applicable_at_stage')} labels={{ not_assessed: 'Not sure' }} /></div>
+        <div className="rf-q"><span>Checked</span><Seg className="is-small" label="Verification state" value={e.verification_state} onChange={(v) => set({ verification_state: v })} options={vocab('verification_state')} labels={{ not_reviewed: 'Not checked' }} /></div>
       </details>
     </li>
   );
@@ -116,7 +116,7 @@ function EvidencePicker({ id, files, evidence, onChange }: { id: string; files: 
     }]);
   return (
     <div className="rf-evidence-list">
-      <h5 id={`rf-ev-${id}`}>Evidence <small>{evidence.length ? `${evidence.length} picked` : 'pick the documents that show it'}</small></h5>
+      <h5 id={`rf-ev-${id}`}>Evidence{evidence.length > 0 && <small> {evidence.length}</small>}</h5>
       <div className="rf-ev-chips" role="group" aria-labelledby={`rf-ev-${id}`}>
         {files.map((f) => (
           <button key={f[5]} type="button" className={`rf-ev-chip ${picked.has(f[5]) ? 'is-on' : ''}`} aria-pressed={picked.has(f[5])} title={f[4]} onClick={() => toggle(f)}>
@@ -172,30 +172,22 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
             if (!open && ['verified_concern', 'cleared_explained', 'unresolved_evidence_gap'].includes(v)) onToggle();
           }} />
       </div>
-      {needs.length > 0 && <p className="rf-needs">To keep this outcome: {needs.join('; ')}.</p>}
-      {(item.detectors.length > 0 || item.documents.length > 0) && (
-        <p className="rf-why">
-          {item.detectors.length > 0 && <>Red flags here: {item.detectors.map(detectorLabel).join(' · ')}</>}
-          {item.detectors.length > 0 && item.documents.length > 0 && <br />}
-          {item.documents.length > 0 && <>On file: {item.documents.join(' · ')}</>}
-        </p>
-      )}
+      {needs.length > 0 && <p className="rf-needs">Still needed: {needs.join('; ')}.</p>}
+      {item.detectors.length > 0 && <p className="rf-why">Flags: {item.detectors.map(detectorLabel).join(' · ')}</p>}
       {open && (
         <div className="rf-body">
-          <h5>What to check</h5>
           <p>{f.instructions}</p>
-          <h5>Minimum evidence</h5>
-          <ul className="rf-chips">{f.minimum_evidence.map((m) => <li key={m}>{m}</li>)}</ul>
+          <p className="rf-needs-list"><span>Needs:</span> {f.minimum_evidence.map((m) => <span key={m} className="rf-chip">{m}</span>)}</p>
           <p className="rf-safeguard"><b>Safeguard.</b> {f.safeguard}{STAGE_GATED[f.id] && <> {STAGE_GATED[f.id]}</>}</p>
 
           <div className="rf-q">
-            <span>Does this check apply to the project now?</span>
+            <span>Applies now?</span>
             <Seg label="Does this check apply now?" value={check.applicability} onChange={(v) => set({ applicability: v })} options={vocab('evidence_applicability')}
               labels={{ not_assessed: 'Not sure' }} clearTo="not_assessed" />
           </div>
           <EvidencePicker id={f.id} files={files} evidence={check.evidence} onChange={(evidence) => set({ evidence })} />
-          <Field label="What you found" hint="For this check, from the evidence: facts only, not conclusions">
-            <textarea className="rf-input" rows={3} value={check.observed_discrepancy} onChange={(e) => set({ observed_discrepancy: e.target.value })} />
+          <Field label="What you found">
+            <textarea className="rf-input" rows={3} value={check.observed_discrepancy} onChange={(e) => set({ observed_discrepancy: e.target.value })} placeholder="Facts only" />
           </Field>
         </div>
       )}
@@ -219,7 +211,7 @@ function FinalStatus({ value, saved, busy, onPick }: { value: Verdict | null; sa
       <div className="rf-final-top">
         <h3 id="rf-final-h" className="rf-final-h">Final status</h3>
         <p className="rf-final-state" role="status" aria-live="polite">
-          {busy ? 'Saving…' : !value ? 'Not given yet' : saved ? <>Saved</> : <>Not saved yet</>}
+          {busy ? 'Saving…' : !value ? 'Not set' : saved ? <>Saved</> : <>Not saved</>}
           {value && !busy && <> · <button type="button" className="rf-link" onClick={() => onPick(null)}>Clear</button></>}
         </p>
       </div>
@@ -279,7 +271,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
       <FinalStatus value={review.verdict ?? null} saved={saved} busy={sending.busy} onPick={(v) => save({ ...review, verdict: v })} />
 
       <div className="rf-head">
-        <h3 className="rv-h">Review checklist</h3>
+        <h3 className="rv-h">Checks</h3>
       </div>
 
       {groups.map(({ g, items: its }) => (
@@ -312,7 +304,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
       <div className="rf-actions">
         <button type="submit" className="rv-btn is-primary rf-save" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save'}</button>
         <span className="rf-export">
-          Download:{' '}
+          Export:{' '}
           <button type="button" onClick={() => downloadCases([review], 'verdicts', `review-${review.project.hgab_id}`)}>final status</button>
           {' · '}
           <button type="button" onClick={() => downloadCases([review], 'json', `review-${review.project.hgab_id}`)}>JSON</button>
@@ -320,7 +312,6 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
           {' · '}<button type="button" onClick={() => downloadCases([review], 'evidence', `review-${review.project.hgab_id}`)}>evidence rows</button>
         </span>
       </div>
-      <p className="rv-hint">Saving sends your review to the team and shows the project as taken. You can keep editing it; clear it to withdraw it.</p>
     </form>
   );
 }

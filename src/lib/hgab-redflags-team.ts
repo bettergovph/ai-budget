@@ -197,10 +197,10 @@ export const STAGE_GATED: Readonly<Record<string, string>> = {
 
 export type ChecklistGroup = 'suggested' | 'documents' | 'category' | 'later';
 export const CHECKLIST_GROUP_LABEL: Record<ChecklistGroup, string> = {
-  suggested: 'Suggested by this project’s red flags',
-  documents: 'The documents on file',
-  category: 'Other checks for this kind of project',
-  later: 'Not yet due at the budget stage',
+  suggested: 'Suggested by its red flags',
+  documents: 'Documents',
+  category: 'More checks',
+  later: 'Not yet due',
 };
 export interface ChecklistItem {
   flag: TeamFlag;
