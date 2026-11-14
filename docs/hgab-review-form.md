@@ -95,6 +95,7 @@ Other ways checks come in:
 
 For each project:
 
+0. **The final status** comes first: **Satisfactory** (the documents support the project) or **Unsatisfactory** (a red flag). It is the field the team reports, and the project's status everywhere. See "The final status" below.
 1. **Documents on file** (RF-033): not asked. Each of the 5 key documents' availability is filled in from what we detected (`available` when found, else `unknown`), so it doesn't count as an edit; `matches_project` stays in the payload.
 2. **The checklist**, in groups: the checks this project's red flags suggest come first, without a heading; then the documents on file, other checks for this kind of project (collapsed), and not yet due (collapsed). A suggested check has no status label until a volunteer starts it. Each check shows:
    - its lead role, what to check, the minimum evidence and the **safeguard**;
@@ -104,9 +105,9 @@ For each project:
    - availability and whether it applies at this stage;
    - the volunteer's check of the extract;
    - the verbatim fact, and the volunteer's observation.
-4. **The case**: name (optional), role (T-task), case stage, suggested priority, next action and notes.
+4. **The case**: suggested priority and notes. The name comes from the sign-in.
 
-**Save draft** always works. **Ready for independent review** runs validation and sets the case stage to "In independent review" (workflow step 5).
+**Save** sends the review. Choosing a final status saves at once.
 
 The **Team checklist** filter in the bar keeps projects whose detector flags suggest any checked RF. Each option shows how many projects it would keep.
 
@@ -247,7 +248,7 @@ Rules:
 - **Two saves at the same moment:** each save only applies to the revision it read. If two land together, one wins and the other gets 409 ("reload and try again"). No revision is lost or doubled.
 - **Team check ids:** intake accepts any `RF-000`-style id, so a draft keeps its checks when the registry changes. Whether a check is in today's registry is a workbook rule: it blocks sending for independent review, not saving.
 - **Verification** (`kind: verification`) has its columns and rules, but the API refuses it (403) until the team sets up verifier roles and decides who may see others' reviews.
-- **The project's status is the furthest of its reviews:** completed > in independent review > in progress > on hold. A saved draft counts as in progress. That status is how members split the work: the status chip on each project, the "Nobody has started" preset, and the note on a project someone else is reviewing. Nothing is locked.
+- **The project's status is its final status** (see "The final status"). Without one, a project with a member's review shows "In progress", so members can split the work: the status on each project, the "Nobody has started" preset, and the note on a project someone else is reviewing. Nothing is locked. The case stage each review stores (`status` in D1, the furthest of a project's reviews in the status API) no longer shows in the page.
 - **Sign-in:** the page sends the Clerk session token as `Authorization: Bearer`. The Worker checks it with `CLERK_SECRET_KEY`. The token must have been issued to the site's own origin (its `azp` claim). `CLERK_AUTHORIZED_PARTIES` (comma-separated) overrides that. Tokens minted with the Backend API carry no `azp` and are refused.
 - **Intake** (`readCaseReview`) rebuilds the review from known fields only. It checks types, vocabularies, registry flag ids, http(s) links and lengths (20,000 characters of text, 40 pieces of evidence per check, 512 KB per request). Anything off is refused with 400, listing the problems.
 - **The workbook's rules** (`validateCaseReview`): a draft may break them. A case sent for independent review may not (422 with the issues). Volunteers can't set "AI candidate" or "Completed" (403).
@@ -294,17 +295,37 @@ Some projects are red flags plainly enough that volunteers need not open them fi
 
 - **Rule `no-key-documents`, weight 100:** none of the five key documents and no other file, in the Senate copies or on DPWH Transparency. This covers 2,119 bill lines, ₱63.5B. It points to team checks RF-033 (Incomplete documents) and RF-021 (Project not ready for implementation).
 - **Score:** the sum of the matched rules' weights, capped at 100. Bands: High from 70, Medium from 40, Low from 1. A project the rules mark has the status "red flag".
-- **In the reviewer:** the project shows "Red flag · auto-reviewed · score 100" in the list and a banner on its Overview. It counts as reviewed: faded in the list, left out by **Hide reviewed**, last in the review-status sort, first in the red-flag-score sort. The **Review status** filter has the list statuses: the members' five, plus "Auto-reviewed: red flag".
-- **A member's review takes over.** Once anyone saves a review of an auto-reviewed project, the list shows that review's status (`listStatus`); the banner stays.
+- **In the reviewer:** the project shows "Unsatisfactory · auto-reviewed · score 100" in the list (until 2026-11-14, "Red flag · auto-reviewed") and a banner on its Overview. It counts as reviewed: faded in the list, left out by **Hide reviewed**, after work still to do in the review-status sort, first in the red-flag-score sort. The **Review status** filter has the list statuses (see "The final status").
+- **A member's review takes over.** Once anyone saves a review of an auto-reviewed project, the list shows "In progress", then the members' final status (`listStatus`); the banner stays.
 - **In D1 as well.** `npm run sync:hgab-auto-reviews` writes `review.json`'s automatic reviews to D1's `review_auto`, one row per project, so the reviews database holds every project's status: members' reviews in `review_cases`, automatic ones in `review_auto`. Each run is logged in `review_auto_runs` (append-only: method, the `review.json` it read and its MD5, and how many rows it added, changed, withdrew and restored). It changes only the difference. A project that stops meeting the rules is withdrawn (`withdrawn_at`), not deleted, and comes back under the same row; triggers refuse deletes. Statements go in small batches of plain queries, not a `--file` import. Run it after every `build:hgab-documents` that changes `auto` (local by default; `--remote` for production, with a token that can edit D1; `--dry-run` shows the plan). **Production, 2026-11-13:** the tables were created (the new statements only, as a plain query) and the first remote run added 2,119 rows from `review.json` MD5 `80b090e6…`.
 - **The status API carries it.** `GET /api/hgab/2027/reviews/status` adds `auto: { score, method }` to each project's entry (`withAutoReviews`), and an entry for projects with only an automatic review (`not_started`, 0 reviews); `meta.auto` counts them. If `review_auto` isn't there yet, the list works without it.
-- **The page** shows a project as auto-reviewed when D1 says so, or, where D1 hasn't been synced, when `review.json` does. A member's review still takes over (`listStatus`). `ListStatus` adds `auto_red_flag` to the members' `ReviewStatus`; `review_cases` stores only members' statuses.
+- **The page** shows a project as auto-reviewed when D1 says so, or, where D1 hasn't been synced, when `review.json` does. A member's review still takes over (`listStatus`). `ListStatus` is the final status, `in_progress`, `not_started` or `auto_red_flag`; `review_cases` stores only members' reviews.
 
 Querying D1: every project's status, members' and automatic, is `review_cases` (kind `review`, not withdrawn) plus `review_auto` (not withdrawn). For example: `SELECT hgab_id, 'red_flag' AS status, score FROM review_auto WHERE withdrawn_at IS NULL AND hgab_id NOT IN (SELECT hgab_id FROM review_cases WHERE kind = 'review' AND withdrawn_at IS NULL)` lists the projects only the automatic review has marked.
 
 **Provisional.** The team has not approved a scoring method, and its workflow says "no unapproved thresholds or weights" (step 6). Its own safeguard for RF-033 says "Do not score missing optional/later-stage records as violation". This rule only marks projects where *nothing at all* was found; the label, the banner and the note say the score is provisional.
 
 When the team settles the method, answers in members' reviews can add weighted components: outcomes per check, document availability, priority. Members' scores would join the rules here under a new `method`. Projects keep their rule codes, so earlier scores can be explained.
+
+## The final status (2026-11-14)
+
+The maintainer asked for one status per review, the field the team reports: **Satisfactory** or **Unsatisfactory**, where unsatisfactory is the red flag.
+
+- **In the review:** two large buttons, first in the Review tab (`FinalStatus` in `HgabReviewForm.tsx`). Choosing one saves the review at once. A line under them says what was saved, and screen readers announce it. "Clear the final status" removes it; a review with nothing else in it is then withdrawn.
+- **Accessibility:** they are toggle buttons (`aria-pressed`), not radios, so moving between them with the keyboard never saves. Each is named by its label alone, with its hint as the description. Each target is at least 76 px tall, with text next to the colour and the icon. They sit side by side when each gets 240 px, else one per row. The focus ring is 3 px.
+- **In the data:** `CaseReview.verdict` is `satisfactory`, `unsatisfactory` or null (`VERDICTS` in `src/lib/hgab-redflags-team.ts`). Reviews from before it was added read as null. A final status alone is enough to send a review (`caseTouched`). It is in the payload only, so D1 needed no change; the status API reads it with `json_extract(payload, '$.verdict')`.
+- **A project's final status** (`projectVerdict`): **unsatisfactory if any member found it unsatisfactory** (a red flag stands until it is resolved), satisfactory if every final status given is satisfactory. The status API returns `verdict` and `verdicts` (how many of each) per project.
+- **The list status** (`listStatus`), in sort order:
+  1. Not started
+  2. In progress (a member's review without a final status)
+  3. Unsatisfactory
+  4. Unsatisfactory · auto-reviewed (no key document and no file, until a member gives a final status)
+  5. Satisfactory
+
+  The last three count as reviewed, for **Hide reviewed**, the faded rows and the progress cards. The badge adds "· N reviews" when several members reviewed a project; its hover text says how they split.
+- **The report:** the "Unsatisfactory: red flags" preset lists members' and automatic red flags. "Final status of each (CSV)" in **My reviews**, and "final status" under each review, download one row per review: House bill row, project, office, region, amount, final status, reviewer, checks with an outcome, notes, and when it was last saved (`verdictRows`). The team's workbook rows are unchanged; the workbook has no column for it.
+- **Everyone's final statuses, from D1:** `SELECT hgab_id, json_extract(payload, '$.verdict') AS final_status, json_extract(payload, '$.reviewer.display_name') AS reviewer, updated_at FROM review_cases WHERE kind = 'review' AND withdrawn_at IS NULL`.
+- **Unchanged:** the case stage and "Ready for independent review" are still in the payload, the API and its rules (`validateCaseReview` for cases sent for independent review). The form no longer offers them. On 2026-11-14 production had one member review, marked ready for independent review with no final status; it shows "In progress" until a final status is given.
 
 ## Fewer clicks (2026-11-13)
 
@@ -313,7 +334,7 @@ When the team settles the method, answers in members' reviews can add weighted c
 - **Evidence is one click:** a button per file of the project, and one for any other document or link.
 - **The name comes from the sign-in.** It is the account's full name or username, else the part of the email before "@" (`memberLabel`), and is sent as `reviewer.display_name` with every save. There is no name field.
 - **Removed from the form:** the role field, "Next action", and the hint about the review committee. "Referred with approval" is still not offered, because it belongs to the committee (workflow step 8). Existing values stay in the review.
-- **Save draft** and **Ready for independent review** stay pinned at the bottom of the review.
+- **Save** stays pinned at the bottom of the review. (Until 2026-11-14 there were "Save draft" and "Ready for independent review", and a case-stage row; the final status replaced them.)
 
 ## Review progress (2026-11-13)
 

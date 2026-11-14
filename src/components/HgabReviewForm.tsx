@@ -1,7 +1,8 @@
 /**
- * The review form in the project reviewer (`/hgab/2027/review`): the team's red-flag checklist (RF-001…RF-044) for one
- * project, with evidence per check and the case details. It edits a `CaseReview` (src/lib/hgab-redflags-team.ts),
- * which the page sends to the team when it is saved (src/worker/hgab-reviews.ts). Shown only to signed-in members.
+ * The review form in the project reviewer (`/hgab/2027/review`): first the final status (satisfactory, or
+ * unsatisfactory = red flag), the one field the team reports; then the team's red-flag checklist (RF-001…RF-044) with
+ * evidence per check, and notes. It edits a `CaseReview` (src/lib/hgab-redflags-team.ts), which the page sends to the
+ * team when it is saved (src/worker/hgab-reviews.ts). Shown only to signed-in members.
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { type DetailFile, type ReviewDetail, type ReviewIndexFlag } from '../lib/hgab-documents';
@@ -9,10 +10,10 @@ import { readerText } from '../lib/hgab-review';
 import { memberLabel, useDocLink, useMember } from '../lib/hgab-review-member';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
-  CHECKLIST_GROUP_LABEL, READY_STAGE, REGISTRY, STAGE_GATED, VOLUNTEER_OUTCOMES,
-  checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, newId, validateCaseReview, vocab,
+  CHECKLIST_GROUP_LABEL, REGISTRY, STAGE_GATED, VERDICT_LABEL, VOLUNTEER_OUTCOMES,
+  checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, newId, vocab,
   type CaseReview, type CategoryKey, type ChecklistGroup, type ChecklistItem, type EvidenceItem, type FlagCheck,
-  type ValidationIssue,
+  type ValidationIssue, type Verdict,
 } from '../lib/hgab-redflags-team';
 
 /** What saving did: `review` is what to keep editing (the stored copy when it was sent). */
@@ -59,9 +60,6 @@ const OUTCOME_WORDS: Readonly<Record<string, string>> = {
   unresolved_evidence_gap: 'Evidence missing',
 };
 const OUTCOME_BUTTONS = VOLUNTEER_OUTCOMES.filter((o) => o.code !== 'not_reviewed');
-/** Stages a volunteer sets with one click; "Ready for independent review" is its own button, after validation. */
-const STAGE_BUTTONS = vocab('case_stage').filter((o) => ['assigned_for_review', 'evidence_requested', 'on_hold'].includes(o.code));
-const STAGE_WORDS: Readonly<Record<string, string>> = { assigned_for_review: 'Working on it', evidence_requested: 'Waiting for evidence', on_hold: 'On hold' };
 const PRIORITY_WORDS: Readonly<Record<string, string>> = { not_prioritized: 'None' };
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -193,6 +191,42 @@ function CheckCard({ item, check, onChange, files, detectorLabel, open, onToggle
   );
 }
 
+const FINAL: readonly { v: Verdict; icon: string; hint: string }[] = [
+  { v: 'satisfactory', icon: '✓', hint: 'The documents support the project.' },
+  { v: 'unsatisfactory', icon: '⚑', hint: 'Red flag: something is missing, wrong or doesn’t add up.' },
+];
+
+/**
+ * The final status, big: two buttons that each save the review at once, and a line saying what was saved (read out by
+ * screen readers). Toggle buttons rather than radios, so moving between them with the keyboard never saves.
+ */
+function FinalStatus({ value, saved, busy, onPick }: { value: Verdict | null; saved: boolean; busy: boolean; onPick: (v: Verdict | null) => void }) {
+  return (
+    <section className="rf-final" aria-labelledby="rf-final-h">
+      <h3 id="rf-final-h" className="rf-final-h">Final status</h3>
+      <p id="rf-final-d" className="rf-final-d">What the team reports for this project. Choosing one saves your review.</p>
+      <div className="rf-final-opts" role="group" aria-labelledby="rf-final-h" aria-describedby="rf-final-d">
+        {FINAL.map((o) => {
+          const on = value === o.v;
+          return (
+            // Named by its label alone ("Unsatisfactory"), with the hint as its description.
+            <button key={o.v} type="button" className={`rf-final-btn is-${o.v} ${on ? 'is-on' : ''}`} aria-pressed={on} disabled={busy}
+              aria-labelledby={`rf-final-${o.v}-l`} aria-describedby={`rf-final-${o.v}-d`} onClick={() => { if (!on) onPick(o.v); }}>
+              <span className="rf-final-icon" aria-hidden="true">{o.icon}</span>
+              <span className="rf-final-label" id={`rf-final-${o.v}-l`}>{VERDICT_LABEL[o.v]}</span>
+              <span className="rf-final-hint" id={`rf-final-${o.v}-d`}>{o.hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="rf-final-state" role="status" aria-live="polite">
+        {busy ? 'Saving…' : !value ? 'No final status yet.' : saved ? <>Saved: <b>{VERDICT_LABEL[value]}</b>.</> : <>{VERDICT_LABEL[value]}, not saved yet.</>}
+        {value && !busy && <> <button type="button" className="rf-link" onClick={() => onPick(null)}>Clear the final status</button></>}
+      </p>
+    </section>
+  );
+}
+
 export interface ReviewFormProps {
   review: CaseReview;
   detail: ReviewDetail;
@@ -223,9 +257,6 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
     onChange({ ...review, flags: flagCheckTouched(c) ? [...rest, c] : rest, updated_at: now() });
   };
   const set = (patch: Partial<CaseReview>) => onChange({ ...review, ...patch, updated_at: now() });
-  const issues = validateCaseReview(review);
-  const errors = issues.filter((i) => i.level === 'error');
-  const [tried, setTried] = useState(false);
   const groups = (['suggested', 'documents', 'category', 'later'] as ChecklistGroup[]).map((g) => ({ g, items: items.filter((x) => x.group === g) })).filter((x) => x.items.length);
   const done = review.flags.filter((f) => f.human_outcome !== 'not_reviewed').length;
   // The member's name comes from their sign-in, not a field; it goes with every save.
@@ -234,6 +265,8 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
 
   return (
     <form className="rf-form" onSubmit={(e) => { e.preventDefault(); save(review); }}>
+      <FinalStatus value={review.verdict ?? null} saved={saved} busy={sending.busy} onPick={(v) => save({ ...review, verdict: v })} />
+
       <div className="rf-head">
         <h3 className="rv-h">Review checklist</h3>
         <p className="rv-muted">
@@ -266,23 +299,12 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
         <h4>The case</h4>
         <p className="rf-who">Reviewing as <b>{who || 'you'}</b>, from your sign-in.</p>
         <div className="rf-q">
-          <span>Where is it?</span>
-          {review.case_stage === READY_STAGE
-            ? <p className="rf-ready">Ready for independent review. <button type="button" className="rf-link" onClick={() => set({ case_stage: 'assigned_for_review' })}>Keep working on it</button></p>
-            : <Seg label="Case stage" value={review.case_stage} onChange={(v) => set({ case_stage: v })} options={STAGE_BUTTONS} labels={STAGE_WORDS} clearTo="not_started" />}
-        </div>
-        <div className="rf-q">
           <span>Suggested priority <small>The team prioritises verified cases.</small></span>
           <Seg label="Suggested priority" value={review.risk_priority} onChange={(v) => set({ risk_priority: v })} options={vocab('risk_priority')} labels={PRIORITY_WORDS} />
         </div>
         <Field label="Notes for the team"><textarea className="rf-input" rows={3} value={review.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="What doesn’t match, what to request next…" /></Field>
       </section>
 
-      {(tried || review.case_stage === READY_STAGE) && issues.length > 0 && (
-        <ul className="rf-issues" aria-live="polite">
-          {issues.map((i) => <li key={i.path + i.message} className={`is-${i.level}`}>{i.path}: {i.message}</li>)}
-        </ul>
-      )}
       {sending.result && !sending.result.ok && (
         <div className="rf-issues is-send" role="alert">
           <p>Couldn’t save it: {sending.result.error} Your changes are still here; save again to retry.</p>
@@ -290,13 +312,11 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
         </div>
       )}
       <div className="rf-actions">
-        <button type="submit" className="rv-btn" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save draft'}</button>
-        <button type="button" className="rv-btn is-primary" disabled={sending.busy} onClick={() => {
-          setTried(true);
-          if (!errors.length) save({ ...review, case_stage: READY_STAGE });
-        }} title="Checks the review, then marks it ready for a second reviewer">Ready for independent review</button>
+        <button type="submit" className="rv-btn is-primary" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save'}</button>
         <span className="rf-export">
           Download:{' '}
+          <button type="button" onClick={() => downloadCases([review], 'verdicts', `review-${review.project.hgab_id}`)}>final status</button>
+          {' · '}
           <button type="button" onClick={() => downloadCases([review], 'json', `review-${review.project.hgab_id}`)}>JSON</button>
           {' · '}<button type="button" onClick={() => downloadCases([review], 'cases', `review-${review.project.hgab_id}`)}>case rows</button>
           {' · '}<button type="button" onClick={() => downloadCases([review], 'evidence', `review-${review.project.hgab_id}`)}>evidence rows</button>

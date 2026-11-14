@@ -2,7 +2,7 @@
  * Reviews from the project reviewer (`/hgab/2027/review`), sent by members who signed in with Clerk (email code, no
  * password). Internal to the site, like /api/hearings: not part of the read-only, CORS-open /api/v1.
  *
- *   GET    /api/hgab/2027/reviews/status     every project with a review: the furthest status, how many, last save;
+ *   GET    /api/hgab/2027/reviews/status     every project with a review: its final status, the furthest stage, how many, last save;
  *                                            and the automatic review (review_auto) where there is one
  *   GET    /api/hgab/2027/reviews/mine       the signed-in member's reviews
  *   POST   /api/hgab/2027/reviews            send a review (a CaseReview); one per member per project, kept editable
@@ -93,8 +93,9 @@ export async function memberFor(env: ReviewEnv, who: Login, now: string): Promis
   return id;
 }
 
-const LIVE_REVIEWS = "SELECT hgab_id, status, updated_at FROM review_cases WHERE kind = 'review' AND withdrawn_at IS NULL";
-type StatusRow = { hgab_id: string; status: ReviewStatus; updated_at: string };
+// Each live review's case status and final status (the payload's `verdict`, the one the team reports).
+const LIVE_REVIEWS = "SELECT hgab_id, status, updated_at, json_extract(payload, '$.verdict') AS verdict FROM review_cases WHERE kind = 'review' AND withdrawn_at IS NULL";
+type StatusRow = { hgab_id: string; status: ReviewStatus; updated_at: string; verdict: string | null };
 
 /** One project's entry in the status list, after a change. */
 const LIVE_AUTO = "SELECT hgab_id, score, method, updated_at FROM review_auto WHERE withdrawn_at IS NULL";

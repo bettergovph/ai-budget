@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { NAMED_TYPES, REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
   CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES, caseEvidenceRows,
-  caseIntakeRows, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv,
+  caseIntakeRows, caseTouched, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv,
   validateCaseReview, vocab, vocabCode,
 } from "../src/lib/hgab-redflags-team";
 
@@ -152,6 +152,8 @@ test("the API's intake keeps a well-formed review as is and refuses anything els
   refuse((x) => { x.flags[0].evidence.push({ ...x.flags[0].evidence[0] }); }, /used twice/);
   refuse((x) => { x.flags[0].evidence[0].evidence_id = ""; }, /evidence_id/);
   refuse((x) => { x.kind = "audit"; }, /kind/);
+  refuse((x) => { x.verdict = "fine"; }, /verdict/);
+  assert.equal(readCaseReview({ ...r, verdict: "unsatisfactory" }).review!.verdict, "unsatisfactory");
   refuse((x) => { x.verifies_case_id = "x"; }, /verifies_case_id/);
   refuse((x) => { x.flags[0].evidence[0].url = "javascript:alert(1)"; }, /http/);
   refuse((x) => { x.flags[0].evidence[0].availability = "maybe"; }, /availability/);
@@ -168,12 +170,13 @@ test("ids are kept: old reviews, retired checks, the API's own fields", () => {
   r.case_id = "1794542748782-u50k0m4cm1b"; // an id from before newId made UUIDs: kept as is
   // A review saved before kind, verifies_case_id and revision existed is a review of its project.
   const old = JSON.parse(JSON.stringify(r));
-  delete old.kind; delete old.verifies_case_id; delete old.revision;
+  delete old.kind; delete old.verifies_case_id; delete old.revision; delete old.verdict;
   const read = readCaseReview(old);
   assert.deepEqual(read.problems, []);
   assert.equal(read.review!.case_id, "1794542748782-u50k0m4cm1b");
   assert.equal(read.review!.kind, "review");
   assert.equal(read.review!.verifies_case_id, null);
+  assert.equal(read.review!.verdict, null, "reviews from before the final status have none");
   // A check the registry no longer has stays in a draft; only sending it for independent review is blocked.
   const retired = { ...JSON.parse(JSON.stringify(r)), flags: [emptyFlagCheck("RF-099", [], "2026-11-12T00:00:00Z")] };
   const kept = readCaseReview(retired);
@@ -185,6 +188,14 @@ test("ids are kept: old reviews, retired checks, the API's own fields", () => {
   // A verification names the case it checks; a review names none.
   assert.match(validateCaseReview({ ...r, kind: "verification" }).map((i) => i.message).join(), /names the case/);
   assert.match(validateCaseReview({ ...r, verifies_case_id: "2b1f0c9e-5d1a-4c51-9a58-1f0c2d3e4f5a" }).map((i) => i.message).join(), /Only a verification/);
+});
+
+test("a final status alone is a review worth sending", () => {
+  const r = fresh();
+  assert.equal(caseTouched(r), false);
+  assert.equal(caseTouched({ ...r, verdict: "unsatisfactory" }), true);
+  assert.equal(caseTouched({ ...r, verdict: "satisfactory" }), true);
+  assert.equal(caseTouched({ ...r, verdict: null }), false, "cleared again: withdrawn");
 });
 
 test("new ids are random UUIDs, with or without randomUUID", () => {
