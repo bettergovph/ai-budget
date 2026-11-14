@@ -66,6 +66,24 @@ A hand check of 30 tracker and 10 POW-title folders against their POWs (text or 
 - 112 rows have a Proposal record in our pairing that the research site doesn't count; we don't attach them.
 - Having a file doesn't verify what's in it.
 
+## Downloads (the dataset, 2026-11-14)
+
+Anyone can download every DPWH project in the House bill with its documents and red flags, for their own analysis: **Download data** in the reviewer's bar, files at `budget-assets.bettergov.ph/hgab/2027/documents/downloads/`.
+
+- `npm run build:hgab-review-dataset` writes `data/hgab/2027/documents/downloads/`:
+  - `house-bill-2027-dpwh-projects`: one row per project (15,979);
+  - `house-bill-2027-dpwh-documents`: one row per document tied to a project (69,085);
+  - `house-bill-2027-dpwh-red-flags`: one row per project and red flag (90,285).
+
+  Each comes as a CSV (UTF-8 with a byte-order mark) and Parquet (typed, zstd). There is also a `README.md` (data dictionary and caveats), a `manifest.json` (sources with SHA-256s, totals, file checksums) and `house-bill-2027-dpwh-dataset.zip` (the CSVs and the README).
+- **Inputs:** this build's `review.json`, `detail/`, `files.parquet` and `manifest.json`, plus the **live** Senate file list (`supporting-documents-file-links.jsonl`, or `--links=<path>`) for which Senate copies are redacted today, and the size and SHA-256 of the file served.
+- **Never in it (the maintainer: "We can't publish the reviews"):** members' reviews or anything from them (final status, outcomes, notes, names), and the automatic review's status or score. The key-document and file facts are in it. The build fails if a column looks like review data.
+- **Senate copies:** every one tied to a project is listed, with `redacted`. A link is given only when it is redacted and its region isn't on the hold list (`SENATE_REGIONS_HELD_BACK`), as in the reviewer.
+- **Checks before writing:** row counts against `review.json` and `files.parquet`, every row joined to a project, amounts summing to `review.json`'s, no unredacted Senate link, each Parquet read back.
+- **Publish:** `npm run upload:hgab -- --only=documents/downloads` (the upload runs `verify:hgab` first). The files keep fixed names and download as `bettergov-<name>`. The CDN keeps CSVs and the zip for up to 4 hours (browser cache 14400), so after re-publishing, purge `budget-assets.bettergov.ph/hgab/2027/documents/downloads/` by prefix (bettergov.ph zone, token in `~/.bettergov/.env`).
+- **Rebuild and re-publish** as Senate copies are redacted or regions come off the hold list, and after every `build:hgab-documents`.
+- **First published 2026-11-14:** 14,859 of the 22,748 project-tied Senate copies were redacted, but 5,969 of those were in regions still held back (IV-A and XII, uploaded that day), so 8,890 have links.
+
 ## The project reviewer (`/hgab/2027/review`)
 
 A workspace for volunteers, with its own full-height layout (a slim bar, no site masthead). Code: `src/pages/HgabReview.tsx`, logic `src/lib/hgab-review.ts` (pure; `npm run test:hgab-review`), styles `src/hgab-review.css`.

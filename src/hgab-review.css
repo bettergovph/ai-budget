@@ -811,3 +811,12 @@ textarea.rf-input { resize: vertical; }
 
 /* A save button you can't miss. */
 .rv-btn.rf-save { min-height: 48px; padding: 0 32px; border-radius: 8px; font-size: 16px; font-weight: 700; }
+
+/* Download data: the dataset's files in the bar's menu. */
+.rv-data .rv-mine-menu { width: 300px; }
+.rv-data .rv-mine-menu > a.rv-btn { text-align: center; text-decoration: none; }
+.rv-data-list { margin: 0; padding: 0; list-style: none; font-size: 12.5px; }
+.rv-data-list li { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--rule-soft); }
+.rv-data-list li > span { flex: 1; color: var(--ink); }
+.rv-data-list small { color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; }
+.rv-data-list a { color: var(--accent); }
