@@ -1154,6 +1154,71 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   );
 }
 
+// --- Bar icons ----------------------------------------------------------------------------------------------------
+
+/** Line icons for the bar (24×24, drawn with the text colour); each button that uses one names itself for screen readers. */
+const ICON_PATHS = {
+  info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-5', 'M12 8h.01'],
+  download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+  signIn: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4 21c0-3.9 3.6-6 8-6s8 2.1 8 6'],
+  reviews: ['M9 3h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1z', 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'm9 14 2 2 4-4'],
+  analysis: ['M3 3v18h18', 'M8 17v-5', 'M13 17V8', 'M18 17v-8'],
+} as const;
+function Icon({ name }: { name: keyof typeof ICON_PATHS }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name].map((d) => <path key={d} d={d} />)}
+    </svg>
+  );
+}
+
+// --- The dataset ------------------------------------------------------------------------------------------------
+
+/** The download (npm run build:hgab-review-dataset): projects, documents and red flags; never reviews. */
+const DATASET_DIR = `${HGAB_BASE}/documents/downloads`;
+const DATASET_STEM = 'house-bill-2027-dpwh';
+const DATASET_TABLES: readonly { key: string; label: string }[] = [
+  { key: 'projects', label: 'Projects' },
+  { key: 'documents', label: 'Documents' },
+  { key: 'red-flags', label: 'Red flags' },
+];
+interface DatasetManifest { as_of: string; files: { key: string; rows?: number; bytes?: number }[] }
+const mbText = (b: number | undefined) => (b ? `${(b / 1e6).toFixed(1)} MB` : '');
+
+/**
+ * "Download data" in the bar: every DPWH project in the House bill with its documents and red flags, as CSV (and
+ * Parquet) for anyone's own analysis. Reads the manifest when opened, for the date and sizes.
+ */
+function DataDownloads() {
+  const [manifest, setManifest] = useState<DatasetManifest | null>(null);
+  const load = () => {
+    if (manifest) return;
+    getJson<DatasetManifest>(dataUrl(`${DATASET_DIR}/manifest.json`), 'Failed to load the dataset list').then(setManifest).catch(() => {});
+  };
+  const zip = manifest?.files.find((f) => f.key === 'zip');
+  const rows = (key: string) => manifest?.files.find((f) => f.key === `${DATASET_STEM}-${key}`)?.rows;
+  return (
+    <details className="rv-mine rv-data" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
+      <summary className="rv-icon" aria-label="Download data" title="Download data"><Icon name="download" /></summary>
+      <div className="rv-mine-menu">
+        <p>Every DPWH project in the House bill, with its documents and red flags, for your own analysis.{manifest && <> As of {asOf(manifest.as_of)}.</>}</p>
+        <a className="rv-btn is-primary" href={dataUrl(`${DATASET_DIR}/${DATASET_STEM}-dataset.zip`)} download>Everything (CSV, zip{zip ? `, ${mbText(zip.bytes)}` : ''})</a>
+        <ul className="rv-data-list">
+          {DATASET_TABLES.map((t) => (
+            <li key={t.key}>
+              <span>{t.label}{rows(t.key) != null && <small> {n(rows(t.key)!)} rows</small>}</span>
+              <a href={dataUrl(`${DATASET_DIR}/${DATASET_STEM}-${t.key}.csv`)} download>CSV</a>
+              <a href={dataUrl(`${DATASET_DIR}/${DATASET_STEM}-${t.key}.parquet`)} download>Parquet</a>
+            </li>
+          ))}
+        </ul>
+        <a href={dataUrl(`${DATASET_DIR}/README.md`)} target="_blank" rel="noopener noreferrer">What each column means (README)</a>
+        <p className="rv-muted">Volunteers’ reviews are not included. Senate copies have a link once their signatures are redacted.</p>
+      </div>
+    </details>
+  );
+}
+
 // --- About ------------------------------------------------------------------------------------------------------
 
 function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) {
@@ -1184,6 +1249,8 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Each project shows its final status. If any member finds it unsatisfactory, it shows unsatisfactory. Projects with no key document and no file are unsatisfactory automatically until a member reviews them.</p>
         <p>Projects without a final status show whether someone has started, so you can pick ones nobody has. More than one member can review a project.</p>
         <p>Anyone can browse the projects. Reviewing needs a sign-in, and nothing of your review is kept in your browser.</p>
+        <h3>The data</h3>
+        <p>Every project here, with its documents and red flags, downloads as CSV or Parquet from <b>Download data</b> in the bar. Volunteers’ reviews are not included.</p>
         <h3>The 5 key documents</h3>
         <ul>{NAMED_TYPES.map((t) => <li key={t}><b>{t}:</b> {NAMED_MEANING[t]}</li>)}</ul>
         <p className="rv-muted">
@@ -1312,11 +1379,16 @@ function Reviewer() {
           <span>DPWH projects in the FY2027 House bill · HB 10858</span>
         </div>
         <nav className="rv-bar-links" aria-label="Reviewer">
-          <button type="button" onClick={() => setAbout(true)}>How it works</button>
-          {opening === 'open' && member.loaded && !member.userId && <button type="button" onClick={member.signIn}>Sign in to review</button>}
+          <button type="button" className="rv-icon" onClick={() => setAbout(true)} aria-label="How it works" title="How it works"><Icon name="info" /></button>
+          <DataDownloads />
+          {opening === 'open' && member.loaded && !member.userId && (
+            <button type="button" className="rv-icon" onClick={member.signIn} aria-label="Sign in to review" title="Sign in to review"><Icon name="signIn" /></button>
+          )}
           {member.userId && (
             <details className="rv-mine">
-              <summary>My reviews <b>{myList.length}</b></summary>
+              <summary className="rv-icon" aria-label={`My reviews: ${n(myList.length)}`} title="My reviews">
+                <Icon name="reviews" />{myList.length > 0 && <b className="rv-badge" aria-hidden="true">{myList.length > 99 ? '99+' : myList.length}</b>}
+              </summary>
               <div className="rv-mine-menu">
                 <p className="rv-mine-who">Signed in as <b>{member.email ?? 'a member'}</b></p>
                 {loadError && <p className="rv-error">Couldn’t load your reviews: {loadError}</p>}
@@ -1334,7 +1406,7 @@ function Reviewer() {
               </div>
             </details>
           )}
-          <Link to={`${HGAB_ROOT}/overview`}>House bill analysis</Link>
+          <Link to={`${HGAB_ROOT}/overview`} className="rv-icon" aria-label="House bill analysis" title="House bill analysis"><Icon name="analysis" /></Link>
         </nav>
       </header>
 

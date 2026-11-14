@@ -27,6 +27,7 @@
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
     "build:hgab-documents": "tsx scripts/build-hgab-documents.ts",
+    "build:hgab-review-dataset": "tsx scripts/build-hgab-review-dataset.ts",
     "build:hgab-redflag-registry": "bash scripts/hgab-review/run.sh",
     "db:hgab-reviews": "wrangler d1 execute budget --local --file=scripts/hgab-review/reviews-schema.sql",
     "sync:hgab-auto-reviews": "tsx scripts/hgab-review/sync-auto-reviews.ts",
