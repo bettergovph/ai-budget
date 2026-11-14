@@ -1154,6 +1154,24 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   );
 }
 
+// --- Bar icons ----------------------------------------------------------------------------------------------------
+
+/** Line icons for the bar (24×24, drawn with the text colour); each button that uses one names itself for screen readers. */
+const ICON_PATHS = {
+  info: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M12 16v-5', 'M12 8h.01'],
+  download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+  signIn: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4 21c0-3.9 3.6-6 8-6s8 2.1 8 6'],
+  reviews: ['M9 3h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1z', 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'm9 14 2 2 4-4'],
+  analysis: ['M3 3v18h18', 'M8 17v-5', 'M13 17V8', 'M18 17v-8'],
+} as const;
+function Icon({ name }: { name: keyof typeof ICON_PATHS }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name].map((d) => <path key={d} d={d} />)}
+    </svg>
+  );
+}
+
 // --- The dataset ------------------------------------------------------------------------------------------------
 
 /** The download (npm run build:hgab-review-dataset): projects, documents and red flags; never reviews. */
@@ -1181,7 +1199,7 @@ function DataDownloads() {
   const rows = (key: string) => manifest?.files.find((f) => f.key === `${DATASET_STEM}-${key}`)?.rows;
   return (
     <details className="rv-mine rv-data" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
-      <summary>Download data</summary>
+      <summary className="rv-icon" aria-label="Download data" title="Download data"><Icon name="download" /></summary>
       <div className="rv-mine-menu">
         <p>Every DPWH project in the House bill, with its documents and red flags, for your own analysis.{manifest && <> As of {asOf(manifest.as_of)}.</>}</p>
         <a className="rv-btn is-primary" href={dataUrl(`${DATASET_DIR}/${DATASET_STEM}-dataset.zip`)} download>Everything (CSV, zip{zip ? `, ${mbText(zip.bytes)}` : ''})</a>
@@ -1361,12 +1379,16 @@ function Reviewer() {
           <span>DPWH projects in the FY2027 House bill · HB 10858</span>
         </div>
         <nav className="rv-bar-links" aria-label="Reviewer">
-          <button type="button" onClick={() => setAbout(true)}>How it works</button>
+          <button type="button" className="rv-icon" onClick={() => setAbout(true)} aria-label="How it works" title="How it works"><Icon name="info" /></button>
           <DataDownloads />
-          {opening === 'open' && member.loaded && !member.userId && <button type="button" onClick={member.signIn}>Sign in to review</button>}
+          {opening === 'open' && member.loaded && !member.userId && (
+            <button type="button" className="rv-icon" onClick={member.signIn} aria-label="Sign in to review" title="Sign in to review"><Icon name="signIn" /></button>
+          )}
           {member.userId && (
             <details className="rv-mine">
-              <summary>My reviews <b>{myList.length}</b></summary>
+              <summary className="rv-icon" aria-label={`My reviews: ${n(myList.length)}`} title="My reviews">
+                <Icon name="reviews" />{myList.length > 0 && <b className="rv-badge" aria-hidden="true">{myList.length > 99 ? '99+' : myList.length}</b>}
+              </summary>
               <div className="rv-mine-menu">
                 <p className="rv-mine-who">Signed in as <b>{member.email ?? 'a member'}</b></p>
                 {loadError && <p className="rv-error">Couldn’t load your reviews: {loadError}</p>}
@@ -1384,7 +1406,7 @@ function Reviewer() {
               </div>
             </details>
           )}
-          <Link to={`${HGAB_ROOT}/overview`}>House bill analysis</Link>
+          <Link to={`${HGAB_ROOT}/overview`} className="rv-icon" aria-label="House bill analysis" title="House bill analysis"><Icon name="analysis" /></Link>
         </nav>
       </header>
 

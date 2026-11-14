@@ -68,7 +68,7 @@ A hand check of 30 tracker and 10 POW-title folders against their POWs (text or 
 
 ## Downloads (the dataset, 2026-11-14)
 
-Anyone can download every DPWH project in the House bill with its documents and red flags, for their own analysis: **Download data** in the reviewer's bar, files at `budget-assets.bettergov.ph/hgab/2027/documents/downloads/`.
+Anyone can download every DPWH project in the House bill with its documents and red flags, for their own analysis: **Download data** (the ↓ icon in the reviewer's bar), files at `budget-assets.bettergov.ph/hgab/2027/documents/downloads/`.
 
 - `npm run build:hgab-review-dataset` writes `data/hgab/2027/documents/downloads/`:
   - `house-bill-2027-dpwh-projects`: one row per project (15,979);
@@ -85,6 +85,8 @@ Anyone can download every DPWH project in the House bill with its documents and 
 - **First published 2026-11-14:** 14,859 of the 22,748 project-tied Senate copies were redacted, but 5,969 of those were in regions still held back (IV-A and XII, uploaded that day), so 8,890 have links.
 
 ## The project reviewer (`/hgab/2027/review`)
+
+- **The bar** (since 2026-11-14) has icons instead of words, so it never crowds the title: ⓘ How it works, ↓ Download data, a person for Sign in to review (a clipboard with a count badge for My reviews once signed in), and a bar chart for House bill analysis. Each is a 36 px button with a tooltip and a screen-reader name. The title truncates instead of wrapping, and below 480 px the logo makes room for it.
 
 A workspace for volunteers, with its own full-height layout (a slim bar, no site masthead). Code: `src/pages/HgabReview.tsx`, logic `src/lib/hgab-review.ts` (pure; `npm run test:hgab-review`), styles `src/hgab-review.css`.
 
