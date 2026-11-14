@@ -5,6 +5,7 @@
  */
 import type { CaseReview, ValidationIssue } from './hgab-redflags-team';
 import type { ReviewStatusIndex } from './hgab-review';
+import { heldBackRegion } from './senate-copies-held-back';
 
 export const REVIEWS_API = '/api/hgab/2027/reviews';
 export type ProjectStatus = ReviewStatusIndex[string];
@@ -54,10 +55,19 @@ export function senatePath(url: string): string | null {
     return null;
   }
 }
-/** Where to open a document: a Senate copy through the Worker with the member's grant (null without one); others as they are. */
+/** The region a Senate copy is held back for (not yet redacted: src/lib/senate-copies-held-back.ts), else null. */
+export function senateHeldBack(url: string): string | null {
+  const path = senatePath(url);
+  return path == null ? null : heldBackRegion(path);
+}
+/**
+ * Where to open a document: a Senate copy through the Worker with the member's grant (null without one, or while its
+ * region is held back); others as they are.
+ */
 export function documentHref(url: string, grant: string | null): string | null {
   const path = senatePath(url);
   if (path == null) return url;
+  if (heldBackRegion(path)) return null;
   return grant ? `${SENATE_COPIES_API}/${path}?grant=${encodeURIComponent(grant)}` : null;
 }
 export const fetchSenateGrant = (token: string | null) =>

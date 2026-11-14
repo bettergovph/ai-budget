@@ -9,10 +9,13 @@
  * `<member_id>.<expiry>.<HMAC>`, signed with a key derived from CLERK_SECRET_KEY (no other secret to keep). The file
  * is read through the R2 binding, with Range requests for the PDF viewer.
  *
+ * Regions not yet redacted are refused outright (SENATE_REGIONS_HELD_BACK in src/lib/senate-copies-held-back.ts).
+ *
  * This gates our page only. The same files are public at budget-assets.bettergov.ph until that path is blocked there;
  * research.bettergov.ph links to them (docs/hgab-review-form.md, "Senate copies").
  */
 import { closed, fail, login, memberFor, missingTable, message, reply, type ReviewEnv } from "./hgab-reviews";
+import { heldBackRegion } from "../lib/senate-copies-held-back";
 
 type FilesEnv = ReviewEnv & { DATA_BUCKET?: R2Bucket };
 
@@ -59,8 +62,8 @@ async function grantOk(secret: string, grant: string | null): Promise<boolean> {
 }
 
 /** A small page for a frame or tab that has no good grant. */
-const signInPage = (status: number, text: string) => new Response(
-  `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Sign in to read the Senate copies</title>
+const signInPage = (status: number, text: string, title = "Sign in to read the Senate copies") => new Response(
+  `<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>${title}</title>
 <body style="font:15px/1.5 system-ui,sans-serif;margin:15vh auto;max-width:28em;padding:0 1em;color:#333">
 <p>${text}</p><p><a href="/hgab/2027/review">Open the project reviewer</a></p></body>`,
   { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } },
@@ -74,6 +77,9 @@ async function serveFile(request: Request, env: FilesEnv, url: URL, rest: string
   let path: string;
   try { path = decodeURIComponent(rest); } catch { return signInPage(400, "That is not a document address."); }
   if (!path || path.split("/").some((part) => part === "" || part === "." || part === "..")) return signInPage(400, "That is not a document address.");
+  // Regions whose signatures aren't redacted yet stay unavailable, grant or not (src/lib/senate-copies-held-back.ts).
+  const held = heldBackRegion(path);
+  if (held) return signInPage(403, `This Senate copy isn’t available yet: the signatures in ${held}’s documents are still being redacted.`, "Not available yet");
 
   const object = await env.DATA_BUCKET.get(PREFIX + path, { range: request.headers, onlyIf: request.headers });
   if (!object) return signInPage(404, "We have no Senate copy at this address.");

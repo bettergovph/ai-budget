@@ -38,7 +38,7 @@ import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
 import { downloadCases } from '../lib/hgab-review-export';
 import {
-  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
+  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, senateHeldBack, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
 } from '../lib/hgab-review-api';
 import { DocLinkContext, useDocLink, useMember, type Member } from '../lib/hgab-review-member';
 import '../hgab-review.css';
@@ -723,7 +723,7 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
                 <span className={`rv-src is-${f[0]}`}>{SOURCE_LABEL[f[0]]}</span>
                 <span className="rv-docfiles-name">{f[2] === 'Other' && f[3] ? f[3] : f[4]}</span>
                 {f[7] && <span className="rv-tag">earlier copy</span>}
-                {!link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
+                {senateHeldBack(f[5]) ? <span className="rv-tag is-locked">not yet available</span> : !link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
               </button>
             </li>
           ))}
@@ -748,6 +748,17 @@ function LockedDoc({ opening }: { opening: Opening }) {
   );
 }
 
+/** A Senate copy from a region whose signatures aren't redacted yet (src/lib/senate-copies-held-back.ts). */
+function HeldBackDoc({ region }: { region: string }) {
+  return (
+    <div className="rv-viewer-empty rv-locked">
+      <p><b>This Senate copy isn’t available yet.</b></p>
+      <p>We are redacting the signatures in {region}’s Senate copies first, for privacy. It will open here once that is done.</p>
+      <p className="rv-muted">DPWH Transparency files, and Senate copies from other regions, open as usual.</p>
+    </div>
+  );
+}
+
 /** The document in a frame, at the address it was opened with: a renewed grant doesn't reload it. */
 function DocFrame({ src, title }: { src: string; title: string }) {
   const [opened] = useState(src);
@@ -764,6 +775,7 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
   opening: Opening;
 }) {
   const href = useDocLink()(file?.[5] ?? '');
+  const held = file ? senateHeldBack(file[5]) : null;
   const body = (
     <div className="rv-viewer">
       <p className="rv-viewer-count">{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</p>
@@ -779,7 +791,9 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
       )}
       {!file
         ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
-        : !href
+        : held
+          ? <HeldBackDoc region={held} />
+          : !href
           ? <LockedDoc opening={opening} />
           : isPdf(file)
             ? <DocFrame key={file[5]} src={href} title={file[4]} />
@@ -971,7 +985,9 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
       if (!live) return;
       const d = s[project.hgabId] ?? null;
       setDetail(d);
-      if (d && inlineViewer) setOpen(d.files.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? d.files.find(isPdf) ?? null);
+      // Open the POW first, from a file that can be shown (a held-back Senate copy only when there is nothing else).
+      const ok = d ? d.files.filter((f) => !senateHeldBack(f[5])) : [];
+      if (d && inlineViewer) setOpen(ok.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? ok.find(isPdf) ?? d.files.find(isPdf) ?? null);
     }).catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)));
     return () => { live = false; };
   }, [project.hgabId, project.seq, inlineViewer]);
