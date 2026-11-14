@@ -9,7 +9,8 @@ Ported from the NEP signature stripper on vm3-server (`~/projects/dpwh`: `strip_
 - PDFs of **19 pages or fewer** only, to keep model costs down; 20+ pages are skipped for now and listed in each region's `manifest.json`.
 - **Black bars.** On typed pages the text under a bar is deleted too, so a hidden name can't be copied out.
 - One **region** at a time.
-- Nothing is uploaded by these scripts. Where the redacted copies go (replace the files on `budget-assets` or a new path) is still open.
+- **Upload (Jason, 2026-11-14): the redacted copies overwrite the originals** on R2 (he keeps a backup of the originals). `upload_redacted.py ROOT slug…` writes every key of an identical-file group, only where R2 still holds the original or our earlier upload (logged in `<region>/upload.json`), then the CDN is purged by prefix (`budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/`, zone bettergov.ph, token in `~/.bettergov/.env`; edge cache is otherwise 4 hours). Object metadata: `sha256` (redacted), `original-sha256`, `redacted`.
+- Still public as originals: PDFs of 20+ pages, damaged files, non-PDFs (jpg, docx, zip, kmz, xlsx) and a few PDFs without a `.pdf` extension. `supporting-documents-file-links.jsonl` still lists the originals' bytes and hashes.
 
 ## How it works
 
