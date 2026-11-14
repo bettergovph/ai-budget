@@ -29,6 +29,7 @@ st["check"] = open(os.path.join(d, "check.log")).read().strip().splitlines()[-1]
 json.dump(st, open(os.path.join(d, "stats.json"), "w"), indent=1); print(st)
 PYEOF
   find "$D/pass1" -type f -iname '*.pdf' -delete; rm -f "$D/SWEEP_PENDING"
+  rm -rf "$D/src"  # only needed for the gallery's "before" images; keeps the disk free for the next region
 done
 "$PY" "$HERE/build_gallery.py" --index "$ROOT"
 echo "== sweep done $(date -u +%FT%TZ)"
