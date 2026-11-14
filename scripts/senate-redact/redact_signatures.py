@@ -402,6 +402,9 @@ def sweep_cands(path, model):
         return {}
     with open(out) as fh:
         entries = json.load(fh)["pages"]
+    failed = [e["page"] for e in entries if e.get("error")]
+    if failed:  # a failed call is not "nothing left": refuse, so sweep_regions.sh keeps the unswept copy
+        raise RuntimeError(f"sweep calls failed on pages {failed[:5]}: {entries[0].get('error', '')[:80]}")
     doc = pymupdf.open(path)
     cands = {}
     for e in entries:
