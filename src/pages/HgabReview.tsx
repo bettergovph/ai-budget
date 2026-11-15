@@ -1224,9 +1224,12 @@ function Reviewer() {
   const sort = (params.get('sort') as SortKey) in SORT_LABEL ? (params.get('sort') as SortKey) : DEFAULT_SORT;
   const current = levels[levels.length - 1].projects;
   const listed = useMemo(() => sortProjects(current, sort, statusOf), [current, sort, statusOf]);
-  const selectedId = params.get('p');
+  // A project opens by its House bill row id or by its comparison row id (`house-reading:N`), as the multi-purpose
+  // buildings documents page and its CSV link it; the address then settles on the House bill row id.
+  const askedId = params.get('p');
+  const selected = useMemo(() => (askedId ? all.find((p) => p.hgabId === askedId) ?? all.find((p) => p.projectId === askedId) ?? null : null), [all, askedId]);
+  const selectedId = selected?.hgabId ?? askedId;
   const [split, setSplit] = useSplit();
-  const selected = useMemo(() => all.find((p) => p.hgabId === selectedId) ?? null, [all, selectedId]);
   // Pages of PAGE_SIZE: `pg=` in the URL, else the page holding the open project.
   const pages = pageCount(listed.length);
   const selectedAt = listed.findIndex((p) => p.hgabId === selectedId);
@@ -1252,6 +1255,9 @@ function Reviewer() {
     update((q) => { q.set('p', p.hgabId); q.delete('tab'); if (i >= 0) q.set('pg', String(pageOf(i))); }, true);
     setPane('project');
   }, [update, listed]);
+  useEffect(() => {
+    if (selected && askedId !== selected.hgabId) update((q) => q.set('p', selected.hgabId), true);
+  }, [selected, askedId, update]);
   const at = listed.findIndex((p) => p.hgabId === selectedId);
   const prev = useMemo(() => (at > 0 ? () => open(listed[at - 1]) : null), [at, listed, open]);
   const next = useMemo(() => (at >= 0 && at < listed.length - 1 ? () => open(listed[at + 1]) : at < 0 && listed.length ? () => open(listed[0]) : null), [at, listed, open]);
