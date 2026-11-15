@@ -682,7 +682,11 @@ def apply_file(src, dst, cands, qa_dir, rel, style="black", primary="glm-5v-turb
         seen = set()
         top = page.cropbox.y0 + HEADER_BAND * page.cropbox.height
         boxed = [(pymupdf.Rect(c["rect"]) * page.derotation_matrix).normalize() for c in cs]
-        for info in page.get_image_info(xrefs=True):
+        try:
+            infos = page.get_image_info(xrefs=True)
+        except Exception:  # noqa: BLE001 - a corrupt embedded image (seen: zero height) can't be inspected;
+            infos = []      # it can't be a pasted signature either, and the model's boxes still apply
+        for info in infos:
             xref, rect = info.get("xref"), pymupdf.Rect(info["bbox"])
             if rect.y1 <= top and not any(rect.intersects(b) for b in boxed):
                 continue
