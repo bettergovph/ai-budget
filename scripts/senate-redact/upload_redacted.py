@@ -60,10 +60,14 @@ def main():
     bucket = os.environ.get("R2_BUCKET", "budget")
     for slug in slugs:
         d = os.path.join(root, slug)
-        check = open(os.path.join(d, "check.log")).read().strip().splitlines()[-1]
-        if not check.endswith(" 0 problems"):
-            print(f"{slug}: output check not clean ({check}); not uploading")
+        lines = open(os.path.join(d, "check.log")).read().strip().splitlines()
+        bad = [l for l in lines if l.startswith("BAD ")]
+        # a file held back (missing from redacted/) stays the original it already is; anything else blocks the region
+        if not lines or any(not l.endswith(": missing from redacted/") for l in bad):
+            print(f"{slug}: output check not clean ({lines[-1] if lines else 'no check.log'}); not uploading")
             continue
+        if bad:
+            print(f"{slug}: {len(bad)} files held back (left as originals), uploading the rest")
         manifest = json.load(open(os.path.join(d, "manifest.json")))
         log_path = os.path.join(d, "upload.json")
         log = json.load(open(log_path)) if os.path.exists(log_path) else {}

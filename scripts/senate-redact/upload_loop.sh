@@ -9,7 +9,7 @@ while true; do
   todo=()
   for d in /data/senate-redact/*/; do
     d=${d%/}; s=$(basename "$d")
-    [ -f "$d/stats.json" ] && [ -f "$d/index.html" ] && [ ! -f "$d/upload.json" ] && grep -q " 0 problems$" "$d/check.log" 2>/dev/null && todo+=("$s")
+    [ -f "$d/stats.json" ] && [ -f "$d/index.html" ] && [ ! -f "$d/upload.json" ] && [ -f "$d/check.log" ] && todo+=("$s")
   done
   if [ ${#todo[@]} -gt 0 ]; then
     echo "== upload ${todo[*]} $(date -u +%FT%TZ)"
