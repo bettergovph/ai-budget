@@ -28,6 +28,7 @@ import { PARTY_DATA_ROOT } from "./hgab-congress-seats";
 import { CITIZEN_REPORTS_ROOT } from "./citizen-reports";
 import { INDICATORS_ROOT, INDICATOR_BY_ID } from "./indicators";
 import { MPB_POPULATION_ROOT } from "./mpb-population";
+import { MPB_DOCS_ROOT, MPB_DOCS_TITLE } from "./mpb-documents";
 import { PBC_REPORT, RED_FLAGS_ROOT, RED_FLAG_POSTERS, RED_FLAG_TOTALS, pbcBillionsWords } from "./hgab-redflags";
 
 export interface PageMeta {
@@ -193,6 +194,16 @@ export function pageMeta(pathname: string): PageMeta {
         "PSA statistics for every Philippine province and Metro Manila district beside the national budget: poverty " +
         "and income, population and age, the economy, farms, registered births and deaths, the provincial NTA, and " +
         "DPWH budget per person. Maps, rankings and a downloadable table.",
+    };
+  }
+  // What the House bill's multi-purpose buildings are, from their own documents (Senate copies).
+  if (p === MPB_DOCS_ROOT) {
+    return {
+      title: `${MPB_DOCS_TITLE} What the House Bill's Multi-Purpose Building Projects Are, From Their Documents · ${SITE}`,
+      description:
+        "We read the DPWH documents given to the Senate for the House bill's multi-purpose building projects: project profiles, " +
+        "programs of work, plans and site photos. Most are multi-purpose halls and covered courts; few are classrooms. Every " +
+        "project links to its documents.",
     };
   }
   if (p === MPB_POPULATION_ROOT) {

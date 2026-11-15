@@ -1,0 +1,52 @@
+/* /hgab/2027/multi-purpose/documents: "Multi-purpose buildings or classrooms?" The classrooms are in the campaign red. */
+:root { --mpbd-red: #c62828; }
+
+.mpbd-main { padding-bottom: 32px; }
+.mpbd-section { scroll-margin-top: 96px; }
+.mpbd-h2 { font-family: var(--font-hero, inherit); font-size: 24px; line-height: 1.2; margin: 0 0 6px; }
+.mpbd-dek { margin: 0 0 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink-2); max-width: 72ch; }
+.mpbd-more { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); max-width: 90ch; }
+
+.mpbd-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin: 4px 0 26px; }
+.mpbd-strip > div { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.mpbd-strip > div + div { border-left: 1px solid var(--rule); }
+.mpbd-strip strong { font-family: var(--font-hero, inherit); font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums; }
+.mpbd-strip .is-red strong { color: var(--mpbd-red); }
+.mpbd-strip span { font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+@media (max-width: 760px) {
+  .mpbd-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mpbd-strip > div:nth-child(3) { border-left: 0; }
+}
+
+.mpbd-tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.mpbd-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.mpbd-table th, .mpbd-table td { padding: 8px 10px; border-bottom: 1px solid var(--rule-soft, #eef0f4); text-align: left; vertical-align: top; }
+.mpbd-table thead th { font-size: 12px; font-weight: 600; color: var(--ink-3, #6b7385); background: var(--paper-2, #f7f8fa); white-space: nowrap; }
+.mpbd-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mpbd-table tfoot th, .mpbd-table tfoot td { font-weight: 700; border-top: 1.5px solid var(--ink); background: var(--paper-2, #f7f8fa); }
+.mpbd-table tr.is-red th, .mpbd-table tr.is-red td { color: var(--mpbd-red); font-weight: 600; }
+.mpbd-bars th[scope='row'] { white-space: nowrap; font-weight: 500; }
+.mpbd-bar { width: 38%; min-width: 160px; }
+.mpbd-bar i { display: inline-block; height: 12px; vertical-align: middle; background: var(--ink-2, #3d4657); border-radius: 0 2px 2px 0; }
+.mpbd-bars tr.is-red .mpbd-bar i { background: var(--mpbd-red); }
+.mpbd-bar { white-space: nowrap; }
+.mpbd-bar span { margin-left: 8px; font-size: 12px; color: var(--ink-3, #6b7385); font-variant-numeric: tabular-nums; }
+
+.mpbd-title { font-weight: 500; }
+.mpbd-sub { display: block; margin-top: 2px; font-size: 12.5px; color: var(--ink-3, #6b7385); }
+.mpbd-cat { display: inline-block; font-weight: 600; font-size: 13px; }
+.mpbd-cat.is-red { color: var(--mpbd-red); }
+.mpbd-quote { display: block; margin-top: 4px; font-size: 12.5px; font-style: italic; color: var(--ink-2); quotes: '“' '”'; }
+
+.mpbd-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; margin: 6px 0 10px; }
+.mpbd-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.mpbd-filters .mpbd-search { flex: 1 1 280px; }
+.mpbd-filters input, .mpbd-filters select { font: inherit; font-size: 13.5px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.mpbd-linkbtn { all: unset; cursor: pointer; color: var(--link, #0b4fd9); text-decoration: underline; }
+.mpbd-table tr.is-strong th, .mpbd-table tr.is-strong td { font-weight: 700; }
+.mpbd-sub-inline { font-size: 12px; font-weight: 400; color: var(--ink-3, #6b7385); }
+.mpbd-tag { display: inline-block; margin-top: 4px; padding: 0 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: #fff; background: var(--mpbd-red); border-radius: 2px; }
+.mpbd-table th.mpbd-indent { padding-left: 24px; }
+.mpbd-star { display: block; margin-bottom: 6px; color: var(--ink); font-weight: 500; }
+.mpbd-table tr.is-next th, .mpbd-table tr.is-next td { border-top: 2px solid var(--ink-3, #6b7385); font-weight: 400; color: var(--ink-2); }
+.mpbd-table th.mpbd-indent.is-2 { padding-left: 44px; }
