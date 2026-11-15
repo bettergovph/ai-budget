@@ -440,6 +440,8 @@ def verify_file(path, models, verifier):
         with open(out) as fh:
             cache = json.load(fh)
     cands = candidates(path, models)
+    if len(models) == 1:  # a single detector: every box is the primary's, no crop verdicts needed
+        return cands
     doc = pymupdf.open(path)
     dirty = False
     from PIL import Image

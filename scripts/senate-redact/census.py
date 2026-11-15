@@ -5,7 +5,7 @@ Large documents are skipped for now to keep model costs down (cost follows pages
 POW had 34 pages and a 12.8 MB one had 4). Identical files (same sha256) are downloaded and redacted once; the
 manifest lists every path that shares them.
 
-  census.py REGION OUT [--max-pages 19] [--links supporting-documents-file-links.jsonl] [--concurrency 8]
+  census.py REGION OUT [--max-pages 19] [--min-pages 1] [--links supporting-documents-file-links.jsonl] [--concurrency 8]
 
   OUT/src/<path>        the kept PDFs (originals; redact_signatures.py reads SRC = OUT/src)
   OUT/manifest.json     every PDF of the region: path, sha256, bytes, pages, kept | skipped reason, same_as
@@ -53,6 +53,7 @@ def main():
         return
     region, out = args[0], args[1]
     max_pages = int(opt(args, "--max-pages", "19"))
+    min_pages = int(opt(args, "--min-pages", "1"))  # e.g. 20 for the long-file pass (Jason, 2026-11-15)
     conc = int(opt(args, "--concurrency", "8"))
     rows = [r for r in pdfs if r["region"] == region]
     if not rows:
@@ -89,6 +90,9 @@ def main():
         if entry["pages"] > max_pages:
             os.remove(dst)
             return {**entry, "status": "skipped", "reason": f"more than {max_pages} pages"}
+        if entry["pages"] < min_pages:
+            os.remove(dst)
+            return {**entry, "status": "skipped", "reason": f"fewer than {min_pages} pages (done in another pass)"}
         return {**entry, "status": "kept"}
 
     t0 = time.time()
