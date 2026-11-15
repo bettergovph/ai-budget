@@ -32,6 +32,7 @@ import { letterDownloadName } from "../src/lib/hgab-letter";
 import { MPB_CSV_NAME } from "../src/lib/hgab-mpb-years";
 import { CONTRACTORS_CSV_NAME } from "../src/lib/hgab-contractors";
 import { FAP_CSV_NAME } from "../src/lib/hgab-fap";
+import { MPB_DOCS_CSV_NAME } from "../src/lib/mpb-documents";
 
 interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string; only: string[] }
 function parseArgs(): Args {
@@ -116,6 +117,8 @@ function contentDispositionFor(path: string): string | undefined {
   if (/[\\/]contractors[\\/]contractors\.csv$/.test(path)) return `attachment; filename="${CONTRACTORS_CSV_NAME}"`;
   // fap.csv: every foreign-assisted project in the House bill against the NEP (the page links it by that name).
   if (/[\\/]fap\.csv$/.test(path)) return `attachment; filename="${FAP_CSV_NAME}"`;
+  // mpb-documents/projects.csv: every House MPB insertion read, with what its documents say (the page links it by that name).
+  if (/[\\/]mpb-documents[\\/]projects\.csv$/.test(path)) return `attachment; filename="${MPB_DOCS_CSV_NAME}"`;
   return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }
 function fmtBytes(n: number): string {

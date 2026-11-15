@@ -199,11 +199,16 @@ export function pageMeta(pathname: string): PageMeta {
   // What the House bill's multi-purpose buildings are, from their own documents (Senate copies).
   if (p === MPB_DOCS_ROOT) {
     return {
-      title: `${MPB_DOCS_TITLE} What the House Bill's Multi-Purpose Building Projects Are, From Their Documents · ${SITE}`,
+      title: `${MPB_DOCS_TITLE} What the House's Multi-Purpose Building Insertions Are, From Their Documents · ${SITE}`,
       description:
-        "We read the DPWH documents given to the Senate for the House bill's multi-purpose building projects: project profiles, " +
-        "programs of work, plans and site photos. Most are multi-purpose halls and covered courts; few are classrooms. Every " +
+        "We read the DPWH documents given to the Senate for the multi-purpose building projects the House inserted: project " +
+        "profiles, programs of work, plans and site photos. Most are halls and covered courts; few are classrooms. Every " +
         "project links to its documents.",
+      // ?v= is the image's MD5: R2 has no purge, and the image caches for a day.
+      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/mpb-or-classrooms-1200x630.png?v=71739979",
+      imageWidth: "1200",
+      imageHeight: "630",
+      imageAlt: "Multi-purpose buildings or classrooms? We read the documents of 2,035 multi-purpose building projects inserted by the House. 21 are classrooms.",
     };
   }
   if (p === MPB_POPULATION_ROOT) {
