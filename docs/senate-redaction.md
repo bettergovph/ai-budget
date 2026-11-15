@@ -6,7 +6,7 @@ Ported from the NEP signature stripper on vm3-server (`~/projects/dpwh`: `strip_
 
 ## Scope and decisions (Jason, 2026-11-13)
 
-- PDFs of **19 pages or fewer** only, to keep model costs down; 20+ pages are skipped for now and listed in each region's `manifest.json`.
+- PDFs of **19 pages or fewer** first (two models + sweep in six regions); then (Jason, 2026-11-15) **PDFs of 20–100 pages with glm-4.6v only, no sweep** (`run_large.sh`, `<region>-large` folders). PDFs over 100 pages are not redacted.
 - **Black bars.** On typed pages the text under a bar is deleted too, so a hidden name can't be copied out.
 - One **region** at a time.
 - **Upload (Jason, 2026-11-14): the redacted copies overwrite the originals** on R2 (he keeps a backup of the originals). `upload_redacted.py ROOT slug…` writes every key of an identical-file group, only where R2 still holds the original or our earlier upload (logged in `<region>/upload.json`), then the CDN is purged by prefix (`budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/`, zone bettergov.ph, token in `~/.bettergov/.env`; edge cache is otherwise 4 hours). Object metadata: `sha256` (redacted), `original-sha256`, `redacted`.
@@ -41,3 +41,11 @@ Six reviewers checked every changed page and a quarter of the unchanged ones. No
 ## The 2026 run
 
 Output in `/data/senate-redact/<region>/` on the dev VM, gallery at `http://100.79.209.24:38118/` (Tailscale only: it shows the originals). Markdown extraction comes later, from the **redacted** copies with GLM-OCR (`layout_parsing`), never from the originals: OCR transcribes handwriting.
+
+## Where it ended (2026-11-15)
+
+- **34,104 of 34,424** files in the Senate set serve redacted copies (`supporting-documents-file-links.jsonl` marks them `redacted: true`).
+- Still original (320): 205 PDFs over 100 pages, 7 empty and 2 damaged PDFs, and 106 non-PDFs (jpg, docx, kmz, zip, xlsx, kml, and 5 files without an extension).
+- Sweep: done in XIII, IV-B, VII, XI, NIR, IX; skipped elsewhere (Jason, 2026-11-15). Long files: glm-4.6v only, no verifier, no sweep.
+- Held-back files (a failed model call) stay original until `retry_held.py` finishes them (fallback model for the failed pages).
+- Model spend about $480 in all (small files ≈ $396 incl. extraction, long files ≈ $81).
