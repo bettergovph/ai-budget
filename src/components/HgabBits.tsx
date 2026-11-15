@@ -30,6 +30,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
+import { MPB_DOCS_ROOT } from '../lib/mpb-documents';
 import { INDICATORS_ROOT } from '../lib/indicators';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
@@ -90,6 +91,7 @@ const MPB_MENU: NavMenu = {
     { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
     { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
     { key: 'per-person', label: 'Per person', to: MPB_POPULATION_ROOT },
+    { key: 'documents', label: 'What the documents say', to: MPB_DOCS_ROOT },
   ],
 };
 /**
