@@ -22,6 +22,7 @@ import { SectionHead } from '../components/shared';
 import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabLoading, StatusChip } from '../components/HgabBits';
 import { Amt } from '../components/HgabProjects';
 import HgabEvidence from '../components/HgabEvidence';
+import HgabRecordDocuments from '../components/HgabRecordDocuments';
 import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import {
@@ -369,6 +370,9 @@ export default function HgabRecord() {
         {open && open.doc && (
           <HgabEvidence docKey={open.doc} page={open.page} docTitle={docTitle(open.doc)} onClose={() => setEvidence(null)} />
         )}
+
+        {/* DPWH lines: the project's own documents (Senate copies once redacted, DPWH Transparency files). */}
+        {key === 'dpwh' && <HgabRecordDocuments projectId={row.id} />}
 
         {(flags.length > 0 || notes.length > 0 || techNotes.length > 0) && (
           <div className="hgab-rec-section">
