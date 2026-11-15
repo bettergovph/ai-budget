@@ -282,7 +282,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | "Publish the documents" and "We demand answers" poster builders | worktree `hgab-programs`, untracked | The first is published; the second is not approved |
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
 | Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5144 | PR #82 open 2026-11-12; `documents/` on R2; Clerk sign-in + D1 submissions added 2026-11-13 (production secret, build variable and remote tables not set up yet); open: nav link |
-| "Multi-purpose buildings or classrooms?" page + poster (`/hgab/2027/multi-purpose/documents`) | worktree `mpb-documents`, branch `hgab-mpb-documents`, preview :5147 | Built 2026-11-15, uncommitted; insertions only (2,035 read of 3,308 MPB insertions, 6,193 DPWH insertions); poster in the "Hosting ASEAN" panel style; `mpb-documents/` and the posters not on R2 |
+| "Multi-purpose buildings or classrooms?" page + poster (`/hgab/2027/multi-purpose/documents`) | worktree `mpb-documents`, branch `hgab-mpb-documents`, preview :5147 | PR #95 open (2026-11-15); insertions only (2,035 read of 3,308 MPB insertions, 6,193 DPWH insertions); poster in the "Hosting ASEAN" panel style; `mpb-documents/` and the posters not on R2 |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
