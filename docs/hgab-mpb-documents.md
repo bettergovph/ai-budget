@@ -91,6 +91,16 @@ documents describing a different facility from their title: hospitals, a public 
   documents; the 3,308 MPB insertions, 2,212 with documents, 1,096 with none; 2,035 read); a red call to action. The dark
   footer defines the 2,035. Every figure from `mpb-documents/`; the build fails when a name is cut, the panel shrinks
   below its floor, or the headline runs into the footer.
+- The Taglish street poster (Jason: "Can we try a different style? More taglish and more impact? Revolutionary, grunge
+  style"): `npm run build:hgab-poster-mpb-classrooms-taglish` → `campaign/mpb-or-classrooms-taglish-{1080x1350,1080x1920,
+  1200x630}.png`, beside the paper one (not replacing it). Newsprint in red, black and cream; headline type worn by an SVG
+  filter; "O CLASSROOM?" on a torn red strip with "ANO BA TALAGA?" beside it (Jason's title: "Multi-purpose building o
+  classroom? Ano ba talaga?"); "21 LANG ANG CLASSROOM" with a giant out-of-register 21 over halftone, "sa
+  sample na 2,035* … ayon sa sarili nilang mga dokumento"; the breakdown as a typed sheet taped on, "Ano laman ng mga
+  dokumento", each label in bold black over a red highlighter band to scale (label and bar as one; the band sits low
+  so the words stay readable), the classrooms circled, "21 lang?!"; the
+  2,035 called the sample throughout (and, in the fine print, not a random one: those read of the 2,212 with documents);
+  the call to action "Ikaw, ano sa tingin mo?"; the starred note and fine print in Taglish. Same figures, same files.
 
 ## Refresh
 
