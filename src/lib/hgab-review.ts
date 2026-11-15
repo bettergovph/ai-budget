@@ -70,7 +70,9 @@ export type Step =
   /** Review status (LIST_STATUSES): from every member's reviews, and the automatic review. */
   | { kind: 'status'; values: ListStatus[] }
   /** Where the documents come from (SOURCE_GROUPS). */
-  | { kind: 'source'; values: SourceGroup[] };
+  | { kind: 'source'; values: SourceGroup[] }
+  /** The signed-in member's own reviews ("Show my reviews"). */
+  | { kind: 'mine' };
 
 export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
 
@@ -234,6 +236,7 @@ export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
     case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': case 'source': return `${s.kind}:${s.values.join(SEP)}`;
+    case 'mine': return 'mine:yes';
     default: return `${s.kind}:${s.value}`;
   }
 }
@@ -252,6 +255,7 @@ export function stepFromParam(p: string): Step | null {
     case 'team': { const ok = values.filter((v) => /^RF-\d{3}$/.test(v)); return ok.length ? { kind, values: ok } : null; }
     case 'source': { const ok = values.filter((v): v is SourceGroup => (SOURCE_GROUPS as readonly string[]).includes(v)); return ok.length ? { kind, values: ok } : null; }
     case 'q': return value.trim() ? { kind, value } : null;
+    case 'mine': return value === 'yes' ? { kind } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'status': {
       const ok = values.filter((v): v is ListStatus => (LIST_STATUSES as readonly string[]).includes(v));
@@ -302,6 +306,8 @@ export interface StepContext {
   statusOf: (hgabId: string) => ListStatus;
   /** Team check → the review.json flag indexes of the detector flags that suggest it. */
   teamIndex?: ReadonlyMap<string, readonly number[]>;
+  /** Whether the signed-in member has a review of a project (none when signed out). */
+  isMine?: (hgabId: string) => boolean;
 }
 const docsTest = (v: DocsFilter) => (p: ReviewProject) =>
   v === 'none' ? p.files === 0 && p.docs === 0 : v === 'complete' ? docCount(p.docs) >= 4 : docCount(p.docs) < 4;
@@ -326,6 +332,7 @@ export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boole
     }
     case 'status': { const v = new Set<string>(s.values); return (p) => v.has(ctx.statusOf(p.hgabId)); }
     case 'source': { const v = new Set<string>(s.values); return (p) => v.has(p.source); }
+    case 'mine': return (p) => !!ctx.isMine?.(p.hgabId);
   }
 }
 
@@ -529,6 +536,7 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     case 'team': return s.values.length === 1 ? `Team check ${s.values[0]}: ${teamTitles.get(s.values[0]) ?? ''}`.replace(/: $/, '') : `Team checks ${s.values.join(', ')}`;
     case 'min': return `Budget of at least ${pesoShort(s.value)}`;
     case 'q': return `Search: “${s.value}”`;
+    case 'mine': return 'My reviews';
     case 'source': return s.values.map((v) => SOURCE_GROUP_LABEL[v]).join(' or ');
     case 'status':
       if (s.values.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => s.values.includes(v))) return 'Not yet reviewed';

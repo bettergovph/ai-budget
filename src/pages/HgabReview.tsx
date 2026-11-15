@@ -36,9 +36,9 @@ import {
 } from '../lib/hgab-redflags-team';
 import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
-import { downloadCases } from '../lib/hgab-review-export';
+import { downloadReviews } from '../lib/hgab-review-export';
 import {
-  ReviewsApiError, documentHref, fetchMine, fetchSenateGrant, fetchSenateStatus, senatePath, type SenateCopyStatus, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
+  ReviewsApiError, documentHref, fetchMine, fetchSenateStatus, senatePath, type SenateCopyStatus, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
 } from '../lib/hgab-review-api';
 import {
   DocLinkContext, SenateBlockContext, senateRegion, useDocLink, useMember, useSenateBlock, type DocBlock, type Member,
@@ -178,33 +178,6 @@ function useCases(member: Member, onStatus: (hgabId: string, entry: ProjectStatu
   return { cases: mine?.cases ?? {}, profile: mine?.profile ?? null, save, loadError };
 }
 
-/**
- * The signed-in member's grant to read the Senate copies (an hour each), renewed five minutes before it runs out and
- * whenever the tab comes back into view near the end. Null when signed out or reviewing isn't open.
- */
-function useSenateGrant(member: Member, open: boolean): string | null {
-  const [state, setState] = useState<{ userId: string; grant: string; expires: number } | null>(null);
-  const { userId, getToken } = member;
-  useEffect(() => {
-    if (!userId || !open) return;
-    let live = true, timer = 0, expires = 0;
-    const load = () => {
-      window.clearTimeout(timer);
-      getToken().then(fetchSenateGrant).then((g) => {
-        if (!live) return;
-        expires = Date.parse(g.expires_at);
-        setState({ userId, grant: g.grant, expires });
-        timer = window.setTimeout(load, Math.max(60_000, expires - Date.now() - 300_000));
-      }).catch(() => { if (live) timer = window.setTimeout(load, 60_000); });
-    };
-    // Timers sleep in background tabs: renew on return if the grant is near its end.
-    const onVisible = () => { if (document.visibilityState === 'visible' && expires - Date.now() < 300_000) load(); };
-    load();
-    document.addEventListener('visibilitychange', onVisible);
-    return () => { live = false; window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible); };
-  }, [userId, getToken, open]);
-  return state && state.userId === userId ? state.grant : null;
-}
 
 // --- Filters and the funnel -------------------------------------------------------------------------------------
 
@@ -689,7 +662,6 @@ function viewOrder(files: readonly DetailFile[]): DetailFile[] {
  * and previous / next through every file ([ and ] on the keyboard).
  */
 function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; file: DetailFile | null; onPick: (f: DetailFile) => void }) {
-  const link = useDocLink();
   const block = useSenateBlock();
   const ordered = viewOrder(files);
   const groups = [...NAMED_TYPES, 'Other'].map((t) => ({ t, fs: ordered.filter((f) => f[2] === t) })).filter((g) => g.fs.length);
@@ -727,27 +699,12 @@ function DocSwitcher({ files, file, onPick }: { files: readonly DetailFile[]; fi
                 <span className={`rv-src is-${f[0]}`}>{SOURCE_LABEL[f[0]]}</span>
                 <span className="rv-docfiles-name">{f[2] === 'Other' && f[3] ? f[3] : f[4]}</span>
                 {f[7] && <span className="rv-tag">earlier copy</span>}
-                {block(f[5]) ? <span className="rv-tag is-locked">{block(f[5])!.checking ? 'checking…' : 'not yet available'}</span> : !link(f[5]) && <span className="rv-tag is-locked">sign in</span>}
+                {block(f[5]) && <span className="rv-tag is-locked">{block(f[5])!.checking ? 'checking…' : 'not yet available'}</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-/** A Senate copy before signing in: what it is and how to read it. */
-function LockedDoc({ opening }: { opening: Opening }) {
-  const member = useMember();
-  const canSignIn = opening === 'open' && member.loaded && !member.userId;
-  return (
-    <div className="rv-viewer-empty rv-locked">
-      <p><b>Senate copies are for signed-in members.</b></p>
-      {canSignIn
-        ? <button type="button" className="rv-btn is-primary" onClick={member.signIn}>Sign in to read it</button>
-        : <p>{member.userId ? 'Getting your access…' : opening === 'loading' ? 'Loading…' : 'Reading them isn’t open yet.'}</p>}
-      <p className="rv-muted">DPWH Transparency files are open to everyone.</p>
     </div>
   );
 }
@@ -761,26 +718,25 @@ function HeldBackDoc({ block }: { block: DocBlock }) {
   return (
     <div className="rv-viewer-empty rv-locked">
       <p><b>This Senate copy isn’t available yet.</b></p>
-      <p>We’re redacting signatures{block.region ? <> in {block.region}’s Senate copies</> : null} first, for privacy.</p>
+      <p>We’re redacting the signatures in this copy first, for privacy.</p>
       <p className="rv-muted">DPWH Transparency files, and Senate copies already redacted, open as usual.</p>
     </div>
   );
 }
 
-/** The document in a frame, at the address it was opened with: a renewed grant doesn't reload it. */
+/** The document in a frame. */
 function DocFrame({ src, title }: { src: string; title: string }) {
   const [opened] = useState(src);
   return <iframe src={`${opened}#view=FitH`} title={title} />;
 }
 
-function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
+function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
   files: readonly DetailFile[];
   keyTypes: number;
   file: DetailFile | null;
   onPick: (f: DetailFile) => void;
   onClose: () => void;
   inline: boolean;
-  opening: Opening;
 }) {
   const href = useDocLink()(file?.[5] ?? '');
   const held = useSenateBlock()(file?.[5] ?? '');
@@ -799,10 +755,8 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, opening }: {
       )}
       {!file
         ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
-        : held
-          ? <HeldBackDoc block={held} />
-          : !href
-          ? <LockedDoc opening={opening} />
+        : held || !href
+          ? <HeldBackDoc block={held ?? { region: null, checking: false }} />
           : isPdf(file)
             ? <DocFrame key={file[5]} src={href} title={file[4]} />
             : <p className="rv-empty">This file can’t be shown here. <a href={href} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
@@ -1102,7 +1056,7 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} opening={opening} onPick={setOpen} onClose={() => setOpen(null)} />}
+      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
     </DocLinkContext.Provider>
     </SenateBlockContext.Provider>
@@ -1189,7 +1143,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Beside every option is how many projects it would keep. Share the page address to share your funnel.</p>
         <h3>Where the documents come from</h3>
         <ul>
-          <li><b>Senate copies:</b> documents DPWH gave the Senate for the House bill’s projects. Sign in to read them.</li>
+          <li><b>Senate copies:</b> documents DPWH gave the Senate for the House bill’s projects, with signatures redacted. A copy the redaction skipped stays closed.</li>
           <li><b>DPWH Transparency:</b> documents DPWH published for its proposals, paired with the project.</li>
         </ul>
         <p>research.bettergov.ph matched most of them; we added more. Each file says how it was matched.</p>
@@ -1234,9 +1188,6 @@ function Reviewer() {
   // Everyone's review status, and whether reviewing is open (sign-in set up and the API taking reviews).
   const { index: shared, opening, patch: patchStatus } = useStatusIndex(member.enabled);
   const { cases: reviews, profile, save, loadError } = useCases(member, patchStatus);
-  // Senate copies open only with a signed-in member's grant; DPWH Transparency files open for all.
-  const grant = useSenateGrant(member, opening === 'open');
-  const docLink = useCallback((url: string) => documentHref(url, grant), [grant]);
   const [about, setAbout] = useState(false);
   const [pane, setPane] = useState<Pane>('list');
   const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
@@ -1266,7 +1217,9 @@ function Reviewer() {
   const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
   // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
   const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
-  const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex }), [flagIndex, statusOf, teamIndex]);
+  // "Show my reviews": the projects the signed-in member has a review of.
+  const isMine = useCallback((h: string) => !!reviews[h], [reviews]);
+  const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex, isMine }), [flagIndex, statusOf, teamIndex, isMine]);
   const levels = useMemo(() => runFunnel(all, steps, ctx), [all, steps, ctx]);
   const sort = (params.get('sort') as SortKey) in SORT_LABEL ? (params.get('sort') as SortKey) : DEFAULT_SORT;
   const current = levels[levels.length - 1].projects;
@@ -1319,7 +1272,7 @@ function Reviewer() {
   const presets = PRESETS.filter((p) => p.steps.every((s) => s.kind !== 'flag' || flagIndex.has(s.code)));
 
   return (
-    <DocLinkContext.Provider value={docLink}>
+    <DocLinkContext.Provider value={documentHref}>
     <div className="rv-app">
       <header className="rv-bar">
         <Link to="/" className="rv-brand"><img src="https://assets.bettergov.ph/logos/png/horizontal-primary.png" alt="BetterGov.ph" /></Link>
@@ -1344,11 +1297,8 @@ function Reviewer() {
                 {myList.length ? (
                   <>
                     <p>{n(myList.length)} {myList.length === 1 ? 'review' : 'reviews'} sent to the team.</p>
-                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'verdicts', 'bettergov-house-bill-reviews')}>Final status of each (CSV)</button>
-                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'json', 'bettergov-house-bill-reviews')}>Download all (JSON)</button>
-                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'cases', 'bettergov-house-bill-reviews')}>Case rows for the team’s workbook</button>
-                    <button type="button" className="rv-btn" onClick={() => downloadCases(myList, 'evidence', 'bettergov-house-bill-reviews')}>Evidence rows for the team’s workbook</button>
-                    <button type="button" className="rv-btn" onClick={() => applySteps((cur) => setValues(cur, 'status', ['in_progress', 'unsatisfactory', 'satisfactory']))}>Show projects with a review</button>
+                    <button type="button" className="rv-btn" onClick={() => { applySteps((cur) => (cur.some((x) => x.kind === 'mine') ? cur : [...cur, { kind: 'mine' }])); setPane('list'); }}>Show my reviews</button>
+                    <button type="button" className="rv-btn" onClick={() => downloadReviews(myList, 'bettergov-my-house-bill-reviews')}>Download my reviews (CSV)</button>
                   </>
                 ) : <p>No reviews yet. Open a project and work through its review checklist.</p>}
                 <button type="button" className="rv-btn" onClick={member.signOut}>Sign out</button>

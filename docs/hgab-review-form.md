@@ -1,8 +1,8 @@
 # The review form: the volunteer team's red-flag checklist
 
-The project reviewer (`/hgab/2027/review`) asks volunteers to work through the volunteer team's red-flag registry for each project. A review is a `CaseReview`. Anyone can browse the projects. **Reviewing needs a sign-in**, and reviews are kept only on the server (D1; see "Sending reviews" below), never in the browser. Members can download their reviews as JSON or as rows for the team's workbook.
+The project reviewer (`/hgab/2027/review`) asks volunteers to work through the volunteer team's red-flag registry for each project. A review is a `CaseReview`. Anyone can browse the projects. **Reviewing needs a sign-in**, and reviews are kept only on the server (D1; see "Sending reviews" below), never in the browser. Members can download their reviews as CSV, one row per review.
 
-Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, payload, intake, validation, workbook rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads), `src/worker/hgab-reviews.ts` (the API), `src/components/HgabReviewMember.tsx` (sign-in). Tests: `npm run test:hgab-review`.
+Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, payload, intake, validation, report rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads), `src/worker/hgab-reviews.ts` (the API), `src/components/HgabReviewMember.tsx` (sign-in). Tests: `npm run test:hgab-review`.
 
 ## The team's workbook
 
@@ -214,12 +214,11 @@ Errors block "Ready for independent review". The rules come from the workbook's 
 - A case in independent review or completed needs at least one outcome.
 - Warnings, which don't block: a check started but without an outcome; available evidence with no page, table or cell.
 
-## Rows for the team's workbook
+## Downloads
 
-- `caseIntakeRows`: one CASE INTAKE & TRACKER row per check the volunteer worked on, in the workbook's column order. The case ID is `case_id/RF-xxx`. "Initial screening source" names the research.bettergov.ph flags or our document matching.
-- `caseEvidenceRows`: one CASE EVIDENCE TEMPLATE row per piece of evidence.
+One CSV (UTF-8 with BOM), one row per review (`verdictRows`, `VERDICT_COLUMNS`): House bill row, project, office, region, amount, final status, reviewer, checks with an outcome, notes, and when it was last saved. **Download (CSV)** under a review gives that review; **Download my reviews (CSV)** in **My reviews** gives all of the member's own. (Until 2026-11-15 there were also JSON and the team workbook's CASE INTAKE and CASE EVIDENCE rows, `caseIntakeRows` and `caseEvidenceRows`. Nobody used them, so they went.)
 
-Columns for later workflow steps stay blank: independent verifier, the budget-origin and readiness/value assessments (step 6), due date and disposition approval (step 8). The rows download as CSV (UTF-8 with BOM) and paste into the workbook.
+**My reviews** (the clipboard in the bar, with a count) has, besides that download, **Show my reviews**: a funnel step ("My reviews", `s=mine:yes`) that keeps only the projects the member has reviewed. Then **Sign out**.
 
 ## Sending reviews
 
@@ -269,26 +268,22 @@ Setup:
 - Without the publishable key, the page has no sign-in and so no reviewing. Without the secret, or before the tables exist, the API answers 503 and the review section says reviewing isn't open yet. Browsing works either way.
 - Testing: Clerk test emails (`name+clerk_test@example.com`, code `424242`) sign in without sending email. Clerk's bot protection blocks sign-up in headless browsers, so create test users with the Backend API first.
 
-## Senate copies: signed-in members only
+## Senate copies: public once redacted
 
-The documents DPWH gave the Senate ("Senate copies", 22,748 files on 6,000-odd projects) open only for signed-in members. DPWH Transparency files are on `s3.infrawatch.ph` and stay open to everyone.
+The documents DPWH gave the Senate ("Senate copies", 22,748 files on 6,000-odd projects; 34,424 in the folder) open for everyone, signed in or not, **once their signatures are redacted**. DPWH Transparency files are on `s3.infrawatch.ph` and open to everyone.
 
-- **Signed out:** the viewer lists the Senate copies, tagged "sign in". Picking one shows "Senate copies are for signed-in members" and a sign-in button instead of the document. There is no "Open in a new tab" link.
-- **Signed in:** the page gets a grant (`POST /api/hgab/2027/senate-copies/grant`), good for an hour and renewed before it ends. Each Senate copy then opens at `/api/hgab/2027/senate-copies/<path>?grant=…`. The Worker checks the grant and streams the file from R2 (binding `DATA_BUCKET`, bucket `budget`, key `hgab/2027/dpwh/supporting-documents/<path>`), with Range requests for the PDF viewer (`src/worker/hgab-senate-copies.ts`).
-- **The grant** is `<member_id>.<expiry>.<HMAC-SHA256>`. Its key is derived from `CLERK_SECRET_KEY`, so there is no other secret, and rotating that one voids every grant. The grant goes in the address, so the frame, a new tab and a download all work. Responses are `Cache-Control: private` and `noindex`, with no referrer. A copied link stops working within the hour.
-- **Without a good grant** (none, expired or altered), the file route answers with a short "sign in" page (401). Paths outside the folder are refused.
-- **What the data keeps:** the detail shards and the reviews keep each file's public address (`budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/…`) as its id. The page turns it into the gated address (`documentHref` in `src/lib/hgab-review-api.ts`), and evidence links in the form do the same.
-- **The same files are still public on budget-assets.bettergov.ph** until that path is blocked there, so for now the gate covers our page only. research.bettergov.ph's `hgab-document-coverage.json` links 20,647 of them, and `supporting-documents-file-links.jsonl` (public, beside them) lists all 34,424. Blocking the path, for example with a WAF rule on `/hgab/2027/dpwh/supporting-documents/*`, would break those links. That is the maintainer's call. The Worker reads through the R2 binding, so a block on the domain doesn't affect it.
-- **Local preview:** the local R2 store has only the files you put in it. wrangler's `r2 object put --local` percent-encodes keys with spaces, so put test files with `getPlatformProxy` instead. Production keys have real spaces.
-- **Only redacted Senate copies open (2026-11-14), so no personal information leaks.** Signatures in the Senate copies are being redacted, and the redacted files replace the originals on R2. Each one the uploader writes carries R2 custom metadata `redacted` ("signatures and handwriting, bettergov.ph 2026-11"). A Senate copy opens in the reviewer only if:
+- **Redacted only, so no personal information leaks.** The redacted files replace the originals on R2, and each one the uploader writes carries R2 custom metadata `redacted` ("signatures and handwriting, bettergov.ph 2026-11"; docs/senate-redaction.md). A Senate copy opens in the reviewer only if:
   1. it carries that mark, and
   2. its region isn't held back by hand (below).
 
-  Anything else stays closed: regions not done yet, and in finished regions the files the redaction skipped (PDFs of 20+ pages, damaged files, non-PDFs, PDFs without a `.pdf` extension). It shows "This Senate copy isn't available yet. We're redacting signatures in <region>'s Senate copies first, for privacy." There is no frame and no link, and the file list tags it "not yet available". A file opens by itself once the redaction uploads it. DPWH Transparency files are unaffected.
-  - **How:** when a project opens, the page asks `POST /api/hgab/2027/senate-copies/status` (public, `{ paths }`, up to 200; a project has at most 80) which of its Senate copies can open. The Worker reads each file's metadata through the R2 binding and answers `available`, `held`, `not_redacted` or `missing`. Until the answer comes, the files show "checking…"; if it fails, none opens. The file route refuses the same files (403, "Not available yet"), grant or not, so a link doesn't work either. The project opens on a file that can be shown when it has one.
-  - **The manual switch:** `SENATE_REGIONS_HELD_BACK` in `src/lib/senate-copies-held-back.ts`, one line per region, by the first folder name in `supporting-documents-file-links.jsonl` `region`. It keeps a region closed even where files are marked, for example while a region's upload is being checked. **To show a region again, delete its line and merge.** The page and the Worker share the list. `npm run test:hgab-review` fails if a name matches no Senate folder.
-  - **Held back on 2026-11-14:** NCR, Region III, Region IV-A, Region V, Region X and Region XII. The file list had no redacted copy for any of them. The maintainer named five; Region IV-A was also unredacted, since its detection had finished but nothing was uploaded.
-  - **Not covered:** the same files stay public at their `budget-assets.bettergov.ph` addresses, which research.bettergov.ph links to.
+  Anything else stays closed: the files the redaction skipped (PDFs of 20+ pages, damaged files, non-PDFs, PDFs without a `.pdf` extension). The pane shows "This Senate copy isn't available yet. We're redacting the signatures in this copy first, for privacy." There is no frame and no link, and the file list tags it "not yet available". A file opens by itself once the redaction uploads it.
+- **How:** when a project opens, the page asks `POST /api/hgab/2027/senate-copies/status` (public, `{ paths }`, up to 200; a project has at most 80) which of its Senate copies can open (`src/worker/hgab-senate-copies.ts`). The Worker reads each file's metadata through the R2 binding (`DATA_BUCKET`, key `hgab/2027/dpwh/supporting-documents/<path>`) and answers `available`, `held`, `not_redacted` or `missing`. Until the answer comes, the files show "checking…"; if it fails, none opens. The project opens on a file that can be shown when it has one. A copy that can open loads from its public address on `budget-assets.bettergov.ph` (`documentHref` in `src/lib/hgab-review-api.ts`), and evidence links in the form use the same address.
+- **The manual switch:** `SENATE_REGIONS_HELD_BACK` in `src/lib/senate-copies-held-back.ts`, one line per region, by the first folder name in `supporting-documents-file-links.jsonl` `region`. It keeps a region closed even where files are marked, for example while a region's upload is being checked, and the dataset then gives its copies no link. **Empty since 2026-11-15.** To hold a region back, add its line and merge; to show it again, delete the line. The page, the Worker and the dataset share the list. `npm run test:hgab-review` fails if a name matches no Senate folder.
+- **History:**
+  - 2026-11-13: Senate copies opened only for signed-in members, through the Worker with an hour-long grant (`/api/hgab/2027/senate-copies/grant`).
+  - 2026-11-14: only redacted copies opened. NCR, Region III, Region IV-A, Region V, Region X and Region XII were held back, because the file list had no redacted copy for any of them. The maintainer named five; Region IV-A was also unredacted, since its detection had finished but nothing was uploaded.
+  - 2026-11-15: every region was redacted (31,093 of the 34,424 files; the rest are the skipped files above), so the maintainer made them public. The grant and the Worker's file route went (they answer 404), and the hold list is empty.
+- **Local preview:** the local R2 store has only the files you put in it. wrangler's `r2 object put --local` percent-encodes keys with spaces, so put test files with `getPlatformProxy` instead, with the `redacted` metadata. Production keys have real spaces.
 
 ## Browser storage, retired
 
@@ -324,7 +319,7 @@ When the team settles the method, answers in members' reviews can add weighted c
   - "Still needed:" for what an outcome lacks.
   - "What you found" has a "Facts only" placeholder instead of a description.
   - Short labels in the evidence details.
-  - No hint under Save; "Export:" for the downloads.
+  - No hint under Save; one "Download (CSV)" under the review.
 
 ## The final status (2026-11-14)
 
@@ -342,7 +337,7 @@ The maintainer asked for one status per review, the field the team reports: **Sa
   5. Satisfactory
 
   The last three count as reviewed, for **Hide reviewed**, the faded rows and the progress cards. The badge adds "· N reviews" when several members reviewed a project; its hover text says how they split.
-- **The report:** the "Unsatisfactory: red flags" preset lists members' and automatic red flags. "Final status of each (CSV)" in **My reviews**, and "final status" under each review, download one row per review: House bill row, project, office, region, amount, final status, reviewer, checks with an outcome, notes, and when it was last saved (`verdictRows`). The team's workbook rows are unchanged; the workbook has no column for it.
+- **The report:** the "Unsatisfactory: red flags" preset lists members' and automatic red flags. **Download my reviews (CSV)** in **My reviews**, and **Download (CSV)** under each review, give one row per review (see "Downloads").
 - **Everyone's final statuses, from D1:** `SELECT hgab_id, json_extract(payload, '$.verdict') AS final_status, json_extract(payload, '$.reviewer.display_name') AS reviewer, updated_at FROM review_cases WHERE kind = 'review' AND withdrawn_at IS NULL`.
 - **Unchanged:** the case stage and "Ready for independent review" are still in the payload, the API and its rules (`validateCaseReview` for cases sent for independent review). The form no longer offers them. On 2026-11-14 production had one member review, marked ready for independent review with no final status; it shows "In progress" until a final status is given.
 

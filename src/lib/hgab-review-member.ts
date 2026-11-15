@@ -30,10 +30,11 @@ export const useMember = () => useContext(MemberContext);
 export const memberLabel = (m: Pick<Member, 'name' | 'email'>) => m.name?.trim() || m.email?.split('@')[0] || '';
 
 /**
- * Where to open a document, by its address in the data: Senate copies only with the signed-in member's grant (null
- * otherwise), DPWH Transparency files as they are. The reviewer page provides it.
+ * Where to open a document, by its address in the data: its public address; Senate copies only once the project pane
+ * knows they're redacted.
  */
-export const DocLinkContext = createContext<(url: string) => string | null>((url) => documentHref(url, null));
+// Outside a project pane no Senate copy opens: only the pane knows which are redacted.
+export const DocLinkContext = createContext<(url: string) => string | null>((url) => (senatePath(url) == null ? documentHref(url) : null));
 export const useDocLink = () => useContext(DocLinkContext);
 
 /**
