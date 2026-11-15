@@ -30,7 +30,7 @@ fixed = held = 0
 for slug in sorted(os.listdir(root)):
     d = os.path.join(root, slug)
     check = os.path.join(d, "check.log")
-    if not slug.endswith("-large") or not os.path.exists(check):
+    if not (slug.endswith("-large") or slug.endswith("-xl")) or not os.path.exists(check):
         continue
     missing = [l[4:].rsplit(": missing from redacted/", 1)[0] for l in open(check).read().splitlines()
                if l.startswith("BAD ") and l.endswith(": missing from redacted/")]

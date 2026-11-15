@@ -44,8 +44,8 @@ Output in `/data/senate-redact/<region>/` on the dev VM, gallery at `http://100.
 
 ## Where it ended (2026-11-15)
 
-- **34,104 of 34,424** files in the Senate set serve redacted copies (`supporting-documents-file-links.jsonl` marks them `redacted: true`).
-- Still original (320): 205 PDFs over 100 pages, 7 empty and 2 damaged PDFs, and 106 non-PDFs (jpg, docx, kmz, zip, xlsx, kml, and 5 files without an extension).
+- **34,309 of 34,424** files in the Senate set serve redacted copies (`supporting-documents-file-links.jsonl` marks them `redacted: true`). PDFs over 100 pages were done last (Jason, 2026-11-15: "until we run out of credits"; `MIN_PAGES=101 SUFFIX=-xl GALLERY=0 run_large.sh`, about $11).
+- Still original (115): 9 empty or damaged PDFs and 106 non-PDFs (jpg, docx, kmz, zip, xlsx, kml, and 5 files without an extension).
 - Sweep: done in XIII, IV-B, VII, XI, NIR, IX; skipped elsewhere (Jason, 2026-11-15). Long files: glm-4.6v only, no verifier, no sweep.
 - Held-back files (a failed model call) stay original until `retry_held.py` finishes them (fallback model for the failed pages).
-- Model spend about $480 in all (small files ≈ $396 incl. extraction, long files ≈ $81).
+- Model spend about $490 in all (small files ≈ $396 incl. extraction, 20–100 pages ≈ $81, over 100 pages ≈ $11).
