@@ -12,21 +12,20 @@ import { documentHref, senateHeldBack, senatePath } from "../src/lib/hgab-review
 
 const detailDir = resolve("data/hgab/2027/documents/detail");
 
-test("a held-back region's Senate copies have no link; others and DPWH Transparency files do", () => {
-  const held = "https://budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/Region%20XII/OO1/X/2027DPWH-HGAB-1_POW.pdf";
-  const shown = "https://budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/Region%20XIII/OO1/X/2027DPWH-HGAB-2_POW.pdf";
+test("Senate copies link to their public address unless their region is held back", () => {
+  const xii = "https://budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/Region%20XII/OO1/X/2027DPWH-HGAB-1_POW.pdf";
   const dpwh = "https://s3.infrawatch.ph/nep/fy2027/2027DPWH-Proposal-1/2027DPWH-Proposal-1_POW.pdf";
-  assert.equal(senateHeldBack(held), "Region XII");
-  assert.equal(documentHref(held, "grant"), null, "even with a grant");
-  assert.equal(senateHeldBack(shown), null);
-  assert.match(documentHref(shown, "grant")!, /^\/api\/hgab\/2027\/senate-copies\/Region%20XIII\//);
-  assert.equal(documentHref(dpwh, null), dpwh);
-  // The Worker gets the decoded path; the page the encoded one.
-  assert.equal(heldBackRegion("Region XII/OO1/x.pdf"), "Region XII");
-  assert.equal(heldBackRegion(senatePath(held)!), "Region XII");
-  // Exact names: "Region X" holds back Region X only.
-  assert.equal(heldBackRegion("Region XI/OO1/x.pdf"), null);
-  assert.equal(heldBackRegion("Region XIII/OO1/x.pdf"), null);
+  // Nothing is held back today (2026-11-15): a Senate copy's link is its public address (the pane still checks redaction).
+  assert.deepEqual(SENATE_REGIONS_HELD_BACK, []);
+  assert.equal(senateHeldBack(xii), null);
+  assert.equal(documentHref(xii), xii);
+  assert.equal(documentHref(dpwh), dpwh);
+  // The switch, with a region on it: the Worker gets the decoded path, the page the encoded one; names are exact.
+  const held = ["Region XII", "Region X"];
+  assert.equal(heldBackRegion("Region XII/OO1/x.pdf", held), "Region XII");
+  assert.equal(heldBackRegion(senatePath(xii)!, held), "Region XII");
+  assert.equal(heldBackRegion("Region XI/OO1/x.pdf", held), null);
+  assert.equal(heldBackRegion("Region XIII/OO1/x.pdf", held), null);
 });
 
 test("every held-back name is a real Senate region", { skip: !existsSync(detailDir) && "documents/detail not built" }, () => {

@@ -9,9 +9,9 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { NAMED_TYPES, REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES, caseEvidenceRows,
-  caseIntakeRows, caseTouched, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv,
-  validateCaseReview, vocab, vocabCode,
+  CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES, 
+  caseTouched, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv, verdictRows, VERDICT_COLUMNS,
+  validateCaseReview, vocabCode,
 } from "../src/lib/hgab-redflags-team";
 
 const ixPath = resolve("data/hgab/2027", REVIEW_INDEX_PATH);
@@ -213,24 +213,14 @@ test("new ids are random UUIDs, with or without randomUUID", () => {
   }
 });
 
-test("workbook rows match the team's columns", () => {
-  const r = fresh();
-  const f = emptyFlagCheck("RF-024", ["potential-nep-insertion"], "2026-11-12T08:00:00Z");
-  f.human_outcome = "unresolved_evidence_gap";
-  f.observed_discrepancy = "No NEP line found.";
-  f.evidence.push({ ...emptyEvidence("e1"), document_title: "HB 10858", url: "https://x/hb.pdf", locator: "p. 546", file_sha256: "ab" });
-  r.flags.push(f, emptyFlagCheck("RF-001", [], "2026-11-12T08:00:00Z"));
-  const rows = caseIntakeRows(r);
-  assert.equal(rows.length, 1, "untouched checks are not rows");
-  assert.equal(rows[0].length, REGISTRY.case_columns.length);
-  const row = Object.fromEntries(REGISTRY.case_columns.map((h, i) => [h, rows[0][i]]));
-  assert.equal(row["Flag ID"], "RF-024");
-  assert.equal(row["Human outcome"], "Unresolved / evidence gap");
-  assert.ok(vocab("human_outcome").some((o) => o.label === row["Human outcome"]));
-  assert.equal(row["Flag description (lookup)"], TEAM_FLAGS.get("RF-024")!.title);
-  const ev = caseEvidenceRows(r);
-  assert.equal(ev.length, 1);
-  assert.equal(ev[0].length, REGISTRY.evidence_columns.length);
-  const csv = toCsv(REGISTRY.case_columns, rows);
-  assert.ok(csv.startsWith("\uFEFFCase ID,"));
+test("the report CSV: one row per review, with its final status", () => {
+  const r = { ...fresh(), verdict: "unsatisfactory" as const, notes: "Line 3, \"quoted\"" };
+  const rows = verdictRows(r);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].length, VERDICT_COLUMNS.length);
+  assert.equal(rows[0][VERDICT_COLUMNS.indexOf("Final status")], "Unsatisfactory");
+  const csv = toCsv(VERDICT_COLUMNS, rows);
+  assert.ok(csv.startsWith("\uFEFFHouse bill row,"));
+  assert.ok(csv.includes('"Line 3, ""quoted"""'));
+  assert.equal(verdictRows(fresh())[0][VERDICT_COLUMNS.indexOf("Final status")], "Not given");
 });

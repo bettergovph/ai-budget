@@ -16,7 +16,7 @@
  * TEMPLATE sheets.
  */
 import registryJson from './hgab-redflag-registry.json';
-import { NAMED_TYPES, OUR_NEP_FLAGS, type NamedType } from './hgab-documents';
+import { NAMED_TYPES, type NamedType } from './hgab-documents';
 
 // --- The registry ----------------------------------------------------------------------------------------------
 
@@ -629,17 +629,7 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
   return problems.length ? { review: null, problems: problems.slice(0, 50) } : { review, problems };
 }
 
-// --- The team's workbook rows -------------------------------------------------------------------------------------
-
-/** Our own flags: missing documents (with our matching) and our NEP comparison; the rest are research.bettergov.ph's. */
-export const isOurDetector = (code: string) => code.startsWith('missing-') || code === OUR_NEP_FLAGS.houseOnly.code || code === OUR_NEP_FLAGS.disagree.code;
-function screeningSource(codes: readonly string[]): string {
-  const ours = codes.filter(isOurDetector), theirs = codes.filter((c) => !isOurDetector(c));
-  return [
-    theirs.length ? `research.bettergov.ph flags: ${theirs.join(', ')}` : '',
-    ours.length ? `BetterGov (our matching and NEP comparison): ${ours.join(', ')}` : '',
-  ].filter(Boolean).join('; ') || 'Volunteer review';
-}
+// --- The report ---------------------------------------------------------------------------------------------------
 
 /** The report: one row per review, with its final status (the field the team reports on). */
 export const VERDICT_COLUMNS = [
@@ -651,63 +641,6 @@ export function verdictRows(r: CaseReview): string[][] {
     r.verdict ? VERDICT_LABEL[r.verdict] : 'Not given', r.reviewer.display_name || r.reviewer.reviewer_id,
     String(r.flags.filter((f) => f.human_outcome !== 'not_reviewed').length), r.notes, (r.submitted_at ?? r.updated_at).slice(0, 10),
   ]];
-}
-
-/** One CASE INTAKE & TRACKER row per check a volunteer worked on, in the workbook's column order. */
-export function caseIntakeRows(r: CaseReview): string[][] {
-  const head = REGISTRY.case_columns;
-  return r.flags.filter(flagCheckTouched).map((f) => {
-    const def = TEAM_FLAGS.get(f.flag_id);
-    const v: Record<string, string> = {
-      'Case ID': `${r.case_id}/${f.flag_id}`,
-      'Project / proposal ID': `${r.project.hgab_id} (${r.project.project_id})`,
-      'Budget source version': r.project.budget_source_version,
-      'Flag ID': f.flag_id,
-      'Flag description (lookup)': def?.title ?? '',
-      'Lead skill (lookup)': def?.lead_skill ?? '',
-      'Project name / location': `${r.project.title} · ${r.project.office} · ${r.project.region}`,
-      'Initial screening source': screeningSource(f.detector_rule_ids),
-      'Evidence page / cell / URL': f.evidence.map((e) => [e.url || e.document_title, e.locator].filter(Boolean).join(' · ')).join('\n'),
-      'Observed discrepancy (facts only)': f.observed_discrepancy,
-      'Case stage': vocabLabel('case_stage', r.case_stage),
-      'Assigned volunteer': r.reviewer.display_name || r.reviewer.reviewer_id,
-      'Independent verifier': '',
-      'Evidence applicability': vocabLabel('evidence_applicability', f.applicability),
-      'Budget-origin assessment': '',
-      'Readiness/value assessment': '',
-      'Risk priority': vocabLabel('risk_priority', r.risk_priority),
-      'Due date': '',
-      'Last update (date)': f.updated_at.slice(0, 10),
-      'Human outcome': vocabLabel('human_outcome', f.human_outcome),
-      'Disposition approval / authority': '',
-      'Notes / next action': [r.next_action, r.notes].filter((x) => x.trim()).join('\n'),
-    };
-    return head.map((h) => v[h] ?? '');
-  });
-}
-
-/** One CASE EVIDENCE TEMPLATE row per piece of evidence, in the workbook's column order. */
-export function caseEvidenceRows(r: CaseReview): string[][] {
-  const head = REGISTRY.evidence_columns;
-  return r.flags.flatMap((f) => f.evidence.map((e) => {
-    const v: Record<string, string> = {
-      'Case ID': `${r.case_id}/${f.flag_id}`,
-      'Flag ID': f.flag_id,
-      'Source institution': e.source_institution,
-      'Official document title + version': e.document_title,
-      'Document URL or local path': e.url,
-      'Page / table / cell': e.locator,
-      'Extracted fact (verbatim / amount)': e.extracted_fact,
-      'Reviewer observation': e.reviewer_observation,
-      'Applicable at current project stage?': vocabLabel('evidence_applicable_at_stage', e.applicable_at_stage),
-      'Document availability': vocabLabel('document_availability', e.availability),
-      'Human verifier': '',
-      'Check date': f.updated_at.slice(0, 10),
-      'Verification state': vocabLabel('verification_state', e.verification_state),
-      'Notes / explanation': e.file_sha256 ? `SHA-256 ${e.file_sha256}` : '',
-    };
-    return head.map((h) => v[h] ?? '');
-  }));
 }
 
 /** CSV with a header row, UTF-8 with BOM, for spreadsheets. */

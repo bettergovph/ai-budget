@@ -8,7 +8,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { type DetailFile, type ReviewDetail, type ReviewIndexFlag } from '../lib/hgab-documents';
 import { readerText } from '../lib/hgab-review';
 import { memberLabel, useDocLink, useMember } from '../lib/hgab-review-member';
-import { downloadCases } from '../lib/hgab-review-export';
+import { downloadReviews } from '../lib/hgab-review-export';
 import {
   CHECKLIST_GROUP_LABEL, STAGE_GATED, VERDICT_LABEL, VOLUNTEER_OUTCOMES,
   checklistFor, emptyEvidence, emptyFlagCheck, flagCheckTouched, flagStatus, newId, vocab,
@@ -304,12 +304,7 @@ export default function HgabReviewForm({ review, detail, categories, detectorCod
       <div className="rf-actions">
         <button type="submit" className="rv-btn is-primary rf-save" disabled={saved || sending.busy}>{sending.busy ? 'Saving…' : saved ? 'Saved' : 'Save'}</button>
         <span className="rf-export">
-          Export:{' '}
-          <button type="button" onClick={() => downloadCases([review], 'verdicts', `review-${review.project.hgab_id}`)}>final status</button>
-          {' · '}
-          <button type="button" onClick={() => downloadCases([review], 'json', `review-${review.project.hgab_id}`)}>JSON</button>
-          {' · '}<button type="button" onClick={() => downloadCases([review], 'cases', `review-${review.project.hgab_id}`)}>case rows</button>
-          {' · '}<button type="button" onClick={() => downloadCases([review], 'evidence', `review-${review.project.hgab_id}`)}>evidence rows</button>
+          <button type="button" onClick={() => downloadReviews([review], `bettergov-review-${review.project.hgab_id}`)}>Download (CSV)</button>
         </span>
       </div>
     </form>

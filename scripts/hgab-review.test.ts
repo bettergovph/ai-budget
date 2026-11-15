@@ -211,3 +211,16 @@ test("a project shows the furthest of its members' reviews", () => {
     "HB10858-3-0002-000004": { status: "on_hold", reviews: 1, updated_at: "2026-11-12T00:00:00Z", ...none },
   });
 });
+
+test("Show my reviews: a funnel step for the signed-in member's projects", { skip: !ix && "review.json not built" }, () => {
+  assert.deepEqual(stepFromParam("mine:yes"), { kind: "mine" });
+  assert.equal(stepFromParam("mine:no"), null);
+  assert.equal(stepToParam({ kind: "mine" }), "mine:yes");
+  assert.equal(stepLabel({ kind: "mine" }, ix!.flags), "My reviews");
+  const all = decodeIndex(ix!);
+  const mine = new Set(all.slice(10, 13).map((p) => p.hgabId));
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: () => "not_started" as const, isMine: (h: string) => mine.has(h) };
+  assert.deepEqual(runFunnel(all, [{ kind: "mine" }], ctx)[1].projects.map((p) => p.hgabId), [...mine]);
+  // Signed out (no isMine): nothing.
+  assert.equal(runFunnel(all, [{ kind: "mine" }], { ...ctx, isMine: undefined })[1].projects.length, 0);
+});

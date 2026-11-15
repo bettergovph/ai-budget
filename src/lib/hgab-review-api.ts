@@ -1,6 +1,6 @@
 /**
  * The reviewer page's side of the reviews API (src/worker/hgab-reviews.ts): everyone's review status, the signed-in
- * member's reviews, sending one and withdrawing one; and the grant to read the Senate copies
+ * member's reviews, sending one and withdrawing one; and which Senate copies can open
  * (src/worker/hgab-senate-copies.ts). `token` is the member's Clerk session token.
  */
 import type { CaseReview, ValidationIssue } from './hgab-redflags-team';
@@ -61,17 +61,13 @@ export function senateHeldBack(url: string): string | null {
   return path == null ? null : heldBackRegion(path);
 }
 /**
- * Where to open a document: a Senate copy through the Worker with the member's grant (null without one, or while its
- * region is held back); others as they are.
+ * Where to open a document: its public address, or null for a Senate copy whose region is held back. Whether a Senate
+ * copy is redacted is the project pane's check (fetchSenateStatus); the pane gives no link to one that isn't.
  */
-export function documentHref(url: string, grant: string | null): string | null {
+export function documentHref(url: string): string | null {
   const path = senatePath(url);
-  if (path == null) return url;
-  if (heldBackRegion(path)) return null;
-  return grant ? `${SENATE_COPIES_API}/${path}?grant=${encodeURIComponent(grant)}` : null;
+  return path != null && heldBackRegion(path) ? null : url;
 }
-export const fetchSenateGrant = (token: string | null) =>
-  call<{ grant: string; expires_at: string }>(`${SENATE_COPIES_API}/grant`, { method: 'POST' }, token);
 
 /**
  * Which of a project's Senate copies can open (src/worker/hgab-senate-copies.ts): `available` only when the redaction
