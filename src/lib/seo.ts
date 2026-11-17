@@ -483,13 +483,19 @@ export function pageMeta(pathname: string): PageMeta {
   }
   // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.
   // Foreign-assisted projects: the House bill against the NEP, and the budgets since FY2021; before the dataset pattern.
-  // The project reviewer, for volunteers; before the dataset pattern.
+  // The project reviewer, for volunteers; before the dataset pattern. Its short address is /review (lib/short-links.ts).
   if (p === REVIEW_ROOT) {
     return {
       title: `${REVIEW_TITLE}: Documents and Red Flags for Every DPWH Project in the FY 2027 House Bill · ${SITE}`,
       description:
-        "Review the DPWH projects in House Bill 10858: narrow 15,979 projects with a red-flag funnel, open each " +
-        "project's documents from the Senate and DPWH Transparency, and record what you find.",
+        "Review the documents of the DPWH projects in House Bill 10858, starting with the 6,192 the House inserted. Read " +
+        "each project's documents from the Senate and DPWH Transparency, answer the team's questions, and give a final status.",
+      // The "Be a citizen reviewer. Help review House insertions." poster's link-preview size (npm run build:hgab-poster-review, published
+      // with upload:hgab). ?v= is the image's MD5: R2 has no purge, and the image caches for a day.
+      image: "https://budget-assets.bettergov.ph/hgab/2027/campaign/review-house-insertions-1200x630.png?v=aeb6bc10",
+      imageWidth: "1200",
+      imageHeight: "630",
+      imageAlt: "Be a citizen reviewer. Help review House insertions. 6,192 DPWH projects worth ₱171.3 billion are in the House bill but not in the NEP. Start here: budget.bettergov.ph/review",
     };
   }
   if (p === FAP_ROOT) {

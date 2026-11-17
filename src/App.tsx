@@ -4,6 +4,7 @@ import { pageMeta } from './lib/seo';
 import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 import { FAP_ROOT } from './lib/hgab-fap';
 import { REVIEW_ROOT } from './lib/hgab-review';
+import { SHORT_PATHS, shortLinkTarget } from './lib/short-links';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
 import TermsGate from './components/TermsGate';
 
@@ -87,6 +88,12 @@ function ServerPage() {
   return null;
 }
 
+/** A short address (lib/short-links.ts) followed inside the app: on to where it points, query kept. */
+function ShortLink() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={shortLinkTarget(pathname, search) ?? '/'} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -94,6 +101,9 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Navigate to="/2027/overview" replace />} />
+          {/* Short addresses (the Worker redirects them too; these catch links inside the app). */}
+          {SHORT_PATHS.map((p) => <Route key={p} path={p} element={<ShortLink />} />)}
+          <Route path="/review/:id" element={<ShortLink />} />
           <Route path="/gaa" element={<National />} />
           {/* Per-year exclusive browser: same hierarchy, one fiscal year.
               The splat carries the drill path as entity ids, so every level
