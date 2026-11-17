@@ -22,7 +22,7 @@
  * Docs: docs/hgab-review-form.md.
  */
 import { createClerkClient, verifyToken } from "@clerk/backend";
-import { READY_STAGE, newId, readCaseReview, validateCaseReview, type CaseReview } from "../lib/hgab-redflags-team";
+import { READY_STAGE, newId, readCaseReview, upgradeCaseReview, validateCaseReview, type CaseReview } from "../lib/hgab-redflags-team";
 import { buildStatusIndex, reviewStatusFromStage, withAutoReviews, type ReviewStatus } from "../lib/hgab-review";
 
 export type ReviewEnv = Env & { CLERK_SECRET_KEY?: string; CLERK_AUTHORIZED_PARTIES?: string };
@@ -131,7 +131,8 @@ async function mine(env: ReviewEnv, memberId: string) {
     env.DB.prepare("SELECT payload FROM review_cases WHERE member_id = ?1 AND withdrawn_at IS NULL ORDER BY updated_at DESC").bind(memberId),
   ]);
   const rows = (cases.results ?? []) as { payload: string }[];
-  return reply({ meta: { reviews: rows.length }, member: member.results?.[0], data: rows.map((r) => JSON.parse(r.payload) as CaseReview) });
+  // As today's form reads them (no questions before they existed; the earlier final status on today's scale).
+  return reply({ meta: { reviews: rows.length }, member: member.results?.[0], data: rows.map((r) => upgradeCaseReview(JSON.parse(r.payload) as CaseReview)) });
 }
 
 interface CaseRow { case_id: string; hgab_id: string; member_id: string; kind: string; rev: number; withdrawn_at: string | null }
@@ -167,7 +168,8 @@ async function send(request: Request, env: ReviewEnv, memberId: string, now: str
     ...review, case_id: caseId, revision: rev, reviewer: { ...review.reviewer, reviewer_id: memberId }, submitted_at: now,
   };
   const status = reviewStatusFromStage(review.case_stage);
-  const outcomes = review.flags.filter((f) => f.human_outcome !== "not_reviewed").length;
+  // Answered questions, and checks answered before the questions.
+  const outcomes = review.questions.filter((q) => q.rating != null).length + review.flags.filter((f) => f.human_outcome !== "not_reviewed").length;
   const payload = JSON.stringify(stored);
   const write = current
     // Only from the revision we read: if another window saved in between, the revision insert below collides and

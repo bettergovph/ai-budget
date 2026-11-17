@@ -1,7 +1,7 @@
 /**
  * npm run test:hgab-review — the team red-flag registry in the reviewer (src/lib/hgab-redflags-team.ts): the
- * detector crosswalk covers every detector flag, project types, checklists, the review's validation and the
- * workbook rows.
+ * detector crosswalk covers every detector flag, the 16 questions group the 44 checks, project types, checklists and
+ * questions, the review's validation and intake, and the report rows.
  */
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -9,9 +9,10 @@ import { resolve } from "node:path";
 import { test } from "node:test";
 import { NAMED_TYPES, REVIEW_INDEX_PATH, type ReviewIndex } from "../src/lib/hgab-documents";
 import {
-  CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES, 
-  caseTouched, checklistFor, classifyProject, emptyEvidence, emptyFlagCheck, flagStatus, newCaseReview, newId, readCaseReview, toCsv, verdictRows, VERDICT_COLUMNS,
-  validateCaseReview, vocabCode,
+  CATEGORY, DETECTOR_TO_TEAM, DOCUMENT_TEAM_FLAG, QUESTIONS, QUESTION_OF_FLAG, REGISTRY, STAGE_GATED, TEAM_FLAGS, VOLUNTEER_OUTCOMES,
+  caseTouched, checklistFor, classifyProject, detectorsForQuestion, emptyEvidence, emptyFlagCheck, emptyQuestionAnswer, flagStatus, newCaseReview, newId,
+  questionsFor, readCaseReview, readVerdict, toCsv, upgradeCaseReview, verdictRows, VERDICT_COLUMNS, validateCaseReview, vocabCode, worseRating,
+  type CaseReview,
 } from "../src/lib/hgab-redflags-team";
 
 const ixPath = resolve("data/hgab/2027", REVIEW_INDEX_PATH);
@@ -30,6 +31,67 @@ test("the registry is the team's workbook, whole", () => {
   assert.ok(!JSON.stringify(REGISTRY).includes("Jayson"), "encoder names stay out of the public registry");
   assert.ok(!VOLUNTEER_OUTCOMES.some((o) => o.code === "referred_with_approval"));
   assert.equal(vocabCode("Cleared / explained"), "cleared_explained");
+});
+
+test("the 16 questions group the 44 checks, each once, as the team's proposal says", () => {
+  assert.equal(QUESTIONS.length, 16);
+  assert.deepEqual(QUESTIONS.map((q) => q.id), Array.from({ length: 16 }, (_, i) => `BW-${String(i + 1).padStart(2, "0")}`));
+  const named = QUESTIONS.flatMap((q) => q.flag_ids);
+  assert.equal(named.length, 44);
+  assert.deepEqual([...named].sort(), [...TEAM_FLAGS.keys()].sort());
+  assert.match(REGISTRY.questions_source.sha256, /^[0-9a-f]{64}$/);
+  assert.match(REGISTRY.questions_source.status, /NOT APPROVED/, "say so while it is a proposal");
+  // The two "Conflicting document dates" are one question; the document checks are the documents question.
+  assert.equal(QUESTION_OF_FLAG.get("RF-026")?.id, QUESTION_OF_FLAG.get("RF-036")?.id);
+  for (const t of NAMED_TYPES) assert.equal(QUESTION_OF_FLAG.get(DOCUMENT_TEAM_FLAG[t])?.id, "BW-16", t);
+});
+
+test("DPWH Transparency's listing is no gap: Senate-only projects are never listed there", () => {
+  for (const c of ["no-listed-dpwh-transparency-documents", "dpwh-transparency-match-not-verified", "no-listed-rdc", "no-listed-geotagged-photos", "no-listed-pow"]) {
+    assert.deepEqual(DETECTOR_TO_TEAM[c], [], c);
+  }
+  // Our missing-document flags count files from both sources, and still suggest the documents question.
+  assert.ok(detectorsForQuestion("BW-16").includes("missing-pow"));
+  assert.ok(!detectorsForQuestion("BW-16").includes("no-listed-dpwh-transparency-documents"));
+  assert.ok(!detectorsForQuestion("BW-12").includes("no-listed-dpwh-transparency-documents"), "nor a readiness question");
+});
+
+test("a project's questions: the documents and flagged ones first, not-yet-due last, only its kinds", () => {
+  const items = questionsFor({ categories: ["buildings"], detectorCodes: ["potential-nep-insertion", "no-listed-dpwh-transparency-documents"], documentTypes: ["BP 202"] });
+  const by = new Map(items.map((x) => [x.question.id, x]));
+  assert.equal(by.get("BW-06")?.group, "suggested");
+  assert.deepEqual(by.get("BW-06")?.detectors, ["potential-nep-insertion"]);
+  assert.equal(by.get("BW-16")?.group, "suggested", "the documents question is always asked");
+  assert.deepEqual(by.get("BW-16")?.detectors, [], "a missing DPWH Transparency listing suggests nothing");
+  assert.equal(by.get("BW-12")?.group, "more");
+  assert.equal(by.get("BW-08")?.group, "later", "procurement only once contracts are awarded");
+  assert.ok(!by.has("BW-09"), "flood and drainage adequacy doesn't apply to a building");
+  assert.ok(!by.has("BW-10") && !by.has("BW-11"));
+  assert.ok(by.get("BW-03")!.flags.some((f) => f.id === "RF-010"), "building cost per sq m, under unit costs");
+  const order = items.map((x) => x.group);
+  assert.deepEqual(order, [...order].sort((a, b) => ["suggested", "more", "later"].indexOf(a) - ["suggested", "more", "later"].indexOf(b)));
+  const flood = questionsFor({ categories: ["flood"], detectorCodes: [], documentTypes: [] });
+  assert.ok(flood.some((x) => x.question.id === "BW-09"));
+});
+
+test("questions on every project", { skip: !ix && "review.json not built" }, () => {
+  for (const [hgabId, , title, , , , , flagIdx] of ix!.rows) {
+    const codes = flagIdx.map((i) => ix!.flags[i].code);
+    const items = questionsFor({ categories: classifyProject({ title }), detectorCodes: codes, documentTypes: [] });
+    assert.ok(items.length >= 13 && items.length <= 16, `${hgabId}: ${items.length}`);
+    assert.equal(new Set(items.map((x) => x.question.id)).size, items.length);
+    for (const x of items) for (const d of x.detectors) assert.ok(codes.includes(d), `${hgabId} ${x.question.id} ${d}`);
+  }
+});
+
+test("one scale for every answer; the earlier final status reads on it", () => {
+  assert.equal(worseRating(null, "satisfactory"), "satisfactory");
+  assert.equal(worseRating("needs_attention", "satisfactory"), "needs_attention");
+  assert.equal(worseRating("needs_attention", "needs_immediate_attention"), "needs_immediate_attention");
+  assert.equal(readVerdict("unsatisfactory"), "needs_attention", "the two-way scale said nothing of urgency");
+  assert.equal(readVerdict("needs_immediate_attention"), "needs_immediate_attention");
+  assert.equal(readVerdict("fine"), null);
+  assert.equal(readVerdict(undefined), null);
 });
 
 test("every detector flag has a crosswalk entry, and every entry names real team flags", { skip: !ix && "review.json not built" }, () => {
@@ -127,6 +189,9 @@ test("the API's intake keeps a well-formed review as is and refuses anything els
     ...emptyFlagCheck("RF-024", ["potential-nep-insertion"], "2026-11-12T00:00:00Z"), human_outcome: "verified_concern", observed_discrepancy: "Not in the NEP.",
     evidence: [{ ...emptyEvidence("e1"), document_title: "HB 10858 Vol I-C", url: "https://example.org/hb.pdf", locator: "p. 546", availability: "available" }],
   });
+  r.questions.push({ ...emptyQuestionAnswer("BW-06", ["potential-nep-insertion"], "2026-11-17T00:00:00Z"), rating: "needs_attention", remark: "Not in the NEP." });
+  r.verdict = "needs_immediate_attention";
+  r.notes = "Final remarks.";
   const ok = readCaseReview(JSON.parse(JSON.stringify(r)));
   assert.deepEqual(ok.problems, []);
   assert.deepEqual(ok.review, r);
@@ -153,7 +218,17 @@ test("the API's intake keeps a well-formed review as is and refuses anything els
   refuse((x) => { x.flags[0].evidence[0].evidence_id = ""; }, /evidence_id/);
   refuse((x) => { x.kind = "audit"; }, /kind/);
   refuse((x) => { x.verdict = "fine"; }, /verdict/);
-  assert.equal(readCaseReview({ ...r, verdict: "unsatisfactory" }).review!.verdict, "unsatisfactory");
+  assert.equal(readCaseReview({ ...r, verdict: "unsatisfactory" }).review!.verdict, "needs_attention", "the earlier scale, read on today's");
+  refuse((x) => { x.questions[0].question_id = "Q6"; }, /question id/);
+  refuse((x) => { x.questions.push(x.questions[0]); }, /listed twice/);
+  refuse((x) => { x.questions[0].rating = "bad"; }, /rating/);
+  refuse((x) => { x.questions[0].flag_ids = ["24"]; }, /team check id/);
+  refuse((x) => { x.questions[0].remark = "x".repeat(20_001); }, /remark: longer/);
+  // A review saved before the questions has none.
+  const before = JSON.parse(JSON.stringify(r));
+  delete before.questions; delete before.registry.questions_sha256;
+  assert.deepEqual(readCaseReview(before).review!.questions, []);
+  assert.equal(readCaseReview(before).review!.registry.questions_sha256, "");
   refuse((x) => { x.verifies_case_id = "x"; }, /verifies_case_id/);
   refuse((x) => { x.flags[0].evidence[0].url = "javascript:alert(1)"; }, /http/);
   refuse((x) => { x.flags[0].evidence[0].availability = "maybe"; }, /availability/);
@@ -190,12 +265,31 @@ test("ids are kept: old reviews, retired checks, the API's own fields", () => {
   assert.match(validateCaseReview({ ...r, verifies_case_id: "2b1f0c9e-5d1a-4c51-9a58-1f0c2d3e4f5a" }).map((i) => i.message).join(), /Only a verification/);
 });
 
-test("a final status alone is a review worth sending", () => {
+test("a final status alone is a review worth sending; so is an answer or a remark", () => {
   const r = fresh();
   assert.equal(caseTouched(r), false);
-  assert.equal(caseTouched({ ...r, verdict: "unsatisfactory" }), true);
+  assert.equal(caseTouched({ ...r, verdict: "needs_attention" }), true);
   assert.equal(caseTouched({ ...r, verdict: "satisfactory" }), true);
   assert.equal(caseTouched({ ...r, verdict: null }), false, "cleared again: withdrawn");
+  assert.equal(caseTouched({ ...r, notes: "Final remarks." }), true);
+  assert.equal(caseTouched({ ...r, questions: [{ ...emptyQuestionAnswer("BW-01", [], "t"), rating: "satisfactory" }] }), true);
+  assert.equal(caseTouched({ ...r, questions: [{ ...emptyQuestionAnswer("BW-01", [], "t"), remark: "Checked the chainage." }] }), true);
+  assert.equal(caseTouched({ ...r, questions: [emptyQuestionAnswer("BW-01", [], "t")] }), false);
+  // An unknown question is the validator's to catch, as an unknown check is.
+  assert.match(validateCaseReview({ ...r, questions: [{ ...emptyQuestionAnswer("BW-99", [], "t"), rating: "satisfactory" }] }).map((i) => i.message).join(), /questions/);
+});
+
+test("a stored review from before the questions reads on today's form, its checks kept", () => {
+  const r = fresh();
+  r.flags.push({ ...emptyFlagCheck("RF-040", [], "t"), human_outcome: "verified_concern", observed_discrepancy: "No photos." });
+  const stored = JSON.parse(JSON.stringify({ ...r, verdict: "unsatisfactory" }));
+  delete stored.questions; delete stored.registry.questions_sha256;
+  const up = upgradeCaseReview(stored as CaseReview);
+  assert.equal(up.verdict, "needs_attention");
+  assert.deepEqual(up.questions, []);
+  assert.equal(up.registry.questions_sha256, "");
+  assert.deepEqual(up.flags, r.flags, "earlier answers to the checks are kept as they were");
+  assert.equal(up.case_id, r.case_id);
 });
 
 test("new ids are random UUIDs, with or without randomUUID", () => {
@@ -213,12 +307,19 @@ test("new ids are random UUIDs, with or without randomUUID", () => {
   }
 });
 
-test("the report CSV: one row per review, with its final status", () => {
-  const r = { ...fresh(), verdict: "unsatisfactory" as const, notes: "Line 3, \"quoted\"" };
+test("the report CSV: one row per review, with its final status, final remarks and answers", () => {
+  const r = { ...fresh(), verdict: "needs_immediate_attention" as const, notes: "Line 3, \"quoted\"" };
+  r.questions = [
+    { ...emptyQuestionAnswer("BW-16", [], "t"), rating: "needs_attention", remark: "No council endorsement." },
+    { ...emptyQuestionAnswer("BW-06", [], "t"), rating: "satisfactory" },
+  ];
   const rows = verdictRows(r);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].length, VERDICT_COLUMNS.length);
-  assert.equal(rows[0][VERDICT_COLUMNS.indexOf("Final status")], "Unsatisfactory");
+  assert.equal(rows[0][VERDICT_COLUMNS.indexOf("Final status")], "Needs immediate attention");
+  assert.equal(rows[0][VERDICT_COLUMNS.indexOf("Final remarks")], r.notes);
+  assert.equal(rows[0][VERDICT_COLUMNS.indexOf("Answers")],
+    "BW-06 Possible NEP-to-GAB allocation change: Satisfactory; BW-16 Document availability, gaps and applicability: Needs attention (No council endorsement.)");
   const csv = toCsv(VERDICT_COLUMNS, rows);
   assert.ok(csv.startsWith("\uFEFFHouse bill row,"));
   assert.ok(csv.includes('"Line 3, ""quoted"""'));
