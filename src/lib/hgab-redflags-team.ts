@@ -10,10 +10,13 @@
  * DETECTOR_TO_TEAM says which team checks a detector flag suggests. It is our proposal for the team to review: a
  * detector flag makes a team check an "AI candidate", never a finding.
  *
+ * The form asks the team's 16 questions (BW-01…BW-16, their "44-to-16 consolidation proposal"), each grouping some of
+ * the 44 checks, and answers each, and the review as a whole, on one scale (RATINGS): satisfactory, needs attention,
+ * needs immediate attention. An answer keeps the check codes its question groups, so no check is lost.
+ *
  * The review (`CaseReview`) is what the API stores (src/worker/hgab-reviews.ts): stable codes, the registry version
- * its flag ids mean, provenance for every piece of evidence, and the workbook's own vocabularies (labels kept for
- * display and CSV). It also exports as JSON or as rows of the workbook's CASE INTAKE & TRACKER and CASE EVIDENCE
- * TEMPLATE sheets.
+ * its ids mean, and the workbook's own vocabularies. Reviews saved before the 16 questions keep their per-check
+ * answers (`flags`, with evidence); the form no longer edits them. It downloads as CSV, one row per review.
  */
 import registryJson from './hgab-redflag-registry.json';
 import { NAMED_TYPES, type NamedType } from './hgab-documents';
@@ -39,10 +42,25 @@ export interface TeamFlag {
   related: string | null;
   status: string;
 }
+/** One of the team's 16 questions (their consolidation proposal): the checks it groups, verbatim from the workbook. */
+export interface TeamQuestion {
+  id: string;
+  title: string;
+  family: string;
+  /** The checks (RF-…) it groups. */
+  flag_ids: string[];
+  /** What a volunteer or expert checks. */
+  checks: string;
+  lead: string;
+  route: string;
+  note: string;
+}
 export interface TeamTask { id: string; step: number; role: string; checks: string; sources: string; deliverable: string; qa: string; handoff: string; recruitment: string | null }
 export interface TeamRegistry {
   schema: number;
   source: { file: string; sha256: string; version: string; note: string };
+  questions_source: { file: string; sha256: string; status: string; note: string };
+  questions: TeamQuestion[];
   flags: TeamFlag[];
   drafts: { code: string; category: string; indicator: string; verification: string; linked_flags: string[]; linkage: string; status: string }[];
   tasks: TeamTask[];
@@ -58,6 +76,12 @@ export type VocabKey =
 
 export const REGISTRY = registryJson as TeamRegistry;
 export const TEAM_FLAGS: ReadonlyMap<string, TeamFlag> = new Map(REGISTRY.flags.map((f) => [f.id, f]));
+export const QUESTIONS: readonly TeamQuestion[] = REGISTRY.questions;
+export const QUESTION_BY_ID: ReadonlyMap<string, TeamQuestion> = new Map(QUESTIONS.map((q) => [q.id, q]));
+/** The question each check belongs to (every check is in exactly one; the registry build fails otherwise). */
+export const QUESTION_OF_FLAG: ReadonlyMap<string, TeamQuestion> = new Map(QUESTIONS.flatMap((q) => q.flag_ids.map((id) => [id, q] as const)));
+/** The question that holds the key documents (BW-16): its status comes from the documents we found. */
+export const DOCUMENTS_QUESTION = 'BW-16';
 
 /** "Cleared / explained" → "cleared_explained": the stable code for a workbook label. */
 export const vocabCode = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -159,19 +183,21 @@ export const DETECTOR_TO_TEAM: Readonly<Record<string, readonly string[]>> = {
   'bridge-rated-good-fair-in-inventory-assessment-date-needed': ['RF-018', 'RF-003'],
   'rehabilitation-on-recorded-good-fair-segment': ['RF-017'],
   'road-rehabilitation-recorded-segment-rated-good-fair': ['RF-017'],
+  // DPWH Transparency's listing is no gap: projects with only Senate copies (nearly all House insertions) are never
+  // listed there (Jason, 2026-11-17). Our missing-document flags, below, count files from both sources.
+  'no-listed-dpwh-transparency-documents': [],
+  'dpwh-transparency-match-not-verified': [],
+  'no-listed-rdc': [],
+  'no-listed-geotagged-photos': [],
+  'no-listed-pow': [],
   // Documents → RF-033 Incomplete documents, and the document's own check
-  'no-listed-dpwh-transparency-documents': ['RF-033', 'RF-021'],
-  'dpwh-transparency-match-not-verified': ['RF-033'],
-  'no-listed-rdc': ['RF-044', 'RF-033'],
-  'no-listed-geotagged-photos': ['RF-040', 'RF-033'],
-  'no-listed-pow': ['RF-039', 'RF-033'],
   'missing-pow': ['RF-039', 'RF-033'],
   'missing-bp-202': ['RF-038', 'RF-033'],
   'missing-development-council': ['RF-044', 'RF-033'],
   'missing-geotagged-photos': ['RF-040', 'RF-033'],
   'missing-certificate-of-implementability': ['RF-041', 'RF-033'],
 };
-export const MAPPING_STATUS = 'Proposed by BetterGov, 2026-11-12 · pending team review';
+export const MAPPING_STATUS = 'Proposed by BetterGov, 2026-11-12, revised 2026-11-17 · pending team review';
 
 /** The team check for each kind of document on file (rows 46–52 of the registry: document-specific reviews). */
 export const DOCUMENT_TEAM_FLAG: Readonly<Record<NamedType, string>> = {
@@ -247,6 +273,45 @@ export function checklistFor(input: {
 export function detectorsFor(teamFlagId: string): string[] {
   return Object.entries(DETECTOR_TO_TEAM).filter(([, ids]) => ids.includes(teamFlagId)).map(([code]) => code);
 }
+/** The detector codes behind a question: those of the checks it groups. */
+export function detectorsForQuestion(questionId: string): string[] {
+  return [...new Set((QUESTION_BY_ID.get(questionId)?.flag_ids ?? []).flatMap(detectorsFor))];
+}
+
+// --- A project's questions ------------------------------------------------------------------------------------------
+
+/** Suggested: a red flag points at it (BW-16, the documents, is always here). More: the rest. Later: not yet due. */
+export type QuestionGroup = 'suggested' | 'more' | 'later';
+export const QUESTION_GROUP_LABEL: Record<QuestionGroup, string> = { suggested: 'Suggested', more: 'More questions', later: 'Not yet due' };
+export interface QuestionItem {
+  question: TeamQuestion;
+  group: QuestionGroup;
+  /** Its checks that apply to this kind of project. */
+  flags: TeamFlag[];
+  /** Detector flags on this project that suggest it. */
+  detectors: string[];
+}
+/**
+ * The questions for one project, from its checks (`checklistFor`): a question applies when any of its checks does. In
+ * the team's order within each group.
+ */
+export function questionsFor(input: Parameters<typeof checklistFor>[0]): QuestionItem[] {
+  const items = new Map<string, QuestionItem & { groups: ChecklistGroup[] }>();
+  for (const c of checklistFor(input)) {
+    const q = QUESTION_OF_FLAG.get(c.flag.id);
+    if (!q) continue;
+    const x = items.get(q.id) ?? { question: q, group: 'more' as QuestionGroup, flags: [], detectors: [], groups: [] };
+    x.flags.push(c.flag);
+    x.groups.push(c.group);
+    for (const d of c.detectors) if (!x.detectors.includes(d)) x.detectors.push(d);
+    items.set(q.id, x);
+  }
+  const order: QuestionGroup[] = ['suggested', 'more', 'later'];
+  return [...items.values()].map(({ groups, ...x }) => ({
+    ...x,
+    group: groups.every((g) => g === 'later') ? 'later' as const : x.detectors.length || x.question.id === DOCUMENTS_QUESTION ? 'suggested' as const : 'more' as const,
+  })).sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group) || a.question.id.localeCompare(b.question.id));
+}
 
 // --- The review (the API payload) ------------------------------------------------------------------------------------
 
@@ -273,12 +338,36 @@ export const EVIDENCE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /** Team check ids, in any registry version: a review keeps its checks when the registry changes. */
 export const FLAG_ID_RE = /^RF-\d{3}$/;
 /**
- * The final status of a review: what the team reports. Satisfactory: the documents support the project.
- * Unsatisfactory: a red flag. A project shows the final status of its reviews (src/lib/hgab-review.ts).
+ * The one scale for every answer (Jason, 2026-11-17): the review's final status, the one the team reports, and each
+ * question. Least to most serious. A project shows the most serious final status of its reviews (src/lib/hgab-review.ts).
  */
-export const VERDICTS = ['satisfactory', 'unsatisfactory'] as const;
-export type Verdict = (typeof VERDICTS)[number];
-export const VERDICT_LABEL: Record<Verdict, string> = { satisfactory: 'Satisfactory', unsatisfactory: 'Unsatisfactory' };
+export const RATINGS = ['satisfactory', 'needs_attention', 'needs_immediate_attention'] as const;
+export type Rating = (typeof RATINGS)[number];
+export const RATING_LABEL: Record<Rating, string> = {
+  satisfactory: 'Satisfactory',
+  needs_attention: 'Needs attention',
+  needs_immediate_attention: 'Needs immediate attention',
+};
+export const RATING_HINT: Record<Rating, string> = {
+  satisfactory: 'The documents support the project.',
+  needs_attention: 'Something is missing, unclear or doesn’t add up, and needs a follow-up.',
+  needs_immediate_attention: 'A serious problem: the team should look at it first.',
+};
+/** The more serious of two answers. */
+export const worseRating = (a: Rating | null, b: Rating | null): Rating | null =>
+  a == null ? b : b == null ? a : RATINGS.indexOf(b) > RATINGS.indexOf(a) ? b : a;
+/** The final status is a rating. */
+export const VERDICTS = RATINGS;
+export type Verdict = Rating;
+export const VERDICT_LABEL = RATING_LABEL;
+/**
+ * A stored final status as today's scale: "unsatisfactory" (the two-way scale of 2026-11-14 to 2026-11-17) reads as
+ * "needs attention", as it said nothing of urgency. Anything else unknown is no final status.
+ */
+export function readVerdict(v: unknown): Verdict | null {
+  if (v === 'unsatisfactory') return 'needs_attention';
+  return (RATINGS as readonly unknown[]).includes(v) ? (v as Verdict) : null;
+}
 /** A review of a project, or a check of another member's review of it (workflow step 5; not open yet). */
 export const CASE_KINDS = ['review', 'verification'] as const;
 export type CaseKind = (typeof CASE_KINDS)[number];
@@ -301,6 +390,19 @@ export interface EvidenceItem {
   availability: string;          // vocab document_availability
   verification_state: string;    // vocab verification_state
 }
+/** The answer to one of the 16 questions. Only answered questions are stored. */
+export interface QuestionAnswer {
+  question_id: string;            // BW-xx, meaning fixed by `registry.questions_sha256`
+  /** The checks the question groups, kept with the answer so none is lost. */
+  flag_ids: string[];
+  /** Detector flags on the project that suggested it (review.json codes). */
+  detector_rule_ids: string[];
+  rating: Rating | null;
+  /** Optional. */
+  remark: string;
+  updated_at: string;
+}
+/** An answer to one of the 44 checks: what the form asked before the 16 questions. Kept, no longer edited. */
 export interface FlagCheck {
   flag_id: string;                // RF-xxx, meaning fixed by `registry`
   detector_rule_ids: string[];    // detector flags that suggested it (review.json codes)
@@ -330,11 +432,12 @@ export interface CaseReview {
   kind: CaseKind;
   /** For a verification: the case it checks. */
   verifies_case_id: string | null;
-  /** The final status (VERDICTS), the one the team reports; null until the member gives it. */
+  /** The final status (RATINGS), the one the team reports; null until the member gives it. */
   verdict: Verdict | null;
   /** Set by the API: the number of the save that produced this copy (1, 2, …); null before the first save. */
   revision: number | null;
-  registry: { version: string; sha256: string; mapping: string };
+  /** The crosswalk's version and fingerprint, the detector mapping, and the questions workbook's fingerprint ("" before it). */
+  registry: { version: string; sha256: string; mapping: string; questions_sha256: string };
   project: {
     hgab_id: string;
     project_id: string;
@@ -350,7 +453,11 @@ export interface CaseReview {
   case_stage: string;            // vocab case_stage
   risk_priority: string;         // vocab risk_priority (a suggestion; workflow step 7 decides)
   documents: DocumentCheck[];
+  /** Answers to the 16 questions. */
+  questions: QuestionAnswer[];
+  /** Answers to the 44 checks, from reviews saved before the questions. */
   flags: FlagCheck[];
+  /** The final remarks. */
   notes: string;
   next_action: string;
   created_at: string;
@@ -374,12 +481,13 @@ export function newCaseReview(input: {
     verifies_case_id: null,
     verdict: null,
     revision: null,
-    registry: { version: REGISTRY.source.version, sha256: REGISTRY.source.sha256, mapping: MAPPING_STATUS },
+    registry: { version: REGISTRY.source.version, sha256: REGISTRY.source.sha256, mapping: MAPPING_STATUS, questions_sha256: REGISTRY.questions_source.sha256 },
     project: input.project,
     reviewer: input.reviewer,
     case_stage: 'not_started',
     risk_priority: 'not_prioritized',
     documents: NAMED_TYPES.map((t) => ({ named_type: t, availability: 'unknown', matches_project: 'unknown' })),
+    questions: [],
     flags: [],
     notes: '',
     next_action: '',
@@ -390,6 +498,9 @@ export function newCaseReview(input: {
   };
 }
 
+export function emptyQuestionAnswer(questionId: string, detectors: string[], now: string): QuestionAnswer {
+  return { question_id: questionId, flag_ids: [...(QUESTION_BY_ID.get(questionId)?.flag_ids ?? [])], detector_rule_ids: detectors, rating: null, remark: '', updated_at: now };
+}
 export function emptyFlagCheck(flagId: string, detectors: string[], now: string): FlagCheck {
   return {
     flag_id: flagId, detector_rule_ids: detectors, applicability: 'not_assessed', observed_discrepancy: '',
@@ -403,6 +514,8 @@ export function emptyEvidence(id: string): EvidenceItem {
   };
 }
 
+/** Whether a question has an answer or a remark. */
+export const questionTouched = (q: QuestionAnswer) => q.rating != null || !!q.remark.trim();
 /** Whether a check has anything a volunteer entered. */
 export const flagCheckTouched = (f: FlagCheck) =>
   f.applicability !== 'not_assessed' || f.human_outcome !== 'not_reviewed' || !!f.observed_discrepancy.trim() || f.evidence.length > 0;
@@ -411,7 +524,7 @@ export const flagCheckTouched = (f: FlagCheck) =>
  * status alone is enough. Document availability is filled in from what we detected, so it doesn't count.
  */
 export const caseTouched = (r: CaseReview) =>
-  r.verdict != null || r.flags.some(flagCheckTouched) || r.documents.some((d) => d.matches_project !== 'unknown')
+  r.verdict != null || r.questions.some(questionTouched) || r.flags.some(flagCheckTouched) || r.documents.some((d) => d.matches_project !== 'unknown')
   || !!r.notes.trim() || !!r.next_action.trim() || r.risk_priority !== 'not_prioritized' || r.case_stage !== 'not_started';
 
 /** The team's flag status: an AI candidate until a person looks, then under review, then an outcome. */
@@ -444,6 +557,14 @@ export function validateCaseReview(r: CaseReview): ValidationIssue[] {
   r.documents.forEach((d, i) => {
     if (!(NAMED_TYPES as readonly string[]).includes(d.named_type)) err(`documents[${i}]`, 'Unknown document type.');
     if (!codes('document_availability').has(d.availability)) err(`documents[${i}].availability`, 'Unknown availability.');
+  });
+  const asked = new Set<string>();
+  r.questions.forEach((q, i) => {
+    const p = `questions[${i}] ${q.question_id}`;
+    if (!QUESTION_BY_ID.has(q.question_id)) { err(p, 'Not one of the team’s questions.'); return; }
+    if (asked.has(q.question_id)) err(p, 'Listed twice.');
+    asked.add(q.question_id);
+    if (q.rating != null && !(RATINGS as readonly string[]).includes(q.rating)) err(`${p}.rating`, 'Unknown answer.');
   });
   const seen = new Set<string>();
   r.flags.forEach((f, i) => {
@@ -485,7 +606,9 @@ export function validateCaseReview(r: CaseReview): ValidationIssue[] {
  * refused. `revision` and `submitted_at` are the API's to set. The workbook's rules (`validateCaseReview`) are
  * separate: a draft may break them, a case sent for independent review may not.
  */
-export const INTAKE_LIMITS = { text: 20_000, line: 600, url: 2_000, evidence: 40, detectors: 200 } as const;
+export const INTAKE_LIMITS = { text: 20_000, line: 600, url: 2_000, evidence: 40, detectors: 200, questions: 40 } as const;
+/** Question ids, in any version of the questions: a review keeps its answers when they change. */
+export const QUESTION_ID_RE = /^BW-\d{2}$/;
 export function readCaseReview(raw: unknown): { review: CaseReview | null; problems: string[] } {
   const problems: string[] = [];
   const bad = (path: string, why: string) => { problems.push(`${path}: ${why}`); };
@@ -529,9 +652,9 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
   if (!(CASE_KINDS as readonly unknown[]).includes(kind)) bad('kind', 'expected review or verification');
   const verifies = nullable(r.verifies_case_id, (v) => str(v, 'verifies_case_id', 64));
   if (verifies != null && !CASE_ID_RE.test(verifies)) bad('verifies_case_id', 'not a case id');
-  // Reviews saved before the final status existed have none.
-  const verdict = r.verdict ?? null;
-  if (verdict != null && !(VERDICTS as readonly unknown[]).includes(verdict)) bad('verdict', 'expected satisfactory, unsatisfactory or none');
+  // Reviews saved before the final status existed have none; "unsatisfactory" is the earlier scale's.
+  const verdict = r.verdict == null ? null : readVerdict(r.verdict);
+  if (r.verdict != null && verdict == null) bad('verdict', `expected ${RATINGS.join(', ')} or none`);
   const reg = obj(r.registry, 'registry'), proj = obj(r.project, 'project'), who = obj(r.reviewer, 'reviewer'), client = obj(r.client, 'client');
   const hgabId = str(proj.hgab_id, 'project.hgab_id', 40);
   if (!/^HB10858-3-\d{4}-\d{6}$/.test(hgabId)) bad('project.hgab_id', 'not a House bill row id');
@@ -586,6 +709,26 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
       updated_at: time(f.updated_at, `${p}.updated_at`),
     };
   });
+  // Reviews saved before the 16 questions have none.
+  const asked = new Set<string>();
+  const questions = list(r.questions ?? [], 'questions', INTAKE_LIMITS.questions).map((x, i): QuestionAnswer => {
+    const q = obj(x, `questions[${i}]`), p = `questions[${i}]`;
+    const id = str(q.question_id, `${p}.question_id`, 20);
+    if (!QUESTION_ID_RE.test(id)) bad(`${p}.question_id`, 'not a question id (BW-00)');
+    if (asked.has(id)) bad(`${p}.question_id`, 'listed twice');
+    asked.add(id);
+    const rating = q.rating ?? null;
+    if (rating != null && !(RATINGS as readonly unknown[]).includes(rating)) bad(`${p}.rating`, `expected ${RATINGS.join(', ')} or none`);
+    const flagIds = list(q.flag_ids, `${p}.flag_ids`, 100).map((c, j) => {
+      const v = str(c, `${p}.flag_ids[${j}]`, 20);
+      if (!FLAG_ID_RE.test(v)) bad(`${p}.flag_ids[${j}]`, 'not a team check id (RF-000)');
+      return v;
+    });
+    return {
+      question_id: id, flag_ids: flagIds, detector_rule_ids: detectorIds(q.detector_rule_ids, `${p}.detector_rule_ids`),
+      rating: rating as Rating | null, remark: str(q.remark, `${p}.remark`, INTAKE_LIMITS.text), updated_at: time(q.updated_at, `${p}.updated_at`),
+    };
+  });
   const documents = list(r.documents, 'documents', NAMED_TYPES.length).map((x, i): DocumentCheck => {
     const d = obj(x, `documents[${i}]`);
     const t = str(d.named_type, `documents[${i}].named_type`, 40);
@@ -602,7 +745,10 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
     verifies_case_id: verifies,
     verdict: verdict as Verdict | null,
     revision: null,
-    registry: { version: str(reg.version, 'registry.version', 80), sha256: str(reg.sha256, 'registry.sha256', 64), mapping: str(reg.mapping, 'registry.mapping') },
+    registry: {
+      version: str(reg.version, 'registry.version', 80), sha256: str(reg.sha256, 'registry.sha256', 64), mapping: str(reg.mapping, 'registry.mapping'),
+      questions_sha256: str(reg.questions_sha256 ?? '', 'registry.questions_sha256', 64),
+    },
     project: {
       hgab_id: hgabId,
       project_id: str(proj.project_id, 'project.project_id', 80),
@@ -618,6 +764,7 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
     case_stage: code(r.case_stage, 'case_stage', 'case_stage'),
     risk_priority: code(r.risk_priority, 'risk_priority', 'risk_priority'),
     documents,
+    questions,
     flags,
     notes: str(r.notes, 'notes', INTAKE_LIMITS.text),
     next_action: str(r.next_action, 'next_action', INTAKE_LIMITS.line),
@@ -629,17 +776,39 @@ export function readCaseReview(raw: unknown): { review: CaseReview | null; probl
   return problems.length ? { review: null, problems: problems.slice(0, 50) } : { review, problems };
 }
 
+/**
+ * A stored review as today's form reads it: no questions before they existed, and the earlier final status on
+ * today's scale (`readVerdict`). The stored copy and its revisions are left as they were.
+ */
+export function upgradeCaseReview(c: CaseReview): CaseReview {
+  const raw = c as CaseReview & { verdict?: unknown; questions?: QuestionAnswer[] };
+  return {
+    ...c,
+    verdict: readVerdict(raw.verdict),
+    questions: raw.questions ?? [],
+    registry: { ...c.registry, questions_sha256: c.registry?.questions_sha256 ?? '' },
+  };
+}
+
 // --- The report ---------------------------------------------------------------------------------------------------
 
 /** The report: one row per review, with its final status (the field the team reports on). */
 export const VERDICT_COLUMNS = [
-  'House bill row', 'Project', 'DPWH office', 'Region', 'House bill amount (PHP)', 'Final status', 'Reviewer', 'Checks with an outcome', 'Notes', 'Last saved',
+  'House bill row', 'Project', 'DPWH office', 'Region', 'House bill amount (PHP)', 'Final status', 'Final remarks', 'Answers', 'Reviewer', 'Last saved',
 ] as const;
+/** "BW-06 Possible NEP-to-GAB allocation change: Needs attention (remark)", for each answered question, in order. */
+export function answerText(r: CaseReview): string {
+  return [...r.questions].filter(questionTouched).sort((a, b) => a.question_id.localeCompare(b.question_id)).map((q) => {
+    const title = QUESTION_BY_ID.get(q.question_id)?.title;
+    const remark = q.remark.trim();
+    return `${q.question_id}${title ? ` ${title}` : ''}: ${q.rating ? RATING_LABEL[q.rating] : 'No answer'}${remark ? ` (${remark})` : ''}`;
+  }).join('; ');
+}
 export function verdictRows(r: CaseReview): string[][] {
   return [[
     r.project.hgab_id, r.project.title, r.project.office, r.project.region, String(r.project.amount_php),
-    r.verdict ? VERDICT_LABEL[r.verdict] : 'Not given', r.reviewer.display_name || r.reviewer.reviewer_id,
-    String(r.flags.filter((f) => f.human_outcome !== 'not_reviewed').length), r.notes, (r.submitted_at ?? r.updated_at).slice(0, 10),
+    r.verdict ? VERDICT_LABEL[r.verdict] : 'Not given', r.notes, answerText(r), r.reviewer.display_name || r.reviewer.reviewer_id,
+    (r.submitted_at ?? r.updated_at).slice(0, 10),
   ]];
 }
 

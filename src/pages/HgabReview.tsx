@@ -31,8 +31,8 @@ import {
   type ListStatus, type MultiKind, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatusIndex, type SortKey, type Step, type StepContext, type VerdictCounts,
 } from '../lib/hgab-review';
 import {
-  BUDGET_SOURCE_VERSION, MAPPING_STATUS, REGISTRY, RETIRED_STORES, TEAM_FLAGS, caseTouched, classifyProject,
-  VERDICT_LABEL, detectorsFor, newCaseReview, newId, type CaseReview, type Reviewer,
+  BUDGET_SOURCE_VERSION, MAPPING_STATUS, QUESTIONS, REGISTRY, RETIRED_STORES, VERDICT_LABEL, caseTouched, classifyProject,
+  detectorsForQuestion, newCaseReview, newId, type CaseReview, type Reviewer, type Verdict,
 } from '../lib/hgab-redflags-team';
 import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
@@ -222,12 +222,12 @@ function PanelFilter({ value, onChange, placeholder }: { value: string; onChange
 }
 function PanelFoot({ children }: { children: ReactNode }) { return <div className="rv-dd-foot">{children}</div>; }
 
-/** The volunteer team's checks (RF-001…): projects whose red flags suggest each one. Rendered only while open. */
+/** The volunteer team's questions (BW-01…): projects whose red flags suggest each one. Rendered only while open. */
 function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: Step[]; ctx: StepContext; onSteps: (fn: (cur: Step[]) => Step[]) => void }) {
   const [q, setQ] = useState('');
   const base = useMemo(() => projectsWithout(all, steps, 'team', ctx), [all, steps, ctx]);
   const checked = checkedValues(steps, 'team');
-  const rows = useMemo(() => REGISTRY.flags.map((f) => {
+  const rows = useMemo(() => QUESTIONS.map((f) => {
     const idx = new Set(ctx.teamIndex?.get(f.id) ?? []);
     return { f, k: idx.size ? base.filter((p) => p.flags.some((i) => idx.has(i))).length : 0, detectors: idx.size };
   }), [base, ctx.teamIndex]);
@@ -235,24 +235,24 @@ function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: 
     const c = checkedValues(cur, 'team');
     return setValues(cur, 'team', c.includes(id) ? c.filter((x) => x !== id) : [...c, id]);
   });
-  const shown = rows.filter(({ f }) => !q || foldText(`${f.id} ${f.title} ${f.category} ${f.lead_skill}`).includes(foldText(q)));
+  const shown = rows.filter(({ f }) => !q || foldText(`${f.id} ${f.title} ${f.family} ${f.lead} ${f.flag_ids.join(' ')}`).includes(foldText(q)));
   return (
     <>
-      <PanelFilter value={q} onChange={setQ} placeholder="Find a team check, category or specialist" />
-      <p className="rv-dd-note">The volunteer team’s registry ({REGISTRY.source.version}). A project shows under a check when its red flags suggest it. {MAPPING_STATUS}.</p>
+      <PanelFilter value={q} onChange={setQ} placeholder="Find a question, check (RF-…) or specialist" />
+      <p className="rv-dd-note">The volunteer team’s {QUESTIONS.length} questions (their proposal, {REGISTRY.questions_source.status.toLowerCase()}). A project shows under a question when its red flags suggest it. {MAPPING_STATUS}.</p>
       <div className="rv-dd-cols">
         {[true, false].map((auto) => (
           <div key={String(auto)} className="rv-dd-group">
             <h3>{auto ? 'Suggested by red flags' : 'No red flag points here yet: check by hand'}</h3>
             {shown.filter((r) => (r.detectors > 0) === auto).map(({ f, k }) => (
               <Check key={f.id} checked={checked.includes(f.id)} onChange={() => toggle(f.id)} k={k} max={Math.max(1, base.length)} disabled={!auto}
-                label={<><b className="rv-rf">{f.id}</b> {f.title}</>} note={`${f.category} · ${f.lead_skill}`} />
+                label={<><b className="rv-rf">{f.id}</b> {f.title}</>} note={`${f.lead} · ${f.flag_ids.join(', ')}`} />
             ))}
           </div>
         ))}
       </div>
       <PanelFoot>
-        <span>Projects suggested for any checked team check.</span>
+        <span>Projects suggested for any checked question.</span>
         {checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'team', []))}>Clear</button>}
       </PanelFoot>
     </>
@@ -346,7 +346,7 @@ function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps }: {
         </PanelFoot>
       </Dropdown>
 
-      <Dropdown label="Team checklist" count={checkedValues(steps, 'team').length} active={checkedValues(steps, 'team').length > 0} wide>
+      <Dropdown label="Questions" count={checkedValues(steps, 'team').length} active={checkedValues(steps, 'team').length > 0} wide>
         <TeamPanel all={all} steps={steps} ctx={ctx} onSteps={onSteps} />
       </Dropdown>
 
@@ -462,8 +462,9 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
     const detail = [
       g ? PROGRESS_GROUP_NOTE[g] : 'Every DPWH project in the House bill',
       `${n(r.pending)} pending of ${n(r.projects)} (${pesoShort(r.pending_php)})`,
-      r.unsatisfactory ? `${n(r.unsatisfactory)} unsatisfactory (members)` : '',
-      r.auto ? `${n(r.auto)} unsatisfactory, auto-reviewed` : '',
+      r.needs_immediate_attention ? `${n(r.needs_immediate_attention)} need immediate attention (members)` : '',
+      r.needs_attention ? `${n(r.needs_attention)} need attention (members)` : '',
+      r.auto ? `${n(r.auto)} need attention, auto-reviewed` : '',
       r.satisfactory ? `${n(r.satisfactory)} satisfactory` : '',
       r.started ? `${n(r.started)} started` : '',
       'Click to list the pending ones.',
@@ -474,7 +475,8 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
           <span className="rv-prog-head"><b>{name}</b></span>
           <span className="rv-prog-bar" aria-hidden="true">
             <span className="is-auto" style={{ width: `${(r.auto / Math.max(1, r.projects)) * 100}%` }} />
-            <span className="is-unsatisfactory" style={{ width: `${(r.unsatisfactory / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-needs_immediate_attention" style={{ width: `${(r.needs_immediate_attention / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-needs_attention" style={{ width: `${(r.needs_attention / Math.max(1, r.projects)) * 100}%` }} />
             <span className="is-satisfactory" style={{ width: `${(r.satisfactory / Math.max(1, r.projects)) * 100}%` }} />
             <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
           </span>
@@ -495,7 +497,7 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
   );
 }
 
-const TEAM_TITLES: ReadonlyMap<string, string> = new Map([...TEAM_FLAGS].map(([id, f]) => [id, f.title]));
+const TEAM_TITLES: ReadonlyMap<string, string> = new Map(QUESTIONS.map((q) => [q.id, q.title]));
 
 /** The funnel, left to right: every project, then what each step keeps. */
 function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
@@ -846,10 +848,12 @@ function TakenNote({ entry, mineSent }: { entry: ProjectStatus | undefined; mine
   );
 }
 
-/** "1 satisfactory, 1 unsatisfactory": how a project's reviews split, for hover text. */
+/** "1 needs attention, 1 satisfactory": how a project's reviews split, most serious first, for hover text. */
 function verdictNote(c: VerdictCounts | undefined): string | undefined {
-  if (!c || c.satisfactory + c.unsatisfactory === 0) return undefined;
-  return [c.unsatisfactory ? `${n(c.unsatisfactory)} unsatisfactory` : '', c.satisfactory ? `${n(c.satisfactory)} satisfactory` : ''].filter(Boolean).join(', ');
+  if (!c) return undefined;
+  const order: Verdict[] = ['needs_immediate_attention', 'needs_attention', 'satisfactory'];
+  const parts = order.filter((v) => c[v] > 0).map((v) => `${n(c[v])} ${VERDICT_LABEL[v].toLowerCase()}`);
+  return parts.length ? parts.join(', ') : undefined;
 }
 
 /** Width of the project beside the document viewer, kept in this browser; the divider between them sets it. */
@@ -1148,14 +1152,14 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         </ul>
         <p>research.bettergov.ph matched most of them; we added more. Each file says how it was matched.</p>
         <p>Matches can be wrong, and a file being here doesn’t confirm what it says. That is what reviews are for.</p>
-        <h3>The review checklist</h3>
-        <p>Each project has the volunteer team’s red-flag checks that fit it ({REGISTRY.flags.length} in all, {REGISTRY.source.version}).</p>
-        <p>Red flags suggest which checks to start with. A suggested check is a candidate, not a finding.</p>
-        <p>Each check says who should lead it, what evidence it needs, and what not to conclude.</p>
+        <h3>The questions</h3>
+        <p>Each project has the volunteer team’s questions that fit it ({QUESTIONS.length} in all, grouping their {REGISTRY.flags.length} red-flag checks; a proposal, {REGISTRY.questions_source.status.toLowerCase()}).</p>
+        <p>Red flags suggest which questions to start with. A suggested question is a candidate, not a finding.</p>
+        <p>Each question takes the same answer as the review, and an optional remark.</p>
         <h3>Sending reviews</h3>
         <p>Sign in with your email (we send a code; there is no password). Saving sends your review to the team, and you can keep editing it.</p>
-        <p>Each review ends with a final status: <b>Satisfactory</b>, or <b>Unsatisfactory</b> for a red flag. It is what the team reports.</p>
-        <p>Each project shows its final status. If any member finds it unsatisfactory, it shows unsatisfactory. Projects with no key document and no file are unsatisfactory automatically until a member reviews them.</p>
+        <p>Each review ends with a final status, <b>Satisfactory</b>, <b>Needs attention</b> or <b>Needs immediate attention</b>, and final remarks. It is what the team reports.</p>
+        <p>Each project shows the most serious final status its reviews gave. Projects with no key document and no file show as needing attention automatically until a member reviews them.</p>
         <p>Projects without a final status show whether someone has started, so you can pick ones nobody has. More than one member can review a project.</p>
         <p>Anyone can browse the projects. Reviewing needs a sign-in, and nothing of your review is kept in your browser.</p>
         <h3>The data</h3>
@@ -1215,8 +1219,8 @@ function Reviewer() {
   }, [reviews, shared, autoRows]);
   const verdictsOf = useCallback((h: string) => shared?.[h]?.verdicts, [shared]);
   const reviewsOf = useCallback((h: string) => shared?.[h]?.reviews ?? 0, [shared]);
-  // Team check → the detector flags (as review.json indexes) that suggest it: the "Team checklist" filter.
-  const teamIndex = useMemo(() => new Map(REGISTRY.flags.map((f) => [f.id, detectorsFor(f.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
+  // Team question → the detector flags (as review.json indexes) that suggest it: the "Questions" filter.
+  const teamIndex = useMemo(() => new Map(QUESTIONS.map((q) => [q.id, detectorsForQuestion(q.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
   // "Show my reviews": the projects the signed-in member has a review of.
   const isMine = useCallback((h: string) => !!reviews[h], [reviews]);
   const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex, isMine }), [flagIndex, statusOf, teamIndex, isMine]);

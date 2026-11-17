@@ -1,8 +1,8 @@
-# The review form: the volunteer team's red-flag checklist
+# The review form: the volunteer team's questions
 
-The project reviewer (`/hgab/2027/review`) asks volunteers to work through the volunteer team's red-flag registry for each project. A review is a `CaseReview`. Anyone can browse the projects. **Reviewing needs a sign-in**, and reviews are kept only on the server (D1; see "Sending reviews" below), never in the browser. Members can download their reviews as CSV, one row per review.
+The project reviewer (`/hgab/2027/review`) asks volunteers the volunteer team's 16 questions for each project (BW-01…BW-16, grouping the team's 44 red-flag checks), and a final status. Every answer is on one scale: **Satisfactory**, **Needs attention** or **Needs immediate attention**. A review is a `CaseReview`. Anyone can browse the projects. **Reviewing needs a sign-in**, and reviews are kept only on the server (D1; see "Sending reviews" below), never in the browser. Members can download their reviews as CSV, one row per review.
 
-Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, payload, intake, validation, report rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads), `src/worker/hgab-reviews.ts` (the API), `src/components/HgabReviewMember.tsx` (sign-in). Tests: `npm run test:hgab-review`.
+Code: `src/lib/hgab-redflags-team.ts` (pure: registry, questions, crosswalk, checklist, payload, intake, validation, report rows), `src/components/HgabReviewForm.tsx` (the form), `src/lib/hgab-review-export.ts` (downloads), `src/worker/hgab-reviews.ts` (the API), `src/components/HgabReviewMember.tsx` (sign-in). Tests: `npm run test:hgab-review`.
 
 ## The team's workbook
 
@@ -17,6 +17,31 @@ Code: `src/lib/hgab-redflags-team.ts` (pure: registry, crosswalk, checklist, pay
 - every dropdown vocabulary (case stage, evidence applicability, risk priority, human outcome, availability, verification state…).
 
 Encoder names are left out; the workbook asks that personal details stay with authorized reviewers. The build fails unless the counts match the workbook's START HERE sheet (44, 24, 35, 9). Re-run it when the team sends a new version. A new SHA-256 makes reviews made under the old registry fail validation with "Made with another version of the team registry."
+
+### The 16 questions (the team's consolidation proposal)
+
+`BudgetWatch_Red_Flags_44_to_16_Consolidation_Proposal.xlsx`, "FOR REVIEW — NOT APPROVED", SHA-256 `73d7eeb287abdfc89973775adb41a685d121f7cf61d5377f43cb55b11999aab1`, kept at `data/hgab/2027/review-registry/red-flag-44-to-16-consolidation-proposal.xlsx`. The same build reads it (second argument) into the registry's `questions` and `questions_source`: each question's id, title, family, the checks it groups (`flag_ids`), what to check, lead, form route and non-loss note, verbatim. The build fails unless every one of the 44 checks is in exactly one question, the groups and mapping sheets agree, and each check's title, category and lead specialist match the crosswalk (they all do). The crosswalk's own fingerprint is unchanged, so reviews made before still validate.
+
+| Question | Checks |
+| --- | --- |
+| BW-01 Project overlap, duplication and chainage | RF-001, RF-016, RF-034 |
+| BW-02 Scope, physical targets and quantities | RF-002, RF-014, RF-019, RF-025 |
+| BW-03 Unit costs, unusual pay items and material sourcing | RF-010, RF-031, RF-032, RF-035, RF-037 |
+| BW-04 Repeated or identical project cost breakdown | RF-022 |
+| BW-05 Inconsistent costs across source documents | RF-023 |
+| BW-06 Possible NEP-to-GAB allocation change | RF-024 |
+| BW-07 Previous work, recurrence and completion | RF-003, RF-009 |
+| BW-08 Contractor award pattern and performance | RF-011, RF-012 (not yet due) |
+| BW-09 Flood/drainage system adequacy | RF-004, RF-013, RF-015 |
+| BW-10 Water supply and rainwater project purpose | RF-007, RF-008 |
+| BW-11 Road and bridge treatment/condition justification | RF-017, RF-018 |
+| BW-12 Implementation readiness, duration and phasing | RF-020, RF-021, RF-029, RF-030 |
+| BW-13 Plans completeness and professional authentication | RF-006, RF-027, RF-028 |
+| BW-14 Geotagged-photo authenticity | RF-005 |
+| BW-15 Conflicting document dates | RF-026, RF-036 (the same check, twice in the crosswalk) |
+| BW-16 Document availability, gaps and applicability | RF-033, RF-038…RF-044 |
+
+A question applies to a project when any of its checks does (`questionsFor`), so a project gets 13 to 15 of them.
 
 ## Reconciliation: detector flags and team checks
 
@@ -65,16 +90,18 @@ They are different things, and the team's integration spec says so: `detector_ru
 | Bridge rated Good/Fair in inventory · assessment date needed | 167 | RF-018, RF-003 |
 | Rehabilitation on recorded Good/Fair segment | 2 | RF-017 |
 | Road rehabilitation · recorded segment rated Good/Fair | 2 | RF-017 |
-| No listed DPWH Transparency documents | 15,228 | RF-033, RF-021 |
-| DPWH Transparency match not verified | 6,886 | RF-033 |
-| No listed RDC | 7,731 | RF-044, RF-033 |
-| No listed geotagged photos | 1,252 | RF-040, RF-033 |
-| No listed POW | 44 | RF-039, RF-033 |
+| No listed DPWH Transparency documents | 15,228 | none (until 2026-11-17: RF-033, RF-021) |
+| DPWH Transparency match not verified | 6,886 | none (until 2026-11-17: RF-033) |
+| No listed RDC | 7,731 | none (until 2026-11-17: RF-044, RF-033) |
+| No listed geotagged photos | 1,252 | none (until 2026-11-17: RF-040, RF-033) |
+| No listed POW | 44 | none (until 2026-11-17: RF-039, RF-033) |
 | Missing POW | 2,291 | RF-039, RF-033 |
 | Missing BP 202 | 2,298 | RF-038, RF-033 |
 | Missing Development Council | 10,791 | RF-044, RF-033 |
 | Missing Geotagged photos | 4,249 | RF-040, RF-033 |
 | Missing Certificate of Implementability | 2,401 | RF-041, RF-033 |
+
+**DPWH Transparency's listing is no gap** (the maintainer, 2026-11-17). Projects with only Senate copies, nearly all House insertions, are never listed on DPWH Transparency, so "No listed DPWH Transparency documents", "DPWH Transparency match not verified" and "No listed RDC / geotagged photos / POW" suggest nothing (1,884 of the "No listed RDC" projects have a development council document anyway). They still show among a project's red flags. Our own "Missing …" flags, which count files from both sources, are the document gaps: they suggest BW-16 on 11,552 projects.
 
 **Our NEP comparison is a detector too.** Our House bill pages count 6,193 DPWH rows (6,196 bill lines) as in the House bill only. That is the analysis workbench's House-only group: no NEP pair, a fuzzy match or an ambiguous one. research.bettergov.ph flags 5,548 lines as "Potential NEP insertion", because it leaves out lines where its newer matching sees a possible NEP counterpart it can't confirm ("pairing is ambiguous" 548, "needs scope review" 192). Both lists are candidates, so the reviewer carries both:
 
@@ -83,7 +110,7 @@ They are different things, and the team's integration spec says so: `detector_ru
 
 Both suggest RF-024 and appear on each project's Overview under "From our comparison". The manifest's `reviewer.nep_comparison` and `verify:hgab` keep the counts.
 
-22 of the 44 checks have no detector yet. Volunteers check them by hand, and the Team checklist filter shows them as "No red flag points here yet": RF-004 No watershed or drainage master plan; RF-005 Edited geotagged photos; RF-006 Not complete set of plans; RF-007 No identified water source; RF-008 No identified purpose; RF-011 Repeated awards to the same contractor; RF-012 Repeated awards despite poor performance; RF-013 Unsubstantiated pumping capacity; RF-014 Inconsistent or unsupported project quantities; RF-015 Unclear discharge or outfall arrangement; RF-019 Unclear physical scope and capacity; RF-020 Unrealistic construction duration; RF-026 Conflicting document dates; RF-027 Project plans are not signed and sealed; RF-028 At least one of the professionals who signed and sealed the plans are not in the database of PRC; RF-030 Apparent multi-phased project might have issues; RF-031 Unjustified embankment boulder-fill quantities; RF-032 Unsubstantiated quarry sources and hauling  costs; RF-036 Conflicting document dates; RF-037 Uncommon pay item; RF-042 Master Plan; RF-043 Feasibility Study. RF-042 and RF-043 still appear on a project when a Master Plan or Feasibility Study is among its files.
+23 of the 44 checks have no detector yet (RF-021 joined them on 2026-11-17), and 6 of the 16 questions: BW-08, BW-09, BW-10, BW-13, BW-14 and BW-15. Volunteers check them by hand, and the Questions filter shows those questions as "No red flag points here yet". The checks: RF-004 No watershed or drainage master plan; RF-005 Edited geotagged photos; RF-006 Not complete set of plans; RF-007 No identified water source; RF-008 No identified purpose; RF-011 Repeated awards to the same contractor; RF-012 Repeated awards despite poor performance; RF-013 Unsubstantiated pumping capacity; RF-014 Inconsistent or unsupported project quantities; RF-015 Unclear discharge or outfall arrangement; RF-019 Unclear physical scope and capacity; RF-020 Unrealistic construction duration; RF-021 Project not ready for implementation; RF-026 Conflicting document dates; RF-027 Project plans are not signed and sealed; RF-028 At least one of the professionals who signed and sealed the plans are not in the database of PRC; RF-030 Apparent multi-phased project might have issues; RF-031 Unjustified embankment boulder-fill quantities; RF-032 Unsubstantiated quarry sources and hauling  costs; RF-036 Conflicting document dates; RF-037 Uncommon pay item; RF-042 Master Plan; RF-043 Feasibility Study. RF-042 and RF-043 still appear on a project when a Master Plan or Feasibility Study is among its files.
 
 Other ways checks come in:
 
@@ -93,19 +120,19 @@ Other ways checks come in:
 
 ## The form
 
-For each project:
+For each project (since 2026-11-17; see "Three answers and 16 questions"):
 
-0. **The final status** comes first: **Satisfactory** (the documents support the project) or **Unsatisfactory** (a red flag). It is the field the team reports, and the project's status everywhere. See "The final status" below.
-1. **Documents on file** (RF-033): not asked. Each of the 5 key documents' availability is filled in from what we detected (`available` when found, else `unknown`), so it doesn't count as an edit; `matches_project` stays in the payload.
-2. **The checklist**, in groups: the checks this project's red flags suggest come first, without a heading; then the documents on file, other checks for this kind of project (collapsed), and not yet due (collapsed). A suggested check has no status label until a volunteer starts it. Each check shows:
-   - its lead role, what to check, the minimum evidence and the **safeguard**;
-   - then the volunteer's answers: does it apply now, what you found (facts only), evidence, and the outcome.
-3. **Evidence is picked, not filled in:** a toggle per file of the project ("POW · Senate", "BP 202 · DPWH"), and "+ Other link" for any other document. Each picked document can take optional **Details**, folded away: page, table or cell; what it says; your observation; availability; whether it applies at this stage; your check of the extract. Under the evidence comes one **What you found** for the check.
-4. The name comes from the sign-in. Since 2026-11-14 the form has no "The case" section (suggested priority, notes) and no lead line or registry note. Values already in a review stay in its data and exports.
+1. **The final status** comes first: **Satisfactory** (the documents support the project), **Needs attention** (something is missing, unclear or doesn't add up, and needs a follow-up) or **Needs immediate attention** (a serious problem: the team should look at it first). It is the field the team reports, and the project's status everywhere. Choosing one saves at once.
+2. **Final remarks**, a text box under it (`notes`), saved with **Save**.
+3. **Questions:** the ones this project's red flags suggest, and BW-16 (the documents) always, come first without a heading; then "More questions" and "Not yet due", folded. Each question shows its id and title, "Flags:" (the red flags behind it), the same three answers as buttons (click the chosen one again to clear it), and **Remark**, folded, with the team's "what to check" above the box. BW-16 also says which key documents we found ("Found: POW 2 · BP 202 · … Not found: Dev. council").
+4. **Documents on file** (RF-033): not asked. Each of the 5 key documents' availability is filled in from what we detected (`available` when found, else `unknown`), so it doesn't count as an edit; `matches_project` stays in the payload.
+5. The name comes from the sign-in.
 
-**Save** sends the review. Choosing a final status saves at once.
+Answers to the 44 checks saved before 2026-11-17 stay in the review (`flags`, with their evidence) and show under their question as "Earlier: RF-040 Geotagged photos: Concern confirmed". The form no longer edits them.
 
-The **Team checklist** filter in the bar keeps projects whose detector flags suggest any checked RF. Each option shows how many projects it would keep.
+**Save** sends the review.
+
+The **Questions** filter in the bar keeps projects whose detector flags suggest any checked question. Each option shows how many projects it would keep. Links from before it name checks (`team:RF-024`); they read as the question that groups each (`team:BW-06`).
 
 ## The payload (`CaseReview`, schema `bettergov.hgab-review/1`)
 
@@ -119,8 +146,10 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
  "registry": {
   "version": "Volunteer-ready draft v2 — 12 November 2026",
   "sha256": "d6fb880d…",
-  "mapping": "Proposed by BetterGov, 2026-11-12 · pending team review"
+  "mapping": "Proposed by BetterGov, 2026-11-12, revised 2026-11-17 · pending team review",
+  "questions_sha256": "73d7eeb2…"
  },
+ "verdict": "needs_attention",
  "project": {
   "hgab_id": "HB10858-3-0546-008478",
   "project_id": "house-reading:8501",
@@ -152,6 +181,20 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
    "matches_project": "yes"
   }
  ],
+ "questions": [
+  {
+   "question_id": "BW-06",
+   "flag_ids": [
+    "RF-024"
+   ],
+   "detector_rule_ids": [
+    "potential-nep-insertion"
+   ],
+   "rating": "needs_attention",
+   "remark": "No NEP line with this title, office or amount.",
+   "updated_at": "2026-11-17T10:00:00Z"
+  }
+ ],
  "flags": [
   {
    "flag_id": "RF-024",
@@ -180,7 +223,7 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
    "updated_at": "2026-11-12T10:00:00Z"
   }
  ],
- "notes": "",
+ "notes": "Final remarks: the increase needs DPWH's justification.",
  "next_action": "",
  "created_at": "2026-11-12T09:40:00Z",
  "updated_at": "2026-11-12T10:00:00Z",
@@ -193,19 +236,21 @@ The **Team checklist** filter in the bar keeps projects whose detector flags sug
 ```
 
 - Codes are the workbook's labels in snake case (`vocabCode`: "Cleared / explained" → `cleared_explained`). `vocab(key)` gives code and label for every dropdown.
-- `registry.sha256` pins which registry the `flag_id`s mean.
+- `registry.sha256` pins which registry the `flag_id`s mean; `registry.questions_sha256` pins which questions the `question_id`s mean ("" in reviews from before them).
+- `verdict` is the final status: `satisfactory`, `needs_attention`, `needs_immediate_attention` or null. A stored `unsatisfactory` (the two-way scale of 2026-11-14 to 2026-11-17) reads as `needs_attention` (`readVerdict`), in the status API, `GET …/mine` (`upgradeCaseReview`) and intake; the stored copy and its revisions keep what they had.
+- Only answered questions (an answer or a remark) are in `questions`. Each keeps the checks its question groups (`flag_ids`), so no check is lost if the questions change. `notes` is the final remarks.
 - `project.hgab_id` is the stable key. `project_id` is ours and positional, so treat it as a hint.
 - `case_id` and each `evidence_id` are random UUIDs (`newId`), made once by the page and kept for life. Older ids in the `<time>-<random>` form stay as they are.
 - `kind` is `review`, or `verification` for a check of another member's case (`verifies_case_id`; not open yet). Reviews saved before these fields existed are read as reviews.
 - `reviewer_id` is the member's id (ours), set by the API. `display_name` is optional.
-- Only checks a volunteer touched are in `flags`.
+- `flags` holds answers to the 44 checks from before the questions; the form no longer adds to it.
 - `revision` and `submitted_at` are set by the API on each accepted save: the save's number (1, 2, …) and its time. Both are null before the first save.
 
 ## Validation (`validateCaseReview`; the API should run the same)
 
 Errors block "Ready for independent review". The rules come from the workbook's safeguards and handoff rules:
 
-- The schema and registry version must match, and every `flag_id` must be in the registry, each listed once.
+- The schema and registry version must match, every `question_id` must be one of the questions and every `flag_id` in the registry, each listed once, and every answer on the scale.
 - Every value must be in its vocabulary, and a `task_id` must be in the role catalog.
 - Volunteers can't record "Referred with approval", which belongs to the review committee (step 8).
 - A check marked "Not yet due" or "Not applicable" can't be a "Verified concern" ("No red flag from missing not-yet-required approval"). Neither can a stage-gated check (RF-011, RF-012).
@@ -216,7 +261,7 @@ Errors block "Ready for independent review". The rules come from the workbook's 
 
 ## Downloads
 
-One CSV (UTF-8 with BOM), one row per review (`verdictRows`, `VERDICT_COLUMNS`): House bill row, project, office, region, amount, final status, reviewer, checks with an outcome, notes, and when it was last saved. **Download (CSV)** under a review gives that review; **Download my reviews (CSV)** in **My reviews** gives all of the member's own. (Until 2026-11-15 there were also JSON and the team workbook's CASE INTAKE and CASE EVIDENCE rows, `caseIntakeRows` and `caseEvidenceRows`. Nobody used them, so they went.)
+One CSV (UTF-8 with BOM), one row per review (`verdictRows`, `VERDICT_COLUMNS`): House bill row, project, office, region, amount, final status, final remarks, answers ("BW-06 Possible NEP-to-GAB allocation change: Needs attention (remark); …", `answerText`), reviewer, and when it was last saved. (Until 2026-11-17 the columns were final status, reviewer, checks with an outcome and notes.) **Download (CSV)** under a review gives that review; **Download my reviews (CSV)** in **My reviews** gives all of the member's own. (Until 2026-11-15 there were also JSON and the team workbook's CASE INTAKE and CASE EVIDENCE rows, `caseIntakeRows` and `caseEvidenceRows`. Nobody used them, so they went.)
 
 **My reviews** (the clipboard in the bar, with a count) has, besides that download, **Show my reviews**: a funnel step ("My reviews", `s=mine:yes`) that keeps only the projects the member has reviewed. Then **Sign out**.
 
@@ -295,7 +340,7 @@ Some projects are red flags plainly enough that volunteers need not open them fi
 
 - **Rule `no-key-documents`, weight 100:** none of the five key documents and no other file, in the Senate copies or on DPWH Transparency. This covers 2,119 bill lines, ₱63.5B. It points to team checks RF-033 (Incomplete documents) and RF-021 (Project not ready for implementation).
 - **Score:** the sum of the matched rules' weights, capped at 100. Bands: High from 70, Medium from 40, Low from 1. A project the rules mark has the status "red flag".
-- **In the reviewer:** the project shows "Unsatisfactory · auto-reviewed · score 100" in the list (until 2026-11-14, "Red flag · auto-reviewed") and a banner on its Overview. It counts as reviewed: faded in the list, left out by **Hide reviewed**, after work still to do in the review-status sort, first in the red-flag-score sort. The **Review status** filter has the list statuses (see "The final status").
+- **In the reviewer:** the project shows "Needs attention · auto-reviewed · score 100" in the list (2026-11-14 to 2026-11-17 "Unsatisfactory · auto-reviewed"; before that, "Red flag · auto-reviewed") and a banner on its Overview. It counts as reviewed: faded in the list, left out by **Hide reviewed**, after work still to do in the review-status sort, first in the red-flag-score sort. The **Review status** filter has the list statuses (see "The final status").
 - **A member's review takes over.** Once anyone saves a review of an auto-reviewed project, the list shows "In progress", then the members' final status (`listStatus`); the banner stays.
 - **In D1 as well.** `npm run sync:hgab-auto-reviews` writes `review.json`'s automatic reviews to D1's `review_auto`, one row per project, so the reviews database holds every project's status: members' reviews in `review_cases`, automatic ones in `review_auto`. Each run is logged in `review_auto_runs` (append-only: method, the `review.json` it read and its MD5, and how many rows it added, changed, withdrew and restored). It changes only the difference. A project that stops meeting the rules is withdrawn (`withdrawn_at`), not deleted, and comes back under the same row; triggers refuse deletes. Statements go in small batches of plain queries, not a `--file` import. Run it after every `build:hgab-documents` that changes `auto` (local by default; `--remote` for production, with a token that can edit D1; `--dry-run` shows the plan). **Production, 2026-11-13:** the tables were created (the new statements only, as a plain query) and the first remote run added 2,119 rows from `review.json` MD5 `80b090e6…`.
 - **The status API carries it.** `GET /api/hgab/2027/reviews/status` adds `auto: { score, method }` to each project's entry (`withAutoReviews`), and an entry for projects with only an automatic review (`not_started`, 0 reviews); `meta.auto` counts them. If `review_auto` isn't there yet, the list works without it.
@@ -306,6 +351,17 @@ Querying D1: every project's status, members' and automatic, is `review_cases` (
 **Provisional.** The team has not approved a scoring method, and its workflow says "no unapproved thresholds or weights" (step 6). Its own safeguard for RF-033 says "Do not score missing optional/later-stage records as violation". This rule only marks projects where *nothing at all* was found; the label, the banner and the note say the score is provisional.
 
 When the team settles the method, answers in members' reviews can add weighted components: outcomes per check, document availability, priority. Members' scores would join the rules here under a new `method`. Projects keep their rule codes, so earlier scores can be explained.
+
+## Three answers and 16 questions (2026-11-17)
+
+The maintainer asked to simplify the answering: one scale, **Satisfactory / Needs attention / Needs immediate attention**, for the final status (with a final remarks box) and for each detailed question, each with an optional remark that folds open. The questions are the team's 16 (their 44-to-16 consolidation proposal, sent 2026-11-16).
+
+- **Replaced:** the 44 check cards with their four outcomes ("Needs an expert", "Concern confirmed", "Cleared", "Evidence missing"), "Applies now?", the evidence picker, "What you found", the minimum evidence and the safeguard line. Each question's remark box carries the team's one-line "what to check".
+- **Kept:** every earlier answer, as stored (`flags`, evidence included); the case stage and validation rules in the payload and API; the automatic review (its rules are for later).
+- **The project's status** is the most serious final status its members gave (`projectVerdict`): immediate attention over attention over satisfactory. List statuses, in sort order: Not started, In progress, Needs immediate attention, Needs attention, Needs attention · auto-reviewed, Satisfactory. The report preset is "Needs attention: the report" (both attention statuses and the automatic ones); a link with `status:unsatisfactory` reads as both attention statuses.
+- **Colours:** satisfactory green, needs attention orange (`--rv-attention`, #b45309, 5:1 against white), needs immediate attention red. Auto-reviewed projects are orange, faded.
+- **The final status buttons** are one per row in a narrow pane and side by side from 560 px (a container query), so words never break.
+- **Production had** 13 live reviews when this changed: one final status (satisfactory; no live "Unsatisfactory", so no project's status changes) and 45 answers to checks (29 on the document checks). Those answers show under their questions as "Earlier: …".
 
 ## One pane, fewer words (2026-11-14)
 
@@ -322,6 +378,8 @@ When the team settles the method, answers in members' reviews can add weighted c
   - No hint under Save; one "Download (CSV)" under the review.
 
 ## The final status (2026-11-14)
+
+Superseded on 2026-11-17 by three answers ("Three answers and 16 questions"); kept here as it was.
 
 The maintainer asked for one status per review, the field the team reports: **Satisfactory** or **Unsatisfactory**, where unsatisfactory is the red flag.
 

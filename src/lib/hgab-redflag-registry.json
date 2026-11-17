@@ -6,6 +6,234 @@
   "version": "Volunteer-ready draft v2 — 12 November 2026",
   "note": "The team's proposal; role assignments and the registry are pending group review."
  },
+ "questions_source": {
+  "file": "red-flag-44-to-16-consolidation-proposal.xlsx",
+  "sha256": "73d7eeb287abdfc89973775adb41a685d121f7cf61d5377f43cb55b11999aab1",
+  "status": "FOR REVIEW — NOT APPROVED",
+  "note": "The team's proposal to ask 16 questions instead of 44 checks."
+ },
+ "questions": [
+  {
+   "id": "BW-01",
+   "title": "Project overlap, duplication and chainage",
+   "family": "Location/identity",
+   "flag_ids": [
+    "RF-001",
+    "RF-016",
+    "RF-034"
+   ],
+   "checks": "Compare project IDs, coordinates, chainages, descriptions and scope; physical overlap does not alone establish duplication.",
+   "lead": "GIS / Budget Specialist",
+   "route": "Part B",
+   "note": "Project overlaps or duplication screening; preserve each underlying observation."
+  },
+  {
+   "id": "BW-02",
+   "title": "Scope, physical targets and quantities",
+   "family": "Physical scope/quantities",
+   "flag_ids": [
+    "RF-002",
+    "RF-014",
+    "RF-019",
+    "RF-025"
+   ],
+   "checks": "Compare length, quantities, capacity and stated targets against descriptions, plans and POW; project-type subchecks.",
+   "lead": "Civil Engineer / Quantity Surveyor",
+   "route": "Part B",
+   "note": "Quantity check is distinct from unit-cost reasonableness."
+  },
+  {
+   "id": "BW-03",
+   "title": "Unit costs, unusual pay items and material sourcing",
+   "family": "Cost/estimates",
+   "flag_ids": [
+    "RF-010",
+    "RF-031",
+    "RF-032",
+    "RF-035",
+    "RF-037"
+   ],
+   "checks": "Check unit rates, boulder-fill quantities, sourcing/hauling and uncommon items when applicable; no automatic excess-cost conclusion.",
+   "lead": "Quantity Surveyor / Cost Engineer",
+   "route": "Part B",
+   "note": "Keep boulder-fill and quarry/hauling as subchecks, not lost in a generic cost question."
+  },
+  {
+   "id": "BW-04",
+   "title": "Repeated or identical project cost breakdown",
+   "family": "Cost/estimates",
+   "flag_ids": [
+    "RF-022"
+   ],
+   "checks": "Compare POW/item-level breakdowns between distinct projects; identical estimates alone do not establish duplication.",
+   "lead": "Quantity Surveyor / Cost Engineer",
+   "route": "Part B",
+   "note": "Preserve cross-project comparison separately from unusual unit prices."
+  },
+  {
+   "id": "BW-05",
+   "title": "Inconsistent costs across source documents",
+   "family": "Budget/document consistency",
+   "flag_ids": [
+    "RF-023"
+   ],
+   "checks": "Compare figures for the same project across POW, BP 202, budget entries and other available documents.",
+   "lead": "CPA / Government Auditor",
+   "route": "Part B (auto-fill evidence)",
+   "note": "Do not confuse different scope/versions with a mathematical mismatch."
+  },
+  {
+   "id": "BW-06",
+   "title": "Possible NEP-to-GAB allocation change",
+   "family": "Budget comparison",
+   "flag_ids": [
+    "RF-024"
+   ],
+   "checks": "Compare NEP and GAB only on independently supported identity and scope; record UNKNOWN when not verified.",
+   "lead": "Government Budget Specialist",
+   "route": "Part B (verification gate)",
+   "note": "Budget change is not itself an irregularity."
+  },
+  {
+   "id": "BW-07",
+   "title": "Previous work, recurrence and completion",
+   "family": "History",
+   "flag_ids": [
+    "RF-003",
+    "RF-009"
+   ],
+   "checks": "Check prior rehabilitation or unfinished projects and whether there is a legitimate new scope.",
+   "lead": "Civil Engineer / Budget Specialist",
+   "route": "Part B",
+   "note": "Repeated maintenance can be appropriate; evidence required."
+  },
+  {
+   "id": "BW-08",
+   "title": "Contractor award pattern and performance",
+   "family": "Procurement",
+   "flag_ids": [
+    "RF-011",
+    "RF-012"
+   ],
+   "checks": "Review repeat awards and performance evidence without assuming either is improper.",
+   "lead": "Procurement Specialist",
+   "route": "Part B",
+   "note": "Repeated awards and poor performance remain distinct subquestions."
+  },
+  {
+   "id": "BW-09",
+   "title": "Flood/drainage system adequacy",
+   "family": "Engineering adequacy",
+   "flag_ids": [
+    "RF-004",
+    "RF-013",
+    "RF-015"
+   ],
+   "checks": "For relevant flood/drainage works, check master plan applicability, pumping capacity, discharge and outfall.",
+   "lead": "Hydraulic / Drainage Engineer",
+   "route": "Part B; Part A supplies plan status",
+   "note": "Technical sufficiency cannot be inferred from plan absence alone."
+  },
+  {
+   "id": "BW-10",
+   "title": "Water supply and rainwater project purpose",
+   "family": "Engineering adequacy",
+   "flag_ids": [
+    "RF-007",
+    "RF-008"
+   ],
+   "checks": "For water supply/rainwater collectors, check source availability and stated purpose/beneficiaries.",
+   "lead": "Civil Engineer",
+   "route": "Part B",
+   "note": "Conditional by project type."
+  },
+  {
+   "id": "BW-11",
+   "title": "Road and bridge treatment/condition justification",
+   "family": "Engineering adequacy",
+   "flag_ids": [
+    "RF-017",
+    "RF-018"
+   ],
+   "checks": "Check basis for pavement treatment or claimed structural condition; conditional by project type.",
+   "lead": "Civil / Structural Engineer",
+   "route": "Part B",
+   "note": "Different asset types retain separate subchecks."
+  },
+  {
+   "id": "BW-12",
+   "title": "Implementation readiness, duration and phasing",
+   "family": "Delivery readiness",
+   "flag_ids": [
+    "RF-020",
+    "RF-021",
+    "RF-029",
+    "RF-030"
+   ],
+   "checks": "Check duration, prior phase, proposed phases, readiness and outstanding preconditions.",
+   "lead": "Civil Engineer / Compliance / Budget Specialist",
+   "route": "Part B",
+   "note": "Phasing can be legitimate; no automatic finding."
+  },
+  {
+   "id": "BW-13",
+   "title": "Plans completeness and professional authentication",
+   "family": "Document quality",
+   "flag_ids": [
+    "RF-006",
+    "RF-027",
+    "RF-028"
+   ],
+   "checks": "Auto-fill whether plans are present from Part A; human checks plans completeness, signatures/seals and PRC verification where applicable.",
+   "lead": "Document Verification / Civil Engineer",
+   "route": "Part A status → Part B technical check",
+   "note": "A missing plan is not equivalent to an invalid plan or PRC issue."
+  },
+  {
+   "id": "BW-14",
+   "title": "Geotagged-photo authenticity",
+   "family": "Document quality",
+   "flag_ids": [
+    "RF-005"
+   ],
+   "checks": "Part A supplies photo availability/link; human specialist evaluates any credible editing or geolocation concern.",
+   "lead": "GIS / Geospatial Specialist",
+   "route": "Part A status → Part B specialist check",
+   "note": "Photo absence and photo editing are separate concerns."
+  },
+  {
+   "id": "BW-15",
+   "title": "Conflicting document dates",
+   "family": "Document consistency",
+   "flag_ids": [
+    "RF-026",
+    "RF-036"
+   ],
+   "checks": "Compare date fields on available documents; direct duplicate titles consolidated.",
+   "lead": "Document Verification Specialist",
+   "route": "Part B (auto-fill dates if available)",
+   "note": "Exact duplicate RF codes."
+  },
+  {
+   "id": "BW-16",
+   "title": "Document availability, gaps and applicability",
+   "family": "Document coverage",
+   "flag_ids": [
+    "RF-033",
+    "RF-038",
+    "RF-039",
+    "RF-040",
+    "RF-041",
+    "RF-042",
+    "RF-043",
+    "RF-044"
+   ],
+   "checks": "Auto-populate present/missing/unverified/not-applicable statuses from Part A; require human action only for gaps and applicability decisions.",
+   "lead": "Coordinator / Compliance Specialist",
+   "route": "Part A driven; Part B exception only",
+   "note": "Document names are checklist items, not confirmed red-flag findings."
+  }
+ ],
  "flags": [
   {
    "id": "RF-001",
