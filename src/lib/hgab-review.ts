@@ -128,23 +128,24 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
 };
 /**
  * What the list shows and filters on: a project's final status, the one the team reports (src/lib/hgab-redflags-team.ts
- * RATINGS: satisfactory, needs attention, needs immediate attention). Before any member gives one: "In progress" when
- * a member has a review, "Needs attention · auto-reviewed" when the automatic review marked the project (review.json
- * `auto`), else "Not started". The case stage members' reviews also store (ReviewStatus, D1 `status`) no longer shows
- * here. Ordered for the review-status sort: work still to do first, then the most serious, then satisfactory.
+ * RATINGS: satisfactory, needs attention, needs immediate attention). Without one: "Reviewed" when a member has saved a
+ * review (a saved review is a review, 2026-11-17; until then "In progress"), "Needs attention · auto-reviewed" when the
+ * automatic review marked the project (review.json `auto`), else "Not started". The case stage members' reviews also
+ * store (ReviewStatus, D1 `status`) no longer shows here. Ordered for the review-status sort: work still to do first,
+ * then the most serious, then reviewed without a final status, then satisfactory.
  */
-export const LIST_STATUSES = ['not_started', 'in_progress', 'needs_immediate_attention', 'needs_attention', 'auto_red_flag', 'satisfactory'] as const;
+export const LIST_STATUSES = ['not_started', 'needs_immediate_attention', 'needs_attention', 'auto_red_flag', 'reviewed', 'satisfactory'] as const;
 export type ListStatus = (typeof LIST_STATUSES)[number];
 export const LIST_STATUS_LABEL: Record<ListStatus, string> = {
   not_started: 'Not started',
-  in_progress: 'In progress',
+  reviewed: 'Reviewed',
   needs_immediate_attention: VERDICT_LABEL.needs_immediate_attention,
   needs_attention: VERDICT_LABEL.needs_attention,
   auto_red_flag: `${VERDICT_LABEL.needs_attention} · auto-reviewed`,
   satisfactory: VERDICT_LABEL.satisfactory,
 };
-/** Statuses that count as reviewed (a final status, given or automatic), for "Hide reviewed" and the faded rows. */
-export const REVIEWED_STATUSES: readonly ListStatus[] = ['needs_immediate_attention', 'needs_attention', 'auto_red_flag', 'satisfactory'];
+/** Statuses that count as reviewed (a member's review, or the automatic one), for "Hide reviewed" and the faded rows. */
+export const REVIEWED_STATUSES: readonly ListStatus[] = ['needs_immediate_attention', 'needs_attention', 'auto_red_flag', 'reviewed', 'satisfactory'];
 export const NOT_REVIEWED_STATUSES: readonly ListStatus[] = LIST_STATUSES.filter((v) => !REVIEWED_STATUSES.includes(v));
 export const isReviewed = (s: ListStatus) => REVIEWED_STATUSES.includes(s);
 /** Needing attention, given by a member or automatic: what the team's report lists. */
@@ -152,7 +153,7 @@ export const ATTENTION_STATUSES: readonly ListStatus[] = ['needs_immediate_atten
 /** A project's list status from its final status, whether a member has a review, and the automatic review. */
 export function listStatus(verdict: Verdict | null, started: boolean, auto: boolean): ListStatus {
   if (verdict) return verdict;
-  if (started) return 'in_progress';
+  if (started) return 'reviewed';
   return auto ? 'auto_red_flag' : 'not_started';
 }
 
@@ -268,8 +269,8 @@ export function stepFromParam(p: string): Step | null {
     case 'mine': return value === 'yes' ? { kind } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
     case 'status': {
-      // Links from the two-way scale: "unsatisfactory" is now either attention status.
-      const read = values.flatMap((v) => (v === 'unsatisfactory' ? ['needs_immediate_attention', 'needs_attention'] : [v]));
+      // Links from the two-way scale: "unsatisfactory" is now either attention status; "in progress" is now "reviewed".
+      const read = values.flatMap((v) => (v === 'unsatisfactory' ? ['needs_immediate_attention', 'needs_attention'] : v === 'in_progress' ? ['reviewed'] : [v]));
       const ok = [...new Set(read)].filter((v): v is ListStatus => (LIST_STATUSES as readonly string[]).includes(v));
       return ok.length ? { kind, values: ok } : null;
     }
@@ -404,21 +405,21 @@ export function sortProjects(xs: readonly ReviewProject[], key: SortKey, statusO
 export interface ProgressRow {
   projects: number;
   php: number;
-  /** With a final status (REVIEWED_STATUSES): given by members, or automatic. */
+  /** Reviewed (REVIEWED_STATUSES): by members, with or without a final status, or automatically. */
   reviewed: number;
   auto: number;
   /** Members' final statuses. */
   needs_immediate_attention: number;
   needs_attention: number;
   satisfactory: number;
-  /** A member has a review without a final status yet. */
-  started: number;
+  /** Reviewed by a member, without a final status. */
+  no_final_status: number;
   pending: number;
   pending_php: number;
 }
-/** Review progress for House insertions, NEP only, and in all: final statuses, started and still pending. */
+/** Review progress for House insertions, NEP only, and in all: final statuses, reviewed without one, and still pending. */
 export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId: string) => ListStatus): { groups: Record<ProgressGroup, ProgressRow>; total: ProgressRow } {
-  const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, needs_immediate_attention: 0, needs_attention: 0, satisfactory: 0, started: 0, pending: 0, pending_php: 0 });
+  const blank = (): ProgressRow => ({ projects: 0, php: 0, reviewed: 0, auto: 0, needs_immediate_attention: 0, needs_attention: 0, satisfactory: 0, no_final_status: 0, pending: 0, pending_php: 0 });
   const groups = Object.fromEntries(PROGRESS_GROUPS.map((g) => [g, blank()])) as Record<ProgressGroup, ProgressRow>;
   const total = blank();
   for (const p of all) {
@@ -427,7 +428,8 @@ export function reviewProgress(all: readonly ReviewProject[], statusOf: (hgabId:
       r.projects++; r.php += p.amount;
       if (st === 'auto_red_flag') { r.reviewed++; r.auto++; }
       else if (st === 'needs_immediate_attention' || st === 'needs_attention' || st === 'satisfactory') { r.reviewed++; r[st]++; }
-      else { r.pending++; r.pending_php += p.amount; if (st === 'in_progress') r.started++; }
+      else if (st === 'reviewed') { r.reviewed++; r.no_final_status++; }
+      else { r.pending++; r.pending_php += p.amount; }
     }
   }
   return { groups, total };
@@ -453,7 +455,7 @@ export const PRESETS: readonly { key: string; label: string; note: string; steps
   {
     key: 'not-reviewed',
     label: 'Not yet reviewed',
-    note: 'Projects without a final status: leaves out reviewed and auto-reviewed ones.',
+    note: 'Projects no member has reviewed, so two people don’t review the same one. Leaves out auto-reviewed ones.',
     steps: [{ kind: 'status', values: [...NOT_REVIEWED_STATUSES] }],
   },
   {
@@ -467,12 +469,6 @@ export const PRESETS: readonly { key: string; label: string; note: string; steps
     label: 'Auto-reviewed red flags',
     note: 'No key document and no file found: marked red flag without a review.',
     steps: [{ kind: 'status', values: ['auto_red_flag'] }],
-  },
-  {
-    key: 'not-taken',
-    label: 'Nobody has started',
-    note: 'Projects no member has a review for yet, so two people don’t review the same one.',
-    steps: [{ kind: 'status', values: ['not_started'] }],
   },
   {
     key: 'inserted-no-docs',

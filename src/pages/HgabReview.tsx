@@ -466,7 +466,7 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
       r.needs_attention ? `${n(r.needs_attention)} need attention (members)` : '',
       r.auto ? `${n(r.auto)} need attention, auto-reviewed` : '',
       r.satisfactory ? `${n(r.satisfactory)} satisfactory` : '',
-      r.started ? `${n(r.started)} started` : '',
+      r.no_final_status ? `${n(r.no_final_status)} reviewed, no final status` : '',
       'Click to list the pending ones.',
     ].filter(Boolean).join('\n');
     return (
@@ -478,7 +478,7 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
             <span className="is-needs_immediate_attention" style={{ width: `${(r.needs_immediate_attention / Math.max(1, r.projects)) * 100}%` }} />
             <span className="is-needs_attention" style={{ width: `${(r.needs_attention / Math.max(1, r.projects)) * 100}%` }} />
             <span className="is-satisfactory" style={{ width: `${(r.satisfactory / Math.max(1, r.projects)) * 100}%` }} />
-            <span className="is-started" style={{ width: `${(r.started / Math.max(1, r.projects)) * 100}%` }} />
+            <span className="is-reviewed" style={{ width: `${(r.no_final_status / Math.max(1, r.projects)) * 100}%` }} />
           </span>
           <span className="rv-prog-foot"><span><b>{n(r.pending)}</b>/{n(r.projects)} · {pct(r)}%</span><span>{pesoShort(r.pending_php)}</span></span>
         </button>
@@ -580,11 +580,6 @@ function ProjectList({ projects, selected, statusOf, reviewsOf, verdictsOf, mine
                 <b>{pesoShort(p.amount)}</b>
                 <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
                 <DocDots mask={p.docs} />
-                {st !== 'not_started' && !isReviewed(st) && (
-                  <span className={`rv-status is-${st}`} title={reviewsOf(p.hgabId) ? `${n(reviewsOf(p.hgabId))} ${reviewsOf(p.hgabId) === 1 ? 'member has' : 'members have'} a review` : undefined}>
-                    {LIST_STATUS_LABEL[st]}{reviewsOf(p.hgabId) > 1 && <small> · {n(reviewsOf(p.hgabId))}</small>}
-                  </span>
-                )}
                 {mine[p.hgabId] && <span className="rv-yours">Yours</span>}
               </span>
             </button>
@@ -1160,7 +1155,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
         <p>Sign in with your email (we send a code; there is no password). Saving sends your review to the team, and you can keep editing it.</p>
         <p>Each review ends with a final status, <b>Satisfactory</b>, <b>Needs attention</b> or <b>Needs immediate attention</b>, and final remarks. It is what the team reports.</p>
         <p>Each project shows the most serious final status its reviews gave. Projects with no key document and no file show as needing attention automatically until a member reviews them.</p>
-        <p>Projects without a final status show whether someone has started, so you can pick ones nobody has. More than one member can review a project.</p>
+        <p>A project a member has reviewed without a final status shows <b>Reviewed</b>. Pick projects nobody has reviewed (“Not yet reviewed”). More than one member can review a project.</p>
         <p>Anyone can browse the projects. Reviewing needs a sign-in, and nothing of your review is kept in your browser.</p>
         <h3>The data</h3>
         <p>Every project here, with its documents and red flags, downloads as CSV or Parquet from <b>Download data</b> in the bar. Volunteers’ reviews are not included.</p>
