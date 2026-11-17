@@ -4,6 +4,7 @@ import { pageMeta } from './lib/seo';
 import { RED_FLAGS_ROOT } from './lib/hgab-redflags';
 import { FAP_ROOT } from './lib/hgab-fap';
 import { REVIEW_ROOT } from './lib/hgab-review';
+import { REPORT_ROOT } from './lib/hgab-review-report';
 import { SHORT_PATHS, shortLinkTarget } from './lib/short-links';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
 import TermsGate from './components/TermsGate';
@@ -51,6 +52,7 @@ const HgabParties = lazy(() => import('./pages/HgabParties'));
 const HgabParty = lazy(() => import('./pages/HgabParty'));
 const HgabRedFlags = lazy(() => import('./pages/HgabRedFlags'));
 const HgabReview = lazy(() => import('./pages/HgabReview'));
+const HgabReviewReport = lazy(() => import('./pages/HgabReviewReport'));
 const HgabFap = lazy(() => import('./pages/HgabFap'));
 const HgabPartyData = lazy(() => import('./pages/HgabPartyData'));
 
@@ -181,6 +183,8 @@ export default function App() {
           <Route path={FAP_ROOT} element={<HgabFap />} />
           {/* The project reviewer: its own full-height layout (src/lib/hgab-review.ts). */}
           <Route path={REVIEW_ROOT} element={<HgabReview />} />
+          {/* The team's report on members' reviews: hidden (no menu, not in the sitemap, noindex) and members-only. */}
+          <Route path={REPORT_ROOT} element={<HgabReviewReport />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
           {/* A static page published with the data and served by the Worker: load it from the server. */}
           <Route path="/hgab/2027/we-are-not-ignorant" element={<ServerPage />} />

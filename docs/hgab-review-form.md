@@ -295,7 +295,7 @@ Rules:
 - **Withdrawing, or sending another member's case id:** you can only touch your own reviews (403/404).
 - **Status** counts reviews only (not verifications), and not withdrawn ones.
 - **Nothing is kept in the browser.** If a save fails, the edits stay in the open form with the error, ready to save again. Leaving the page with unsaved edits asks first. On load the page removes the keys earlier versions kept reviews under (`RETIRED_STORES`: `hgab-review:v1`, `hgab-review:v2`, `hgab-review:reviewer`); those drafts were never sent and are not migrated. The only reviewer key left in the browser is `hgab-review:split`, the width of the project beside the document.
-- **Privacy:** the members table keeps each member's email from Clerk for the team. No route returns another member's email or review. Before anyone else sees reviews (the independent verifier, say), decide who may see them. The workbook asks that case notes and personal data stay with authorized reviewers.
+- **Privacy:** the members table keeps each member's email from Clerk for the team. No route returns another member's email. The review report's route returns every member's reviews, by name, to anyone with its address (see "The review report"). Before anyone else sees reviews (the independent verifier, say), decide who may see them. The workbook asks that case notes and personal data stay with authorized reviewers.
 
 Storage (`scripts/hgab-review/reviews-schema.sql`, additive and safe to re-run):
 
@@ -312,6 +312,17 @@ Setup:
 - Production: run `npx wrangler secret put CLERK_SECRET_KEY` on the `budget` Worker; set `VITE_CLERK_PUBLISHABLE_KEY` in the Workers Builds build variables (it is public); and run `npx wrangler d1 execute budget --remote --file=scripts/hgab-review/reviews-schema.sql`. Use a Clerk production instance for `budget.bettergov.ph`: a development instance shows "Development mode" and caps its users.
 - Without the publishable key, the page has no sign-in and so no reviewing. Without the secret, or before the tables exist, the API answers 503 and the review section says reviewing isn't open yet. Browsing works either way.
 - Testing: Clerk test emails (`name+clerk_test@example.com`, code `424242`) sign in without sending email. Clerk's bot protection blocks sign-up in headless browsers, so create test users with the Backend API first.
+
+## The review report (hidden, team only)
+
+`/hgab/2027/review/report` is a report on members' reviews for the team: easy to scan, print and download. It is not linked from any menu or page, not in the sitemap, and `noindex`.
+
+- **Who can read it.** Anyone with the address, for now, with no sign-in (the maintainer, 2026-11-17): the page is simply not linked from anywhere. The Worker route `GET /api/hgab/2027/reviews/report` is open like the status list (503 while reviewing isn't set up). Before linking it anywhere, decide whether it should need a sign-in or a list of the team's emails.
+- **What the route sends:** every live review (`kind = 'review'`, not withdrawn), upgraded to today's form (`upgradeCaseReview`), with the member's id, the name they last gave, the review status, how many saves and the first and last save; and the automatic reviews (`review_auto`). No emails.
+- **The page** joins the reviews to `documents/review.json` for each line's office, legislative districts, region, program, House insertion, red flags and key documents (without it, the review's own copy of the project). A project counts under the most serious final status any member gave it (`reportProjects`), else "No final status yet". Sections: Summary (projects and budget by final status; the 2,119 auto-reviewed projects noted, not counted), House insertions and NEP only, By region, By DPWH office (legislative districts first, as the copy rules ask), By question (the 16 questions; and the 44 checks answered before them), then Projects, grouped by final status, most serious first, with filters (final status, region, insertions or NEP only, search) kept in the URL (`st=`, `region=`, `src=`, `q=`). Each project links to the reviewer (`?p=`).
+- **Members** show by the name they gave, else "Member N", numbered by their first review (`memberNames`).
+- **Downloads:** reviews CSV (`REPORT_REVIEW_COLUMNS`, one row per review, with the reviewer link), answers CSV (`REPORT_ANSWER_COLUMNS`, one row per question answered or earlier check), and print or save as PDF (the bar, contents and filters don't print).
+- **Tests:** `scripts/hgab-review-report.test.ts` (in `npm run test:hgab-review`).
 
 ## Senate copies: public once redacted
 

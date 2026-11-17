@@ -7,6 +7,8 @@
  *   GET    /api/hgab/2027/reviews/mine       the signed-in member's reviews
  *   POST   /api/hgab/2027/reviews            send a review (a CaseReview); one per member per project, kept editable
  *   DELETE /api/hgab/2027/reviews/:case_id   withdraw one of your reviews (it is kept, and comes back if you send it again)
+ *   GET    /api/hgab/2027/reviews/report     every member's live reviews, for the team's report (/hgab/2027/review/report);
+ *                                            open to anyone for now (Jason, 2026-11-17), but linked from nowhere; no emails
  *
  * The status list is public so anyone can see which projects are taken; it names no one. Sign-in: the page sends the
  * Clerk session token as `Authorization: Bearer …`, checked with CLERK_SECRET_KEY (a Worker secret; `.dev.vars`
@@ -24,6 +26,7 @@
 import { createClerkClient, verifyToken } from "@clerk/backend";
 import { READY_STAGE, newId, readCaseReview, upgradeCaseReview, validateCaseReview, type CaseReview } from "../lib/hgab-redflags-team";
 import { buildStatusIndex, reviewStatusFromStage, withAutoReviews, type ReviewStatus } from "../lib/hgab-review";
+import type { ReportAuto, ReportCase } from "../lib/hgab-review-report";
 
 export type ReviewEnv = Env & { CLERK_SECRET_KEY?: string; CLERK_AUTHORIZED_PARTIES?: string };
 interface Login { issuer: string; subject: string }
@@ -135,6 +138,31 @@ async function mine(env: ReviewEnv, memberId: string) {
   return reply({ meta: { reviews: rows.length }, member: member.results?.[0], data: rows.map((r) => upgradeCaseReview(JSON.parse(r.payload) as CaseReview)) });
 }
 
+/**
+ * Every member's live reviews, for the team's report. Open to anyone for now, with no sign-in (Jason, 2026-11-17); the
+ * page is linked from nowhere and noindex. Members show by the name they gave, never by email.
+ */
+async function report(env: ReviewEnv) {
+  const [{ results }, auto] = await Promise.all([
+    env.DB.prepare(
+      `SELECT c.case_id, c.hgab_id, c.member_id, c.status, c.rev, c.created_at, c.updated_at, c.payload, m.display_name
+       FROM review_cases c JOIN review_members m ON m.member_id = c.member_id
+       WHERE c.kind = 'review' AND c.withdrawn_at IS NULL ORDER BY c.updated_at DESC`,
+    ).all<{ case_id: string; hgab_id: string; member_id: string; status: ReviewStatus; rev: number; created_at: string; updated_at: string; payload: string; display_name: string | null }>(),
+    autoReviews(env),
+  ]);
+  const data: ReportCase[] = (results ?? []).map((r) => ({
+    hgab_id: r.hgab_id, member_id: r.member_id, member_name: r.display_name?.trim() || null, status: r.status, revisions: r.rev,
+    created_at: r.created_at, updated_at: r.updated_at, review: upgradeCaseReview(JSON.parse(r.payload) as CaseReview),
+  }));
+  const autoRows: ReportAuto[] = auto.map((a) => ({ hgab_id: a.hgab_id, score: a.score, method: a.method }));
+  return reply({
+    meta: { generated_at: new Date().toISOString(), reviews: data.length, members: new Set(data.map((d) => d.member_id)).size, auto: autoRows.length },
+    data,
+    auto: autoRows,
+  });
+}
+
 interface CaseRow { case_id: string; hgab_id: string; member_id: string; kind: string; rev: number; withdrawn_at: string | null }
 
 async function send(request: Request, env: ReviewEnv, memberId: string, now: string) {
@@ -227,6 +255,7 @@ export async function handleReviews(request: Request, env: ReviewEnv, url: URL):
   const method = request.method;
   try {
     if (path === `${REVIEWS_API}/status` && method === "GET") return env.CLERK_SECRET_KEY ? await statusList(env) : closed();
+    if (path === `${REVIEWS_API}/report` && method === "GET") return env.CLERK_SECRET_KEY ? await report(env) : closed();
     const caseMatch = new RegExp(`^${REVIEWS_API}/([A-Za-z0-9_-]{8,64})$`).exec(path);
     const route = path === `${REVIEWS_API}/mine` && method === "GET" ? "mine"
       : path === REVIEWS_API && method === "POST" ? "send"
