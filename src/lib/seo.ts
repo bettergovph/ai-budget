@@ -20,6 +20,7 @@ import { LETTER_ROOT } from "./hgab-letter";
 import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { FAP_ROOT, FAP_TITLE } from "./hgab-fap";
 import { REVIEW_ROOT, REVIEW_TITLE } from "./hgab-review";
+import { REPORT_ROOT, REPORT_TITLE } from "./hgab-review-report";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
@@ -39,6 +40,8 @@ export interface PageMeta {
   imageAlt?: string;
   imageWidth?: string;
   imageHeight?: string;
+  /** Hidden pages: kept out of search results (a robots meta tag and X-Robots-Tag from the Worker). */
+  noindex?: boolean;
 }
 
 /** Fields the hearings SEO needs, mirroring the D1 `hearings` row. */
@@ -484,6 +487,14 @@ export function pageMeta(pathname: string): PageMeta {
   // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.
   // Foreign-assisted projects: the House bill against the NEP, and the budgets since FY2021; before the dataset pattern.
   // The project reviewer, for volunteers; before the dataset pattern. Its short address is /review (lib/short-links.ts).
+  // The team's report on members' reviews: hidden (no menu, not in the sitemap) and members-only.
+  if (p === REPORT_ROOT) {
+    return {
+      title: `${REPORT_TITLE} · ${SITE}`,
+      description: "For the BetterGov team: members' reviews of DPWH projects in the FY 2027 House bill. Sign-in required.",
+      noindex: true,
+    };
+  }
   if (p === REVIEW_ROOT) {
     return {
       title: `${REVIEW_TITLE}: Documents and Red Flags for Every DPWH Project in the FY 2027 House Bill · ${SITE}`,

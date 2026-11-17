@@ -131,7 +131,14 @@ export async function serveSpaHtml(request: Request, env: Env, url: URL): Promis
       .on('meta[property="og:image:alt"]', setAttr("content", meta.imageAlt ?? meta.title));
   }
 
-  return rewriter.transform(res);
+  if (!meta.noindex) return rewriter.transform(res);
+  // Hidden pages stay out of search results.
+  const out = rewriter
+    .on("head", { element(el) { el.append('<meta name="robots" content="noindex, nofollow">', { html: true }); } })
+    .transform(res);
+  const hidden = new Response(out.body, out);
+  hidden.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return hidden;
 }
 
 // ---------------------------------------------------------------------------
