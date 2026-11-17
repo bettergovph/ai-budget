@@ -27,6 +27,7 @@ test("steps round-trip through the URL", () => {
   assert.deepEqual(stepFromParam("reviewed:no"), { kind: "status", values: ["not_started"] }, "old links still work");
   // Links from the two-way final status and from the 44 checks.
   assert.deepEqual(stepFromParam("status:unsatisfactory"), { kind: "status", values: ["needs_immediate_attention", "needs_attention"] });
+  assert.deepEqual(stepFromParam("status:in_progress|not_started"), { kind: "status", values: ["reviewed", "not_started"] }, "in progress is now reviewed");
   assert.deepEqual(stepFromParam("team:RF-024|RF-016|RF-001"), { kind: "team", values: ["BW-06", "BW-01"] }, "a check reads as its question, once");
   assert.equal(stepFromParam("team:RF-999"), null);
   assert.equal(stepFromParam("status:done"), null);
@@ -56,12 +57,12 @@ test("automatic review: no key document and no file, a red flag the list can hid
   assert.equal(scoreBand(100), "High");
   // A member's final status takes over; a review without one shows "in progress"; nobody's review leaves the automatic one.
   assert.equal(listStatus(null, false, true), "auto_red_flag");
-  assert.equal(listStatus(null, true, true), "in_progress");
+  assert.equal(listStatus(null, true, true), "reviewed", "a saved review without a final status is a review");
   assert.equal(listStatus("satisfactory", true, true), "satisfactory");
   assert.equal(listStatus("needs_attention", true, false), "needs_attention");
   assert.equal(listStatus("needs_immediate_attention", true, true), "needs_immediate_attention");
   assert.equal(listStatus(null, false, false), "not_started");
-  assert.ok(isReviewed("auto_red_flag") && isReviewed("satisfactory") && isReviewed("needs_attention") && isReviewed("needs_immediate_attention") && !isReviewed("in_progress"));
+  assert.ok(isReviewed("auto_red_flag") && isReviewed("satisfactory") && isReviewed("needs_attention") && isReviewed("needs_immediate_attention") && isReviewed("reviewed") && !isReviewed("not_started"));
   const autoSet = new Set(auto.map((p) => p.hgabId));
   const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: (h: string) => listStatus(null, false, autoSet.has(h)) };
   const hidden = runFunnel(all, [{ kind: "status", values: [...NOT_REVIEWED_STATUSES] }], ctx)[1].projects;
@@ -79,7 +80,9 @@ test("review progress: House insertions and NEP only, auto-reviewed included; th
   const autoSet = new Set(all.filter((p) => p.auto).map((p) => p.hgabId));
   const done = new Set(ins.filter((p) => !p.auto).slice(0, 5).map((p) => p.hgabId));
   const flagged = new Set(ins.filter((p) => !p.auto).slice(0, 2).map((p) => p.hgabId));
-  const statusOf = (h: string) => listStatus(flagged.has(h) ? "needs_attention" : done.has(h) ? "satisfactory" : null, done.has(h), autoSet.has(h));
+  // Saved by a member without a final status: reviewed all the same.
+  const saved = new Set(ins.filter((p) => !p.auto).slice(5, 8).map((p) => p.hgabId));
+  const statusOf = (h: string) => listStatus(flagged.has(h) ? "needs_attention" : done.has(h) ? "satisfactory" : null, done.has(h) || saved.has(h), autoSet.has(h));
   const { groups, total } = reviewProgress(all, statusOf);
   assert.equal(groups.insertion.projects, ins.length);
   assert.equal(groups.insertion.projects + groups.nep.projects, all.length);
@@ -89,7 +92,9 @@ test("review progress: House insertions and NEP only, auto-reviewed included; th
   assert.equal(groups.insertion.needs_attention, 2);
   assert.equal(groups.insertion.needs_immediate_attention, 0);
   assert.equal(groups.insertion.satisfactory, 3);
-  assert.equal(groups.insertion.pending, ins.length - groups.insertion.auto - 5);
+  assert.equal(groups.insertion.no_final_status, 3);
+  assert.equal(groups.insertion.reviewed, groups.insertion.auto + 8);
+  assert.equal(groups.insertion.pending, ins.length - groups.insertion.auto - 8);
   assert.equal(total.auto, autoSet.size);
   assert.equal(total.pending + total.reviewed, total.projects);
   assert.equal(groups.insertion.php + groups.nep.php, total.php);
@@ -207,7 +212,7 @@ test("a project's final status: the most serious its members gave", () => {
   assert.equal(ix["HB10858-3-0004-000010"].verdict, "needs_immediate_attention");
   assert.equal(ix["HB10858-3-0002-000004"].verdict, null, "a review without a final status");
   assert.equal(ix["HB10858-3-0003-000009"].verdict, null, "anything else isn't a final status");
-  assert.equal(listStatus(ix["HB10858-3-0002-000004"].verdict!, ix["HB10858-3-0002-000004"].reviews > 0, true), "in_progress");
+  assert.equal(listStatus(ix["HB10858-3-0002-000004"].verdict!, ix["HB10858-3-0002-000004"].reviews > 0, true), "reviewed");
 });
 
 test("a project shows the furthest of its members' reviews", () => {
