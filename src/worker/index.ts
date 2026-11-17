@@ -41,6 +41,7 @@ import { REVIEWS_API, handleReviews } from "./hgab-reviews";
 import { SENATE_COPIES_API, handleSenateCopies } from "./hgab-senate-copies";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
+import { shortLinkTarget } from "../lib/short-links";
 import { serveStaticPage, staticPageFor } from "./static-pages";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
@@ -1425,6 +1426,10 @@ async function handleNepRollup(env: Env, dimension: string, url: URL): Promise<R
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // ---- short addresses for posters (/review → the project reviewer); 302 so a target can move ----
+    const short = shortLinkTarget(url.pathname, url.search);
+    if (short) return Response.redirect(new URL(short, url.origin).toString(), 302);
 
     // ---- public surface: versioned API, MCP server, documentation ----
     // These must run before the asset fallback: the SPA's catch-all route
