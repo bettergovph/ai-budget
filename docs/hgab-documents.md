@@ -87,7 +87,7 @@ Anyone can download every DPWH project in the House bill with its documents and 
 
 ## The project reviewer (`/hgab/2027/review`)
 
-- **The bar** (since 2026-11-14) has icons instead of words, so it never crowds the title: ⓘ How it works, ↓ Download data, a person for Sign in to review (a clipboard with a count badge for My reviews once signed in), and a bar chart for House bill analysis. Each is a 36 px button with a tooltip and a screen-reader name. The title truncates instead of wrapping, and below 480 px the logo makes room for it.
+- **The bar** (since 2026-11-14) has icons instead of words, so it never crowds the title, except one: **How to review a project**, a worded button that opens the guide (since 2026-11-18, the maintainer: "instead of the icon … to make it more visible"; "How to review" below 720 px). It replaced the ⓘ How it works icon; "How it works" now opens from the welcome panel ("how the reviewer works"). Then ↓ Download data, a person for Sign in to review (a clipboard with a count badge for My reviews once signed in), and a bar chart for House bill analysis. Each is a 36 px button with a tooltip and a screen-reader name. The title truncates instead of wrapping, and below 480 px the logo makes room for it.
 
 A workspace for volunteers, with its own full-height layout (a slim bar, no site masthead). Code: `src/pages/HgabReview.tsx`, logic `src/lib/hgab-review.ts` (pure; `npm run test:hgab-review`), styles `src/hgab-review.css`.
 

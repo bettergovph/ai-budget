@@ -1352,7 +1352,10 @@ function Reviewer() {
           <span>DPWH projects in the FY2027 House bill · HB 10858</span>
         </div>
         <nav className="rv-bar-links" aria-label="Reviewer">
-          <button type="button" className="rv-icon" onClick={() => setAbout(true)} aria-label="How it works" title="How it works"><Icon name="info" /></button>
+          {/* The guide, in words, so newcomers see it first (the maintainer, 2026-11-18; it replaced the "How it works" icon). */}
+          <Link to={HOWTO_ROOT} className="rv-bar-howto" title="How to review a project, step by step with screenshots">
+            <Icon name="info" /><span className="rv-howto-long">How to review a project</span><span className="rv-howto-short">How to review</span>
+          </Link>
           <DataDownloads />
           {opening === 'open' && member.loaded && !member.userId && (
             <button type="button" className="rv-icon" onClick={member.signIn} aria-label="Sign in to review" title="Sign in to review"><Icon name="signIn" /></button>
@@ -1427,7 +1430,7 @@ function Reviewer() {
                   <p>Narrow the list with the filters above. Each one you add is a step in the funnel, with what it keeps.</p>
                   <p>Then open each document and fill in your review. Use <kbd>j</kbd> and <kbd>k</kbd> to move between projects.</p>
                   {listed.length > 0 && <button type="button" className="rv-btn is-primary" onClick={() => open(listed[0])}>Open the first project</button>}
-                  <p className="rv-howto-link">New here? <Link to={HOWTO_ROOT}>How to review a project</Link>, step by step.</p>
+                  <p className="rv-howto-link">New here? <Link to={HOWTO_ROOT}>How to review a project</Link>, step by step. Or read <button type="button" className="rv-linkbtn" onClick={() => setAbout(true)}>how the reviewer works</button>: the data and where it comes from.</p>
                   <DisclaimerNotice compact className="rv-disclaimer" />
                 </div>
               )}
