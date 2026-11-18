@@ -386,21 +386,28 @@ export interface DocTally {
   files: number;
   /** Projects with at least one file from the source counted. */
   withFile: number;
+  /** The same counts as House bill budget (₱): the amounts of the projects counted. */
+  amounts: { byType: number[]; byCount: number[]; levels: Record<DocLevel, number>; sources: Record<SourceGroup, number>; withFile: number };
 }
 /** Documents of some projects, from one source or either (`from`). */
 export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects', from: DocFrom = 'either'): DocTally {
   const t: DocTally = {
     key, label, from, withFile: 0, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
     levels: { complete: 0, partial: 0, none: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
+    amounts: {
+      byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0], levels: { complete: 0, partial: 0, none: 0 },
+      sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, withFile: 0,
+    },
   };
+  const a = t.amounts;
   for (const p of projects) {
     const d = docsFrom(p, from);
-    NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) t.byType[i]++; });
-    t.byCount[docCount(d.docs)]++;
-    t.levels[docLevel(d)]++;
-    t.sources[p.source]++;
+    NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) { t.byType[i]++; a.byType[i] += p.amount; } });
+    t.byCount[docCount(d.docs)]++; a.byCount[docCount(d.docs)] += p.amount;
+    t.levels[docLevel(d)]++; a.levels[docLevel(d)] += p.amount;
+    t.sources[p.source]++; a.sources[p.source] += p.amount;
     t.files += d.files;
-    if (d.files > 0) t.withFile++;
+    if (d.files > 0) { t.withFile++; a.withFile += p.amount; }
   }
   return t;
 }

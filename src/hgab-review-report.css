@@ -200,6 +200,9 @@ a.rr-card:hover { border-color: var(--accent); }
 .rr-weak { color: var(--rr-att); }
 .rr-switch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--paper); position: sticky; top: calc(var(--rr-bar-h) + 6px); z-index: 2; }
 .rr-split td.num small { margin-left: 4px; }
+/* A count's budget, under the count. */
+.rr-amt { display: block; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.rr-table tr.rr-total th, .rr-table tr.rr-total td { background: var(--paper-2); font-weight: 600; }
 .rr-docsrc { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule-soft); }
 .rr-docsrc:first-of-type { margin-top: 6px; padding-top: 0; border-top: 0; }
 .rr-downloads { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }

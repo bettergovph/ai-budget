@@ -292,7 +292,9 @@ export function DocumentsPage() {
   const byRegion = useMemo(() => docTallies(all, (p) => [p.region, p.region], from), [all, from]);
   const split = all.some((p) => p.bySource);
   const projects = reportPath('projects');
-  const cell = (f: DocFrom, v: number, of = all.length) => <td key={f} className="num">{n(v)} <small>{pct(v, of)}</small></td>;
+  const budget = by.either.amount;
+  // A count with its share of all projects, and the budget of those projects with its share of the whole budget.
+  const cell = (f: DocFrom, v: number, amount: number) => <td key={f} className="num"><Stat count={v} of={all.length} amount={amount} ofAmount={budget} /></td>;
   return (
     <>
       <PageHead title="Documents">
@@ -304,8 +306,10 @@ export function DocumentsPage() {
             note={`${n(docs?.senate.files_tied ?? by.senate.files)} House bill (Senate copies) · ${n(docs?.proposal.files ?? by.nep.files)} NEP (DPWH Transparency)`} />
           <Card label="Senate copies open" value={dataset ? n(dataset.totals.senate_copies_redacted) : '…'}
             note={dataset ? `of ${n(dataset.totals.senate_copies)}: redacted, as of ${dataset.as_of}; the rest stay closed` : undefined} />
-          <Card label="Projects with a file" value={n(by.either.withFile)} note={`${pct(by.either.withFile, all.length)} of ${n(all.length)}`} />
-          <Card label={DOC_LEVEL_LABEL.complete} value={n(by.either.levels.complete)} note={`${pct(by.either.levels.complete, all.length)} of the projects, either source`} to={`${projects}?docs=complete`} />
+          <Card label="Projects with a file" value={n(by.either.withFile)}
+            note={`${pesoShort(by.either.amounts.withFile)} · ${pct(by.either.withFile, all.length)} of ${n(all.length)} projects (${pesoShort(budget)})`} />
+          <Card label={DOC_LEVEL_LABEL.complete} value={n(by.either.levels.complete)} to={`${projects}?docs=complete`}
+            note={`${pesoShort(by.either.amounts.levels.complete)} · ${pct(by.either.levels.complete, all.length)} of the projects, either source`} />
         </div>
       </section>
 
@@ -321,42 +325,46 @@ export function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
+              <tr className="rr-total">
+                <th scope="row">DPWH projects in the House bill</th>
+                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, all.length, budget))}
+              </tr>
               <tr>
                 <th scope="row">Documents (files)</th>
                 <td className="num">{n(by.senate.files)}</td><td className="num">{n(by.nep.files)}</td><td className="num">{n(by.either.files)}</td>
               </tr>
               <tr>
                 <th scope="row">Projects with a file</th>
-                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].withFile))}
+                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].withFile, by[f].amounts.withFile))}
               </tr>
               <tr>
                 <th scope="row">Projects with {DOC_LEVEL_LABEL.complete.toLowerCase()}</th>
-                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].levels.complete))}
+                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].levels.complete, by[f].amounts.levels.complete))}
               </tr>
               {NAMED_TYPES.map((type, i) => (
                 <tr key={type}>
                   <th scope="row">With the {type === 'POW' ? 'program of work (POW)' : type === 'BP 202' ? 'BP 202' : type.toLowerCase()}</th>
-                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byType[i]))}
+                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byType[i], by[f].amounts.byType[i]))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="rr-note">
-          Shares are of all {n(all.length)} projects. Most House insertions have only House bill documents, and most NEP projects only NEP ones.
+          Each cell: projects and their share of all {n(all.length)}, then their House bill budget and its share of {pesoShort(budget)}. Most House insertions have only House bill documents, and most NEP projects only NEP ones.
           A key document counts where its source lists it, even if we haven’t found the file
           {docs ? ` (${n(docs.proposal.rows_types_without_files)} projects on DPWH Transparency, ${n(docs.senate.rows_matched_without_files)} in the Senate copies)` : ''}.
         </p>
         <h4 className="rr-h4">Where each project’s files come from</h4>
         <div className="rr-table-wrap">
           <table className="rr-table rr-narrow">
-            <thead><tr><th scope="col">Files from</th><th scope="col" className="num">Projects</th><th scope="col" className="num">Share</th><th scope="col">Note</th></tr></thead>
+            <thead><tr><th scope="col">Files from</th><th scope="col" className="num">Projects</th><th scope="col" className="num">Budget</th><th scope="col">Note</th></tr></thead>
             <tbody>
               {SOURCE_GROUPS.map((g) => (
                 <tr key={g}>
                   <th scope="row"><Link to={`${projects}?from=${g}`}>{FILES_FROM_LABEL[g]}</Link></th>
-                  <td className="num">{n(by.either.sources[g])}</td>
-                  <td className="num">{pct(by.either.sources[g], all.length)}</td>
+                  <td className="num">{n(by.either.sources[g])} <small>{pct(by.either.sources[g], all.length)}</small></td>
+                  <td className="num" title={pesoFull(by.either.amounts.sources[g])}>{pesoShort(by.either.amounts.sources[g])} <small>{pct(by.either.amounts.sources[g], budget)}</small></td>
                   <td className="rr-muted">{SOURCE_GROUP_NOTE[g]}</td>
                 </tr>
               ))}
@@ -375,12 +383,17 @@ export function DocumentsPage() {
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">The five key documents <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
         <LevelBar t={t} big />
-        <p className="rr-note">{DOC_LEVELS.map((d) => `${DOC_LEVEL_LABEL[d]}: ${n(t.levels[d])}`).join(' · ')}. {from === 'either'
+        <p className="rr-note">{DOC_LEVELS.map((d) => `${DOC_LEVEL_LABEL[d]}: ${n(t.levels[d])} (${pesoShort(t.amounts.levels[d])})`).join(' · ')}. {from === 'either'
           ? '“No document found” means none of the five and no other file in either source: the projects the automatic rule marks.'
           : `Counting only ${DOC_FROM_LABEL[from]}.`}</p>
         <div className="rr-table-wrap">
           <table className="rr-table">
-            <thead><tr><th scope="col">Document</th><th scope="col">What it is</th><th scope="col" className="num">Projects with it</th><th scope="col" className="num">Share</th><th scope="col" className="num">Without it</th></tr></thead>
+            <thead>
+              <tr>
+                <th scope="col">Document</th><th scope="col">What it is</th><th scope="col" className="num">Projects with it</th><th scope="col" className="num">Share</th>
+                <th scope="col" className="num">Budget with it</th><th scope="col" className="num">Without it</th><th scope="col" className="num">Budget without it</th>
+              </tr>
+            </thead>
             <tbody>
               {NAMED_TYPES.map((type, i) => (
                 <tr key={type}>
@@ -388,7 +401,9 @@ export function DocumentsPage() {
                   <td className="rr-muted">{NAMED_MEANING[type]}</td>
                   <td className="num">{n(t.byType[i])}</td>
                   <td className="num"><Meter value={t.byType[i]} of={t.projects} /></td>
+                  <td className="num" title={pesoFull(t.amounts.byType[i])}>{pesoShort(t.amounts.byType[i])} <small>{pct(t.amounts.byType[i], t.amount)}</small></td>
                   <td className="num">{from === 'either' ? <Link to={flagPath(missingCode(type))}>{n(t.projects - t.byType[i])}</Link> : n(t.projects - t.byType[i])}</td>
+                  <td className="num" title={pesoFull(t.amount - t.amounts.byType[i])}>{pesoShort(t.amount - t.amounts.byType[i])} <small>{pct(t.amount - t.amounts.byType[i], t.amount)}</small></td>
                 </tr>
               ))}
             </tbody>
@@ -403,7 +418,7 @@ export function DocumentsPage() {
               {[5, 4, 3, 2, 1, 0].map((k) => (
                 <tr key={k}>
                   <th scope="row">{k} of 5</th>
-                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byCount[k]))}
+                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byCount[k], by[f].amounts.byCount[k]))}
                 </tr>
               ))}
             </tbody>
@@ -447,6 +462,16 @@ const FILES_FROM_LABEL: Record<(typeof SOURCE_GROUPS)[number], string> = {
   senate: 'House bill only (Senate copies)', nep: 'NEP only (DPWH Transparency)', both: 'Both', none: 'No file found',
 };
 
+/** A count and its share, over the budget of those projects and its share. */
+function Stat({ count, of, amount, ofAmount }: { count: number; of: number; amount: number; ofAmount: number }) {
+  return (
+    <>
+      {n(count)} <small>{pct(count, of)}</small>
+      <span className="rr-amt" title={pesoFull(amount)}>{pesoShort(amount)} <small>{pct(amount, ofAmount)}</small></span>
+    </>
+  );
+}
+
 function Meter({ value, of }: { value: number; of: number }) {
   return <span className="rr-meter"><span className="rr-meter-track" aria-hidden="true"><span style={{ width: of ? `${(100 * value) / of}%` : 0 }} /></span><b>{pct(value, of)}</b></span>;
 }
@@ -476,7 +501,8 @@ function DocTable({ rows, head, link }: { rows: DocTally[]; head: string; link: 
           <tr>
             <th scope="col">{head}</th>
             <th scope="col" className="num">Projects</th>
-            {DOC_LEVELS.map((d) => <th key={d} scope="col" className="num" title={DOC_LEVEL_LABEL[d]}>{LEVEL_SHORT[d]}</th>)}
+            <th scope="col" className="num">Budget</th>
+            {DOC_LEVELS.map((d) => <th key={d} scope="col" className="num" title={`${DOC_LEVEL_LABEL[d]}: projects, then their budget`}>{LEVEL_SHORT[d]}</th>)}
             {NAMED_TYPES.map((type) => <th key={type} scope="col" className="num" title={`Share of projects with the ${type}`}>{TYPE_SHORT[type]}</th>)}
           </tr>
         </thead>
@@ -485,7 +511,12 @@ function DocTable({ rows, head, link }: { rows: DocTally[]; head: string; link: 
             <tr key={r.key}>
               <th scope="row"><Link to={link(r.key)}>{r.label}</Link></th>
               <td className="num">{n(r.projects)}</td>
-              {DOC_LEVELS.map((d) => <td key={d} className={`num${r.levels[d] ? '' : ' is-zero'}`}>{n(r.levels[d])} <small>{pct(r.levels[d], r.projects)}</small></td>)}
+              <td className="num" title={pesoFull(r.amount)}>{pesoShort(r.amount)}</td>
+              {DOC_LEVELS.map((d) => (
+                <td key={d} className={`num${r.levels[d] ? '' : ' is-zero'}`}>
+                  <Stat count={r.levels[d]} of={r.projects} amount={r.amounts.levels[d]} ofAmount={r.amount} />
+                </td>
+              ))}
               {NAMED_TYPES.map((type, i) => <td key={type} className="num">{pct(r.byType[i], r.projects)}</td>)}
             </tr>
           ))}
