@@ -855,3 +855,7 @@ textarea.rf-input { resize: vertical; }
 .rv-data-list li > span { flex: 1; color: var(--ink); }
 .rv-data-list small { color: var(--ink-3); font-family: var(--font-mono); font-size: 11px; }
 .rv-data-list a { color: var(--accent); }
+
+/* "New here?": the link to How to review a project (/hgab/2027/review/how-to). */
+.rv-howto-link { margin: 12px 0 0; color: var(--ink-3); font-size: 13px; }
+.rv-howto-link a { color: var(--accent); font-weight: 600; }
