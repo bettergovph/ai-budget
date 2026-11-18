@@ -10,7 +10,7 @@ import type { ReviewIndexFlag } from "../src/lib/hgab-documents";
 import {
   REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally, docsFrom,
   flagPath, flagTallies, groupCounts, groupIndex, insertionKey, memberNames, projectPath, questionTallies, reportPath, reportProjects,
-  reviewRows, tallyBy, totalTally, type ReportCase,
+  reviewRows, stamp, tallyBy, totalTally, type ReportCase,
 } from "../src/lib/hgab-review-report";
 
 const project = (hgabId: string, amount: number) => ({
@@ -170,5 +170,18 @@ test("documents are counted from the House bill (Senate copies), the NEP (DPWH T
   assert.deepEqual(either.levels, { complete: 2, partial: 1, none: 0 });
   assert.deepEqual(senate.byType, [2, 1, 1, 1, 1]);
   assert.deepEqual(nep.byType, [2, 2, 0, 1, 1]);
+  // The same counts as budget: every project here is ₱5M.
+  assert.equal(either.amount, 15_000_000);
+  assert.deepEqual([senate.amounts.withFile, nep.amounts.withFile, either.amounts.withFile], [10_000_000, 5_000_000, 10_000_000]);
+  assert.deepEqual(senate.amounts.levels, { complete: 5_000_000, partial: 5_000_000, none: 5_000_000 });
+  assert.deepEqual(nep.amounts.byType, [10_000_000, 10_000_000, 0, 5_000_000, 5_000_000]);
+  assert.deepEqual(either.amounts.byCount, [0, 0, 5_000_000, 0, 5_000_000, 5_000_000]);
+  assert.deepEqual(either.amounts.sources, { senate: 5_000_000, nep: 0, both: 5_000_000, none: 5_000_000 });
   assert.equal(docTallies(all, (p) => [p.region, p.region], "nep")[0].from, "nep");
+});
+
+test("each page's stamp: the date and time in Manila", () => {
+  assert.equal(stamp("2026-11-18T14:54:00Z"), "November 18, 2026, 10:54 PM");
+  assert.equal(stamp("2026-11-18T16:05:00Z"), "November 19, 2026, 12:05 AM", "Manila's date, not UTC's");
+  assert.equal(stamp("not a date"), "");
 });

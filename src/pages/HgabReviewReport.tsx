@@ -17,7 +17,7 @@ import { REVIEW_ROOT, decodeIndex } from '../lib/hgab-review';
 import { toCsv } from '../lib/hgab-redflags-team';
 import {
   REPORT_ANSWER_COLUMNS, REPORT_API, REPORT_PAGES, REPORT_REVIEW_COLUMNS, REPORT_ROOT, REPORT_TITLE, answerRows, groupIndex, memberNames,
-  reportPath, reportProjects, reviewRows, when,
+  reportPath, reportProjects, reviewRows, stamp,
 } from '../lib/hgab-review-report';
 import { ReportDataContext, type ReportData, type ReviewsLoad } from '../lib/hgab-report-data';
 import { ReviewsApiError } from '../lib/hgab-review-api';
@@ -41,6 +41,8 @@ function useNoindex() {
 export default function HgabReviewReport() {
   useNoindex();
   const [reviews, setReviews] = useState<ReviewsLoad>({ state: 'loading' });
+  // When the figures were read: the server's time for the members' reviews, else (if they failed) when we tried.
+  const [readAt, setReadAt] = useState<string | null>(null);
   const [index, setIndex] = useState<ReviewIndex | null>(null);
   const [indexError, setIndexError] = useState<string | null>(null);
   // Bumped to load the reviews again (Refresh, Try again).
@@ -51,9 +53,16 @@ export default function HgabReviewReport() {
       .then(async (res) => {
         const body = await res.json().catch(() => null);
         if (!res.ok) throw new ReviewsApiError(res.status, body as ConstructorParameters<typeof ReviewsApiError>[1]);
-        if (live) setReviews({ state: 'ready', res: body as Extract<ReviewsLoad, { state: 'ready' }>['res'] });
+        if (!live) return;
+        const r = body as Extract<ReviewsLoad, { state: 'ready' }>['res'];
+        setReviews({ state: 'ready', res: r });
+        setReadAt(r.meta.generated_at);
       })
-      .catch((e: unknown) => { if (live) setReviews({ state: 'error', message: e instanceof Error ? e.message : String(e) }); });
+      .catch((e: unknown) => {
+        if (!live) return;
+        setReviews({ state: 'error', message: e instanceof Error ? e.message : String(e) });
+        setReadAt(new Date().toISOString());
+      });
     return () => { live = false; };
   }, [tick]);
   // The project list (public data): every project's office, districts, red flags, documents and automatic review.
@@ -93,11 +102,23 @@ export default function HgabReviewReport() {
         </nav>
       </header>
       <div className="rr-layout">
-        <ReportNav data={data} reviews={reviews} reload={reload} />
+        <ReportNav data={data} reviews={reviews} />
         <main className="rr-main">
           <div className="rr-notice">
-            <b>For the team. This report isn’t linked from the site; please don’t share it.</b> A red flag, automatic or from a member’s review, is a
-            candidate for follow-up, not a finding, and not evidence that anyone did anything wrong.
+            {/* The stamp locks in what a printed or shared page shows (the maintainer, 2026-11-18). */}
+            <p className="rr-stamp" role="status">
+              <b>Partial and unofficial</b> as of {readAt ? <time dateTime={readAt}>{stamp(readAt)}</time> : '…'} (Philippine time)
+              {reviews.state !== 'loading' && <span className="rr-noprint"> · <button type="button" className="rr-link" onClick={reload}>Refresh</button></span>}
+            </p>
+            <p>
+              This report keeps growing: members are still reviewing projects, so its counts, final statuses and lists change as reviews come in.
+              Figures read at different times won’t match. Give the date and time above with any figure you use.
+              {index && <span className="rr-muted"> Projects, red flags and documents: data built {stamp(index.built_at)}.</span>}
+            </p>
+            <p>
+              <b>For the team. This report isn’t linked from the site; please don’t share it.</b> A red flag, automatic or from a member’s review, is a
+              candidate for follow-up, not a finding, and not evidence that anyone did anything wrong.
+            </p>
             {reviews.state === 'error' && (
               <span className="rr-warn"> Members’ reviews didn’t load ({reviews.message}): final statuses show the automatic review only. <button type="button" className="rr-link" onClick={reload}>Try again</button></span>
             )}
@@ -137,8 +158,8 @@ function Gate({ children }: { children: ReactNode }) {
   return <div className="rr-gate">{children}</div>;
 }
 
-/** The report's pages, then the team's downloads and when the reviews were read. */
-function ReportNav({ data, reviews, reload }: { data: ReportData | null; reviews: ReviewsLoad; reload: () => void }) {
+/** The report's pages, then the team's downloads. */
+function ReportNav({ data, reviews }: { data: ReportData | null; reviews: ReviewsLoad }) {
   const res = reviews.state === 'ready' ? reviews.res : null;
   const stem = `bettergov-house-bill-2027-review-report-${res?.meta.generated_at.slice(0, 10) ?? ''}`;
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://budget.bettergov.ph';
@@ -159,10 +180,7 @@ function ReportNav({ data, reviews, reload }: { data: ReportData | null; reviews
         <p className="rr-toc-h">Members’ reviews</p>
         <button type="button" className="rr-btn" onClick={csvReviews} disabled={!res || !data}>Reviews (CSV)</button>
         <button type="button" className="rr-btn" onClick={csvAnswers} disabled={!res || !data}>Answers (CSV)</button>
-        <p className="rr-asof">
-          {res ? <>As of {when(res.meta.generated_at, true)} · </> : reviews.state === 'loading' ? 'Loading… ' : 'Not loaded · '}
-          {reviews.state !== 'loading' && <button type="button" className="rr-link" onClick={reload}>Refresh</button>}
-        </p>
+        <p className="rr-asof">{res ? 'As of the time at the top of the page.' : reviews.state === 'loading' ? 'Loading…' : 'Not loaded.'}</p>
       </div>
     </nav>
   );
