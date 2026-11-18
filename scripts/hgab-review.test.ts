@@ -243,3 +243,18 @@ test("Show my reviews: a funnel step for the signed-in member's projects", { ski
   // Signed out (no isMine): nothing.
   assert.equal(runFunnel(all, [{ kind: "mine" }], { ...ctx, isMine: undefined })[1].projects.length, 0);
 });
+
+test("only DPWH Transparency PDFs come through the Worker; our own files are read as they are", async () => {
+  const { proxiedDocument, pdfSource, DOCUMENT_PROXY_API } = await import("../src/lib/hgab-review-api");
+  const ok = "https://s3.infrawatch.ph/nep/fy2027/2027DPWH-Proposal-12535/2027DPWH-Proposal-12535_GEOTAGGED%20PHOTO.pdf";
+  assert.ok(proxiedDocument(ok));
+  for (const bad of [
+    "https://s3.infrawatch.ph/nep/fy2026/x.pdf", "https://s3.infrawatch.ph/nep/fy2027/../x.pdf", "http://s3.infrawatch.ph/nep/fy2027/x.pdf",
+    "https://s3.infrawatch.ph/nep/fy2027/x.pdf?y=1", "https://s3.infrawatch.ph/nep/fy2027/x.html", "https://evil.example/nep/fy2027/x.pdf",
+    "https://user@s3.infrawatch.ph/nep/fy2027/x.pdf", "not a url",
+  ]) assert.ok(!proxiedDocument(bad), bad);
+  assert.equal(pdfSource(ok), `${DOCUMENT_PROXY_API}?u=${encodeURIComponent(ok)}`);
+  const ours = "https://budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/Region%20VIII/x.pdf";
+  assert.equal(pdfSource(ours), ours);
+  assert.equal(pdfSource("https://example.com/x.pdf"), null);
+});

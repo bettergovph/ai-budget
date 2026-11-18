@@ -76,3 +76,25 @@ export function documentHref(url: string): string | null {
 export type SenateCopyStatus = 'available' | 'held' | 'not_redacted' | 'missing';
 export const fetchSenateStatus = (paths: string[]) =>
   call<{ data: Record<string, SenateCopyStatus> }>(`${SENATE_COPIES_API}/status`, { method: 'POST', body: JSON.stringify({ paths }) });
+
+/**
+ * DPWH Transparency's files, through our Worker for the phone view (src/worker/hgab-document-proxy.ts): their host
+ * sends no CORS headers, so the page can't read them to draw the pages itself.
+ */
+export const DOCUMENT_PROXY_API = '/api/hgab/2027/document';
+const PROXIED = 'https://s3.infrawatch.ph/nep/fy2027/';
+/** Whether a file may come through the Worker: a PDF in DPWH Transparency's FY2027 folder, nothing else. */
+export function proxiedDocument(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && `${u.origin}${u.pathname}`.startsWith(PROXIED) && /\.pdf$/i.test(u.pathname)
+      && !u.pathname.includes('..') && !u.search && !u.hash && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+/** Where the page reads a PDF to draw it: our own files as they are, DPWH Transparency's through the Worker, else null. */
+export function pdfSource(url: string): string | null {
+  if (url.startsWith('https://budget-assets.bettergov.ph/')) return url;
+  return proxiedDocument(url) ? `${DOCUMENT_PROXY_API}?u=${encodeURIComponent(url)}` : null;
+}

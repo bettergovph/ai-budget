@@ -12,7 +12,7 @@
  * kept in the browser. Every project shows the furthest status of all members' reviews, so members can split the work
  * without reviewing the same project twice. Reviews also download as JSON or as rows for the team's workbook.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DisclaimerNotice } from '../components/HgabBits';
@@ -38,8 +38,12 @@ import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
 import MemberProvider from '../components/HgabReviewMember';
 import { downloadReviews } from '../lib/hgab-review-export';
 import {
-  ReviewsApiError, documentHref, fetchMine, fetchSenateStatus, senatePath, type SenateCopyStatus, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
+  ReviewsApiError, documentHref, fetchMine, fetchSenateStatus, pdfSource, senatePath, type SenateCopyStatus, fetchStatus, sendReview, withdrawReview, type ProjectStatus,
 } from '../lib/hgab-review-api';
+// Phones only: PDF.js, to draw a document's pages (phone browsers don't show a PDF inside a page).
+const HgabPdfPages = lazy(() => import('../components/HgabPdfPages'));
+/** Touch screens (phones and tablets) get those drawn pages too: their browsers show a PDF in a frame poorly or not at all. */
+const TOUCH = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 import {
   DocLinkContext, SenateBlockContext, senateRegion, useDocLink, useMember, useSenateBlock, type DocBlock, type Member,
 } from '../lib/hgab-review-member';
@@ -54,6 +58,8 @@ const loadShard = (seq: number) => {
   return cached(`review-detail:${path}`, () => getJson<ReviewDetailShard>(dataUrl(`${HGAB_BASE}/${path}`), 'Failed to load the project’s documents'));
 };
 const n = (v: number) => v.toLocaleString('en-US');
+/** A count for a tab badge: 15,979 → "16k". */
+const tabCount = (v: number) => (v >= 10_000 ? `${Math.round(v / 1000)}k` : v.toLocaleString('en-US'));
 const asOf = (iso: string | undefined) => {
   const d = iso ? new Date(iso) : null;
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' }) : '';
@@ -728,13 +734,27 @@ function DocFrame({ src, title }: { src: string; title: string }) {
   return <iframe src={`${opened}#view=FitH`} title={title} />;
 }
 
-function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
+/** A PDF on a phone: drawn by PDF.js where the page can read the file, else a button to open it. */
+function PhonePdf({ href, title }: { href: string; title: string }) {
+  const src = pdfSource(href);
+  const open = <a className="rv-btn" href={href} target="_blank" rel="noopener noreferrer">Open in a new tab</a>;
+  if (!src) return <div className="rv-viewer-empty"><p>This document opens in a new tab.</p>{open}</div>;
+  return (
+    <Suspense fallback={<div className="rv-viewer-empty"><p role="status">Loading the document…</p></div>}>
+      <HgabPdfPages src={src} openHref={href} title={title} />
+    </Suspense>
+  );
+}
+
+function Viewer({ files, keyTypes, file, onPick, onClose, inline, phone = false }: {
   files: readonly DetailFile[];
   keyTypes: number;
   file: DetailFile | null;
   onPick: (f: DetailFile) => void;
   onClose: () => void;
   inline: boolean;
+  /** The Documents tab on a phone: pages drawn by PDF.js, no close button. */
+  phone?: boolean;
 }) {
   const href = useDocLink()(file?.[5] ?? '');
   const held = useSenateBlock()(file?.[5] ?? '');
@@ -747,14 +767,16 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline }: {
           <span className={`rv-src is-${file[0]}`}>{SOURCE_LABEL[file[0]]}</span>
           <span className="rv-viewer-name" title={file[4]}>{file[4]}</span>
           <span className={`rv-file-how ${LINK_WEAK.has(file[1]) ? 'is-weak' : ''}`}>{LINK_LABEL[file[1]]}</span>
-          {href && <a href={href} target="_blank" rel="noopener noreferrer">Open in a new tab</a>}
-          <button type="button" onClick={onClose} aria-label="Close the document">×</button>
+          {href && <a href={href} target="_blank" rel="noopener noreferrer">{phone ? 'Open ↗' : 'Open in a new tab'}</a>}
+          {!phone && <button type="button" onClick={onClose} aria-label="Close the document">×</button>}
         </div>
       )}
       {!file
         ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
         : held || !href
           ? <HeldBackDoc block={held ?? { region: null, checking: false }} />
+          : isPdf(file) && (phone || TOUCH)
+            ? <PhonePdf key={file[5]} href={href} title={file[4]} />
           : isPdf(file)
             ? <DocFrame key={file[5]} src={href} title={file[4]} />
             : <p className="rv-empty">This file can’t be shown here. <a href={href} target="_blank" rel="noopener noreferrer">Open it</a>.</p>}
@@ -912,7 +934,10 @@ function SplitHandle({ width, onWidth, container }: { width: number; onWidth: (w
   );
 }
 
-function ProjectPane({ project, index, mine, entry, opening, profile, loadError, onSave, inlineViewer, onPrev, onNext, split, onSplit }: {
+/** On a phone, what the project pane shows: the bottom tabs other than Projects. */
+type PhoneSection = 'project' | 'docs' | 'review';
+
+function ProjectPane({ project, index, mine, entry, opening, profile, loadError, onSave, inlineViewer, onPrev, onNext, split, onSplit, phone, section, onSection }: {
   project: ReviewProject;
   index: ReviewIndex;
   /** The signed-in member's review of this project. */
@@ -929,6 +954,10 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   onNext: (() => void) | null;
   split: number;
   onSplit: (w: number) => void;
+  /** A phone: one section at a time, picked from the bottom tabs. */
+  phone: boolean;
+  section: PhoneSection;
+  onSection: (s: PhoneSection) => void;
 }) {
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -952,10 +981,14 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
       setSenate(st);
       // Open the POW first, from a file that can be shown (one that can't only when there is nothing else).
       const ok = d.files.filter((f) => { const p = senatePath(f[5]); return p == null || (st[p] === 'available' && !heldBackRegion(p)); });
-      if (inlineViewer) setOpen(ok.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? ok.find(isPdf) ?? d.files.find(isPdf) ?? null);
+      if (inlineViewer || phone) setOpen(ok.find((f) => f[2] === 'POW' && isPdf(f) && !f[7]) ?? ok.find(isPdf) ?? d.files.find(isPdf) ?? null);
     }).catch((e: unknown) => live && setError(e instanceof Error ? e.message : String(e)));
     return () => { live = false; };
-  }, [project.hgabId, project.seq, inlineViewer]);
+  }, [project.hgabId, project.seq, inlineViewer, phone]);
+  const [titleOpen, setTitleOpen] = useState(false);
+  // On a phone the documents load only once their tab is opened, and stay loaded.
+  const [docsSeen, setDocsSeen] = useState(section === 'docs');
+  if (phone && section === 'docs' && !docsSeen) setDocsSeen(true);
   // Why a document can't open (null when it can), and its link only when it can: for the viewer, the file list and evidence.
   const blockOf = useCallback((url: string): DocBlock | null => {
     const p = senatePath(url);
@@ -991,7 +1024,7 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
   return (
     <SenateBlockContext.Provider value={blockOf}>
     <DocLinkContext.Provider value={linkOf}>
-    <div ref={box} className={`rv-project ${inlineViewer ? 'has-viewer' : ''}`} style={inlineViewer ? { gridTemplateColumns: `${split}px 8px minmax(${VIEWER_MIN}px, 1fr)` } : undefined}>
+    <div ref={box} className={`rv-project ${inlineViewer ? 'has-viewer' : ''} ${phone ? `is-phone show-${section}` : ''}`} style={inlineViewer ? { gridTemplateColumns: `${split}px 8px minmax(${VIEWER_MIN}px, 1fr)` } : undefined}>
       <div className="rv-project-info">
         <div className="rv-project-top">
           <div className="rv-project-nav">
@@ -999,7 +1032,13 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
             <span className="rv-muted">{project.hgabId}</span>
             <button type="button" onClick={onNext ?? undefined} disabled={!onNext} aria-label="Next project (j)">Next ›</button>
           </div>
-          <h2 className="rv-project-title">{project.title}</h2>
+          {phone ? (
+            // On a phone a long title is cut to a line or two, so the project's documents and review keep the screen;
+            // tapping it shows it whole.
+            <h2 className={`rv-project-title ${titleOpen ? 'is-open' : ''}`}>
+              <button type="button" className="rv-title-toggle" aria-expanded={titleOpen} onClick={() => setTitleOpen((o) => !o)}>{project.title}</button>
+            </h2>
+          ) : <h2 className="rv-project-title">{project.title}</h2>}
           <p className="rv-project-sub"><b>{pesoFull(project.amount)}</b> · {officeName} · {project.region}</p>
         </div>
 
@@ -1043,10 +1082,21 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
                 )}
               </details>
             )}
-            {!inlineViewer && detail && detail.files.length > 0 && (
+            {!inlineViewer && !phone && detail && detail.files.length > 0 && (
               <div className="rv-next"><button type="button" className="rv-btn" onClick={() => setOpen(viewOrder(detail.files)[0])}>Read the documents</button></div>
             )}
+            {phone && (
+              <div className="rv-phone-next">
+                {detail && detail.files.length > 0 && <button type="button" className="rv-btn" onClick={() => onSection('docs')}>Read the documents ({detail.files.length})</button>}
+                <button type="button" className="rv-btn is-primary" onClick={() => onSection('review')}>Review this project</button>
+              </div>
+            )}
           </section>
+          {phone && docsSeen && detail && (
+            <section className="rv-phone-docs" aria-label="Documents">
+              <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline phone onPick={setOpen} onClose={() => setOpen(null)} />
+            </section>
+          )}
           <section className="rv-review" aria-label="Review">
             {!profile
               ? <ReviewGate opening={opening} loadError={loadError} />
@@ -1057,7 +1107,7 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {detail && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
+      {detail && !phone && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
     </DocLinkContext.Provider>
     </SenateBlockContext.Provider>
@@ -1073,6 +1123,9 @@ const ICON_PATHS = {
   signIn: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4 21c0-3.9 3.6-6 8-6s8 2.1 8 6'],
   reviews: ['M9 3h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1z', 'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2', 'm9 14 2 2 4-4'],
   analysis: ['M3 3v18h18', 'M8 17v-5', 'M13 17V8', 'M18 17v-8'],
+  list: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
+  project: ['M4 4h16v16H4z', 'M8 9h8', 'M8 13h8', 'M8 17h5'],
+  docs: ['M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z', 'M14 3v6h6', 'M9 13h6', 'M9 17h4'],
 } as const;
 function Icon({ name }: { name: keyof typeof ICON_PATHS }) {
   return (
@@ -1176,7 +1229,9 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
 
 // --- Page -------------------------------------------------------------------------------------------------------
 
-type Pane = 'list' | 'project';
+/** The bottom tabs on a phone (up to 900px): the projects, then the open project's sections. */
+type Pane = 'list' | PhoneSection;
+const PHONE = '(max-width: 900px)';
 
 export default function HgabReview() {
   return <MemberProvider><Reviewer /></MemberProvider>;
@@ -1191,7 +1246,15 @@ function Reviewer() {
   const { index: shared, opening, patch: patchStatus } = useStatusIndex(member.enabled);
   const { cases: reviews, profile, save, loadError } = useCases(member, patchStatus);
   const [about, setAbout] = useState(false);
-  const [pane, setPane] = useState<Pane>('list');
+  // A link to a project opens on the project, not the list, on a phone too.
+  const [pane, setPane] = useState<Pane>(() => (params.get('p') && typeof window !== 'undefined' && window.matchMedia(PHONE).matches ? 'project' : 'list'));
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia(PHONE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE);
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
   const [inlineViewer, setInlineViewer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)');
@@ -1281,7 +1344,7 @@ function Reviewer() {
 
   return (
     <DocLinkContext.Provider value={documentHref}>
-    <div className="rv-app">
+    <div className={`rv-app on-${pane}`}>
       <header className="rv-bar">
         <Link to="/" className="rv-brand"><img src="https://assets.bettergov.ph/logos/png/horizontal-primary.png" alt="BetterGov.ph" /></Link>
         <div className="rv-bar-title">
@@ -1356,7 +1419,8 @@ function Reviewer() {
             {selected
               ? <ProjectPane key={selected.hgabId} project={selected} index={index} mine={reviews[selected.hgabId]} profile={profile} onSave={save}
                   entry={shared?.[selected.hgabId]} opening={opening} loadError={loadError}
-                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} split={split} onSplit={setSplit} />
+                  inlineViewer={inlineViewer} onPrev={prev} onNext={next} split={split} onSplit={setSplit}
+                  phone={phone} section={pane === 'list' ? 'project' : pane} onSection={setPane} />
               : (
                 <div className="rv-welcome">
                   <h2>Pick a project to review</h2>
@@ -1370,8 +1434,18 @@ function Reviewer() {
           </section>
 
           <nav className="rv-panes" aria-label="Panels">
-            <button type="button" className={pane === 'list' ? 'is-on' : ''} onClick={() => setPane('list')}>Projects · {n(current.length)}</button>
-            <button type="button" className={pane === 'project' ? 'is-on' : ''} onClick={() => setPane('project')} disabled={!selected}>Project</button>
+            {([
+              ['list', 'Projects', 'list', tabCount(current.length)],
+              ['project', 'Project', 'project', null],
+              ['docs', 'Documents', 'docs', selected?.files ? String(selected.files) : null],
+              ['review', 'Review', 'reviews', selected && reviews[selected.hgabId] ? '✓' : null],
+            ] as const).map(([key, label, icon, badge]) => (
+              <button key={key} type="button" className={pane === key ? 'is-on' : ''} aria-current={pane === key ? 'page' : undefined}
+                onClick={() => setPane(key)} disabled={key !== 'list' && !selected}>
+                <Icon name={icon} />
+                <span>{label}{badge && <b>{badge}</b>}</span>
+              </button>
+            ))}
           </nav>
         </div>
         </>

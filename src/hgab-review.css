@@ -441,12 +441,16 @@ textarea.rf-input { resize: vertical; }
 @media (max-width: 1200px) {
   .rv-cols { grid-template-columns: 330px minmax(0, 1fr); }
 }
+/* Phones: four tabs at the bottom (Projects · Project · Documents · Review), one at a time. The filters show only on
+   Projects; the open project's title and Prev / Next stay on top of the other three. */
 @media (max-width: 900px) {
+  .rv-app { --rv-tabs-h: calc(58px + env(safe-area-inset-bottom, 0px)); }
   .rv-bar-title span { display: none; }
-  .rv-cols { grid-template-columns: 1fr; padding-bottom: 48px; }
+  .rv-app:not(.on-list) .rv-filterbar { display: none; }
+  .rv-cols { grid-template-columns: 1fr; padding-bottom: var(--rv-tabs-h); }
   .rv-list, .rv-detail { display: none; border: 0; }
   .rv-cols.show-list .rv-list { display: flex; }
-  .rv-cols.show-project .rv-detail { display: block; }
+  .rv-cols:not(.show-list) .rv-detail { display: block; }
   .rv-panes {
     position: fixed;
     left: 0;
@@ -454,17 +458,73 @@ textarea.rf-input { resize: vertical; }
     bottom: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    height: 48px;
+    grid-template-columns: repeat(4, 1fr);
+    height: var(--rv-tabs-h);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--paper);
     border-top: 1px solid var(--rule);
   }
-  .rv-panes button { border: 0; background: none; color: var(--ink-3); font-size: 13px; cursor: pointer; }
-  .rv-panes button.is-on { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
-  .rv-panes button:disabled { opacity: 0.4; }
+  .rv-panes button {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    border: 0; background: none; color: var(--ink-3); font-size: 11.5px; font-weight: 600; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .rv-panes button svg { width: 22px; height: 22px; }
+  .rv-panes button span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .rv-panes button b { padding: 0 5px; border-radius: 8px; background: var(--paper-3); color: var(--ink-2); font-family: var(--font-mono); font-size: 10px; font-weight: 600; line-height: 15px; }
+  .rv-panes button.is-on { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+  .rv-panes button.is-on b { background: var(--accent-soft); color: var(--accent); }
+  .rv-panes button:disabled { opacity: 0.35; }
   .rv-viewer-modal { padding: 0; }
   .rv-viewer-modal .rv-viewer { border-radius: 0; }
+
+  /* The project pane, one section at a time; the review form stays in the page (hidden) so a draft survives. */
+  .rv-project.is-phone { display: flex; flex-direction: column; height: 100%; }
+  .rv-project.is-phone .rv-project-info { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  /* A compact header: Prev / Next on one slim row; the title cut to 2 lines (1 on Documents and Review), whole on tap;
+     amount, office and region on one line on Documents and Review. */
+  .rv-project.is-phone .rv-project-top { padding: 6px 14px 8px; }
+  .rv-project.is-phone .rv-project-nav { margin-bottom: 4px; }
+  .rv-project.is-phone .rv-project-nav button { min-height: 32px; padding: 0 12px; }
+  .rv-project.is-phone .rv-project-title { margin-bottom: 2px; font-size: 16px; line-height: 1.3; }
+  .rv-title-toggle {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .rv-project.is-phone:not(.show-project) .rv-title-toggle { -webkit-line-clamp: 1; }
+  .rv-project-title.is-open .rv-title-toggle { -webkit-line-clamp: unset; }
+  .rv-project.is-phone .rv-project-sub { margin-bottom: 0; font-size: 12px; }
+  .rv-project.is-phone:not(.show-project) .rv-project-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rv-project.is-phone .rv-project-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px 20px; }
+  .rv-project.is-phone:not(.show-project) .rv-overview,
+  .rv-project.is-phone.show-docs .rv-taken,
+  .rv-project.is-phone:not(.show-review) .rv-review,
+  .rv-project.is-phone:not(.show-docs) .rv-phone-docs { display: none; }
+  .rv-project.is-phone.show-docs .rv-project-body { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .rv-phone-docs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .rv-phone-docs .rv-viewer { flex: 1; min-height: 0; }
+  .rv-phone-next { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .rv-phone-next .rv-btn { flex: 1 1 160px; min-height: 44px; justify-content: center; }
+
+  /* Bigger targets for thumbs. */
+  .rf-seg button { min-height: 40px; padding: 6px 12px; }
+  .rv-doctabs button { min-height: 44px; padding: 9px 12px; }
+  .rv-docnav button { width: 40px; height: 36px; }
+  .rv-viewer-bar { flex-wrap: nowrap; }
+  .rv-viewer-bar .rv-file-how { display: none; }
+  .rv-viewer-bar a { flex: none; white-space: nowrap; font-weight: 600; }
 }
+
+/* A PDF drawn by PDF.js (phones and other touch screens): a slim bar with the page count and zoom, then the pages, scrolling both ways. */
+.rv-pdf { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper-3); }
+.rv-pdf .rv-viewer-empty { flex-direction: column; gap: 10px; padding: 24px; text-align: center; }
+.rv-pdf-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; background: var(--paper); border-bottom: 1px solid var(--rule); font-size: 12.5px; color: var(--ink-3); }
+.rv-pdf-zoom { display: inline-flex; align-items: center; gap: 6px; }
+.rv-pdf-zoom b { min-width: 44px; text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+.rv-pdf-zoom button { width: 40px; height: 34px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); font-size: 18px; line-height: 1; cursor: pointer; }
+.rv-pdf-zoom button:disabled { opacity: 0.35; }
+.rv-pdf-pages { flex: 1; min-height: 0; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
+.rv-pdf-page { display: block; margin: 0 auto 8px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
 
 /* --- the filter bar ------------------------------------------------------------- */
 .rv-filterbar { flex: none; background: var(--paper); border-bottom: 1px solid var(--rule); }
