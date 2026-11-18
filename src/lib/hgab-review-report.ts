@@ -433,6 +433,16 @@ export function when(iso: string, time = false): string {
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', ...(time ? { hour: 'numeric', minute: '2-digit' } : {}) });
 }
+/**
+ * The report's "as of" stamp: a date and time in Manila, in full ("November 18, 2026, 10:54 PM"), so a printed or
+ * shared page says when its figures were read.
+ */
+export function stamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const tz = 'Asia/Manila';
+  return `${d.toLocaleDateString('en-US', { timeZone: tz, month: 'long', day: 'numeric', year: 'numeric' })}, ${d.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })}`;
+}
 export const shortOffice = (name: string) => name.replace(/\bDistrict Engineering Office\b/i, 'DEO');
 /** A DPWH office beside the legislative districts it serves, as the copy rules ask. */
 export const officeLine = (office: string, districts: readonly string[]) =>

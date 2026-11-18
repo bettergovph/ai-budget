@@ -72,6 +72,10 @@
 .rr-notice { margin-bottom: 20px; padding: 12px 14px; border: 1px solid #f1d39b; border-left: 4px solid var(--rr-att); border-radius: 6px; background: #fff8eb; color: var(--ink-2); }
 .rr-asof { color: var(--ink-3); white-space: nowrap; }
 .rr-warn { display: block; margin-top: 6px; color: var(--rr-imm); }
+.rr-notice p { margin: 0 0 6px; }
+.rr-notice p:last-child { margin-bottom: 0; }
+.rr-stamp { font-size: 15px; color: var(--ink); }
+.rr-stamp b { text-transform: uppercase; letter-spacing: .04em; color: var(--rr-att); }
 .rr-error { color: var(--rr-imm); }
 
 /* --- page head ---------------------------------------------------------------------- */
@@ -291,7 +295,7 @@ a.rr-card:hover { border-color: var(--accent); }
 @media print {
   .rr-app { background: #fff; font-size: 11px; }
   .rr-bar { position: static; height: auto; padding: 0 0 8px; border: 0; }
-  .rr-bar-links, .rr-toc, .rr-filters, .rr-link, .rr-pager, .rr-sort { display: none !important; }
+  .rr-bar-links, .rr-toc, .rr-filters, .rr-link, .rr-pager, .rr-sort, .rr-noprint { display: none !important; }
   .rr-layout { display: block; max-width: none; padding: 0; }
   .rr-sec { padding: 0; border: 0; margin-bottom: 16px; }
   .rr-table thead th { position: static; }
