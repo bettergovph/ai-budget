@@ -8,8 +8,8 @@
  * can be shared.
  */
 import {
-  FLAG_FAMILIES, NAMED_TYPES, parseHgabId, type FlagFamily, type LinkMethod, type ReviewIndex, type ReviewIndexFlag,
-  type ReviewIndexOffice,
+  FLAG_FAMILIES, NAMED_TYPES, parseHgabId, type DetailFile, type FlagFamily, type LinkMethod, type ReviewDetail, type ReviewIndex,
+  type ReviewIndexFlag, type ReviewIndexOffice,
 } from './hgab-documents';
 import { QUESTION_OF_FLAG, RATINGS, VERDICT_LABEL, readVerdict, worseRating, type Verdict } from './hgab-redflags-team';
 
@@ -37,15 +37,21 @@ export interface ReviewProject {
   insertion: boolean;
   /** Automatic review (review.json `auto`): the rules it met and its provisional score; null when not auto-reviewed. */
   auto: { rules: string[]; score: number } | null;
+  /**
+   * The key documents (bitmask, as `docs`) and files in each source: the House bill's (Senate copies) and the NEP's
+   * (DPWH Transparency). Null in a review.json built before 2026-11-18.
+   */
+  bySource?: { senate: { docs: number; files: number }; nep: { docs: number; files: number } } | null;
 }
 
 export function decodeIndex(ix: ReviewIndex): ReviewProject[] {
   const ins = ix.flags.findIndex((f) => f.code === INSERTION_FLAG);
-  return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from]) => {
+  return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from, sDocs, pDocs, sFiles, pFiles]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
     const a = ix.auto?.rows[hgabId];
     const auto = a ? { rules: a.r.map((i) => ix.auto!.rules[i]?.code).filter(Boolean), score: a.s } : null;
-    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto };
+    const bySource = sDocs == null || pDocs == null ? null : { senate: { docs: sDocs, files: sFiles ?? 0 }, nep: { docs: pDocs, files: pFiles ?? 0 } };
+    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto, bySource };
   });
 }
 
@@ -572,6 +578,18 @@ export const LINK_LABEL: Record<LinkMethod, string> = {
   reviewed: 'Checked by reading its program of work',
   proposal: 'DPWH Transparency record paired with this project',
 };
+/** A project's detail `notes`, in plain words (the reviewer's overview and the report's project page). */
+export const DETAIL_NOTE_TEXT: Record<string, (d: ReviewDetail, files: DetailFile[]) => string | null> = {
+  proposal_documents_via_nep_counterpart: () =>
+    'DPWH Transparency lists no documents under this project’s own name. The DPWH Transparency files here come from its NEP counterpart.',
+  proposal_types_without_files: () =>
+    'research.bettergov.ph lists DPWH Transparency documents for this project, but we have not found their files yet.',
+  senate_matched_without_files: () => 'research.bettergov.ph counts Senate documents for this project, but lists no files for it.',
+  senate_folder_moved_from_another_row: () => 'We moved a Senate folder to this project after reading its program of work.',
+  senate_folder_moved_to_another_row: () => 'A Senate folder once matched here belongs to another project, by its program of work.',
+  several_senate_folders: (_, files) => `These files come from ${new Set(files.filter((f) => f[0] === 'senate').map((f) => f[8])).size} Senate folders. Check each is for this project.`,
+};
+
 /** Tracker links are the weakest; say so. */
 export const LINK_WEAK: ReadonlySet<LinkMethod> = new Set(['tracker']);
 

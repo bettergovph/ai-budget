@@ -6,9 +6,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyFlagCheck, emptyQuestionAnswer, newCaseReview, type CaseReview, type Verdict } from "../src/lib/hgab-redflags-team";
 import type { ReviewProject } from "../src/lib/hgab-review";
+import type { ReviewIndexFlag } from "../src/lib/hgab-documents";
 import {
-  REPORT_ANSWER_COLUMNS, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, insertionKey, memberNames, questionTallies,
-  reportProjects, reviewRows, tallyBy, totalTally, type ReportCase,
+  REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally, docsFrom,
+  flagPath, flagTallies, groupCounts, groupIndex, insertionKey, memberNames, projectPath, questionTallies, reportPath, reportProjects,
+  reviewRows, tallyBy, totalTally, type ReportCase,
 } from "../src/lib/hgab-review-report";
 
 const project = (hgabId: string, amount: number) => ({
@@ -93,4 +95,80 @@ test("question tallies, answer lines and CSV rows", () => {
   const answers = answerRows(rows, names);
   assert.ok(answers.every((r) => r.length === REPORT_ANSWER_COLUMNS.length));
   assert.deepEqual(answers.map((r) => r[5]), ["BW-16", "BW-01", "RF-024"]);
+});
+
+// --- The hand-over pages (2026-11-18): the automatic review counted, red flags and documents on every project ---------
+
+const D = "HB10858-3-0004-000004", E = "HB10858-3-0005-000005";
+const auto = (p: ReviewProject): ReviewProject => ({ ...p, docs: 0, files: 0, source: "none", auto: { rules: ["no-key-documents"], score: 100 } });
+
+test("the automatic review counts in the report until a member reviews the project", () => {
+  // A: members (immediate attention); B: auto-marked but reviewed by a member; D: auto only; E: neither.
+  const all = [listed(A, true), auto(listed(B, false, "NCR")), auto(listed(D, true, "NCR")), listed(E, false)];
+  assert.deepEqual(reportProjects(cases, all).map((p) => p.hgabId), [A, C, B], "without withAuto, members' reviews only");
+  const rows = reportProjects(cases, all, true);
+  assert.deepEqual(rows.map((p) => [p.hgabId, p.group]), [[A, "needs_immediate_attention"], [C, "needs_attention"], [D, "auto"], [B, "none"]]);
+  assert.equal(rows.find((p) => p.hgabId === B)!.auto?.score, 100, "a member's review takes over, the automatic one is kept");
+  assert.deepEqual(rows.find((p) => p.hgabId === D)!.reviews, []);
+
+  const groups = groupIndex(all, rows);
+  assert.deepEqual([A, B, D, E].map((h) => groups.get(h)), ["needs_immediate_attention", "none", "auto", "not_reviewed"]);
+  const counts = groupCounts(all, (h) => groups.get(h)!);
+  assert.equal(counts.auto.projects, 1);
+  assert.equal(counts.not_reviewed.amount, 5_000_000);
+  // Review-only CSVs leave the automatic ones out (no review to list).
+  assert.equal(reviewRows(rows, memberNames(cases), "https://x").length, 4);
+  // Tallies put attention, the automatic review's included, first.
+  const byRegion = tallyBy(rows, (p) => [p.region, p.region]);
+  assert.deepEqual(byRegion.map((t) => [t.key, t.groups.auto.projects]), [["Region IV-A", 0], ["NCR", 1]]);
+});
+
+test("red flags and documents on every project", () => {
+  const flags = [
+    { code: "missing-pow", label: "Missing POW", family: "documents", n: 2, computed: true, source: "bettergov" },
+    { code: "potential-nep-insertion", label: "Potential NEP insertion", family: "nep", n: 1 },
+  ] as ReviewIndexFlag[];
+  const all = [{ ...listed(A, true), flags: [0, 1] }, { ...auto(listed(D, true)), flags: [0] }, { ...listed(E, false), flags: [], docs: 0b11111, files: 9 }];
+  const groupOf = (h: string) => (h === D ? "auto" as const : "not_reviewed" as const);
+  const t = flagTallies(flags, all, groupOf);
+  assert.deepEqual(t.map((x) => [x.flag.code, x.projects, x.amount, x.groups.auto.projects]), [["missing-pow", 2, 10_000_000, 1], ["potential-nep-insertion", 1, 5_000_000, 0]]);
+
+  assert.deepEqual(all.map(docLevel), ["partial", "none", "complete"]);
+  const d = docTally(all);
+  assert.deepEqual(d.levels, { complete: 1, partial: 1, none: 1 });
+  assert.deepEqual(d.byType, [2, 2, 2, 1, 1]);
+  assert.deepEqual(d.byCount, [1, 0, 0, 1, 0, 1]);
+  assert.equal(d.files, 12);
+  assert.equal(d.sources.none, 1);
+  const byIns = docTallies(all, (p) => (p.insertion ? ["insertion", "House insertions"] : ["nep", "NEP only"]));
+  assert.deepEqual(byIns.map((x) => [x.key, x.projects, x.levels.complete]), [["insertion", 2, 0], ["nep", 1, 1]], "fewest complete first");
+});
+
+test("the report's pages have their own addresses", () => {
+  assert.equal(reportPath(), "/hgab/2027/review/report");
+  assert.equal(reportPath("flags"), "/hgab/2027/review/report/flags");
+  assert.equal(flagPath("missing-pow"), "/hgab/2027/review/report/flags/missing-pow");
+  assert.equal(projectPath(A), `/hgab/2027/review/report/project/${A}`);
+  assert.equal(new Set(REPORT_PAGES.map((p) => p.slug)).size, REPORT_PAGES.length);
+});
+
+test("documents are counted from the House bill (Senate copies), the NEP (DPWH Transparency), or either", () => {
+  const bySource = (s: number, sf: number, p: number, pf: number) => ({ senate: { docs: s, files: sf }, nep: { docs: p, files: pf } });
+  const all = [
+    { ...listed(A, true), docs: 0b11111, files: 6, source: "senate" as const, bySource: bySource(0b11111, 6, 0, 0) },
+    { ...listed(B, false), docs: 0b11011, files: 9, source: "both" as const, bySource: bySource(0b00001, 1, 0b11011, 8) },
+    { ...listed(E, false), docs: 0b00011, files: 0, source: "none" as const, bySource: bySource(0, 0, 0b00011, 0) },
+  ];
+  assert.deepEqual(docsFrom(all[1], "senate"), { docs: 1, files: 1 });
+  assert.deepEqual(docsFrom(all[1], "either"), { docs: 0b11011, files: 9 });
+  assert.deepEqual(docsFrom({ docs: 3, files: 2 }, "nep"), { docs: 0, files: 0 }, "a review.json from before the split counts nothing by source");
+  const senate = docTally(all, "all", "All", "senate"), nep = docTally(all, "all", "All", "nep"), either = docTally(all);
+  assert.deepEqual([senate.files, nep.files, either.files], [7, 8, 15]);
+  assert.deepEqual([senate.withFile, nep.withFile, either.withFile], [2, 1, 2]);
+  assert.deepEqual(senate.levels, { complete: 1, partial: 1, none: 1 });
+  assert.deepEqual(nep.levels, { complete: 1, partial: 1, none: 1 }, "listed key documents count without a file");
+  assert.deepEqual(either.levels, { complete: 2, partial: 1, none: 0 });
+  assert.deepEqual(senate.byType, [2, 1, 1, 1, 1]);
+  assert.deepEqual(nep.byType, [2, 2, 0, 1, 1]);
+  assert.equal(docTallies(all, (p) => [p.region, p.region], "nep")[0].from, "nep");
 });

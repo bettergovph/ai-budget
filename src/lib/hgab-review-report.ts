@@ -1,8 +1,9 @@
 /**
- * The team's report on members' reviews (`/hgab/2027/review/report`, hidden): every live review from D1 (the Worker's
+ * The team's report (`/hgab/2027/review/report`, hidden), the hand-over site: every live review from D1 (the Worker's
  * GET /api/hgab/2027/reviews/report, src/worker/hgab-reviews.ts) joined to the project list (documents/review.json),
- * tallied by final status, region, DPWH office, House insertion and question, and downloadable as CSV. Pure: the
- * Worker and tests use it as is.
+ * with the automatic review and the red flags applied to every project, and the documents found for each. Tallied by
+ * final status, region, DPWH office, House insertion, question, red flag and document, and downloadable as CSV. Pure:
+ * the Worker and tests use it as is.
  *
  * Open to anyone for now, with no sign-in (Jason, 2026-11-17), but linked from no menu or page, not in the sitemap,
  * and noindex. Members show by the name they gave, never by email.
@@ -11,11 +12,31 @@ import {
   QUESTIONS, RATINGS, TEAM_FLAGS, VERDICT_LABEL, answerText, flagCheckTouched, questionTouched, vocabLabel, worseRating,
   type CaseReview, type Rating, type Verdict,
 } from './hgab-redflags-team';
-import { REVIEW_ROOT, REVIEW_STATUS_LABEL, docCount, type ReviewProject, type ReviewStatus } from './hgab-review';
+import { COMPLETE_AT, NAMED_TYPES, type ReviewIndexFlag } from './hgab-documents';
+import {
+  LIST_STATUS_LABEL, REVIEW_ROOT, REVIEW_STATUS_LABEL, SOURCE_GROUPS, docCount, hasDoc,
+  type ReviewProject, type ReviewStatus, type SourceGroup,
+} from './hgab-review';
 
 export const REPORT_ROOT = `${REVIEW_ROOT}/report`;
 export const REPORT_TITLE = 'Project red-flag report';
 export const REPORT_API = '/api/hgab/2027/reviews/report';
+
+/** The report's pages, in the menu's order (2026-11-18: one page each, instead of one long page). */
+export const REPORT_PAGES = [
+  { slug: '', label: 'Overview', note: 'Every project’s final status, from members and the automatic review.' },
+  { slug: 'automatic', label: 'Automatic red flags', note: 'The rule applied to every project before anyone read it, and the projects it marked.' },
+  { slug: 'flags', label: 'Red flags', note: 'Each red flag on the projects, with its projects.' },
+  { slug: 'documents', label: 'Documents', note: 'The documents found for each project, from the House bill (Senate copies) and the NEP (DPWH Transparency).' },
+  { slug: 'regions', label: 'By region', note: 'Final status by House insertion, region and DPWH office.' },
+  { slug: 'questions', label: 'Questions', note: 'How members answered the team’s 16 questions.' },
+  { slug: 'projects', label: 'Projects', note: 'Every project, with filters: final status, region, documents, search.' },
+] as const;
+export type ReportSlug = (typeof REPORT_PAGES)[number]['slug'];
+export const reportPath = (slug: ReportSlug = '') => (slug ? `${REPORT_ROOT}/${slug}` : REPORT_ROOT);
+export const projectPath = (hgabId: string) => `${REPORT_ROOT}/project/${hgabId}`;
+export const flagPath = (code: string) => `${REPORT_ROOT}/flags/${code}`;
+export const rulePath = (code: string) => `${REPORT_ROOT}/automatic/${code}`;
 
 /** One member's live review, as the Worker sends it. Members show by the name they gave, never by email. */
 export interface ReportCase {
@@ -39,16 +60,27 @@ export interface ReportResponse {
 
 // --- Grouping ------------------------------------------------------------------------------------------------------
 
-/** A project's place in the report: the most serious final status of its reviews, or none yet. */
-export type ReportGroup = Verdict | 'none';
-export const REPORT_GROUPS: readonly ReportGroup[] = ['needs_immediate_attention', 'needs_attention', 'satisfactory', 'none'];
-export const REPORT_GROUP_LABEL: Record<ReportGroup, string> = { ...VERDICT_LABEL, none: 'No final status yet' };
+/**
+ * A project's place in the report: the most serious final status of its members' reviews; else reviewed without one;
+ * else, when the automatic review marked it (review.json `auto`), `auto`. A member's review takes over from the
+ * automatic one, as in the reviewer (listStatus).
+ */
+export type ReportGroup = Verdict | 'auto' | 'none';
+export const REPORT_GROUPS: readonly ReportGroup[] = ['needs_immediate_attention', 'needs_attention', 'auto', 'satisfactory', 'none'];
+export const REPORT_GROUP_LABEL: Record<ReportGroup, string> = { ...VERDICT_LABEL, auto: LIST_STATUS_LABEL.auto_red_flag, none: 'No final status yet' };
 export const REPORT_GROUP_NOTE: Record<ReportGroup, string> = {
   needs_immediate_attention: 'At least one member found a serious problem: the team looks at these first.',
   needs_attention: 'Something is missing, unclear or doesn’t add up, and needs a follow-up.',
+  auto: 'Marked by the automatic rule (no key document and no file found). No member has reviewed them yet.',
   satisfactory: 'Every member who gave a final status found the documents support the project.',
   none: 'Members have started these but not given a final status.',
 };
+/** The groups that need attention, from members or the automatic review. */
+export const ATTENTION_GROUPS: readonly ReportGroup[] = ['needs_immediate_attention', 'needs_attention', 'auto'];
+/** Every project in the House bill: a report group, or not reviewed at all. */
+export type ProjectGroup = ReportGroup | 'not_reviewed';
+export const PROJECT_GROUPS: readonly ProjectGroup[] = [...REPORT_GROUPS, 'not_reviewed'];
+export const PROJECT_GROUP_LABEL: Record<ProjectGroup, string> = { ...REPORT_GROUP_LABEL, not_reviewed: 'Not reviewed' };
 const severity = (v: Verdict | null) => (v ? RATINGS.indexOf(v) : -1);
 
 /** A reviewed project: the bill's line (from the project list when we have it, else the review's own copy) and its reviews. */
@@ -68,8 +100,10 @@ export interface ReportProject {
   docs: number | null;
   verdict: Verdict | null;
   group: ReportGroup;
-  /** Most serious first, then newest. */
+  /** Most serious first, then newest; empty for a project only the automatic review marked. */
   reviews: ReportCase[];
+  /** The automatic review, when it marked the project (whether or not a member has reviewed it since). */
+  auto: { rules: string[]; score: number } | null;
   lastSaved: string;
 }
 
@@ -88,7 +122,11 @@ export function memberNames(cases: readonly ReportCase[]): Map<string, string> {
   return new Map(order.map(([id]) => [id, named.get(id) ?? `Member ${++unnamed}`]));
 }
 
-export function reportProjects(cases: readonly ReportCase[], projects: readonly ReviewProject[] | null): ReportProject[] {
+/**
+ * The reviewed projects: members' reviews by project, and, with `withAuto`, the projects only the automatic review
+ * marked (from the project list), so the report counts them too.
+ */
+export function reportProjects(cases: readonly ReportCase[], projects: readonly ReviewProject[] | null, withAuto = false): ReportProject[] {
   const byId = new Map((projects ?? []).map((p) => [p.hgabId, p]));
   const groups = new Map<string, ReportCase[]>();
   for (const c of cases) groups.set(c.hgab_id, [...(groups.get(c.hgab_id) ?? []), c]);
@@ -111,9 +149,14 @@ export function reportProjects(cases: readonly ReportCase[], projects: readonly 
       verdict,
       group: verdict ?? 'none',
       reviews,
+      auto: p?.auto ?? null,
       lastSaved: reviews.reduce((t, r) => (r.updated_at > t ? r.updated_at : t), ''),
     };
-  }).sort((a, b) => REPORT_GROUPS.indexOf(a.group) - REPORT_GROUPS.indexOf(b.group) || b.amount - a.amount || a.hgabId.localeCompare(b.hgabId));
+  }).concat(withAuto ? (projects ?? []).filter((p) => p.auto && !groups.has(p.hgabId)).map((p): ReportProject => ({
+    hgabId: p.hgabId, title: p.title, office: p.office.name, districts: p.office.districts, region: p.region, program: p.program,
+    amount: p.amount, insertion: p.insertion, flags: p.flags.length, docs: docCount(p.docs), verdict: null, group: 'auto', reviews: [],
+    auto: p.auto, lastSaved: '',
+  })) : []).sort((a, b) => REPORT_GROUPS.indexOf(a.group) - REPORT_GROUPS.indexOf(b.group) || b.amount - a.amount || a.hgabId.localeCompare(b.hgabId));
 }
 
 // --- Tallies -------------------------------------------------------------------------------------------------------
@@ -142,7 +185,8 @@ export function totalTally(rows: readonly ReportProject[], billProjects: number 
   return t;
 }
 
-/** Tallies by a key, most projects needing attention first (immediate, then any), then most reviewed. */
+/** Tallies by a key, most projects needing attention first (immediate, then any, the automatic review's included), then most reviewed. */
+const attention = (t: Tally) => ATTENTION_GROUPS.reduce((n, g) => n + t.groups[g].projects, 0);
 export function tallyBy(
   rows: readonly ReportProject[], key: (p: ReportProject) => [string, string], of?: (key: string) => number | null,
 ): Tally[] {
@@ -154,7 +198,7 @@ export function tallyBy(
   }
   return [...out.values()].sort((a, b) =>
     b.groups.needs_immediate_attention.projects - a.groups.needs_immediate_attention.projects
-    || (b.groups.needs_immediate_attention.projects + b.groups.needs_attention.projects) - (a.groups.needs_immediate_attention.projects + a.groups.needs_attention.projects)
+    || attention(b) - attention(a)
     || b.projects - a.projects || a.label.localeCompare(b.label));
 }
 
@@ -254,3 +298,135 @@ export function answerRows(rows: readonly ReportProject[], names: ReadonlyMap<st
     a.id, a.title, a.label, a.remark, c.review.verdict ? VERDICT_LABEL[c.review.verdict] : 'Not given',
   ])));
 }
+
+// --- Every project: final status, red flags, documents ---------------------------------------------------------------
+
+/** Each project's group: its report group (members, then the automatic review), else not reviewed. */
+export function groupIndex(all: readonly ReviewProject[], rows: readonly ReportProject[]): Map<string, ProjectGroup> {
+  const m = new Map<string, ProjectGroup>(all.map((p) => [p.hgabId, p.auto ? 'auto' : 'not_reviewed']));
+  for (const r of rows) m.set(r.hgabId, r.group);
+  return m;
+}
+
+export type GroupCounts = Record<ProjectGroup, { projects: number; amount: number }>;
+export function groupCounts(projects: readonly ReviewProject[], groupOf: (hgabId: string) => ProjectGroup): GroupCounts {
+  const out = Object.fromEntries(PROJECT_GROUPS.map((g) => [g, { projects: 0, amount: 0 }])) as GroupCounts;
+  for (const p of projects) { const g = out[groupOf(p.hgabId)]; g.projects++; g.amount += p.amount; }
+  return out;
+}
+export const sumAmount = (projects: readonly ReviewProject[]) => projects.reduce((s, p) => s + p.amount, 0);
+
+/** Who computes a red flag: research.bettergov.ph's detectors, or ours (our NEP comparison, our document matching). */
+export const flagSource = (f: Pick<ReviewIndexFlag, 'source'>) => (f.source === 'bettergov' ? 'BetterGov' : 'research.bettergov.ph');
+
+export interface FlagTally {
+  index: number;
+  flag: ReviewIndexFlag;
+  projects: number;
+  amount: number;
+  groups: GroupCounts;
+}
+/** Every red flag with its projects, budget and their final statuses, most projects first. */
+export function flagTallies(flags: readonly ReviewIndexFlag[], all: readonly ReviewProject[], groupOf: (hgabId: string) => ProjectGroup): FlagTally[] {
+  const by = flags.map((): ReviewProject[] => []);
+  for (const p of all) for (const i of p.flags) by[i]?.push(p);
+  return flags.map((flag, index) => ({ index, flag, projects: by[index].length, amount: sumAmount(by[index]), groups: groupCounts(by[index], groupOf) }))
+    .sort((a, b) => b.projects - a.projects || a.flag.label.localeCompare(b.flag.label));
+}
+
+/**
+ * Where documents come from, kept apart in the report (the maintainer, 2026-11-18): the House bill's (the Senate copies
+ * DPWH gave the Senate for the House bill's projects) and the NEP's (DPWH Transparency, the NEP proposal's).
+ * `either` counts both together, as the reviewer and the automatic rule do.
+ */
+export const DOC_FROM = ['either', 'senate', 'nep'] as const;
+export type DocFrom = (typeof DOC_FROM)[number];
+export const DOC_FROM_LABEL: Record<DocFrom, string> = { either: 'Either source', senate: 'House bill (Senate copies)', nep: 'NEP (DPWH Transparency)' };
+export const DOC_FROM_SHORT: Record<DocFrom, string> = { either: 'Either', senate: 'House bill', nep: 'NEP' };
+export const DOC_FROM_NOTE: Record<DocFrom, string> = {
+  either: 'Found in the Senate copies or on DPWH Transparency.',
+  senate: 'What DPWH gave the Senate for the House bill’s projects, with signatures redacted.',
+  nep: 'What DPWH published for the NEP proposal on DPWH Transparency, some through the project’s NEP counterpart.',
+};
+/** A project's key documents (bitmask) and files from one source, or both. Zero for a source when review.json predates it. */
+export function docsFrom(p: Pick<ReviewProject, 'docs' | 'files' | 'bySource'>, from: DocFrom): { docs: number; files: number } {
+  if (from === 'either') return { docs: p.docs, files: p.files };
+  return p.bySource?.[from] ?? { docs: 0, files: 0 };
+}
+
+/**
+ * How complete a project's documents are: at least COMPLETE_AT of the five key documents, fewer, or nothing at all
+ * (no key document and no other file: what the automatic rule marks).
+ */
+export const DOC_LEVELS = ['complete', 'partial', 'none'] as const;
+export type DocLevel = (typeof DOC_LEVELS)[number];
+export const DOC_LEVEL_LABEL: Record<DocLevel, string> = {
+  complete: `${COMPLETE_AT} or 5 key documents`,
+  partial: `Fewer than ${COMPLETE_AT} key documents`,
+  none: 'No document found',
+};
+export const docLevel = (p: { docs: number; files: number }): DocLevel =>
+  docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
+
+export interface DocTally {
+  key: string;
+  label: string;
+  /** The source counted (DOC_FROM). */
+  from: DocFrom;
+  projects: number;
+  amount: number;
+  /** Projects with each of the five key documents (NAMED_TYPES order). */
+  byType: number[];
+  /** Projects with 0, 1, … 5 of the key documents. */
+  byCount: number[];
+  levels: Record<DocLevel, number>;
+  /** Projects by where their files come from. */
+  sources: Record<SourceGroup, number>;
+  /** Files tied to the projects, from the source counted. */
+  files: number;
+  /** Projects with at least one file from the source counted. */
+  withFile: number;
+}
+/** Documents of some projects, from one source or either (`from`). */
+export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects', from: DocFrom = 'either'): DocTally {
+  const t: DocTally = {
+    key, label, from, withFile: 0, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
+    levels: { complete: 0, partial: 0, none: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
+  };
+  for (const p of projects) {
+    const d = docsFrom(p, from);
+    NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) t.byType[i]++; });
+    t.byCount[docCount(d.docs)]++;
+    t.levels[docLevel(d)]++;
+    t.sources[p.source]++;
+    t.files += d.files;
+    if (d.files > 0) t.withFile++;
+  }
+  return t;
+}
+/** Document tallies by a key (region, House insertion), fewest complete first. */
+export function docTallies(all: readonly ReviewProject[], key: (p: ReviewProject) => [string, string], from: DocFrom = 'either'): DocTally[] {
+  const groups = new Map<string, { label: string; ps: ReviewProject[] }>();
+  for (const p of all) {
+    const [k, label] = key(p);
+    if (!groups.has(k)) groups.set(k, { label, ps: [] });
+    groups.get(k)!.ps.push(p);
+  }
+  return [...groups.entries()].map(([k, g]) => docTally(g.ps, k, g.label, from))
+    .sort((a, b) => a.levels.complete / a.projects - b.levels.complete / b.projects || a.label.localeCompare(b.label));
+}
+
+// --- Words and numbers -----------------------------------------------------------------------------------------------
+
+export const n = (v: number) => v.toLocaleString('en-US');
+export const pct = (part: number, whole: number) => (whole ? `${((100 * part) / whole).toFixed(part && part < whole / 1000 ? 2 : 1)}%` : '—');
+/** A date (and time) in Manila. */
+export function when(iso: string, time = false): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric', ...(time ? { hour: 'numeric', minute: '2-digit' } : {}) });
+}
+export const shortOffice = (name: string) => name.replace(/\bDistrict Engineering Office\b/i, 'DEO');
+/** A DPWH office beside the legislative districts it serves, as the copy rules ask. */
+export const officeLine = (office: string, districts: readonly string[]) =>
+  districts.length ? `${districts.join(' · ')} [${shortOffice(office)}]` : office === 'Central Office' ? 'DPWH Central Office' : `DPWH ${shortOffice(office)}`;

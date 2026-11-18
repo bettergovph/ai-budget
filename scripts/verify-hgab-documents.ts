@@ -138,8 +138,8 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
   check("at least 9,380 of the 9,577 rows with Proposal documents have their files", propByRow.size >= 9_380, String(propByRow.size));
 
   // Per-row fields follow from the files; the research site's own flags are reproduced.
-  const pFull = await rows<{ hgab_id: string; senate_files: number; proposal_files: number; proposal_code: string | null; senate_folders: string[]; named_present: string[]; named_present_upstream: string[]; complete: boolean; complete_upstream: boolean; missing_flags: string[]; missing_flags_upstream: string[]; review_flags: { code: string; label: string; value: number | null; evidence: string[] }[] }>(c,
-    "SELECT hgab_id, senate_files, proposal_files, proposal_code, senate_folders, named_present, named_present_upstream, complete, complete_upstream, missing_flags, missing_flags_upstream, review_flags FROM doc_p");
+  const pFull = await rows<{ hgab_id: string; senate_files: number; proposal_files: number; proposal_code: string | null; senate_folders: string[]; senate_types: string[]; proposal_types: string[]; named_present: string[]; named_present_upstream: string[]; complete: boolean; complete_upstream: boolean; missing_flags: string[]; missing_flags_upstream: string[]; review_flags: { code: string; label: string; value: number | null; evidence: string[] }[] }>(c,
+    "SELECT hgab_id, senate_files, proposal_files, proposal_code, senate_folders, senate_types, proposal_types, named_present, named_present_upstream, complete, complete_upstream, missing_flags, missing_flags_upstream, review_flags FROM doc_p");
   const sByRow = new Map<string, typeof senate>();
   for (const f of senate) sByRow.set(f.hgab_id, [...(sByRow.get(f.hgab_id) ?? []), f]);
   const countsOff = pFull.filter((p) => p.senate_files !== (sByRow.get(p.hgab_id)?.length ?? 0) || p.proposal_files !== (propByRow.get(p.hgab_id)?.length ?? 0)
@@ -198,6 +198,16 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
         || from !== ((p.senate_files > 0 ? 1 : 0) | (p.proposal_files > 0 ? 2 : 0));
     });
     check("review.json: each row's ids, title, office, region, amount, flags, documents, file count and sources are the Parquet's", rowOff.length === 0, rowOff.slice(0, 3).map((r) => r[0]).join(", "));
+    // By source (2026-11-18): the House bill's documents (Senate copies) and the NEP's (DPWH Transparency).
+    const maskOf = (types: readonly string[]) => NAMED_TYPES.reduce((m, t, i) => (types.includes(t) ? m | (1 << i) : m), 0);
+    const srcOff = ix.rows.filter(([h, , , , , , , , mask, nf, , sMask, pMask, sFiles, pFiles]) => {
+      const p = pBy.get(h);
+      if (!p || sMask == null || pMask == null) return true;
+      const pTypes = p.proposal_types.map((t) => PROPOSAL_TYPE_MAP[t]).filter(Boolean);
+      return (sMask | pMask) !== mask || pMask !== maskOf(pTypes) || (sMask & maskOf(p.senate_types)) !== maskOf(p.senate_types)
+        || sFiles !== p.senate_files || pFiles !== p.proposal_files || (sFiles ?? 0) + (pFiles ?? 0) !== nf;
+    });
+    check("review.json: each row's key documents and files by source (Senate copies, DPWH Transparency) add up to its own", srcOff.length === 0, srcOff.slice(0, 3).map((r) => r[0]).join(", "));
     const nOff = ix.flags.filter((f, i) => f.n !== ix.rows.filter((r) => r[7].includes(i)).length || flagFamily(f.code) !== f.family);
     check(`review.json: all ${ix.flags.length} flags' counts and families hold`, nOff.length === 0, nOff.map((f) => f.code).join(", "));
     const nOf = (code: string) => ix.flags.find((f) => f.code === code)?.n ?? -1;

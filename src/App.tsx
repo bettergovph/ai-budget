@@ -185,8 +185,8 @@ export default function App() {
           <Route path={FAP_ROOT} element={<HgabFap />} />
           {/* The project reviewer: its own full-height layout (src/lib/hgab-review.ts). */}
           <Route path={REVIEW_ROOT} element={<HgabReview />} />
-          {/* The team's report on members' reviews: hidden (no menu, not in the sitemap, noindex) and members-only. */}
-          <Route path={REPORT_ROOT} element={<HgabReviewReport />} />
+          {/* The team's report, one page each: hidden (no menu, not in the sitemap, noindex). */}
+          <Route path={`${REPORT_ROOT}/*`} element={<HgabReviewReport />} />
           {/* How to review a project, step by step with screenshots; linked from the reviewer. */}
           <Route path={HOWTO_ROOT} element={<HgabReviewHowto />} />
           {/* Every inserted and adjusted project as one list, no site chrome. */}
