@@ -488,11 +488,11 @@ export function pageMeta(pathname: string): PageMeta {
   // Multi-purpose buildings (the budget-history page, "Budget by year" in its menu), before the dataset pattern.
   // Foreign-assisted projects: the House bill against the NEP, and the budgets since FY2021; before the dataset pattern.
   // The project reviewer, for volunteers; before the dataset pattern. Its short address is /review (lib/short-links.ts).
-  // The team's report on members' reviews: hidden (no menu, not in the sitemap) and members-only.
-  if (p === REPORT_ROOT) {
+  // The team's report and its pages: hidden (no menu, not in the sitemap) and noindex.
+  if (p === REPORT_ROOT || p.startsWith(`${REPORT_ROOT}/`)) {
     return {
       title: `${REPORT_TITLE} · ${SITE}`,
-      description: "For the BetterGov team: members' reviews of DPWH projects in the FY 2027 House bill. Sign-in required.",
+      description: "For the BetterGov team: red flags, documents and members' reviews of DPWH projects in the FY 2027 House bill.",
       noindex: true,
     };
   }

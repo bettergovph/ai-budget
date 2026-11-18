@@ -23,7 +23,7 @@ import {
   type ReviewIndex, type ReviewIndexFlag,
 } from '../lib/hgab-documents';
 import {
-  DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
+  DETAIL_NOTE_TEXT as NOTE_TEXT, DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
   DEFAULT_SORT, INSERTION_FLAG, LIST_STATUSES, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, checkedValues, countBy,
   decodeIndex, docCount, isReviewed, listStatus, pageCount, pageOf, pageWindow, projectVerdict,
   flagYields, foldText, hasDoc, pesoFull, pesoShort, projectsWithout, readerText, runFunnel, setSingle,
@@ -616,17 +616,6 @@ function Pager({ page, total, items, onPage }: { page: number; total: number; it
 }
 
 // --- One project ------------------------------------------------------------------------------------------------
-
-const NOTE_TEXT: Record<string, (d: ReviewDetail, files: DetailFile[]) => string | null> = {
-  proposal_documents_via_nep_counterpart: () =>
-    'DPWH Transparency lists no documents under this project’s own name. The DPWH Transparency files here come from its NEP counterpart.',
-  proposal_types_without_files: () =>
-    'research.bettergov.ph lists DPWH Transparency documents for this project, but we have not found their files yet.',
-  senate_matched_without_files: () => 'research.bettergov.ph counts Senate documents for this project, but lists no files for it.',
-  senate_folder_moved_from_another_row: () => 'We moved a Senate folder to this project after reading its program of work.',
-  senate_folder_moved_to_another_row: () => 'A Senate folder once matched here belongs to another project, by its program of work.',
-  several_senate_folders: (_, files) => `These files come from ${new Set(files.filter((f) => f[0] === 'senate').map((f) => f[8])).size} Senate folders. Check each is for this project.`,
-};
 
 function FlagList({ detail, index }: { detail: ReviewDetail; index: ReviewIndex }) {
   const family = (code: string) => index.flags.find((f) => f.code === code)?.family ?? 'nep';
