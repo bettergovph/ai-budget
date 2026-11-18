@@ -46,7 +46,7 @@ export default function HgabReviewHowto() {
             <ul className="hw-facts">
               <li><b>{HOWTO_STEPS.length} steps</b> from opening the reviewer to sending your review</li>
               <li><b>A sign-in with your email</b>, no password</li>
-              <li><b>A computer works best</b>: the documents open beside the project</li>
+              <li><b>Works on a phone</b>; on a computer the documents open beside the project</li>
             </ul>
             <Link to={REVIEW_ROOT} className="hw-btn is-primary is-big">Start reviewing</Link>
             </div>

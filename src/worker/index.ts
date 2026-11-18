@@ -38,6 +38,8 @@ import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
 import { handleHearings } from "./hearings";
 import { REVIEWS_API, handleReviews } from "./hgab-reviews";
+import { handleDocumentProxy } from "./hgab-document-proxy";
+import { DOCUMENT_PROXY_API } from "../lib/hgab-review-api";
 import { SENATE_COPIES_API, handleSenateCopies } from "./hgab-senate-copies";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
@@ -1482,6 +1484,10 @@ export default {
     // ---- Project reviewer: reviews sent by signed-in members (D1) ----
     if (url.pathname === REVIEWS_API || url.pathname.startsWith(`${REVIEWS_API}/`)) {
       return handleReviews(request, env, url);
+    }
+    // DPWH Transparency's PDFs, passed through for the reviewer's phone view (their host sends no CORS headers).
+    if (url.pathname === DOCUMENT_PROXY_API) {
+      return handleDocumentProxy(request, url);
     }
     // The House bill's Senate copies, for signed-in members only.
     if (url.pathname.startsWith(`${SENATE_COPIES_API}/`)) {
