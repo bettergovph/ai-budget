@@ -44,6 +44,7 @@ import {
   DocLinkContext, SenateBlockContext, senateRegion, useDocLink, useMember, useSenateBlock, type DocBlock, type Member,
 } from '../lib/hgab-review-member';
 import { heldBackRegion } from '../lib/senate-copies-held-back';
+import { HOWTO_ROOT } from '../lib/hgab-review-howto';
 import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
@@ -825,6 +826,7 @@ function ReviewGate({ opening, loadError }: { opening: Opening; loadError: strin
       <p>Enter your email and we send you a code. There is no password.</p>
       <p>Your review goes to the team, and the project shows as taken so others can pick another.</p>
       <button type="button" className="rv-btn is-primary" onClick={member.signIn}>Sign in</button>
+      <p className="rv-howto-link">New here? <Link to={HOWTO_ROOT}>How to review a project</Link>, step by step.</p>
     </div>
   );
 }
@@ -1135,6 +1137,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
       <div className="rv-about-card">
         <button type="button" className="rv-about-close" onClick={onClose} aria-label="Close">×</button>
         <h2>How the reviewer works</h2>
+        <p><b>New here?</b> <Link to={HOWTO_ROOT}>How to review a project</Link> walks you through it, step by step with screenshots.</p>
         <p>Every DPWH project in the House bill (HB 10858, third reading) is here: {n(index.rows.length)} projects.</p>
         <p>Each comes with the documents found for it and the red flags research.bettergov.ph raised.</p>
         <h3>The funnel</h3>
@@ -1360,6 +1363,7 @@ function Reviewer() {
                   <p>Narrow the list with the filters above. Each one you add is a step in the funnel, with what it keeps.</p>
                   <p>Then open each document and fill in your review. Use <kbd>j</kbd> and <kbd>k</kbd> to move between projects.</p>
                   {listed.length > 0 && <button type="button" className="rv-btn is-primary" onClick={() => open(listed[0])}>Open the first project</button>}
+                  <p className="rv-howto-link">New here? <Link to={HOWTO_ROOT}>How to review a project</Link>, step by step.</p>
                   <DisclaimerNotice compact className="rv-disclaimer" />
                 </div>
               )}

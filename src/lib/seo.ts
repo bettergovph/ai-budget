@@ -21,6 +21,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from "./hgab-history";
 import { FAP_ROOT, FAP_TITLE } from "./hgab-fap";
 import { REVIEW_ROOT, REVIEW_TITLE } from "./hgab-review";
 import { REPORT_ROOT, REPORT_TITLE } from "./hgab-review-report";
+import { HOWTO_ROOT, HOWTO_SHOT_HEIGHT, HOWTO_SHOT_WIDTH, HOWTO_STEPS, HOWTO_TITLE, howtoShot } from "./hgab-review-howto";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
@@ -493,6 +494,19 @@ export function pageMeta(pathname: string): PageMeta {
       title: `${REPORT_TITLE} · ${SITE}`,
       description: "For the BetterGov team: members' reviews of DPWH projects in the FY 2027 House bill. Sign-in required.",
       noindex: true,
+    };
+  }
+  // How to review a project: the reviewer's step-by-step guide; its link preview is the first screenshot.
+  if (p === HOWTO_ROOT) {
+    return {
+      title: `${HOWTO_TITLE}: A Step-by-Step Guide to the Project Reviewer · ${SITE}`,
+      description:
+        `How to review the DPWH projects in the FY 2027 House bill, in ${HOWTO_STEPS.length} steps with screenshots: sign in, pick a ` +
+        "project nobody has reviewed, read its documents, answer the team's questions and give a final status.",
+      image: `https://budget.bettergov.ph${howtoShot(HOWTO_STEPS[0].key)}`,
+      imageWidth: String(HOWTO_SHOT_WIDTH),
+      imageHeight: String(HOWTO_SHOT_HEIGHT),
+      imageAlt: HOWTO_STEPS[0].alt,
     };
   }
   if (p === REVIEW_ROOT) {
