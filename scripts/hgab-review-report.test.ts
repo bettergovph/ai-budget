@@ -8,7 +8,7 @@ import { emptyFlagCheck, emptyQuestionAnswer, newCaseReview, type CaseReview, ty
 import type { ReviewProject } from "../src/lib/hgab-review";
 import type { ReviewIndexFlag } from "../src/lib/hgab-documents";
 import {
-  REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally,
+  REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally, docsFrom,
   flagPath, flagTallies, groupCounts, groupIndex, insertionKey, memberNames, projectPath, questionTallies, reportPath, reportProjects,
   reviewRows, tallyBy, totalTally, type ReportCase,
 } from "../src/lib/hgab-review-report";
@@ -150,4 +150,25 @@ test("the report's pages have their own addresses", () => {
   assert.equal(flagPath("missing-pow"), "/hgab/2027/review/report/flags/missing-pow");
   assert.equal(projectPath(A), `/hgab/2027/review/report/project/${A}`);
   assert.equal(new Set(REPORT_PAGES.map((p) => p.slug)).size, REPORT_PAGES.length);
+});
+
+test("documents are counted from the House bill (Senate copies), the NEP (DPWH Transparency), or either", () => {
+  const bySource = (s: number, sf: number, p: number, pf: number) => ({ senate: { docs: s, files: sf }, nep: { docs: p, files: pf } });
+  const all = [
+    { ...listed(A, true), docs: 0b11111, files: 6, source: "senate" as const, bySource: bySource(0b11111, 6, 0, 0) },
+    { ...listed(B, false), docs: 0b11011, files: 9, source: "both" as const, bySource: bySource(0b00001, 1, 0b11011, 8) },
+    { ...listed(E, false), docs: 0b00011, files: 0, source: "none" as const, bySource: bySource(0, 0, 0b00011, 0) },
+  ];
+  assert.deepEqual(docsFrom(all[1], "senate"), { docs: 1, files: 1 });
+  assert.deepEqual(docsFrom(all[1], "either"), { docs: 0b11011, files: 9 });
+  assert.deepEqual(docsFrom({ docs: 3, files: 2 }, "nep"), { docs: 0, files: 0 }, "a review.json from before the split counts nothing by source");
+  const senate = docTally(all, "all", "All", "senate"), nep = docTally(all, "all", "All", "nep"), either = docTally(all);
+  assert.deepEqual([senate.files, nep.files, either.files], [7, 8, 15]);
+  assert.deepEqual([senate.withFile, nep.withFile, either.withFile], [2, 1, 2]);
+  assert.deepEqual(senate.levels, { complete: 1, partial: 1, none: 1 });
+  assert.deepEqual(nep.levels, { complete: 1, partial: 1, none: 1 }, "listed key documents count without a file");
+  assert.deepEqual(either.levels, { complete: 2, partial: 1, none: 0 });
+  assert.deepEqual(senate.byType, [2, 1, 1, 1, 1]);
+  assert.deepEqual(nep.byType, [2, 2, 0, 1, 1]);
+  assert.equal(docTallies(all, (p) => [p.region, p.region], "nep")[0].from, "nep");
 });

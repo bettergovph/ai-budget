@@ -27,7 +27,7 @@ export const REPORT_PAGES = [
   { slug: '', label: 'Overview', note: 'Every project’s final status, from members and the automatic review.' },
   { slug: 'automatic', label: 'Automatic red flags', note: 'The rule applied to every project before anyone read it, and the projects it marked.' },
   { slug: 'flags', label: 'Red flags', note: 'Each red flag on the projects, with its projects.' },
-  { slug: 'documents', label: 'Documents', note: 'The documents found for each project: the five key ones, sources and regions.' },
+  { slug: 'documents', label: 'Documents', note: 'The documents found for each project, from the House bill (Senate copies) and the NEP (DPWH Transparency).' },
   { slug: 'regions', label: 'By region', note: 'Final status by House insertion, region and DPWH office.' },
   { slug: 'questions', label: 'Questions', note: 'How members answered the team’s 16 questions.' },
   { slug: 'projects', label: 'Projects', note: 'Every project, with filters: final status, region, documents, search.' },
@@ -335,6 +335,26 @@ export function flagTallies(flags: readonly ReviewIndexFlag[], all: readonly Rev
 }
 
 /**
+ * Where documents come from, kept apart in the report (the maintainer, 2026-11-18): the House bill's (the Senate copies
+ * DPWH gave the Senate for the House bill's projects) and the NEP's (DPWH Transparency, the NEP proposal's).
+ * `either` counts both together, as the reviewer and the automatic rule do.
+ */
+export const DOC_FROM = ['either', 'senate', 'nep'] as const;
+export type DocFrom = (typeof DOC_FROM)[number];
+export const DOC_FROM_LABEL: Record<DocFrom, string> = { either: 'Either source', senate: 'House bill (Senate copies)', nep: 'NEP (DPWH Transparency)' };
+export const DOC_FROM_SHORT: Record<DocFrom, string> = { either: 'Either', senate: 'House bill', nep: 'NEP' };
+export const DOC_FROM_NOTE: Record<DocFrom, string> = {
+  either: 'Found in the Senate copies or on DPWH Transparency.',
+  senate: 'What DPWH gave the Senate for the House bill’s projects, with signatures redacted.',
+  nep: 'What DPWH published for the NEP proposal on DPWH Transparency, some through the project’s NEP counterpart.',
+};
+/** A project's key documents (bitmask) and files from one source, or both. Zero for a source when review.json predates it. */
+export function docsFrom(p: Pick<ReviewProject, 'docs' | 'files' | 'bySource'>, from: DocFrom): { docs: number; files: number } {
+  if (from === 'either') return { docs: p.docs, files: p.files };
+  return p.bySource?.[from] ?? { docs: 0, files: 0 };
+}
+
+/**
  * How complete a project's documents are: at least COMPLETE_AT of the five key documents, fewer, or nothing at all
  * (no key document and no other file: what the automatic rule marks).
  */
@@ -345,12 +365,14 @@ export const DOC_LEVEL_LABEL: Record<DocLevel, string> = {
   partial: `Fewer than ${COMPLETE_AT} key documents`,
   none: 'No document found',
 };
-export const docLevel = (p: Pick<ReviewProject, 'docs' | 'files'>): DocLevel =>
+export const docLevel = (p: { docs: number; files: number }): DocLevel =>
   docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
 
 export interface DocTally {
   key: string;
   label: string;
+  /** The source counted (DOC_FROM). */
+  from: DocFrom;
   projects: number;
   amount: number;
   /** Projects with each of the five key documents (NAMED_TYPES order). */
@@ -360,32 +382,37 @@ export interface DocTally {
   levels: Record<DocLevel, number>;
   /** Projects by where their files come from. */
   sources: Record<SourceGroup, number>;
-  /** Files tied to the projects (Senate copies and DPWH Transparency). */
+  /** Files tied to the projects, from the source counted. */
   files: number;
+  /** Projects with at least one file from the source counted. */
+  withFile: number;
 }
-export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects'): DocTally {
+/** Documents of some projects, from one source or either (`from`). */
+export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects', from: DocFrom = 'either'): DocTally {
   const t: DocTally = {
-    key, label, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
+    key, label, from, withFile: 0, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
     levels: { complete: 0, partial: 0, none: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
   };
   for (const p of projects) {
-    NAMED_TYPES.forEach((_, i) => { if (hasDoc(p.docs, i)) t.byType[i]++; });
-    t.byCount[docCount(p.docs)]++;
-    t.levels[docLevel(p)]++;
+    const d = docsFrom(p, from);
+    NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) t.byType[i]++; });
+    t.byCount[docCount(d.docs)]++;
+    t.levels[docLevel(d)]++;
     t.sources[p.source]++;
-    t.files += p.files;
+    t.files += d.files;
+    if (d.files > 0) t.withFile++;
   }
   return t;
 }
 /** Document tallies by a key (region, House insertion), fewest complete first. */
-export function docTallies(all: readonly ReviewProject[], key: (p: ReviewProject) => [string, string]): DocTally[] {
+export function docTallies(all: readonly ReviewProject[], key: (p: ReviewProject) => [string, string], from: DocFrom = 'either'): DocTally[] {
   const groups = new Map<string, { label: string; ps: ReviewProject[] }>();
   for (const p of all) {
     const [k, label] = key(p);
     if (!groups.has(k)) groups.set(k, { label, ps: [] });
     groups.get(k)!.ps.push(p);
   }
-  return [...groups.entries()].map(([k, g]) => docTally(g.ps, k, g.label))
+  return [...groups.entries()].map(([k, g]) => docTally(g.ps, k, g.label, from))
     .sort((a, b) => a.levels.complete / a.projects - b.levels.complete / b.projects || a.label.localeCompare(b.label));
 }
 

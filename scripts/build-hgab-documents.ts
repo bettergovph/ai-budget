@@ -414,6 +414,9 @@ async function main(): Promise<void> {
   const filesByRow = new Map<string, DocumentFile[]>();
   for (const f of files) filesByRow.set(f.hgab_id, [...(filesByRow.get(f.hgab_id) ?? []), f]);
   const parityMisses: string[] = [];
+  // The key documents by source, for the reviewer and the team's report: the House bill's (Senate copies) and the NEP's
+  // (DPWH Transparency). Together they make `named`.
+  const namedBySource = new Map<string, NamedBySource>();
   const projects: DocumentProject[] = cov.projects.map((r) => {
     const f = flagById.get(r.hgabId)!;
     const j = joined.get(r.hgabId)!;
@@ -426,6 +429,7 @@ async function main(): Promise<void> {
     // Senate types stand (170 rows have types but no file list).
     const lostFolder = F.tracker.reviewed_moved.some((d) => d.from === r.hgabId);
     const named = byNamedOrder([...proposalNamed, ...(lostFolder ? [] : r.senateDocumentTypes), ...senate.map((x) => x.doc_type)]);
+    namedBySource.set(r.hgabId, { senate: byNamedOrder([...(lostFolder ? [] : r.senateDocumentTypes), ...senate.map((x) => x.doc_type)]), proposal: byNamedOrder(proposalNamed) });
     const missingUpstream = missingOf(upstreamNamed);
     if (missingUpstream.join("|") !== f.missingDocumentFlags.join("|")) parityMisses.push(r.hgabId);
     const prop = P.links.get(r.hgabId);
@@ -482,7 +486,7 @@ async function main(): Promise<void> {
     link_method: "VARCHAR",
   });
 
-  const reviewer = writeReviewer(args.out, projects, files, joined, {
+  const reviewer = writeReviewer(args.out, projects, files, joined, namedBySource, {
     coverage: cov.generatedAtUtc, flags: flags.generatedAtUtc, in_depth: inDepth.generatedAtUtc,
   });
 
@@ -549,7 +553,14 @@ async function main(): Promise<void> {
 // --- 5. The reviewer's files ---------------------------------------------------------------------------------------
 
 /** review.json (every row, compact) and detail/<NN>.json (files and flag evidence per row), for the Review screen. */
-function writeReviewer(out: string, projects: DocumentProject[], files: DocumentFile[], joined: Map<string, { row: OurRow }>, generated: Record<string, string>) {
+/** A row's key documents found in each source: Senate copies (the House bill's) and DPWH Transparency (the NEP's). */
+interface NamedBySource { senate: readonly string[]; proposal: readonly string[] }
+const namedMask = (types: readonly string[]) => NAMED_TYPES.reduce((m, t, i) => (types.includes(t) ? m | (1 << i) : m), 0);
+
+function writeReviewer(
+  out: string, projects: DocumentProject[], files: DocumentFile[], joined: Map<string, { row: OurRow }>, namedBySource: ReadonlyMap<string, NamedBySource>,
+  generated: Record<string, string>,
+) {
   const districts = readJson<{ districts: { id: string; label: string }[]; offices: Record<string, { name: string; district_ids: string[]; tier: string | null }> }>(resolve(out, "districts.json"));
   const label = new Map(districts.districts.map((d) => [d.id, d.label]));
   // districts.json names offices "Abra DEO"; our rows "Abra District Engineering Office".
@@ -608,9 +619,10 @@ function writeReviewer(out: string, projects: DocumentProject[], files: Document
   const rows: ReviewIndexRow[] = ordered.map((p) => [
     p.hgab_id, p.project_id, p.title, officeAt(p.office), regionAt(p.region), programAt(joined.get(p.hgab_id)!.row.program), p.amount_php,
     uniq([...p.review_flags.map((f) => flagAt(f.code)), ...ourNep(p).map(flagAt), ...p.missing_flags.map((l) => flagAt(flagCode(l).code))]),
-    NAMED_TYPES.reduce((m, t, i) => (p.named_present.includes(t) ? m | (1 << i) : m), 0),
+    namedMask(p.named_present),
     filesBy.get(p.hgab_id)?.length ?? 0,
     (p.senate_files > 0 ? FROM_SENATE : 0) | (p.proposal_files > 0 ? FROM_PROPOSAL : 0),
+    namedMask(namedBySource.get(p.hgab_id)!.senate), namedMask(namedBySource.get(p.hgab_id)!.proposal), p.senate_files, p.proposal_files,
   ]);
   // Automatic review (AUTO_REVIEW): every rule each row meets, and its score.
   const autoRows: Record<string, { r: number[]; s: number }> = {};

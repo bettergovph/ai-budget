@@ -311,9 +311,12 @@ export const FROM_SENATE = 1, FROM_PROPOSAL = 2;
  * One row of review.json `rows`, positional to keep the file small:
  * [hgab_id, project_id, title, office index, region index, program index, amount_php, flag indexes, named-type
  *  bitmask (bit i = NAMED_TYPES[i] present, with our links), files (Senate + Proposal), sources bitmask
- *  (FROM_SENATE | FROM_PROPOSAL; absent in files built before it)]
+ *  (FROM_SENATE | FROM_PROPOSAL; absent in files built before it), then by source (absent in files built before
+ *  2026-11-18): the named-type bitmask in the Senate copies (the House bill's documents), the same in DPWH
+ *  Transparency (the NEP proposal's; the research site's types, with or without files), Senate files, DPWH
+ *  Transparency files. The two bitmasks together make the first; the two counts, the files.]
  */
-export type ReviewIndexRow = [string, string, string, number, number, number, number, number[], number, number, number?];
+export type ReviewIndexRow = [string, string, string, number, number, number, number, number[], number, number, number?, number?, number?, number?, number?];
 export interface ReviewIndex {
   schema: number;
   built_at: string;

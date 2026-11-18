@@ -4,7 +4,7 @@
  * status by region, the questions, every project, and each project. Data: useReport() (src/lib/hgab-report-data.ts).
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { HGAB_BASE, cached, getJson, pdfUrl, recordPath } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import {
@@ -12,13 +12,13 @@ import {
 } from '../lib/hgab-documents';
 import {
   DETAIL_NOTE_TEXT, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT, REVIEW_ROOT, SOURCE_GROUPS,
-  SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, SOURCE_LABEL, docCount, hasDoc, pesoFull, pesoShort, readerText,
+  SOURCE_GROUP_NOTE, docCount, hasDoc, pesoFull, pesoShort, readerText,
 } from '../lib/hgab-review';
 import { QUESTION_OF_FLAG, RATINGS, TEAM_FLAGS, VERDICT_LABEL } from '../lib/hgab-redflags-team';
 import {
-  ATTENTION_GROUPS, DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUP_NOTE, REPORT_PAGES,
+  ATTENTION_GROUPS, DOC_FROM, DOC_FROM_LABEL, DOC_FROM_NOTE, DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUP_NOTE, REPORT_PAGES,
   checkTallies, docTallies, docTally, flagPath, flagSource, flagTallies, groupCounts, insertionKey, n, officeLine, pct,
-  questionTallies, reportPath, rulePath, sumAmount, tallyBy, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
+  questionTallies, reportPath, rulePath, sumAmount, tallyBy, type DocFrom, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
 } from '../lib/hgab-review-report';
 import { fetchSenateStatus, senatePath, type SenateCopyStatus } from '../lib/hgab-review-api';
 import { useReport } from '../lib/hgab-report-data';
@@ -257,7 +257,12 @@ export function ConditionPage({ kind }: { kind: 'flag' | 'rule' }) {
 // --- Documents ---------------------------------------------------------------------------------------------------------
 
 /** documents/manifest.json (build:hgab-documents), the parts this page reads. */
-interface DocumentsManifest { built_at: string; files: { total: number; rows_with_any: number }; senate: { files_in_index: number; files_tied: number }; proposal: { files: number } }
+interface DocumentsManifest {
+  built_at: string;
+  files: { total: number; rows_with_any: number };
+  senate: { files_in_index: number; files_tied: number; rows_matched_without_files: number };
+  proposal: { files: number; rows_types_without_files: number };
+}
 /** documents/downloads/manifest.json (build:hgab-review-dataset): the public dataset. */
 interface DatasetManifest {
   as_of: string;
@@ -271,40 +276,108 @@ const mb = (b: number) => `${(b / 1e6).toFixed(1)} MB`;
 
 export function DocumentsPage() {
   const { all } = useReport();
+  const [params, setParams] = useSearchParams();
+  const from: DocFrom = (DOC_FROM as readonly string[]).includes(params.get('from') ?? '') ? params.get('from') as DocFrom : 'either';
+  const setFrom = (f: DocFrom) => setParams((prev) => { const next = new URLSearchParams(prev); if (f === 'either') next.delete('from'); else next.set('from', f); return next; }, { replace: true });
   const [docs, setDocs] = useState<DocumentsManifest | null>(null);
   const [dataset, setDataset] = useState<DatasetManifest | null>(null);
   useEffect(() => {
     loadDocumentsManifest().then(setDocs).catch(() => {});
     loadDatasetManifest().then(setDataset).catch(() => {});
   }, []);
-  const t = useMemo(() => docTally(all), [all]);
-  const bySource = useMemo(() => docTallies(all, (p) => (p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only'])), [all]);
-  const byRegion = useMemo(() => docTallies(all, (p) => [p.region, p.region]), [all]);
-  const withFile = all.filter((p) => p.files > 0).length;
+  // Both sources side by side, then every table below for the source chosen.
+  const by = useMemo(() => Object.fromEntries(DOC_FROM.map((f) => [f, docTally(all, 'all', 'All projects', f)])) as Record<DocFrom, DocTally>, [all]);
+  const t = by[from];
+  const bySource = useMemo(() => docTallies(all, (p) => (p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only']), from), [all, from]);
+  const byRegion = useMemo(() => docTallies(all, (p) => [p.region, p.region], from), [all, from]);
+  const split = all.some((p) => p.bySource);
   const projects = reportPath('projects');
+  const cell = (f: DocFrom, v: number, of = all.length) => <td key={f} className="num">{n(v)} <small>{pct(v, of)}</small></td>;
   return (
     <>
       <PageHead title="Documents">
-        <p>The documents found for each DPWH project in the House bill: Senate copies (the documents DPWH gave the Senate, with signatures redacted) and DPWH Transparency (the NEP proposal’s documents). Five of them are the key documents the team checks first.</p>
+        <p>The documents found for each DPWH project in the House bill, from two sources kept apart here: the <b>House bill</b>’s (the Senate copies, what DPWH gave the Senate for the House bill’s projects, with signatures redacted) and the <b>NEP</b>’s (DPWH Transparency, what DPWH published for the NEP proposal). Five of them are the key documents the team checks first.</p>
       </PageHead>
       <section className="rr-sec">
         <div className="rr-cards is-4">
-          <Card label="Documents found" value={n(docs?.files.total ?? t.files)}
-            note={docs ? `${n(docs.senate.files_tied)} Senate copies · ${n(docs.proposal.files)} DPWH Transparency` : undefined} />
+          <Card label="Documents found" value={n(docs?.files.total ?? by.either.files)}
+            note={`${n(docs?.senate.files_tied ?? by.senate.files)} House bill (Senate copies) · ${n(docs?.proposal.files ?? by.nep.files)} NEP (DPWH Transparency)`} />
           <Card label="Senate copies open" value={dataset ? n(dataset.totals.senate_copies_redacted) : '…'}
             note={dataset ? `of ${n(dataset.totals.senate_copies)}: redacted, as of ${dataset.as_of}; the rest stay closed` : undefined} />
-          <Card label="Projects with a file" value={n(withFile)} note={`${pct(withFile, all.length)} of ${n(all.length)}`} />
-          <Card label={DOC_LEVEL_LABEL.complete} value={n(t.levels.complete)} note={`${pct(t.levels.complete, all.length)} of the projects`} to={`${projects}?docs=complete`} />
+          <Card label="Projects with a file" value={n(by.either.withFile)} note={`${pct(by.either.withFile, all.length)} of ${n(all.length)}`} />
+          <Card label={DOC_LEVEL_LABEL.complete} value={n(by.either.levels.complete)} note={`${pct(by.either.levels.complete, all.length)} of the projects, either source`} to={`${projects}?docs=complete`} />
         </div>
-        <LevelBar t={t} big />
-        <p className="rr-note">
-          {DOC_LEVELS.map((d) => `${DOC_LEVEL_LABEL[d]}: ${n(t.levels[d])}`).join(' · ')}. “No document found” means none of the five and no other file:
-          those are the projects the automatic rule marks.
-        </p>
       </section>
 
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">The five key documents</h3>
+        <h3 className="rr-h3 is-first">House bill and NEP documents</h3>
+        {!split && <p className="rr-warn">This build of the project list doesn’t split the key documents by source yet.</p>}
+        <div className="rr-table-wrap">
+          <table className="rr-table rr-split">
+            <thead>
+              <tr>
+                <th scope="col"><span className="rr-sr">Measure</span></th>
+                {(['senate', 'nep', 'either'] as const).map((f) => <th key={f} scope="col" className="num" title={DOC_FROM_NOTE[f]}>{DOC_FROM_LABEL[f]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Documents (files)</th>
+                <td className="num">{n(by.senate.files)}</td><td className="num">{n(by.nep.files)}</td><td className="num">{n(by.either.files)}</td>
+              </tr>
+              <tr>
+                <th scope="row">Projects with a file</th>
+                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].withFile))}
+              </tr>
+              <tr>
+                <th scope="row">Projects with {DOC_LEVEL_LABEL.complete.toLowerCase()}</th>
+                {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].levels.complete))}
+              </tr>
+              {NAMED_TYPES.map((type, i) => (
+                <tr key={type}>
+                  <th scope="row">With the {type === 'POW' ? 'program of work (POW)' : type === 'BP 202' ? 'BP 202' : type.toLowerCase()}</th>
+                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byType[i]))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">
+          Shares are of all {n(all.length)} projects. Most House insertions have only House bill documents, and most NEP projects only NEP ones.
+          A key document counts where its source lists it, even if we haven’t found the file
+          {docs ? ` (${n(docs.proposal.rows_types_without_files)} projects on DPWH Transparency, ${n(docs.senate.rows_matched_without_files)} in the Senate copies)` : ''}.
+        </p>
+        <h4 className="rr-h4">Where each project’s files come from</h4>
+        <div className="rr-table-wrap">
+          <table className="rr-table rr-narrow">
+            <thead><tr><th scope="col">Files from</th><th scope="col" className="num">Projects</th><th scope="col" className="num">Share</th><th scope="col">Note</th></tr></thead>
+            <tbody>
+              {SOURCE_GROUPS.map((g) => (
+                <tr key={g}>
+                  <th scope="row"><Link to={`${projects}?from=${g}`}>{FILES_FROM_LABEL[g]}</Link></th>
+                  <td className="num">{n(by.either.sources[g])}</td>
+                  <td className="num">{pct(by.either.sources[g], all.length)}</td>
+                  <td className="rr-muted">{SOURCE_GROUP_NOTE[g]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div className="rr-switch" role="group" aria-label="Count documents from">
+        <span className="rr-filters-l">Count documents from</span>
+        {DOC_FROM.map((f) => (
+          <button key={f} type="button" className={`rr-chip${from === f ? ' is-on' : ''}`} aria-pressed={from === f} onClick={() => setFrom(f)} title={DOC_FROM_NOTE[f]}>{DOC_FROM_LABEL[f]}</button>
+        ))}
+      </div>
+
+      <section className="rr-sec">
+        <h3 className="rr-h3 is-first">The five key documents <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
+        <LevelBar t={t} big />
+        <p className="rr-note">{DOC_LEVELS.map((d) => `${DOC_LEVEL_LABEL[d]}: ${n(t.levels[d])}`).join(' · ')}. {from === 'either'
+          ? '“No document found” means none of the five and no other file in either source: the projects the automatic rule marks.'
+          : `Counting only ${DOC_FROM_LABEL[from]}.`}</p>
         <div className="rr-table-wrap">
           <table className="rr-table">
             <thead><tr><th scope="col">Document</th><th scope="col">What it is</th><th scope="col" className="num">Projects with it</th><th scope="col" className="num">Share</th><th scope="col" className="num">Without it</th></tr></thead>
@@ -315,23 +388,22 @@ export function DocumentsPage() {
                   <td className="rr-muted">{NAMED_MEANING[type]}</td>
                   <td className="num">{n(t.byType[i])}</td>
                   <td className="num"><Meter value={t.byType[i]} of={t.projects} /></td>
-                  <td className="num"><Link to={flagPath(missingCode(type))}>{n(t.projects - t.byType[i])}</Link></td>
+                  <td className="num">{from === 'either' ? <Link to={flagPath(missingCode(type))}>{n(t.projects - t.byType[i])}</Link> : n(t.projects - t.byType[i])}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="rr-note">Found with our document links, in the Senate copies or on DPWH Transparency. “Without it” opens the projects missing it.</p>
+        {from === 'either' && <p className="rr-note">“Without it” opens the projects missing it in both sources.</p>}
         <h4 className="rr-h4">How many of the five each project has</h4>
         <div className="rr-table-wrap">
           <table className="rr-table rr-narrow">
-            <thead><tr><th scope="col">Key documents found</th><th scope="col" className="num">Projects</th><th scope="col" className="num">Share</th></tr></thead>
+            <thead><tr><th scope="col">Key documents found</th>{(['senate', 'nep', 'either'] as const).map((f) => <th key={f} scope="col" className="num">{DOC_FROM_LABEL[f]}</th>)}</tr></thead>
             <tbody>
               {[5, 4, 3, 2, 1, 0].map((k) => (
                 <tr key={k}>
                   <th scope="row">{k} of 5</th>
-                  <td className="num">{n(t.byCount[k])}</td>
-                  <td className="num"><Meter value={t.byCount[k]} of={t.projects} /></td>
+                  {(['senate', 'nep', 'either'] as const).map((f) => cell(f, by[f].byCount[k]))}
                 </tr>
               ))}
             </tbody>
@@ -340,32 +412,13 @@ export function DocumentsPage() {
       </section>
 
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">Where the documents come from</h3>
-        <div className="rr-table-wrap">
-          <table className="rr-table rr-narrow">
-            <thead><tr><th scope="col">Source</th><th scope="col" className="num">Projects</th><th scope="col" className="num">Share</th><th scope="col">Note</th></tr></thead>
-            <tbody>
-              {SOURCE_GROUPS.map((g) => (
-                <tr key={g}>
-                  <th scope="row">{SOURCE_GROUP_LABEL[g]}</th>
-                  <td className="num">{n(t.sources[g])}</td>
-                  <td className="num">{pct(t.sources[g], t.projects)}</td>
-                  <td className="rr-muted">{SOURCE_GROUP_NOTE[g]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="rr-sec">
-        <h3 className="rr-h3 is-first">House insertions and NEP only</h3>
+        <h3 className="rr-h3 is-first">House insertions and NEP only <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
         <p className="rr-note">House insertions are projects in the House bill but not in the NEP, by our comparison.</p>
         <DocTable rows={bySource} head="Projects" link={(k) => `${projects}?src=${k}`} />
       </section>
 
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">By region</h3>
+        <h3 className="rr-h3 is-first">By region <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
         <p className="rr-note">Fewest projects with 4 or 5 key documents first.</p>
         <DocTable rows={byRegion} head="Region" link={(k) => `${projects}?region=${encodeURIComponent(k)}`} />
       </section>
@@ -388,6 +441,11 @@ export function DocumentsPage() {
     </>
   );
 }
+
+/** Where a project's files come from (SOURCE_GROUPS), in the report's words. */
+const FILES_FROM_LABEL: Record<(typeof SOURCE_GROUPS)[number], string> = {
+  senate: 'House bill only (Senate copies)', nep: 'NEP only (DPWH Transparency)', both: 'Both', none: 'No file found',
+};
 
 function Meter({ value, of }: { value: number; of: number }) {
   return <span className="rr-meter"><span className="rr-meter-track" aria-hidden="true"><span style={{ width: of ? `${(100 * value) / of}%` : 0 }} /></span><b>{pct(value, of)}</b></span>;
@@ -557,6 +615,9 @@ const loadShard = (seq: number) => {
   return cached(`review-detail:${path}`, () => getJson<ReviewDetailShard>(dataUrl(`${HGAB_BASE}/${path}`), 'Failed to load the project’s documents'));
 };
 /** Files in reading order: the five key documents, then the rest; current copies before earlier ones. */
+/** Which detail notes belong to which source, for the project page's two document sections. */
+const SENATE_NOTES = ['senate_matched_without_files', 'senate_folder_moved_from_another_row', 'senate_folder_moved_to_another_row', 'several_senate_folders'];
+const NEP_NOTES = ['proposal_documents_via_nep_counterpart', 'proposal_types_without_files'];
 const fileOrder = (files: readonly DetailFile[]) => {
   const rank = (t: string) => { const i = (NAMED_TYPES as readonly string[]).indexOf(t); return i < 0 ? 99 : i; };
   return [...files].sort((a, b) => rank(a[2]) - rank(b[2]) || Number(a[7]) - Number(b[7]) || a[0].localeCompare(b[0]) || a[4].localeCompare(b[4]));
@@ -654,44 +715,56 @@ export function ProjectPage() {
       </section>
 
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">Documents <span className="rr-muted">({n(p.files)} file{p.files === 1 ? '' : 's'} · {docCount(p.docs)} of 5 key documents)</span></h3>
-        <ul className="rr-keydocs" aria-label="The 5 key documents">
-          {NAMED_TYPES.map((t, i) => (
-            <li key={t} className={hasDoc(p.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
-              <span aria-hidden="true">{hasDoc(p.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}<span className="rr-sr">{hasDoc(p.docs, i) ? ' found' : ' not found'}</span>
-            </li>
-          ))}
-        </ul>
-        {d && d.notes.map((k) => DETAIL_NOTE_TEXT[k]?.(d, d.files)).filter(Boolean).map((t) => <p key={t} className="rr-note">{t}</p>)}
+        <h3 className="rr-h3 is-first">Documents <span className="rr-muted">({n(p.files)} file{p.files === 1 ? '' : 's'} · {docCount(p.docs)} of 5 key documents in either source)</span></h3>
         {detail?.id === hgabId && detail.error && <p className="rr-error">{detail.error}</p>}
         {!d && !(detail?.id === hgabId && detail.error) && p.files > 0 && <p className="rr-muted" role="status">Loading the documents…</p>}
-        {files.length > 0 && (
-          <div className="rr-table-wrap">
-            <table className="rr-table">
-              <thead><tr><th scope="col">Document</th><th scope="col">File</th><th scope="col">Source</th><th scope="col">How it was tied to the project</th><th scope="col" className="num">Size</th></tr></thead>
-              <tbody>
-                {files.map((f) => {
-                  const path = f[0] === 'senate' ? senatePath(f[5]) : null;
-                  const status = path ? st?.[path] : undefined;
-                  const open = f[0] === 'proposal' || status === 'available';
-                  return (
-                    <tr key={f[5]}>
-                      <td>{f[2] === 'Other' ? <span className="rr-muted">Other</span> : NAMED_SHORT[f[2]]}{f[7] && <small className="rr-muted"> · earlier copy</small>}</td>
-                      <th scope="row">
-                        {open ? <a href={f[5]} target="_blank" rel="noopener noreferrer">{f[4]}</a> : <span>{f[4]}</span>}
-                        {!open && <small className="rr-sub">{!st ? 'Checking…' : 'Not available yet: we’re redacting the signatures in this copy first, for privacy.'}</small>}
-                      </th>
-                      <td>{SOURCE_LABEL[f[0]]}</td>
-                      <td className={LINK_WEAK.has(f[1]) ? 'rr-weak' : 'rr-muted'}>{LINK_LABEL[f[1]]}</td>
-                      <td className="num">{f[6] ? mb(f[6]) : ''}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {d && !files.length && <p className="rr-muted">No file found for this project, in the Senate copies or on DPWH Transparency.</p>}
+        {(['senate', 'nep'] as const).map((src) => {
+          const kind = src === 'senate' ? 'senate' : 'proposal';
+          const mask = p.bySource?.[src].docs ?? null;
+          const list = files.filter((f) => f[0] === kind);
+          const notes = d ? d.notes.filter((k) => (src === 'senate' ? SENATE_NOTES : NEP_NOTES).includes(k)).map((k) => DETAIL_NOTE_TEXT[k]?.(d, d.files)).filter(Boolean) : [];
+          return (
+            <div key={src} className="rr-docsrc">
+              <h4 className="rr-h4">{DOC_FROM_LABEL[src]} <span className="rr-muted">· {n(list.length || (p.bySource?.[src].files ?? 0))} file{(list.length || p.bySource?.[src].files) === 1 ? '' : 's'}</span></h4>
+              <p className="rr-note">{DOC_FROM_NOTE[src]}</p>
+              {mask != null && (
+                <ul className="rr-keydocs" aria-label={`The 5 key documents, ${DOC_FROM_LABEL[src]}`}>
+                  {NAMED_TYPES.map((t, i) => (
+                    <li key={t} className={hasDoc(mask, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
+                      <span aria-hidden="true">{hasDoc(mask, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}<span className="rr-sr">{hasDoc(mask, i) ? ' found' : ' not found'}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {notes.map((t) => <p key={t} className="rr-note">{t}</p>)}
+              {list.length > 0 ? (
+                <div className="rr-table-wrap">
+                  <table className="rr-table">
+                    <thead><tr><th scope="col">Document</th><th scope="col">File</th><th scope="col">How it was tied to the project</th><th scope="col" className="num">Size</th></tr></thead>
+                    <tbody>
+                      {list.map((f) => {
+                        const path = f[0] === 'senate' ? senatePath(f[5]) : null;
+                        const status = path ? st?.[path] : undefined;
+                        const open = f[0] === 'proposal' || status === 'available';
+                        return (
+                          <tr key={f[5]}>
+                            <td>{f[2] === 'Other' ? <span className="rr-muted">Other</span> : NAMED_SHORT[f[2]]}{f[7] && <small className="rr-muted"> · earlier copy</small>}</td>
+                            <th scope="row">
+                              {open ? <a href={f[5]} target="_blank" rel="noopener noreferrer">{f[4]}</a> : <span>{f[4]}</span>}
+                              {!open && <small className="rr-sub">{!st ? 'Checking…' : 'Not available yet: we’re redacting the signatures in this copy first, for privacy.'}</small>}
+                            </th>
+                            <td className={LINK_WEAK.has(f[1]) ? 'rr-weak' : 'rr-muted'}>{LINK_LABEL[f[1]]}</td>
+                            <td className="num">{f[6] ? mb(f[6]) : ''}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : d && <p className="rr-muted">No file from {src === 'senate' ? 'the Senate copies' : 'DPWH Transparency'} for this project.</p>}
+            </div>
+          );
+        })}
       </section>
     </>
   );

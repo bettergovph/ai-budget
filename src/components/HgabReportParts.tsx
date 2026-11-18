@@ -5,7 +5,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useReport } from '../lib/hgab-report-data';
-import { PAGE_SIZE, docCount, foldText, pageCount, pageWindow, pesoFull, pesoShort, type ReviewProject } from '../lib/hgab-review';
+import { PAGE_SIZE, SOURCE_GROUPS, docCount, foldText, pageCount, pageWindow, pesoFull, pesoShort, type ReviewProject, type SourceGroup } from '../lib/hgab-review';
 import { VERDICT_LABEL } from '../lib/hgab-redflags-team';
 import {
   DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUPS, REPORT_GROUP_LABEL, answerLines, docLevel, n,
@@ -134,9 +134,26 @@ export function ReviewEntry({ c }: { c: ReportCase }) {
 const SORTS = { status: 'Final status', amount: 'Largest budget', bill: 'Bill order' } as const;
 type Sort = keyof typeof SORTS;
 
+/** Where a project's files come from (SOURCE_GROUPS), as the report keeps the House bill's and the NEP's apart. */
+const FILES_FROM: Record<SourceGroup, string> = {
+  senate: 'Files: House bill only (Senate copies)', nep: 'Files: NEP only (DPWH Transparency)', both: 'Files: both', none: 'No file found',
+};
+/** "3/5" key documents from one source, with its file count in the tooltip; blank where review.json predates the split. */
+function SourceDocs({ p, from }: { p: ReviewProject; from: 'senate' | 'nep' }) {
+  const d = p.bySource?.[from];
+  if (!d) return <span className="rr-muted">—</span>;
+  const label = from === 'senate' ? 'House bill' : 'NEP';
+  return (
+    <span className={d.docs || d.files ? '' : 'rr-muted'} title={`${label}: ${docCount(d.docs)} of 5 key documents, ${n(d.files)} file${d.files === 1 ? '' : 's'}`}>
+      <span className="rr-narrow-only">{label} </span>{docCount(d.docs)}/5
+    </span>
+  );
+}
+
 /**
- * A list of projects with filters (final status, region, House insertion, documents, search), a sort and pages, all
- * in the URL (`st=`, `region=`, `src=`, `docs=`, `q=`, `sort=`, `pg=`), so a filtered list can be shared.
+ * A list of projects with filters (final status, region, House insertion, documents, where the files come from,
+ * search), a sort and pages, all in the URL (`st=`, `region=`, `src=`, `docs=`, `from=`, `q=`, `sort=`, `pg=`), so a
+ * filtered list can be shared.
  */
 export function ProjectTable({ projects, label = 'projects' }: { projects: readonly ReviewProject[]; label?: string }) {
   const { groupOf, rowById, names } = useReport();
@@ -146,6 +163,7 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
   const region = params.get('region') ?? '';
   const source = params.get('src') ?? '';
   const docs = (DOC_LEVELS as readonly string[]).includes(params.get('docs') ?? '') ? params.get('docs') as DocLevel : '';
+  const filesFrom = (SOURCE_GROUPS as readonly string[]).includes(params.get('from') ?? '') ? params.get('from') as SourceGroup : '';
   const q = params.get('q') ?? '';
   const sort: Sort = (params.get('sort') ?? '') in SORTS ? params.get('sort') as Sort : 'status';
   const set = (changes: Record<string, string>) => setParams((prev) => {
@@ -165,7 +183,7 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
   const shown = useMemo(() => {
     const words = foldText(q.trim()).split(/\s+/).filter(Boolean);
     const out = projects.filter((p) => (!groups.length || groups.includes(groupOf(p.hgabId))) && (!region || p.region === region)
-      && (!source || (source === 'insertion') === p.insertion) && (!docs || docLevel(p) === docs)
+      && (!source || (source === 'insertion') === p.insertion) && (!docs || docLevel(p) === docs) && (!filesFrom || p.source === filesFrom)
       && (!words.length || (() => {
         const r = rowById.get(p.hgabId);
         const t = foldText(`${p.hgabId} ${p.title} ${p.office.name} ${p.office.districts.join(' ')} ${p.program} ${r?.reviews.map((c) => `${names.get(c.member_id)} ${c.review.notes}`).join(' ') ?? ''}`);
@@ -175,11 +193,11 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
     return out.sort((a, b) => (sort === 'bill' ? a.hgabId.localeCompare(b.hgabId)
       : sort === 'amount' ? b.amount - a.amount || a.hgabId.localeCompare(b.hgabId)
         : rank(a) - rank(b) || b.amount - a.amount || a.hgabId.localeCompare(b.hgabId)));
-  }, [projects, groups, region, source, docs, q, sort, groupOf, rowById, names]);
+  }, [projects, groups, region, source, docs, filesFrom, q, sort, groupOf, rowById, names]);
   const pages = pageCount(shown.length);
   const page = Math.min(Math.max(1, Number(params.get('pg')) || 1), pages);
   const slice = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const filtered = groups.length > 0 || !!region || !!source || !!docs || !!q;
+  const filtered = groups.length > 0 || !!region || !!source || !!docs || !!filesFrom || !!q;
   const amount = shown.reduce((s, p) => s + p.amount, 0);
 
   return (
@@ -202,15 +220,19 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
           <option value="insertion">House insertions</option>
           <option value="nep">NEP only</option>
         </select>
-        <select className="rr-select" value={docs} onChange={(e) => set({ docs: e.target.value })} aria-label="Documents">
-          <option value="">Any documents</option>
+        <select className="rr-select" value={docs} onChange={(e) => set({ docs: e.target.value })} aria-label="Key documents, either source">
+          <option value="">Any key documents</option>
           {DOC_LEVELS.map((d) => <option key={d} value={d}>{DOC_LEVEL_LABEL[d]}</option>)}
+        </select>
+        <select className="rr-select" value={filesFrom} onChange={(e) => set({ from: e.target.value })} aria-label="Where the files come from">
+          <option value="">Files from either source</option>
+          {SOURCE_GROUPS.map((g) => <option key={g} value={g}>{FILES_FROM[g]}</option>)}
         </select>
         <input className="rr-input" type="search" placeholder="Search project, office, district, program, reviewer, remarks" value={q} onChange={(e) => set({ q: e.target.value })} />
         <label className="rr-sort">Sort <select className="rr-select" value={sort} onChange={(e) => set({ sort: e.target.value === 'status' ? '' : e.target.value })}>
           {(Object.keys(SORTS) as Sort[]).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}
         </select></label>
-        {filtered && <button type="button" className="rr-link" onClick={() => set({ st: '', region: '', src: '', docs: '', q: '' })}>Clear</button>}
+        {filtered && <button type="button" className="rr-link" onClick={() => set({ st: '', region: '', src: '', docs: '', from: '', q: '' })}>Clear</button>}
       </div>
       <p className="rr-count" role="status">
         {n(shown.length)} {filtered ? `of ${n(projects.length)} ` : ''}{label} · {pesoShort(amount)}
@@ -225,7 +247,8 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
                 <th scope="col">Project</th>
                 <th scope="col">Region</th>
                 <th scope="col" className="num">Budget</th>
-                <th scope="col" className="num" title="Of the five key documents">Key docs</th>
+                <th scope="col" className="num" title="Key documents (of 5) in the Senate copies">House bill docs</th>
+                <th scope="col" className="num" title="Key documents (of 5) on DPWH Transparency">NEP docs</th>
                 <th scope="col" className="num">Red flags</th>
                 <th scope="col">Reviewed by</th>
               </tr>
@@ -242,7 +265,8 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
                     </th>
                     <td className="rr-c-region">{p.region}</td>
                     <td className="num rr-c-budget" title={pesoFull(p.amount)}>{pesoShort(p.amount)}</td>
-                    <td className="num rr-c-docs" title="Of the five key documents">{docCount(p.docs)}/5<span className="rr-narrow-only"> key documents</span></td>
+                    <td className="num rr-c-docs"><SourceDocs p={p} from="senate" /></td>
+                    <td className="num rr-c-docs is-nep"><SourceDocs p={p} from="nep" /></td>
                     <td className="num rr-c-flags">{n(p.flags.length)}<span className="rr-narrow-only"> red flags</span></td>
                     <td className="rr-who">{r?.reviews.map((c) => names.get(c.member_id)).join(', ') || <span className="rr-muted">—</span>}</td>
                   </tr>
