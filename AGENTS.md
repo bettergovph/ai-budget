@@ -243,7 +243,8 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
 
 - The House bill's Senate copies carry officials' handwritten signatures, so they are redacted before publishing (Jason, 2026-11-13). Scripts in `scripts/senate-redact/`, docs in `docs/senate-redaction.md`.
 - PDFs of 19 pages or fewer, one region at a time, black bars. Two Z.ai vision models find the marks, scans are flattened, and a second model pass catches tails left outside the bars.
-- The full run writes to `/data/senate-redact/` on the dev VM, with a Tailscale-only before | after gallery on port 38118. Nothing is uploaded yet: where the redacted copies go is still open.
+- Done 2026-11-15: 34,309 of 34,424 Senate files on R2 are redacted copies, uploaded over the originals (Jason keeps a backup); `supporting-documents-file-links.jsonl` marks them `redacted: true`. Still original: 9 empty or damaged PDFs and 106 non-PDFs. Work folders in `/data/senate-redact/` on the dev VM (Tailscale-only gallery on port 38118).
+- Project records read from the redacted documents, and red flags for research.bettergov.ph's expectation-vs-reality page: `scripts/senate-extract/`, docs in `docs/senate-extract.md`. The companion data is at `budget-assets.bettergov.ph/hgab/2027/dpwh/expectation-vs-reality-additions.json`; the research page itself is maintained elsewhere.
 
 ### Outside this repo
 
