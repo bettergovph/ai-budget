@@ -41,7 +41,8 @@ maintainers merge it, its code is not in our repositories.
 
 ## Multi-purpose buildings
 
-The question that started this (Jason, 2026-11-14: are multi-purpose buildings really classrooms?): of 718
-"multi-purpose" lines read first, most are halls or covered courts; few are classrooms (Mina National High School, 14
-classrooms; Middle Quirino Hill, Baguio), and some are something else entirely (a slaughterhouse in New Bataan, a
-hospital, a market). `classify_mpb.py` is the earlier trial.
+The question that started this (Jason, 2026-11-14: are multi-purpose buildings really classrooms?). In the first 1,382
+records, 718 projects are titled "multi-purpose building" in the House bill (₱7.97B). By their documents: 498 halls,
+155 covered courts, 29 barangay or government offices, 11 evacuation centers, 6 health facilities, 4 classrooms and 4
+other (one in New Bataan, Davao de Oro is a slaughterhouse). At a school, a "multi-purpose" project is mostly a court,
+a hall or an amphitheater, not classrooms. `classify_mpb.py` is the earlier trial.
