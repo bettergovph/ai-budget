@@ -84,13 +84,14 @@ export default function SenateExplorerDept() {
         crumb={crumb}
         title={name}
         dek={senate != null
-          ? <>House bill {fmt.shortPhp(house)} → Senate committee report {fmt.shortPhp(senate)} (<SignedChange v={senate - house} base={house} />).</>
+          ? <>{dept?.nep ? <>NEP {fmt.shortPhp(dept.nep)} → </> : null}House bill {fmt.shortPhp(house)} → Senate committee report {fmt.shortPhp(senate)} (<SignedChange v={senate - house} base={house} />).</>
           : undefined}
       />
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner />
         <KpiStrip
           items={[
+            { label: 'NEP', value: dept?.nep ? fmt.shortPhp(dept.nep) : '—', sub: dept?.nep ? `₱${dept.nep.toLocaleString()}` : undefined },
             { label: 'House bill', value: fmt.shortPhp(house), sub: `₱${house.toLocaleString()}` },
             { label: 'Senate', value: senate != null ? fmt.shortPhp(senate) : '—', sub: senate != null ? `₱${senate.toLocaleString()}` : undefined },
             {
@@ -99,7 +100,6 @@ export default function SenateExplorerDept() {
               tone: senate != null && senate !== house ? (senate > house ? 'up' : 'down') : undefined,
               sub: 'Senate committee report minus the House bill',
             },
-            { label: 'Lines the report cites', value: lines.rows.filter((r) => r.kind === 'class' && r.label.toUpperCase() !== 'TOTAL').length.toLocaleString(), sub: 'by expense class, in Annex A' },
           ]}
         />
 
@@ -107,7 +107,7 @@ export default function SenateExplorerDept() {
           <SectionHead
             eyebrow="What the report changes"
             headline={lines.rows.length ? 'The Senate committee report’s amendments, line by line' : 'No amendments to this department'}
-            dek="As Annex A prints them: the House bill amount, the change and the committee report amount, with the House bill page and line it cites."
+            dek="As Annex A prints them: the House bill amount, the change and the committee report amount, with the House bill page and line it cites. The NEP amount is the same line's in the NEP."
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={showObjects} onChange={(e) => setShowObjects(e.target.checked)} /> Also by object of expenditure
@@ -122,6 +122,7 @@ export default function SenateExplorerDept() {
                   <thead>
                     <tr>
                       <th className="nep-th-name">Line</th>
+                      <th className="num">NEP</th>
                       <th className="num">House bill</th>
                       <th className="num">Change</th>
                       <th className="num senate-col-senate">Senate</th>
@@ -179,6 +180,10 @@ function AmendmentRow({ r }: { r: SenateLineRow }) {
         {note && <span className="hgab-ex-moved"> {note}</span>}
         {r.instruction && <span className="senate-instr">{r.instruction}</span>}
       </td>
+      <td className="num nep-td-base">
+        {r.nep != null ? fmt.shortPhp(r.nep)
+          : <span className="hgab-ds-null" title={r.house ? 'The NEP has no figure for this line at this level' : 'Not in the NEP'}>—</span>}
+      </td>
       <td className="num">{r.house != null ? fmt.shortPhp(r.house) : <span className="hgab-ds-null">—</span>}</td>
       <td className="num"><SignedChange v={r.net} base={r.house} /></td>
       <td className="num senate-col-senate"><strong>{r.senate != null ? fmt.shortPhp(r.senate) : '—'}</strong></td>
@@ -215,6 +220,7 @@ function AgencyTree({ a, ex, lookup, changedOnly, query, single }: {
           <span className="hgab-ex-agency-name">{titleCase(a.name)}</span>
         </button>
         <span className="hgab-ex-agency-figs">
+          <span><span className="hgab-ex-fig-label">NEP</span> {a.nep ? fmt.shortPhp(a.nep) : '—'}</span>
           <span><span className="hgab-ex-fig-label">House bill</span> {fmt.shortPhp(a.house)}</span>
           <span><span className="hgab-ex-fig-label">Senate</span> <strong>{s?.senate != null ? fmt.shortPhp(s.senate) : '—'}</strong></span>
           {s?.senate != null && <SignedChange v={s.senate - a.house} base={a.house} />}

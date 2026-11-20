@@ -41,7 +41,7 @@ PROGRAMS = [("dpwh", "DPWH projects", "Department of Public Works and Highways")
             ("fmr", "Farm-to-market roads", "Department of Agriculture"),
             ("hfep", "Health facilities", "Department of Health"),
             ("nia", "Irrigation", "National Irrigation Administration")]
-STATUS_ORDER = ["cut", "reduced", "raised", "added", "renamed", "unchanged"]
+STATUS_ORDER = ["cut", "reduced", "raised", "added", "renamed", "unchanged", "nep_only"]
 
 
 def slug(s):
@@ -60,6 +60,7 @@ def main(src, hgab, out):
     built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     ex_index = json.load(open(f"{hgab}/explorer/index.json"))
     ex_id = {d["roman"]: d["id"] for d in ex_index["departments"]}
+    ex_nep = {d["roman"]: d["nep"] for d in ex_index["departments"]}
 
     # The report's PDFs, renamed for links.
     docs = []
@@ -83,6 +84,7 @@ def main(src, hgab, out):
             name = re.sub(r"^[IVXL]+\.\s*", "", r["name"])
             cur = {"roman": roman if not r["name"].startswith("BUDGETS") else None, "name": name,
                    "id": ex_id.get(roman) if not r["name"].startswith("BUDGETS") else "doe-attached-corporations",
+                   "nep": ex_nep.get(roman) if not r["name"].startswith("BUDGETS") else None,
                    **amt, "agencies": []}
             depts.append(cur)
         elif cur is not None:
@@ -91,11 +93,15 @@ def main(src, hgab, out):
 
     # Annex A -> lines/<id>.json
     rows = list(csv.DictReader(open(f"{src}/annex_a_mapped.csv")))
+    # The NEP amount of each row's House line (build_explorer_senate.py), aligned with the CSV's rows.
+    nep_path = f"{src}/annex_a_nep.json"
+    row_nep = json.load(open(nep_path)) if os.path.exists(nep_path) else [None] * len(rows)
     by_dept = defaultdict(list)
-    for r in rows:
+    for r, nep in zip(rows, row_nep):
         if r["subtotal"] == "1":
             continue
         by_dept[r["dept_no"]].append({
+            "nep": nep,
             "agency": r["agency"], "agency_no": r["agency_no"], "kind": r["row_kind"],
             "context": r["context"], "label": r["label"], "deleted": r["deleted"] == "1",
             "house": k(r["hb_thousands"]), "increase": k(r["inc_thousands"]), "decrease": k(r["dec_thousands"]),
@@ -120,7 +126,7 @@ def main(src, hgab, out):
     for key, label, agency in PROGRAMS:
         os.makedirs(f"{out}/{key}", exist_ok=True)
         hb = {r[0]: r for r in con.execute(
-            f"select id, nep_php, hgab3_doc, hgab3_page, record_json is not null from '{hgab}/{key}/projects.parquet'").fetchall()}
+            f"select id, nep_php, hgab3_doc, hgab3_page, nep_doc, nep_page from '{hgab}/{key}/projects.parquet'").fetchall()}
         recs = []
         for i, r in enumerate(csv.DictReader(open(f"{src}/{key}_senate.csv"))):
             h = hb.get(r["id"]) if r["id"] else None
@@ -137,32 +143,48 @@ def main(src, hgab, out):
                 "change_php": senate - house,
                 "replaces_id": r["replaces_id"] or None,
                 "house_doc": h[2] if h else None, "house_page": h[3] if h else None,
+                "nep_doc": h[4] if h else None, "nep_page": h[5] if h else None,
                 "senate_doc": PROGRAM_PDF[key], "senate_page": int(r["senate_pdf_page"]) if r["senate_pdf_page"] else None,
                 "search_text": " ".join(x for x in (title, r["hb_title"], r["region"], r["office"], r["program"], r["pap"]) if x).lower(),
+            })
+        # NEP projects with no House bill line (the House section's deletion candidates): in neither the House bill
+        # nor the committee report, listed so the NEP column is the whole program.
+        for r in con.execute(f"""select id, title, region, office, program, pap, nep_php, nep_doc, nep_page
+                                 from '{hgab}/{key}/projects.parquet' where hgab3_php is null and nep_php is not null""").fetchall():
+            recs.append({
+                "id": r[0], "house_id": None, "status": "nep_only", "title": r[1], "hb_title": None, "renamed": False,
+                "region": r[2], "office": r[3], "program": r[4], "pap": r[5], "nep_php": r[6], "house_php": None,
+                "senate_php": 0, "change_php": 0, "replaces_id": None, "house_doc": None, "house_page": None,
+                "nep_doc": r[7], "nep_page": r[8],
+                "senate_doc": PROGRAM_PDF[key], "senate_page": None,
+                "search_text": " ".join(x for x in (r[1], r[2], r[3], r[4], r[5]) if x).lower(),
             })
         con.execute("create or replace temp table t as select * from read_json_auto(?)", [_tmp_json(out, key, recs)])
         con.execute(f"""copy (select id, house_id, status, title, hb_title, renamed, region, office, program, pap,
                                nep_php::bigint nep_php, house_php::bigint house_php, senate_php::bigint senate_php,
                                change_php::bigint change_php, replaces_id::varchar replaces_id, house_doc::varchar house_doc,
-                               house_page::integer house_page, senate_doc, senate_page::integer senate_page, search_text
+                               house_page::integer house_page, nep_doc::varchar nep_doc, nep_page::integer nep_page,
+                               senate_doc, senate_page::integer senate_page, search_text
                         from t order by status, senate_php desc)
                         to '{out}/{key}/projects.parquet' (format parquet, compression zstd)""")
         os.remove(f"{out}/{key}/_rows.json")
-        by_status = defaultdict(lambda: {"count": 0, "house_php": 0, "senate_php": 0})
+        by_status = defaultdict(lambda: {"count": 0, "nep_php": 0, "house_php": 0, "senate_php": 0})
         for x in recs:
             s = by_status[x["status"]]
             s["count"] += 1
+            s["nep_php"] += x["nep_php"] or 0
             s["house_php"] += x["house_php"] or 0
             s["senate_php"] += x["senate_php"]
 
         def dim(field):
-            g = defaultdict(lambda: {"house_php": 0, "senate_php": 0, "count": 0, "changed": 0})
+            g = defaultdict(lambda: {"nep_php": 0, "house_php": 0, "senate_php": 0, "count": 0, "changed": 0})
             for x in recs:
                 v = g[x[field] or "Not recorded"]
+                v["nep_php"] += x["nep_php"] or 0
                 v["house_php"] += x["house_php"] or 0
                 v["senate_php"] += x["senate_php"]
                 v["count"] += 1
-                v["changed"] += x["status"] not in ("unchanged", "renamed")
+                v["changed"] += x["status"] not in ("unchanged", "renamed", "nep_only")
             return sorted(({"label": lab, **v} for lab, v in g.items()), key=lambda r: -(r["house_php"] or r["senate_php"]))
 
         def top(status, key_fn, n=25):
@@ -219,7 +241,7 @@ def main(src, hgab, out):
         "departments_changed": sum(1 for d in depts if d["roman"] and (d["increase"] or d["decrease"])),
         "departments": len([d for d in depts if d["roman"]]),
         "annex_a": dict(a_status), "provisions": len(prov), "documents": docs,
-        "biggest": sorted(({"id": d["id"], "name": d["name"], "net": d["net"], "house": d["house"], "senate": d["senate"]}
+        "biggest": sorted(({"id": d["id"], "name": d["name"], "net": d["net"], "nep": d["nep"], "house": d["house"], "senate": d["senate"]}
                            for d in depts if d["roman"] and d["net"]), key=lambda d: d["net"]),
     }
     json.dump(overview, open(f"{out}/overview.json", "w"), indent=1, ensure_ascii=False)

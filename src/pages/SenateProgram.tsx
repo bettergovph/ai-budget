@@ -111,22 +111,23 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
     <>
       <KpiStrip
         items={[
-          { label: 'NEP', value: fmt.shortPhp(sum.nep_php), sub: 'for the House bill’s projects that are in the NEP' },
+          { label: 'NEP', value: fmt.shortPhp(sum.nep_php), sub: 'every NEP project, with those the House bill doesn’t have' },
           { label: 'House bill', value: fmt.shortPhp(sum.house_php) },
           { label: 'Senate', value: fmt.shortPhp(sum.senate_php) },
           { label: 'Change', value: `${sum.change_php >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(sum.change_php))}`, tone: sum.change_php < 0 ? 'down' : sum.change_php > 0 ? 'up' : undefined, sub: 'Senate minus the House bill' },
         ]}
       />
       <section className="nep-section">
-        <SectionHead eyebrow="What happened to each project" headline="House bill projects in the Senate committee report" />
+        <SectionHead eyebrow="What happened to each project" headline="Every project: NEP, House bill and Senate committee report" />
         <div className="nep-table-wrap">
           <table className="nep-table">
-            <thead><tr><th>Status</th><th className="num">Projects</th><th className="num">House bill</th><th className="num">Senate</th><th>What it means</th></tr></thead>
+            <thead><tr><th>Status</th><th className="num">Projects</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th>What it means</th></tr></thead>
             <tbody>
               {SENATE_STATUS_ORDER.filter((x) => sum.status[x]).map((x) => (
                 <tr key={x}>
                   <td><Link to={`${senateProgramPath(k, 'projects')}&status=${x}`}><SenateStatusChip status={x} /></Link></td>
                   <td className="num">{sum.status[x]!.count.toLocaleString()}</td>
+                  <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.nep_php)}</td>
                   <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.house_php)}</td>
                   <td className="num nep-td-amt">{fmt.shortPhp(sum.status[x]!.senate_php)}</td>
                   <td className="hgab-ex-sub">{SENATE_STATUS[x].help}</td>
@@ -149,11 +150,12 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
       <SectionHead eyebrow="Breakdown" headline={title} dek={note} />
       <div className="nep-table-wrap">
         <table className="nep-table">
-          <thead><tr><th className="nep-th-name">{title.replace(/^By /, '')}</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th><th className="num">Projects changed</th></tr></thead>
+          <thead><tr><th className="nep-th-name">{title.replace(/^By /, '')}</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th><th className="num">Projects changed</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.label}>
                 <td className="nep-td-name"><Link to={`${senateProgramPath(k, 'projects')}&${param}=${encodeURIComponent(r.label)}`}>{r.label}</Link></td>
+                <td className="num nep-td-base">{fmt.shortPhp(r.nep_php)}</td>
                 <td className="num nep-td-base">{fmt.shortPhp(r.house_php)}</td>
                 <td className="num nep-td-amt">{fmt.shortPhp(r.senate_php)}</td>
                 <td className="num"><SignedChange v={r.senate_php - r.house_php} base={r.house_php} /></td>
@@ -327,7 +329,7 @@ function ProjectsView({ k }: { k: DatasetKey }) {
       {err && <p className="nep-status-error">{err}</p>}
       {cur && (
         <p className="nep-table-count">
-          {cur.total.n.toLocaleString()} projects · House bill {fmt.shortPhp(cur.total.house)} · Senate {fmt.shortPhp(cur.total.senate)}
+          {cur.total.n.toLocaleString()} projects · NEP {fmt.shortPhp(cur.total.nep)} · House bill {fmt.shortPhp(cur.total.house)} · Senate {fmt.shortPhp(cur.total.senate)}
           {' '}(<SignedChange v={cur.total.senate - cur.total.house} base={cur.total.house} />) · two versions of one budget: compare them, don’t add them
         </p>
       )}

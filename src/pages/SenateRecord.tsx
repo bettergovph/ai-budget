@@ -85,6 +85,9 @@ export default function SenateRecord() {
           {r.senate_page && (
             <a href={senatePdfUrl(r.senate_doc, r.senate_page)} target="_blank" rel="noreferrer">The Senate committee report, page {r.senate_page} →</a>
           )}
+          {r.nep_doc && r.nep_page && (
+            <a href={pdfUrl(r.nep_doc, r.nep_page)} target="_blank" rel="noreferrer">The NEP page →</a>
+          )}
           {r.house_doc && r.house_page && (
             <a href={pdfUrl(r.house_doc, r.house_page)} target="_blank" rel="noreferrer">The House bill page →</a>
           )}

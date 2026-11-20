@@ -18,7 +18,7 @@ import { SENATE_EXPLORER_ROOT, loadSenateDepartments, senateExplorerPath, senate
 import '../nep2027.css';
 import '../hgab-explorer.css';
 
-type Sort = 'order' | 'house' | 'senate' | 'net' | 'rows';
+type Sort = 'order' | 'nep' | 'house' | 'senate' | 'net' | 'rows';
 
 export default function SenateExplorer() {
   const [d, setD] = useState<SenateDepartments | null>(null);
@@ -39,7 +39,7 @@ export default function SenateExplorer() {
     if (needle) r = r.filter((x) => x.name.toLowerCase().includes(needle));
     if (changedOnly) r = r.filter((x) => x.increase || x.decrease);
     if (sort === 'order') return r;
-    const val = (x: SenateDept) => (sort === 'house' ? x.house : sort === 'senate' ? x.senate : sort === 'rows' ? x.changed_rows : x.net) ?? 0;
+    const val = (x: SenateDept) => (sort === 'nep' ? x.nep : sort === 'house' ? x.house : sort === 'senate' ? x.senate : sort === 'rows' ? x.changed_rows : x.net) ?? 0;
     const m = dir === 'asc' ? 1 : -1;
     return [...r].sort((a, b) => (val(a) - val(b)) * m);
   }, [d, q, changedOnly, sort, dir]);
@@ -47,6 +47,7 @@ export default function SenateExplorer() {
   if (err) return <SenateError message={err} />;
   if (!d) return <SenateLoading what="the Senate committee report by department" />;
   const t = d.totals['DEPARTMENTS'];
+  const nepDepts = d.departments.filter((x) => x.roman && x.roman !== 'XLIII').reduce((a, x) => a + (x.nep ?? 0), 0);
   const all = d.departments.filter((x) => x.roman);
   const changed = all.filter((x) => x.increase || x.decrease).length;
 
@@ -77,16 +78,16 @@ export default function SenateExplorer() {
         <SenateReviewBanner />
         <KpiStrip
           items={[
+            { label: 'NEP', value: fmt.shortPhp(nepDepts, 'T'), sub: 'departments and funds, programmed' },
             { label: 'Departments, House bill', value: fmt.shortPhp(t.house ?? 0, 'T') },
             { label: 'Departments, Senate', value: fmt.shortPhp(t.senate ?? 0, 'T'), sub: `${fmt.shortPhp(t.net ?? 0, 'B')} vs the House bill` },
-            { label: 'Raised', value: fmt.shortPhp(t.increase ?? 0, 'B'), tone: 'up', sub: 'in departments' },
-            { label: 'Cut', value: fmt.shortPhp(Math.abs(t.decrease ?? 0), 'B'), tone: 'down', sub: 'in departments' },
+            { label: 'Raised · cut', value: `+${fmt.shortPhp(t.increase ?? 0, 'B')} · −${fmt.shortPhp(Math.abs(t.decrease ?? 0), 'B')}`, sub: 'in departments, by the Senate' },
           ]}
         />
         <section className="nep-section">
           <SectionHead
             eyebrow="By department"
-            headline="House bill and Senate committee report"
+            headline="NEP, House bill and Senate committee report"
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Only those that change
@@ -102,6 +103,7 @@ export default function SenateExplorer() {
               <thead>
                 <tr>
                   {head('order', 'Department or fund', 'nep-th-name')}
+                  {head('nep', 'NEP', 'num')}
                   {head('house', 'House bill', 'num')}
                   {head('senate', 'Senate', 'num')}
                   {head('net', 'Change', 'num')}
@@ -115,20 +117,22 @@ export default function SenateExplorer() {
                       {x.id ? <Link to={senateExplorerPath(x.id)}>{titleCase(x.name)}</Link> : titleCase(x.name)}
                       {x.agencies.length > 1 && <span className="hgab-ex-sub">{x.agencies.length} agencies</span>}
                     </td>
+                    <td className="num nep-td-base">{x.nep != null ? fmt.shortPhp(x.nep) : '—'}</td>
                     <td className="num nep-td-base">{fmt.shortPhp(x.house ?? 0)}</td>
                     <td className="num nep-td-amt">{fmt.shortPhp(x.senate ?? 0)}</td>
                     <td className="num"><SignedChange v={x.net} base={x.house} /></td>
                     <td className="num">{x.changed_rows ? x.changed_rows.toLocaleString() : <span className="hgab-ex-none">none</span>}</td>
                   </tr>
                 ))}
-                {!rows.length && <tr><td colSpan={5} className="nep-empty">No department matches that filter.</td></tr>}
+                {!rows.length && <tr><td colSpan={6} className="nep-empty">No department matches that filter.</td></tr>}
               </tbody>
             </table>
           </div>
           <p className="nep-provenance">
             From the report's <a href={senatePdfUrl('senate-cr-general-summary')} target="_blank" rel="noreferrer">General Summary</a> (in
             thousand pesos, shown here in pesos) and <a href={senatePdfUrl('senate-cr-annex-a')} target="_blank" rel="noreferrer">Annex A</a>,
-            the line-by-line amendments. "Lines changed" counts Annex A's rows for the department.
+            the line-by-line amendments; NEP from the House bill line-by-line pages. "Change" is the Senate committee report
+            minus the House bill. "Lines changed" counts Annex A's rows for the department.
           </p>
         </section>
         <SenateNotice />

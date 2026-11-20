@@ -126,7 +126,7 @@ pages read from R2 `senate/2027/`. `npm run upload:senate` publishes it (the Hou
 | `departments.json` | the General Summary by department and agency, pesos |
 | `lines/<dept id>.json` | Annex A rows of one department (department ids are the House explorer's) |
 | `explorer/<dept id>.json` | the Senate amount of every House explorer line that changes, plus agency totals |
-| `<program>/projects.parquet`, `summary.json` | every House project + insertions: NEP, House, Senate, status; by region, program line, office; largest changes |
+| `<program>/projects.parquet`, `summary.json` | every House project, the Senate's insertions and the NEP-only projects (status `nep_only`): NEP, House, Senate, status; by region, program line, office; largest changes |
 | `provisions.json` | Annex B, with the House bill PDF page of each cited page |
 | `pdf/senate-cr-*.pdf` | the report, for page links |
 
@@ -141,7 +141,10 @@ nav tab "Senate Budget 2027":
 On the House pages: a Senate column on the explorer index and department pages (`compare` stays House vs NEP),
 on the program project tables (a second query on the Senate parquet for the rows on screen), and an "In the
 Senate committee report" box on each project page. The budget-stage timeline now has the Senate as current.
-Everything carries the "Under citizen review" banner while `SENATE_UNDER_REVIEW` is true.
+Everything carries the "Under citizen review" banner while `SENATE_UNDER_REVIEW` is true. Every Senate table and
+figure shows the NEP beside the House bill and the Senate (Jason, 2026-11-20: "a full view"); Annex A rows take the
+NEP amount of the House line they cite (`annex_a_nep.json`, from build_explorer_senate.py). A zero amount reads
+"0" site-wide (`shortPhp`), not "0K".
 
 ## Not done yet
 

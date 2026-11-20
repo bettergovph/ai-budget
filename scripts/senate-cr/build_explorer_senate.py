@@ -115,6 +115,43 @@ def main(src, lines_dir, hgab, out):
     for r in csv.DictReader(open(f"{src}/annex_a_mapped.csv")):
         if r["status"] in ("new", "new_class", "unmatched", "ref_only", "no_hb_table") and r["subtotal"] == "0":
             unplaced[r["dept_no"]].append(r["agency"] or "")
+    # NEP by House node and class (a line's own NEP, summed up to every heading above it): the NEP figure of
+    # each Annex A row, written beside its mapping for build_site.py.
+    nep_at = defaultdict(lambda: defaultdict(int))
+    for fn in sorted(os.listdir(f"{hgab}/explorer/d")):
+        for a in json.load(open(f"{hgab}/explorer/d/{fn}"))["agencies"]:
+            stack = list(a["tree"])
+            while stack:
+                n = stack.pop()
+                stack.extend(n.get("c", []))
+                for x in n.get("x", []):
+                    if not x.get("p"):
+                        continue
+                    doc, pdf, _printed, ln = x["p"]
+                    node = idx.get((DOC_VOL.get(doc, doc), pdf, ln))
+                    while node is not None:
+                        nep_at[id(node)][x["e"]] += x["n"]
+                        nep_at[id(node)]["T"] += x["n"]
+                        node = parent.get(id(node))
+    obj_nep = {}
+    for r in csv.DictReader(open(f"{lines_dir}/object_compare.csv")):
+        if r["nep_thousands"] and r["pdf_page"].isdigit():
+            obj_nep[(r["volume"], int(r["pdf_page"]), r["line"])] = int(float(r["nep_thousands"])) * 1000
+    row_nep = []
+    for r in csv.DictReader(open(f"{src}/annex_a_mapped.csv")):
+        v = None
+        if r["status"] in ("exact", "exact_nearby", "new_class", "ref_only") and r["hb_doc"]:
+            vol = DOC_VOL[r["hb_doc"]]
+            if r["row_kind"] == "object":
+                v = obj_nep.get((vol, int(r["hb_pdf_page"]), r["hb_node_line"]))
+            else:
+                node = idx.get((vol, int(r["hb_pdf_page"]), int(r["hb_node_line"])))
+                if node is not None:
+                    lab = r["label"].upper()
+                    code = {"PS": "1", "MOOE": "2", "FINEX": "3", "CO": "6", "TOTAL": "T"}.get(lab, "6")
+                    v = nep_at.get(id(node), {}).get(code, 0)
+        row_nep.append(v)
+    json.dump(row_nep, open(f"{src}/annex_a_nep.json", "w"))
     report = []
     for fn in sorted(os.listdir(f"{hgab}/explorer/d")):
         d = json.load(open(f"{hgab}/explorer/d/{fn}"))

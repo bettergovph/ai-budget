@@ -5,7 +5,9 @@
 .senate-program-card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--paper, #fff); color: inherit; text-decoration: none; }
 .senate-program-card:hover { border-color: var(--ink-3); }
 .senate-program-card h3 { margin: 0 0 6px; font-size: 1rem; }
-.senate-program-card .senate-flow { font-variant-numeric: tabular-nums; font-size: 1.15rem; margin: 2px 0 8px; }
+.senate-program-card .senate-flow { font-variant-numeric: tabular-nums; font-size: 1.05rem; margin: 2px 0 2px; }
+.senate-program-card .senate-flow-change { margin: 0 0 8px; font-size: 0.9rem; }
+.senate-program-card .senate-flow-change small { color: var(--ink-3); }
 .senate-program-card .senate-flow small { color: var(--ink-3); font-size: 0.8rem; margin: 0 4px; }
 .senate-program-card ul { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; color: var(--ink-2); }
 .senate-program-card li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }

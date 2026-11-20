@@ -66,8 +66,8 @@ export function senateProjectsUrl(key: DatasetKey): string {
 // Status of a project in the committee report
 // ---------------------------------------------------------------------------
 
-export type SenateStatus = 'cut' | 'reduced' | 'raised' | 'added' | 'renamed' | 'unchanged';
-export const SENATE_STATUS_ORDER: readonly SenateStatus[] = ['cut', 'reduced', 'raised', 'added', 'renamed', 'unchanged'];
+export type SenateStatus = 'cut' | 'reduced' | 'raised' | 'added' | 'renamed' | 'unchanged' | 'nep_only';
+export const SENATE_STATUS_ORDER: readonly SenateStatus[] = ['cut', 'reduced', 'raised', 'added', 'renamed', 'unchanged', 'nep_only'];
 
 export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string; help: string; tone: string }> = {
   cut: {
@@ -94,6 +94,10 @@ export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string
     label: 'Unchanged', plural: 'unchanged', tone: 'var(--ink-3)',
     help: 'Not listed in the Senate committee report, so the same as in the House bill.',
   },
+  nep_only: {
+    label: 'NEP only', plural: 'in the NEP only', tone: '#8a8a8a',
+    help: 'In the NEP, with no matching line in the House bill (a deletion candidate on the House bill pages), so not in the Senate committee report either.',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -118,7 +122,7 @@ export interface SenateProgramRow {
   senate_php: number;
   change_php: number;
   nep_php: number;
-  status: Partial<Record<SenateStatus, { count: number; house_php: number; senate_php: number }>>;
+  status: Partial<Record<SenateStatus, { count: number; nep_php: number; house_php: number; senate_php: number }>>;
 }
 
 export interface SenateOverview {
@@ -132,11 +136,13 @@ export interface SenateOverview {
   annex_a: Record<string, number>;
   provisions: number;
   documents: SenateDocument[];
-  biggest: Array<{ id: string; name: string; net: number; house: number; senate: number }>;
+  biggest: Array<{ id: string; name: string; net: number; nep: number | null; house: number; senate: number }>;
 }
 
 export interface SenateAgency extends SenateAmounts { no: string; name: string }
 export interface SenateDept extends SenateAmounts {
+  /** The NEP's new appropriations for the department (from the House bill explorer's matching). */
+  nep: number | null;
   roman: string | null;
   name: string;
   id: string | null;
@@ -147,6 +153,8 @@ export interface SenateDepartments { built_at: string; totals: Record<string, Se
 
 /** One Annex A row: an amount the Senate changes, or inserts, in the House bill. */
 export interface SenateLineRow extends SenateAmounts {
+  /** The NEP amount of the House bill line the row cites, when the line is matched and the NEP has it. */
+  nep: number | null;
   agency: string | null;
   agency_no: string | null;
   kind: 'class' | 'object';
@@ -195,11 +203,13 @@ export interface SenateProject {
   replaces_id: string | null;
   house_doc: string | null;
   house_page: number | null;
+  nep_doc: string | null;
+  nep_page: number | null;
   senate_doc: string;
   senate_page: number | null;
 }
 
-export interface SenateDimRow { label: string; house_php: number; senate_php: number; count: number; changed: number }
+export interface SenateDimRow { label: string; nep_php: number; house_php: number; senate_php: number; count: number; changed: number }
 
 export interface SenateProgramSummary {
   key: DatasetKey;
@@ -293,6 +303,6 @@ export function coerceSenateProject(r: Record<string, unknown>): SenateProject {
   return {
     ...(r as unknown as SenateProject),
     nep_php: num(r.nep_php), house_php: num(r.house_php), senate_php: Number(r.senate_php ?? 0), change_php: Number(r.change_php ?? 0),
-    house_page: num(r.house_page), senate_page: num(r.senate_page),
+    house_page: num(r.house_page), nep_page: num(r.nep_page), senate_page: num(r.senate_page),
   };
 }

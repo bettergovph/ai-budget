@@ -88,7 +88,7 @@ export default function SenateOverview() {
           <SectionHead
             eyebrow="By department"
             headline={`${o.departments_changed} of ${o.departments} departments and funds change`}
-            dek={<>Each department's House bill total and the committee report's, from the report's General Summary. <Link to={SENATE_EXPLORER_ROOT}>See every line →</Link></>}
+            dek={<>Each department's NEP, House bill and committee report totals; "Change" is the Senate committee report minus the House bill. <Link to={SENATE_EXPLORER_ROOT}>See every line →</Link></>}
           />
           <div className="senate-split">
             <DeptList title="Largest cuts" rows={cuts} />
@@ -99,11 +99,12 @@ export default function SenateOverview() {
               <summary>All departments and funds</summary>
               <div className="nep-table-wrap">
                 <table className="nep-table">
-                  <thead><tr><th>Department or fund</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th></tr></thead>
+                  <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th></tr></thead>
                   <tbody>
                     {deps.departments.filter((d) => d.roman).map((d) => (
                       <tr key={d.name}>
                         <td className="nep-td-name">{d.id ? <Link to={senateExplorerPath(d.id)}>{titleCase(d.name)}</Link> : titleCase(d.name)}</td>
+                        <td className="num nep-td-base">{d.nep != null ? fmt.shortPhp(d.nep) : '—'}</td>
                         <td className="num nep-td-base">{fmt.shortPhp(d.house ?? 0)}</td>
                         <td className="num nep-td-amt">{fmt.shortPhp(d.senate ?? 0)}</td>
                         <td className="num"><SignedChange v={d.net} base={d.house} /></td>
@@ -149,8 +150,9 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
     <Link to={senateProgramPath(p.key)} className="senate-program-card">
       <h3>{PROGRAM_SHORT[p.key]}</h3>
       <p className="senate-flow">
-        {fmt.shortPhp(p.house_php)}<small>House bill →</small>{fmt.shortPhp(p.senate_php)} <SignedChange v={p.change_php} base={p.house_php} />
+        <small>NEP</small>{fmt.shortPhp(p.nep_php)}<small>→ House bill</small>{fmt.shortPhp(p.house_php)}<small>→ Senate</small>{fmt.shortPhp(p.senate_php)}
       </p>
+      <p className="senate-flow-change"><SignedChange v={p.change_php} base={p.house_php} /> <small>Senate vs the House bill</small></p>
       <div className="senate-statusbar" aria-hidden="true">
         {SENATE_STATUS_ORDER.map((s) => {
           const v = p.status[s];
@@ -173,8 +175,9 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
 
 /** What a status group's money means: cut and renamed carry the House amount, added the Senate's, raised and
  * reduced the change. */
-function statusAmount(s: string, v: { house_php: number; senate_php: number }): string {
+function statusAmount(s: string, v: { nep_php: number; house_php: number; senate_php: number }): string {
   if (s === 'added') return fmt.shortPhp(v.senate_php);
+  if (s === 'nep_only') return `NEP ${fmt.shortPhp(v.nep_php)}`;
   if (s === 'raised' || s === 'reduced') {
     const d = v.senate_php - v.house_php;
     return `${d >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(d))}`;
@@ -187,10 +190,14 @@ function DeptList({ title, rows }: { title: string; rows: Overview['biggest'] })
     <div>
       <h3 className="senate-split-title">{title}</h3>
       <table className="nep-table">
+        <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th></tr></thead>
         <tbody>
           {rows.map((d) => (
             <tr key={d.id}>
               <td className="nep-td-name"><Link to={senateExplorerPath(d.id)}>{titleCase(d.name)}</Link></td>
+              <td className="num nep-td-base">{d.nep != null ? fmt.shortPhp(d.nep) : '—'}</td>
+              <td className="num nep-td-base">{fmt.shortPhp(d.house)}</td>
+              <td className="num nep-td-amt">{fmt.shortPhp(d.senate)}</td>
               <td className="num"><SignedChange v={d.net} base={d.house} /></td>
             </tr>
           ))}
