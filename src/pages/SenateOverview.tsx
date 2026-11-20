@@ -99,7 +99,7 @@ export default function SenateOverview() {
               <summary>All departments and funds</summary>
               <div className="nep-table-wrap">
                 <table className="nep-table">
-                  <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th></tr></thead>
+                  <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th></tr></thead>
                   <tbody>
                     {deps.departments.filter((d) => d.roman).map((d) => (
                       <tr key={d.name}>
@@ -108,6 +108,7 @@ export default function SenateOverview() {
                         <td className="num nep-td-base">{fmt.shortPhp(d.house ?? 0)}</td>
                         <td className="num nep-td-amt">{fmt.shortPhp(d.senate ?? 0)}</td>
                         <td className="num"><SignedChange v={d.net} base={d.house} /></td>
+                        <td className="num"><SignedChange v={d.nep != null && d.senate != null ? d.senate - d.nep : null} base={d.nep} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -152,7 +153,10 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
       <p className="senate-flow">
         <small>NEP</small>{fmt.shortPhp(p.nep_php)}<small>→ House bill</small>{fmt.shortPhp(p.house_php)}<small>→ Senate</small>{fmt.shortPhp(p.senate_php)}
       </p>
-      <p className="senate-flow-change"><SignedChange v={p.change_php} base={p.house_php} /> <small>Senate vs the House bill</small></p>
+      <p className="senate-flow-change">
+        <SignedChange v={p.change_php} base={p.house_php} /> <small>vs the House bill</small>
+        {' · '}<SignedChange v={p.senate_php - p.nep_php} base={p.nep_php} /> <small>vs the NEP</small>
+      </p>
       <div className="senate-statusbar" aria-hidden="true">
         {SENATE_STATUS_ORDER.map((s) => {
           const v = p.status[s];
@@ -190,7 +194,7 @@ function DeptList({ title, rows }: { title: string; rows: Overview['biggest'] })
     <div>
       <h3 className="senate-split-title">{title}</h3>
       <table className="nep-table">
-        <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th></tr></thead>
+        <thead><tr><th>Department or fund</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th></tr></thead>
         <tbody>
           {rows.map((d) => (
             <tr key={d.id}>
@@ -199,6 +203,7 @@ function DeptList({ title, rows }: { title: string; rows: Overview['biggest'] })
               <td className="num nep-td-base">{fmt.shortPhp(d.house)}</td>
               <td className="num nep-td-amt">{fmt.shortPhp(d.senate)}</td>
               <td className="num"><SignedChange v={d.net} base={d.house} /></td>
+              <td className="num"><SignedChange v={d.nep != null && d.senate != null ? d.senate - d.nep : null} base={d.nep} /></td>
             </tr>
           ))}
         </tbody>

@@ -14,6 +14,7 @@
  * passed Senate bill.
  */
 import { dataUrl } from './data-url';
+import { shortPhp } from './format';
 import { cached, getJson, type DatasetKey } from './hgab';
 
 export const SENATE_YEAR = 2027;
@@ -304,5 +305,31 @@ export function coerceSenateProject(r: Record<string, unknown>): SenateProject {
     ...(r as unknown as SenateProject),
     nep_php: num(r.nep_php), house_php: num(r.house_php), senate_php: Number(r.senate_php ?? 0), change_php: Number(r.change_php ?? 0),
     house_page: num(r.house_page), nep_page: num(r.nep_page), senate_page: num(r.senate_page),
+  };
+}
+
+/** "+1.2B", "−340.5M", "0"; null when either side is missing. */
+export function signedShort(v: number | null | undefined): string {
+  if (v == null) return '—';
+  if (v === 0) return '0';
+  return `${v > 0 ? '+' : '−'}${shortPhp(Math.abs(v))}`;
+}
+
+/** "+12.3%" of a base; empty when there is no base to divide by. */
+export function signedPctText(v: number | null | undefined, base: number | null | undefined): string {
+  if (v == null || !base) return '';
+  const p = (v / base) * 100;
+  return `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1)}%`;
+}
+
+/** A KPI cell for the Senate committee report minus a base (the House bill or the NEP): amount, percent. */
+export function changeKpi(label: string, senate: number | null | undefined, base: number | null | undefined, what: string) {
+  const v = senate != null && base != null ? senate - base : null;
+  const pct = signedPctText(v, base);
+  return {
+    label,
+    value: signedShort(v),
+    tone: v ? (v > 0 ? ('up' as const) : ('down' as const)) : undefined,
+    sub: `${pct ? `${pct} · ` : ''}Senate minus ${what}`,
   };
 }

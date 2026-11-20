@@ -144,7 +144,10 @@ Senate committee report" box on each project page. The budget-stage timeline now
 Everything carries the "Under citizen review" banner while `SENATE_UNDER_REVIEW` is true. Every Senate table and
 figure shows the NEP beside the House bill and the Senate (Jason, 2026-11-20: "a full view"); Annex A rows take the
 NEP amount of the House line they cite (`annex_a_nep.json`, from build_explorer_senate.py). A zero amount reads
-"0" site-wide (`shortPhp`), not "0K".
+"0" site-wide (`shortPhp`), not "0K". Every change is shown twice, amount and percent: "vs House bill" (Senate − House) and "vs NEP"
+(Senate − NEP). The "only those that change" filters start off, so every department and line shows by default.
+Unprogrammed appropriations have no NEP figure here (the explorer's NEP data leaves them out; they are the same in
+both), so their "vs NEP" is blank rather than an addition.
 
 ## Not done yet
 

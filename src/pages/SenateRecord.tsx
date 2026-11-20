@@ -16,7 +16,7 @@ import * as fmt from '../lib/format';
 import { pdfUrl, recordPath } from '../lib/hgab';
 import { sqlStr } from '../lib/hgab-query';
 import {
-  PROGRAM_SHORT, SENATE_STATUS, coerceSenateProject as coerce, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl, senateRecordPath, type SenateProject,
+  PROGRAM_SHORT, SENATE_STATUS, changeKpi, coerceSenateProject as coerce, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl, senateRecordPath, type SenateProject,
 } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
@@ -68,7 +68,8 @@ export default function SenateRecord() {
             { label: 'NEP', value: r.nep_php != null ? fmt.shortPhp(r.nep_php) : '—', sub: r.nep_php != null ? `₱${r.nep_php.toLocaleString()}` : 'not in the NEP' },
             { label: 'House bill', value: r.house_php != null ? fmt.shortPhp(r.house_php) : '—', sub: r.house_php != null ? `₱${r.house_php.toLocaleString()}` : 'not in the House bill' },
             { label: 'Senate', value: fmt.shortPhp(r.senate_php), sub: `₱${r.senate_php.toLocaleString()}` },
-            { label: 'Change', value: `${r.change_php >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(r.change_php))}`, tone: r.change_php < 0 ? 'down' : r.change_php > 0 ? 'up' : undefined, sub: 'Senate minus the House bill' },
+            changeKpi('vs House bill', r.senate_php, r.house_php, 'the House bill'),
+            changeKpi('vs NEP', r.senate_php, r.nep_php, 'the NEP'),
           ]}
         />
         <div className="senate-record-names">

@@ -60,7 +60,9 @@ def main(src, hgab, out):
     built = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     ex_index = json.load(open(f"{hgab}/explorer/index.json"))
     ex_id = {d["roman"]: d["id"] for d in ex_index["departments"]}
-    ex_nep = {d["roman"]: d["nep"] for d in ex_index["departments"]}
+    # The explorer's NEP data leaves out unprogrammed appropriations (the same P111,984,494,000 in the NEP and the
+    # House bill): no NEP figure for it, rather than a zero that would read as an addition.
+    ex_nep = {d["roman"]: (d["nep"] if d["roman"] != "XLIII" else None) for d in ex_index["departments"]}
 
     # The report's PDFs, renamed for links.
     docs = []

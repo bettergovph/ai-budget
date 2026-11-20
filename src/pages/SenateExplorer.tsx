@@ -18,13 +18,13 @@ import { SENATE_EXPLORER_ROOT, loadSenateDepartments, senateExplorerPath, senate
 import '../nep2027.css';
 import '../hgab-explorer.css';
 
-type Sort = 'order' | 'nep' | 'house' | 'senate' | 'net' | 'rows';
+type Sort = 'order' | 'nep' | 'house' | 'senate' | 'net' | 'vsnep' | 'rows';
 
 export default function SenateExplorer() {
   const [d, setD] = useState<SenateDepartments | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const [changedOnly, setChangedOnly] = useState(true);
+  const [changedOnly, setChangedOnly] = useState(false);
   const [sort, setSort] = useState<Sort>('net');
   const [dir, setDir] = useState<'asc' | 'desc'>('asc');
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function SenateExplorer() {
     if (needle) r = r.filter((x) => x.name.toLowerCase().includes(needle));
     if (changedOnly) r = r.filter((x) => x.increase || x.decrease);
     if (sort === 'order') return r;
-    const val = (x: SenateDept) => (sort === 'nep' ? x.nep : sort === 'house' ? x.house : sort === 'senate' ? x.senate : sort === 'rows' ? x.changed_rows : x.net) ?? 0;
+    const val = (x: SenateDept) => (sort === 'nep' ? x.nep : sort === 'house' ? x.house : sort === 'senate' ? x.senate : sort === 'rows' ? x.changed_rows : sort === 'vsnep' ? (x.nep != null && x.senate != null ? x.senate - x.nep : 0) : x.net) ?? 0;
     const m = dir === 'asc' ? 1 : -1;
     return [...r].sort((a, b) => (val(a) - val(b)) * m);
   }, [d, q, changedOnly, sort, dir]);
@@ -47,7 +47,9 @@ export default function SenateExplorer() {
   if (err) return <SenateError message={err} />;
   if (!d) return <SenateLoading what="the Senate committee report by department" />;
   const t = d.totals['DEPARTMENTS'];
-  const nepDepts = d.departments.filter((x) => x.roman && x.roman !== 'XLIII').reduce((a, x) => a + (x.nep ?? 0), 0);
+  // Departments only (I to XXXV), like the House bill and Senate figures beside it; the special purpose funds start at XXXVI.
+  const SPF = new Set(['XXXVI', 'XXXVII', 'XXXVIII', 'XXXIX', 'XL', 'XLI', 'XLII', 'XLIII']);
+  const nepDepts = d.departments.filter((x) => x.roman && !SPF.has(x.roman)).reduce((a, x) => a + (x.nep ?? 0), 0);
   const all = d.departments.filter((x) => x.roman);
   const changed = all.filter((x) => x.increase || x.decrease).length;
 
@@ -57,7 +59,7 @@ export default function SenateExplorer() {
       <th className={`${cls} ${active ? 'nep-th-active' : ''}`.trim()}>
         <button type="button" onClick={() => {
           if (active && key !== 'order') setDir(dir === 'asc' ? 'desc' : 'asc');
-          else { setSort(key); setDir(key === 'net' ? 'asc' : 'desc'); }
+          else { setSort(key); setDir(key === 'net' || key === 'vsnep' ? 'asc' : 'desc'); }
         }}>
           {text}<span className="nep-sort-caret">{active && key !== 'order' ? (dir === 'asc' ? '▲' : '▼') : ''}</span>
         </button>
@@ -78,7 +80,7 @@ export default function SenateExplorer() {
         <SenateReviewBanner />
         <KpiStrip
           items={[
-            { label: 'NEP', value: fmt.shortPhp(nepDepts, 'T'), sub: 'departments and funds, programmed' },
+            { label: 'Departments, NEP', value: fmt.shortPhp(nepDepts, 'T') },
             { label: 'Departments, House bill', value: fmt.shortPhp(t.house ?? 0, 'T') },
             { label: 'Departments, Senate', value: fmt.shortPhp(t.senate ?? 0, 'T'), sub: `${fmt.shortPhp(t.net ?? 0, 'B')} vs the House bill` },
             { label: 'Raised · cut', value: `+${fmt.shortPhp(t.increase ?? 0, 'B')} · −${fmt.shortPhp(Math.abs(t.decrease ?? 0), 'B')}`, sub: 'in departments, by the Senate' },
@@ -106,7 +108,8 @@ export default function SenateExplorer() {
                   {head('nep', 'NEP', 'num')}
                   {head('house', 'House bill', 'num')}
                   {head('senate', 'Senate', 'num')}
-                  {head('net', 'Change', 'num')}
+                  {head('net', 'vs House bill', 'num')}
+                  {head('vsnep', 'vs NEP', 'num')}
                   {head('rows', 'Lines changed', 'num')}
                 </tr>
               </thead>
@@ -121,18 +124,19 @@ export default function SenateExplorer() {
                     <td className="num nep-td-base">{fmt.shortPhp(x.house ?? 0)}</td>
                     <td className="num nep-td-amt">{fmt.shortPhp(x.senate ?? 0)}</td>
                     <td className="num"><SignedChange v={x.net} base={x.house} /></td>
+                    <td className="num"><SignedChange v={x.nep != null && x.senate != null ? x.senate - x.nep : null} base={x.nep} /></td>
                     <td className="num">{x.changed_rows ? x.changed_rows.toLocaleString() : <span className="hgab-ex-none">none</span>}</td>
                   </tr>
                 ))}
-                {!rows.length && <tr><td colSpan={6} className="nep-empty">No department matches that filter.</td></tr>}
+                {!rows.length && <tr><td colSpan={7} className="nep-empty">No department matches that filter.</td></tr>}
               </tbody>
             </table>
           </div>
           <p className="nep-provenance">
             From the report's <a href={senatePdfUrl('senate-cr-general-summary')} target="_blank" rel="noreferrer">General Summary</a> (in
             thousand pesos, shown here in pesos) and <a href={senatePdfUrl('senate-cr-annex-a')} target="_blank" rel="noreferrer">Annex A</a>,
-            the line-by-line amendments; NEP from the House bill line-by-line pages. "Change" is the Senate committee report
-            minus the House bill. "Lines changed" counts Annex A's rows for the department.
+            the line-by-line amendments; NEP from the House bill line-by-line pages. "vs House bill" and "vs NEP" are the Senate committee report
+            minus each, with the percent. "Lines changed" counts Annex A's rows for the department.
           </p>
         </section>
         <SenateNotice />

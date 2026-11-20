@@ -20,7 +20,7 @@ import * as fmt from '../lib/format';
 import { pdfUrl } from '../lib/hgab';
 import { explorerPath, loadExplorerDept, titleCase, type ExAgency, type ExDept } from '../lib/hgab-explorer';
 import {
-  SENATE_EXPLORER_ROOT, loadSenateExplorer, loadSenateLines, senateLookup, senatePdfUrl,
+  SENATE_EXPLORER_ROOT, changeKpi, loadSenateExplorer, loadSenateLines, senateLookup, senatePdfUrl,
   type SenateExplorerDept as SenateEx, type SenateLineRow, type SenateLines,
 } from '../lib/senate';
 import '../nep2027.css';
@@ -52,7 +52,7 @@ export default function SenateExplorerDept() {
   const exData = cur?.ex ?? null;
   const lookup = useMemo(() => (exData ? senateLookup(exData) : undefined), [exData]);
   const [showObjects, setShowObjects] = useState(false);
-  const [changedOnly, setChangedOnly] = useState(true);
+  const [changedOnly, setChangedOnly] = useState(false);
   const [q, setQ] = useState('');
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function SenateExplorerDept() {
         crumb={crumb}
         title={name}
         dek={senate != null
-          ? <>{dept?.nep ? <>NEP {fmt.shortPhp(dept.nep)} → </> : null}House bill {fmt.shortPhp(house)} → Senate committee report {fmt.shortPhp(senate)} (<SignedChange v={senate - house} base={house} />).</>
+          ? <>{dept?.nep ? <>NEP {fmt.shortPhp(dept.nep)} → </> : null}House bill {fmt.shortPhp(house)} → Senate committee report {fmt.shortPhp(senate)} (<SignedChange v={senate - house} base={house} /> vs the House bill{dept?.nep ? <>, <SignedChange v={senate - dept.nep} base={dept.nep} /> vs the NEP</> : null}).</>
           : undefined}
       />
       <main className="nep-main hgab-ex-main">
@@ -94,12 +94,8 @@ export default function SenateExplorerDept() {
             { label: 'NEP', value: dept?.nep ? fmt.shortPhp(dept.nep) : '—', sub: dept?.nep ? `₱${dept.nep.toLocaleString()}` : undefined },
             { label: 'House bill', value: fmt.shortPhp(house), sub: `₱${house.toLocaleString()}` },
             { label: 'Senate', value: senate != null ? fmt.shortPhp(senate) : '—', sub: senate != null ? `₱${senate.toLocaleString()}` : undefined },
-            {
-              label: 'Change',
-              value: senate != null ? `${senate >= house ? '+' : '−'}${fmt.shortPhp(Math.abs(senate - house))}` : '—',
-              tone: senate != null && senate !== house ? (senate > house ? 'up' : 'down') : undefined,
-              sub: 'Senate committee report minus the House bill',
-            },
+            changeKpi('vs House bill', senate, house, 'the House bill'),
+            changeKpi('vs NEP', senate, dept?.nep || null, 'the NEP'),
           ]}
         />
 
@@ -124,8 +120,9 @@ export default function SenateExplorerDept() {
                       <th className="nep-th-name">Line</th>
                       <th className="num">NEP</th>
                       <th className="num">House bill</th>
-                      <th className="num">Change</th>
                       <th className="num senate-col-senate">Senate</th>
+                      <th className="num" title="Senate committee report minus the House bill">vs House bill</th>
+                      <th className="num" title="Senate committee report minus the NEP">vs NEP</th>
                       <th>Pages</th>
                     </tr>
                   </thead>
@@ -169,7 +166,8 @@ function AmendmentRow({ r }: { r: SenateLineRow }) {
   const note = ROW_NOTE[r.status];
   // The House bill's own path for a matched line (clean names); else the report's text above the row, whose
   // lines wrap mid-name.
-  const where = r.hb_path ? r.hb_path.split(' > ').slice(-3) : r.context ? [r.context.split(' > ').join(' ')] : [];
+  const where = (r.hb_path ? r.hb_path.split(' > ').slice(-3) : r.context ? [r.context.split(' > ').join(' ')] : [])
+    .filter((x) => x.toLowerCase() !== r.label.toLowerCase());
   return (
     <tr className="hgab-ex-line">
       <td className="hgab-ex-name">
@@ -185,8 +183,9 @@ function AmendmentRow({ r }: { r: SenateLineRow }) {
           : <span className="hgab-ds-null" title={r.house ? 'The NEP has no figure for this line at this level' : 'Not in the NEP'}>—</span>}
       </td>
       <td className="num">{r.house != null ? fmt.shortPhp(r.house) : <span className="hgab-ds-null">—</span>}</td>
-      <td className="num"><SignedChange v={r.net} base={r.house} /></td>
       <td className="num senate-col-senate"><strong>{r.senate != null ? fmt.shortPhp(r.senate) : '—'}</strong></td>
+      <td className="num"><SignedChange v={r.net} base={r.house} /></td>
+      <td className="num"><SignedChange v={r.nep != null && r.senate != null ? r.senate - r.nep : null} base={r.nep} /></td>
       <td className="hgab-ex-page">
         <span className="hgab-ex-refs">
           {doc && pdf ? (
@@ -223,7 +222,8 @@ function AgencyTree({ a, ex, lookup, changedOnly, query, single }: {
           <span><span className="hgab-ex-fig-label">NEP</span> {a.nep ? fmt.shortPhp(a.nep) : '—'}</span>
           <span><span className="hgab-ex-fig-label">House bill</span> {fmt.shortPhp(a.house)}</span>
           <span><span className="hgab-ex-fig-label">Senate</span> <strong>{s?.senate != null ? fmt.shortPhp(s.senate) : '—'}</strong></span>
-          {s?.senate != null && <SignedChange v={s.senate - a.house} base={a.house} />}
+          {s?.senate != null && <span title="vs the House bill"><SignedChange v={s.senate - a.house} base={a.house} /></span>}
+          {s?.senate != null && a.nep > 0 && <span title="vs the NEP"><span className="hgab-ex-fig-label">vs NEP</span> <SignedChange v={s.senate - a.nep} base={a.nep} /></span>}
         </span>
       </header>
       {!!s?.new_lines && (

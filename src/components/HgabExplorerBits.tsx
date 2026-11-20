@@ -191,7 +191,7 @@ function SenateAmount({ v, strong = false }: { v: number | null; strong?: boolea
   return <Amount v={v} strong={strong} />;
 }
 
-/** Senate committee report minus the House bill. */
+/** Senate committee report minus a base (the House bill, or the NEP), with its percent. */
 function SenateChange({ house, senate }: { house: number; senate: number | null }) {
   if (senate == null) return <span className="hgab-ds-null">—</span>;
   return <ExChange nep={house} house={senate} />;
@@ -321,6 +321,7 @@ export function ExTree({ nodes, changedOnly, query, openDepth = 1, senate, compa
           <td className="num"><Amount v={n.h} strong={!senate} /></td>
           {senate && <td className="num senate-col-senate"><SenateAmount v={senateTotal(n, senate, senateMemo)} strong /></td>}
           <td className="num">{vsHouse ? <SenateChange house={n.h} senate={senateTotal(n, senate!, senateMemo)} /> : <ExChange nep={n.n} house={n.h} />}</td>
+          {vsHouse && <td className="num"><SenateChange house={n.n} senate={senateTotal(n, senate!, senateMemo)} /></td>}
           <td className="hgab-ex-status">
             {vsHouse
               ? (marks.changed.get(n) ? null : <span className="hgab-ex-none">All same</span>)
@@ -346,14 +347,15 @@ export function ExTree({ nodes, changedOnly, query, openDepth = 1, senate, compa
             <th className="num">NEP</th>
             <th className="num">House bill</th>
             {senate && <th className="num senate-col-senate" title="The Senate committee report on the House bill">Senate</th>}
-            <th className="num" title={vsHouse ? 'Senate committee report minus the House bill' : 'House bill minus the NEP'}>Change</th>
+            <th className="num" title={vsHouse ? 'Senate committee report minus the House bill' : 'House bill minus the NEP'}>{vsHouse ? 'vs House bill' : 'Change'}</th>
+            {vsHouse && <th className="num" title="Senate committee report minus the NEP">vs NEP</th>}
             <th>Label</th>
             <th title="The page that prints each line in the NEP and in the House bill. A group links to the first page where it appears.">Pages</th>
           </tr>
         </thead>
         <tbody>
           {rows.length ? rows : (
-            <tr><td colSpan={senate ? 7 : 6} className="nep-empty">
+            <tr><td colSpan={vsHouse ? 8 : senate ? 7 : 6} className="nep-empty">
               {changedOnly
                 ? (vsHouse ? 'No line here differs between the House bill and the Senate committee report.' : 'No line here differs between the NEP and the House bill.')
                 : 'Nothing matches that search.'}
@@ -459,6 +461,7 @@ function LineRow({ x, depth, senate, vsHouse }: { x: ExLine; depth: number; sena
       <td className="num"><Amount v={x.h} strong={!senate} /></td>
       {senate && <td className="num senate-col-senate"><SenateAmount v={sv ?? null} strong /></td>}
       <td className="num">{vsHouse ? <SenateChange house={x.h} senate={sv ?? null} /> : <ExChange nep={x.n} house={x.h} />}</td>
+      {vsHouse && <td className="num"><SenateChange house={x.n} senate={sv ?? null} /></td>}
       <td className="hgab-ex-status">
         {vsHouse ? <SenateLineLabel house={x.h} senate={sv ?? null} /> : <ExStatusChip status={x.s} />}
       </td>

@@ -22,7 +22,7 @@ import { pageMeta } from '../lib/seo';
 import { datasetPath, type DatasetKey } from '../lib/hgab';
 import { sqlStr } from '../lib/hgab-query';
 import {
-  PROGRAM_SHORT, SENATE_STATUS, SENATE_STATUS_ORDER, coerceSenateProject as coerce, loadSenateProgram, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl,
+  PROGRAM_SHORT, SENATE_STATUS, SENATE_STATUS_ORDER, changeKpi, coerceSenateProject as coerce, loadSenateProgram, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl,
   senateRecordPath, type SenateDimRow, type SenateProgramSummary, type SenateProject, type SenateStatus,
 } from '../lib/senate';
 import '../nep2027.css';
@@ -114,14 +114,15 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
           { label: 'NEP', value: fmt.shortPhp(sum.nep_php), sub: 'every NEP project, with those the House bill doesn’t have' },
           { label: 'House bill', value: fmt.shortPhp(sum.house_php) },
           { label: 'Senate', value: fmt.shortPhp(sum.senate_php) },
-          { label: 'Change', value: `${sum.change_php >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(sum.change_php))}`, tone: sum.change_php < 0 ? 'down' : sum.change_php > 0 ? 'up' : undefined, sub: 'Senate minus the House bill' },
+          changeKpi('vs House bill', sum.senate_php, sum.house_php, 'the House bill'),
+          changeKpi('vs NEP', sum.senate_php, sum.nep_php, 'the NEP'),
         ]}
       />
       <section className="nep-section">
         <SectionHead eyebrow="What happened to each project" headline="Every project: NEP, House bill and Senate committee report" />
         <div className="nep-table-wrap">
           <table className="nep-table">
-            <thead><tr><th>Status</th><th className="num">Projects</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th>What it means</th></tr></thead>
+            <thead><tr><th>Status</th><th className="num">Projects</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th><th>What it means</th></tr></thead>
             <tbody>
               {SENATE_STATUS_ORDER.filter((x) => sum.status[x]).map((x) => (
                 <tr key={x}>
@@ -130,6 +131,8 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
                   <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.nep_php)}</td>
                   <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.house_php)}</td>
                   <td className="num nep-td-amt">{fmt.shortPhp(sum.status[x]!.senate_php)}</td>
+                  <td className="num"><SignedChange v={sum.status[x]!.senate_php - sum.status[x]!.house_php} base={sum.status[x]!.house_php} /></td>
+                  <td className="num"><SignedChange v={sum.status[x]!.senate_php - sum.status[x]!.nep_php} base={sum.status[x]!.nep_php} /></td>
                   <td className="hgab-ex-sub">{SENATE_STATUS[x].help}</td>
                 </tr>
               ))}
@@ -150,7 +153,7 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
       <SectionHead eyebrow="Breakdown" headline={title} dek={note} />
       <div className="nep-table-wrap">
         <table className="nep-table">
-          <thead><tr><th className="nep-th-name">{title.replace(/^By /, '')}</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">Change</th><th className="num">Projects changed</th></tr></thead>
+          <thead><tr><th className="nep-th-name">{title.replace(/^By /, '')}</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th><th className="num">Projects changed</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.label}>
@@ -159,6 +162,7 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
                 <td className="num nep-td-base">{fmt.shortPhp(r.house_php)}</td>
                 <td className="num nep-td-amt">{fmt.shortPhp(r.senate_php)}</td>
                 <td className="num"><SignedChange v={r.senate_php - r.house_php} base={r.house_php} /></td>
+                <td className="num"><SignedChange v={r.senate_php - r.nep_php} base={r.nep_php} /></td>
                 <td className="num">{r.changed.toLocaleString()} of {r.count.toLocaleString()}</td>
               </tr>
             ))}
@@ -201,7 +205,8 @@ function ProjectTable({ k, rows }: { k: DatasetKey; rows: SenateProject[] }) {
             <th className="num">NEP</th>
             <th className="num">House bill</th>
             <th className="num senate-col-senate">Senate</th>
-            <th className="num">Change</th>
+            <th className="num" title="Senate minus the House bill">vs House bill</th>
+            <th className="num" title="Senate minus the NEP">vs NEP</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -217,6 +222,7 @@ function ProjectTable({ k, rows }: { k: DatasetKey; rows: SenateProject[] }) {
               <td className="num">{r.house_php != null ? fmt.shortPhp(r.house_php) : <span className="hgab-ds-null">—</span>}</td>
               <td className="num senate-col-senate"><strong>{fmt.shortPhp(r.senate_php)}</strong></td>
               <td className="num"><SignedChange v={r.change_php} base={r.house_php} /></td>
+              <td className="num"><SignedChange v={r.nep_php != null ? r.senate_php - r.nep_php : null} base={r.nep_php} /></td>
               <td><SenateStatusChip status={r.status} /></td>
             </tr>
           ))}
@@ -227,9 +233,9 @@ function ProjectTable({ k, rows }: { k: DatasetKey; rows: SenateProject[] }) {
 }
 
 const PAGE = 50;
-type SortKey = 'house' | 'senate' | 'change' | 'title';
+type SortKey = 'house' | 'senate' | 'change' | 'vsnep' | 'title';
 const SORT_SQL: Record<SortKey, string> = {
-  house: 'house_php', senate: 'senate_php', change: 'change_php', title: 'title',
+  house: 'house_php', senate: 'senate_php', change: 'change_php', vsnep: '(senate_php - nep_php)', title: 'title',
 };
 
 function ProjectsView({ k }: { k: DatasetKey }) {
@@ -330,7 +336,7 @@ function ProjectsView({ k }: { k: DatasetKey }) {
       {cur && (
         <p className="nep-table-count">
           {cur.total.n.toLocaleString()} projects · NEP {fmt.shortPhp(cur.total.nep)} · House bill {fmt.shortPhp(cur.total.house)} · Senate {fmt.shortPhp(cur.total.senate)}
-          {' '}(<SignedChange v={cur.total.senate - cur.total.house} base={cur.total.house} />) · two versions of one budget: compare them, don’t add them
+          {' '}(<SignedChange v={cur.total.senate - cur.total.house} base={cur.total.house} /> vs the House bill, <SignedChange v={cur.total.senate - cur.total.nep} base={cur.total.nep} /> vs the NEP) · two versions of one budget: compare them, don’t add them
         </p>
       )}
       <div className="nep-table-wrap">
@@ -341,12 +347,13 @@ function ProjectsView({ k }: { k: DatasetKey }) {
               <th className="num">NEP</th>
               {head('house', 'House bill', 'num')}
               {head('senate', 'Senate', 'num senate-col-senate')}
-              {head('change', 'Change', 'num')}
+              {head('change', 'vs House bill', 'num')}
+              {head('vsnep', 'vs NEP', 'num')}
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {!cur ? <SkeletonRows cols={6} rows={8} /> : cur.rows.map((r) => (
+            {!cur ? <SkeletonRows cols={7} rows={8} /> : cur.rows.map((r) => (
               <tr key={r.id}>
                 <td className="hgab-ex-name">
                   <Link to={senateRecordPath(k, r.id)}>{r.title}</Link>
@@ -357,10 +364,11 @@ function ProjectsView({ k }: { k: DatasetKey }) {
                 <td className="num">{r.house_php != null ? fmt.shortPhp(r.house_php) : <span className="hgab-ds-null">—</span>}</td>
                 <td className="num senate-col-senate"><strong>{fmt.shortPhp(r.senate_php)}</strong></td>
                 <td className="num"><SignedChange v={r.change_php} base={r.house_php} /></td>
+              <td className="num"><SignedChange v={r.nep_php != null ? r.senate_php - r.nep_php : null} base={r.nep_php} /></td>
                 <td><SenateStatusChip status={r.status} /></td>
               </tr>
             ))}
-            {cur && !cur.rows.length && <tr><td colSpan={6} className="nep-empty">No project matches.</td></tr>}
+            {cur && !cur.rows.length && <tr><td colSpan={7} className="nep-empty">No project matches.</td></tr>}
           </tbody>
         </table>
       </div>
