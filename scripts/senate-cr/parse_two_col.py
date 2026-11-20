@@ -66,6 +66,8 @@ def main(kind, pdf_path, out_path):
                 (rev if w["x0"] >= cf["rev_x"] else hb).append(w)
             hbt = " ".join(w["text"] for w in hb)
             rvt = " ".join(w["text"] for w in rev)
+            if amts and not hbt and not rvt and all(not v for v in amts.values()):
+                continue  # a row of dashes closing a region
             if amts:
                 items.append({"pdf_page": pi + 1, "hb": [hbt] if hbt else [], "rev": [rvt] if rvt else [],
                               **{k: amts.get(k) for k in COLS}})

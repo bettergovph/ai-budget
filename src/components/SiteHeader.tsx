@@ -82,6 +82,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
     ? 'FY 2020 \u2013 2026'
     : location.pathname.startsWith('/hgab')
     ? 'FY 2027 House bill'
+    : location.pathname.startsWith('/senate')
+    ? 'FY 2027 Senate committee report'
     : 'FY 2027 NEP';
 
   const today = useMemo(
@@ -187,6 +189,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               House Appropriations Bill 2027
             </Link>
             <Link
+              to="/senate/2027/overview"
+              className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
+            >
+              Senate Budget 2027
+            </Link>
+            <Link
               to="/hearings"
               className={`primary-nav-link ${location.pathname.startsWith('/hearings') ? 'active' : ''}`}
             >
@@ -257,6 +265,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </Link>
           <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
             House bill 2027 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
+            Senate committee report 2027 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/hearings" onClick={() => setMenuOpen(false)}>
             Budget Hearings <span className="drawer-link-arrow">→</span>

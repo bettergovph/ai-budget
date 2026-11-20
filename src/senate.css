@@ -1,0 +1,34 @@
+/* The Senate committee report section (/senate/2027). It reuses the House bill section's styles (hgab.css,
+   hgab-explorer.css); these are the few pieces of its own. */
+.senate-chip { white-space: nowrap; }
+.senate-programs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 12px 0 4px; }
+.senate-program-card { display: block; border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--paper, #fff); color: inherit; text-decoration: none; }
+.senate-program-card:hover { border-color: var(--ink-3); }
+.senate-program-card h3 { margin: 0 0 6px; font-size: 1rem; }
+.senate-program-card .senate-flow { font-variant-numeric: tabular-nums; font-size: 1.15rem; margin: 2px 0 8px; }
+.senate-program-card .senate-flow small { color: var(--ink-3); font-size: 0.8rem; margin: 0 4px; }
+.senate-program-card ul { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; color: var(--ink-2); }
+.senate-program-card li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+.senate-statusbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0 10px; background: var(--rule); }
+.senate-statusbar span { display: block; height: 100%; }
+.senate-rename { display: block; font-size: 0.82rem; color: var(--ink-3); margin-top: 2px; }
+.senate-rename::before { content: 'House bill: '; font-weight: 600; }
+.senate-instr { display: block; font-size: 0.8rem; color: var(--ink-3); margin-top: 3px; font-style: italic; }
+.senate-deleted { text-decoration: line-through; }
+.senate-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+.senate-filters select, .senate-filters input[type='search'] { max-width: 260px; }
+.senate-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin: 10px 0; font-size: 0.9rem; }
+.senate-prov { border-top: 1px solid var(--rule); padding: 12px 0; }
+.senate-prov h3 { font-size: 0.95rem; margin: 0 0 4px; }
+.senate-prov p { margin: 4px 0; font-size: 0.92rem; }
+.senate-prov .senate-prov-text { white-space: pre-wrap; background: var(--paper-2, #f6f5f1); padding: 8px 10px; border-radius: 6px; font-size: 0.88rem; }
+.senate-refs a { margin-right: 10px; white-space: nowrap; }
+.senate-col-senate { background: rgba(58, 35, 80, 0.04); }
+.senate-house-link { font-size: 0.82rem; }
+.senate-record-names { display: grid; gap: 10px; grid-template-columns: 1fr; margin: 8px 0 16px; }
+.senate-record-names div { border-left: 3px solid var(--rule); padding-left: 10px; }
+.senate-record-names div.is-senate { border-left-color: #3a2350; }
+.senate-record-names strong { display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.senate-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.senate-split-title { font-size: 1rem; margin: 8px 0; }
+.senate-moved { color: #3a2350; font-weight: 700; }

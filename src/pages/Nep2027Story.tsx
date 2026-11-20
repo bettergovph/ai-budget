@@ -317,15 +317,15 @@ function StageNotice() {
           Notice · Where the 2027 budget is now
         </p>
         <h2 id="story-notice-title" className="story-notice-title">
-          The House has approved its version of the 2027 budget.
+          The Senate Finance Committee has reported on the 2027 budget.
         </h2>
         <p className="story-notice-body">
-          House Bill No. 10858 was approved on third reading, and the Senate is next. You are reading the NEP, where
-          the budget started.
+          Its committee report amends House Bill No. 10858, which the House approved on third reading. The Senate votes
+          on it next. You are reading the NEP, where the budget started.
         </p>
       </div>
-      <Link className="story-notice-cta" to="/hgab/2027/overview">
-        Go to the House bill <span aria-hidden="true">→</span>
+      <Link className="story-notice-cta" to="/senate/2027/overview">
+        Go to the Senate report <span aria-hidden="true">→</span>
       </Link>
       <div className="story-tl" style={{ '--n': n, '--i': current } as React.CSSProperties}>
         <span className="story-tl-track" aria-hidden="true"><span className="story-tl-fill" /></span>

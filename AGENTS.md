@@ -225,7 +225,7 @@ The House bill is HB 10858 at second and third reading, compared with the NEP. S
   - "Be a citizen reviewer. Help review House insertions." (2026-11-17, `npm run build:hgab-poster-review`): the "Be a citizen budget reviewer" poster's layout, pointed at the reviewer (`budget.bettergov.ph/review`): why (the House insertions, figures from `documents/review.json`), four steps as the reviewer works, what to look for from the team's questions; the wall is the insertions in bill order. Feed 1080×1350 and the reviewer's link preview 1200×630. Insertions are candidates: "aren't wrong, but each needs its documents and a reason".
   - Builders are `scripts/build-hgab-poster*.ts`; several still sit untracked in worktrees (see In progress).
 
-### FY2027 Senate Committee Report (data only, started 2026-11-20)
+### FY2027 Senate Committee Report (`/senate/2027`, started 2026-11-20)
 
 The Senate Committee on Finance's report on HB 10858 is the next budget stage. `npm run build:senate-cr` parses its
 born-digital PDFs (no OCR, no LLM) and maps them onto our House bill data in `data/senate-cr/2027/` (not published).
@@ -235,7 +235,12 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   with its Senate amount, Senate name and status (renames linked).
 - **DPWH:** 3,479 projects cut to zero (−₱99.30B), 13 foreign-assisted raised (+₱33.10B), 5,182 renamed.
 - Our House data's Taysan, Batangas MPB row is two printed lines (₱15M + ₱10M); the doc has the details.
-- Not on the site yet.
+- **The section** (PR #106 follow-up, branch `senate-cr-2027`): `/senate/2027` with its own primary tab
+  ("Senate Budget 2027"): overview, line by line, the four programs project by project, provisions, sources,
+  methodology. It reads `data/senate/2027/` from R2 `senate/2027/` (`npm run upload:senate`; upload before
+  the merge). The House pages gained a Senate column (explorer, project tables) and a Senate box on project
+  pages. `budget-stage.ts` now has the Senate as current (the House bill's month is not known: "Approved").
+  "Under citizen review" banner until `SENATE_UNDER_REVIEW` is set false.
 
 ### Citizen Reports (`/citizen-reports`, #53)
 
@@ -304,7 +309,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
 | Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5144 | PR #82 open 2026-11-12; `documents/` on R2; Clerk sign-in + D1 submissions added 2026-11-13 (production secret, build variable and remote tables not set up yet); open: nav link |
 | "Multi-purpose buildings or classrooms?" page + poster (`/hgab/2027/multi-purpose/documents`) | worktree `mpb-documents`, branch `hgab-mpb-documents`, preview :5147 | PR #95 MERGED 2026-11-15 (data, paper posters and og image on R2); Taglish street posters on R2 2026-11-15; reviewer either-id links + documents on DPWH project pages + Taglish poster script in branch `hgab-record-documents` |
-| Senate Committee Report parse + map (`scripts/senate-cr/`, `docs/senate-cr-2027.md`) | worktree `senate-cr`, branch `senate-cr-2027` (from main 2026-11-20) | Data built in `data/senate-cr/2027/`; uncommitted; source PDFs in `/data/senate-cr-2027/raw` |
+| Senate Committee Report: parse + map, then the `/senate/2027` section | worktree `senate-cr`, branch `senate-cr-2027`, PR #106, preview :5155 | Data in `data/senate-cr/2027/` and `data/senate/2027/` (not on R2 yet); source PDFs in `/data/senate-cr-2027/raw`; awaiting review before upload + merge |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**

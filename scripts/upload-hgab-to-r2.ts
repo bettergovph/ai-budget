@@ -18,6 +18,7 @@
  *   npm run upload:hgab -- --force --concurrency=4
  *   npm run upload:hgab -- --only=mpb-years --skip-verify    # one folder of the tree (after a full verify)
  *   npm run upload:hgab -- --only=locations.json --skip-verify    # one file
+ *   npm run upload:senate                                         # data/senate/2027 -> senate/2027/ (--out, --prefix)
  *
  * --only=<path>[,<path>] uploads just those folders or files of the tree: the data folder is shared between
  * branches, and a plain run would publish whatever else is in it.
@@ -34,7 +35,7 @@ import { CONTRACTORS_CSV_NAME } from "../src/lib/hgab-contractors";
 import { FAP_CSV_NAME } from "../src/lib/hgab-fap";
 import { MPB_DOCS_CSV_NAME } from "../src/lib/mpb-documents";
 
-interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string; only: string[] }
+interface Args { dryRun: boolean; force: boolean; skipVerify: boolean; concurrency: number; root: string; prefix: string; only: string[] }
 function parseArgs(): Args {
   const args = process.argv.slice(2);
   const get = (k: string) => args.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3);
@@ -44,12 +45,14 @@ function parseArgs(): Args {
     skipVerify: args.includes("--skip-verify"),
     concurrency: Number(get("concurrency") || "4"),
     root: resolve(get("out") ?? "data/hgab/2027"),
+    // Another tree with the same publishing rules: the Senate committee report (`upload:senate`).
+    prefix: (get("prefix") ?? "hgab/2027/").replace(/^\/+/, "").replace(/\/*$/, "/"),
     only: (get("only") ?? "").split(",").map((x) => x.trim().replace(/^\/+|\/+$/g, "")).filter(Boolean),
   };
 }
 
-const PREFIX = "hgab/2027/";
 const opts = parseArgs();
+const PREFIX = opts.prefix;
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;

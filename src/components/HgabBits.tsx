@@ -248,7 +248,7 @@ export function HgabHeader({
  * navigation (it is keyed to the location, so a route change closes it
  * without an effect). Pointers that can hover open it on hover as well.
  */
-function SectionMenu({
+export function SectionMenu({
   label,
   items,
   active,

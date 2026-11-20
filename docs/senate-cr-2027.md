@@ -54,8 +54,8 @@ totals and counts.
   - 5,182 are renamed with the same amount (the Senate adds stations, coordinates and corrected names).
   - 7,597 are not listed, so they are unchanged.
 - **FMR:** ₱19.63B → ₱16.00B.
-  - 577 House roads are cut and 406 Senate roads added.
-  - 142 of the 406 revise a cut road: the Senate cuts a row and re-adds it with new coordinates or a
+  - 577 House roads are cut and 391 Senate roads added.
+  - 142 of the 391 revise a cut road: the Senate cuts a row and re-adds it with new coordinates or a
     corrected name. `replaces_id` links the two.
   - 122 are renamed in place.
 - **NIA:** ₱18.00B → ₱17.75B. 660 are renamed in place (the Senate's description adds stations and
@@ -64,13 +64,17 @@ totals and counts.
   - 23 facility components add to a House row; 2 more match after a spelling difference.
   - 164 are facilities the House bill does not fund.
   - Dr. Jose N. Rodriguez Memorial Hospital is cut by ₱100M.
-- **Annex A:** 3,172 amount rows.
-  - 1,665 match a House bill node peso for peso, at the cited page and line or a few lines off.
+- **Annex A:** 3,185 amount rows (2,894 class and object rows mapped).
+  - 1,675 match a House bill node peso for peso, at the cited page and line or a few lines off.
   - 47 add an expense class to an existing House line, 949 are Senate insertions and 177 are subtotals.
   - 19 are in Unprogrammed Appropriations or the DOE corporations' budgets, which our House tables don't
     parse.
-  - 20 are unmatched and 8 cite a House amount that differs from the bill (typos in the Senate copy, listed
+  - 19 are unmatched and 8 cite a House amount that differs from the bill (typos in the Senate copy, listed
     in the CSV).
+- **Explorer lines:** 902 House bill explorer lines change in the committee report; 3 sit under a changed
+  heading whose split the report does not give. Every agency reconciles with the General Summary: its House
+  total plus its changed lines, plus the money in lines the House bill does not have (Senate insertions,
+  allowed only where Annex A inserts something for that agency), equals its committee-report total.
 
 ## How the matching works
 
@@ -110,10 +114,40 @@ totals and counts.
 - NIA prints a big project as an activity (its name, then region headings). MARIIS and UPRIIS sit at
   region level.
 
+## The site: `/senate/2027` and the Senate column on the House pages
+
+`build_explorer_senate.py` and `build_site.py` (the last steps of run.sh) write `data/senate/2027/`, which the
+pages read from R2 `senate/2027/`. `npm run upload:senate` publishes it (the House uploader with
+`--out=data/senate/2027 --prefix=senate/2027/`). **Upload before the merge that ships the pages.**
+
+| File | What |
+|---|---|
+| `overview.json`, `manifest.json` | whole-bill totals, the four programs, the report's documents; build info |
+| `departments.json` | the General Summary by department and agency, pesos |
+| `lines/<dept id>.json` | Annex A rows of one department (department ids are the House explorer's) |
+| `explorer/<dept id>.json` | the Senate amount of every House explorer line that changes, plus agency totals |
+| `<program>/projects.parquet`, `summary.json` | every House project + insertions: NEP, House, Senate, status; by region, program line, office; largest changes |
+| `provisions.json` | Annex B, with the House bill PDF page of each cited page |
+| `pdf/senate-cr-*.pdf` | the report, for page links |
+
+Pages (`src/lib/senate.ts`, `src/components/SenateBits.tsx`, `src/pages/Senate*.tsx`), its own primary
+nav tab "Senate Budget 2027":
+- `/senate/2027/overview`: totals, the four programs, departments that change most.
+- `/senate/2027/explorer` and `/explorer/:deptId`: each department's amendments as Annex A prints them, then
+  the House bill's tree with a Senate column (`ExTree` with `senate` and `compare="house"`).
+- `/senate/2027/:program` (`?view=overview|projects|changes`) and `/:program/p/:id`: project by project.
+- `/senate/2027/provisions`, `/sources`, `/methodology`.
+
+On the House pages: a Senate column on the explorer index and department pages (`compare` stays House vs NEP),
+on the program project tables (a second query on the Senate parquet for the rows on screen), and an "In the
+Senate committee report" box on each project page. The budget-stage timeline now has the Senate as current.
+Everything carries the "Under citizen review" banner while `SENATE_UNDER_REVIEW` is true.
+
 ## Not done yet
 
-- Not in the site, the API or D1. The next step is adding a Senate column to the explorer and the four
-  program pages.
+- Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
+- Districts, maps and leaderboards for the Senate version; MPB, flood control and foreign-assisted pages
+  don't have a Senate column yet.
 - Unprogrammed Appropriations and DOE corporations: Annex A rows are parsed, but our House tables don't
   hold those sections.
 - Annex A-3B (the NIA watershed list) and Annex A-5 (TIEZA/TPB pages) are not parsed into rows.

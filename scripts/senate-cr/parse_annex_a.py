@@ -112,7 +112,7 @@ def main(pdf_path, out_path):
         fw = [w for w in words if w["top"] >= foot_top - 1]
         if fw:
             label = fw[-1]["text"]
-        body = [w for w in words if 140 < w["top"] < foot_top - 1]
+        body = [w for w in words if 133 < w["top"] < foot_top - 1]
         lines = [(ln["top"], *split_line(ln, cols)) for ln in visual_lines(body)]
         # Amounts printed a little above their label land on a line of their own: give them to the next
         # line that has text (and lacks those columns), when it is close below.
@@ -131,12 +131,13 @@ def main(pdf_path, out_path):
         for _top, pref, lref, tw, amts in merged:
             text = " ".join(w["text"] for w in tw).strip()
             x0 = tw[0]["x0"] if tw else None
+            # Notes ("Note: The totals and sub-totals ... accordingly.", "Note: Refer to Annex ...") run to a full stop.
             if in_note:
-                if text.endswith("accordingly."):
+                if text.endswith("."):
                     in_note = False
                 continue
             if text.startswith("Note:"):
-                in_note = not text.endswith("accordingly.")
+                in_note = not text.endswith(".")
                 continue
             if pref is not None:
                 hb_page = pref
@@ -150,10 +151,11 @@ def main(pdf_path, out_path):
                     if b["x0"] is None or b["x0"] >= 100 or b["line_ref"]:
                         break
                     run.insert(0, b)
-                    if b["x0"] < 60:
-                        break
-                if run and run[0]["x0"] < 60:
-                    head = (" ".join(b["text"] for b in run) + " " + text).strip()
+                # The heading starts at the last left-margin line that opens with a numeral or a letter.
+                starts = [i for i, b in enumerate(run) if b["x0"] < 60 and b["text"]
+                          and (ROMAN.match(b["text"].split()[0]) or AGENCY.match(b["text"].split()[0]))]
+                if starts:
+                    head = (" ".join(b["text"] for b in run[starts[-1]:]) + " " + text).strip()
                 elif x0 is not None and x0 < 60:
                     head = text
             first = head.split()[0] if head else ""

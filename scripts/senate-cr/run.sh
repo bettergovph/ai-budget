@@ -4,6 +4,7 @@
 #   SRC   the report's PDFs (General Summary, Annexes A, A-1..A-5, B), unzipped from "Senate CR 2027.zip"
 #         (default: /data/senate-cr-2027/raw)
 #   OUT   working outputs (default: data/senate-cr/2027, NOT under data/hgab/2027, which upload:hgab publishes)
+#   SITE  what the /senate/2027 pages read (default: data/senate/2027; `npm run upload:senate` publishes it)
 # Needs data/hgab-lines/2027/tables-vol{1a,1b}.json (build:hgab-lines) and data/hgab/2027/{dpwh,fmr,nia,hfep}.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -42,4 +43,9 @@ echo "== Senate version of every House project (dpwh, fmr, nia, hfep)"
 py "$here/build_versions.py" "$OUT" "$HGAB" "$OUT"
 cp "$SRC"/*.pdf "$OUT/pdf/"
 ( cd "$OUT/pdf" && sha256sum *.pdf > SHA256SUMS )
-echo "done -> $OUT"
+echo "== Site data for /senate/2027 (published by upload:senate)"
+SITE="${SITE:-$root/data/senate/2027}"
+mkdir -p "$SITE"
+py "$here/build_explorer_senate.py" "$OUT" "$LINES" "$HGAB" "$SITE"
+py "$here/build_site.py" "$OUT" "$HGAB" "$SITE"
+echo "done -> $OUT, $SITE"

@@ -87,6 +87,7 @@ function canonicalFor(pathname: string): string {
   if (p === "/" || p === "/2027") p = "/2027/overview";
   if (p === "/2027/explore") p = "/2027/search";
   if (p === "/hgab" || p === "/hgab/2027" || p === "/hgab/2027/intro") p = "/hgab/2027/overview";
+  if (p === "/senate" || p === "/senate/2027") p = "/senate/2027/overview";
   if (p.toLowerCase() === RED_FLAGS_ROOT.toLowerCase()) p = RED_FLAGS_ROOT;
   return p === "/" ? CANONICAL_HOST + "/" : CANONICAL_HOST + p;
 }
@@ -176,6 +177,15 @@ const STATIC_SITEMAP_PATHS = [
   // static pages and the four dataset hubs. Record pages are too many (≈19k)
   // to list; the hubs link to them. The Explainer (/intro) is hidden for now.
   "/hgab/2027/overview",
+  "/senate/2027/overview",
+  "/senate/2027/explorer",
+  "/senate/2027/dpwh",
+  "/senate/2027/fmr",
+  "/senate/2027/hfep",
+  "/senate/2027/nia",
+  "/senate/2027/provisions",
+  "/senate/2027/sources",
+  "/senate/2027/methodology",
   "/hgab/2027/sources",
   "/hgab/2027/methodology",
   "/hgab/2027/dpwh",

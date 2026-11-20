@@ -37,7 +37,21 @@ import { shownHouseCitations } from '../lib/hgab-citations';
 import { csvFileName } from '../lib/hgab-csv';
 import { HgabDetails, StatusChip } from './HgabBits';
 import { SkeletonRows } from './Nep2027Bits';
+import { SENATE_STATUS, senateProjectsUrl, senateRecordPath, type SenateStatus } from '../lib/senate';
 import '../hgab-districts.css';
+import '../senate.css';
+
+/** The Senate committee report's amount for a House project, linked to its Senate page. */
+function SenateCell({ k, id, v, loading }: { k: HgabDatasetMeta['key']; id: string; v?: { php: number; status: SenateStatus }; loading: boolean }) {
+  if (!v) return loading ? <span className="hgab-ds-null">…</span> : <span className="hgab-ds-null" title="Not in the Senate committee report data">—</span>;
+  const changed = v.status !== 'unchanged' && v.status !== 'renamed';
+  return (
+    <Link to={senateRecordPath(k, id)} title={SENATE_STATUS[v.status].label}
+      style={changed ? { color: SENATE_STATUS[v.status].tone, fontWeight: 600 } : undefined}>
+      {v.php === 0 ? '0' : fmt.shortPhp(v.php)}
+    </Link>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Small cells shared with the hub and the record page
@@ -222,6 +236,25 @@ export default function HgabProjects({
     return () => { live = false; clearTimeout(t); };
   }, [sql, sumSql]);
 
+  // The Senate committee report's amount for the rows on screen (a second, small query on the Senate file; the
+  // House table works the same without it).
+  const [senate, setSenate] = useState<{ sql: string; by: Map<string, { php: number; status: SenateStatus }> } | null>(null);
+  useEffect(() => {
+    if (!result || result.sql !== sql || !result.rows.length) return;
+    let live = true;
+    const ids = result.rows.map((r) => `'${r.id.replace(/'/g, "''")}'`).join(',');
+    runQuery(`SELECT house_id, senate_php, status FROM read_parquet('${senateProjectsUrl(key)}') WHERE house_id IN (${ids})`)
+      .then((res) => {
+        if (!live) return;
+        const by = new Map<string, { php: number; status: SenateStatus }>();
+        for (const r of res.rows as Array<Record<string, unknown>>) by.set(String(r.house_id), { php: Number(r.senate_php), status: r.status as SenateStatus });
+        setSenate({ sql, by });
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [result, sql, key]);
+  const senateBy = senate?.sql === sql ? senate.by : null;
+
   // Facets (distinct values per filter column) are per dataset, not per filter.
   const [facets, setFacets] = useState<{ url: string; rows: FacetRow[] } | null>(null);
   useEffect(() => {
@@ -347,7 +380,7 @@ export default function HgabProjects({
   const pap = papLabel(dataset.key);
   // DPWH offices are named as such, so a DEO's number is never read as a legislative district's.
   const officeHeading = dataset.key === 'dpwh' ? 'DPWH office' : 'Office';
-  const colCount = 7 + (twoReadings ? 1 : 0) + (pap ? 1 : 0);
+  const colCount = 8 + (twoReadings ? 1 : 0) + (pap ? 1 : 0);
   const sortLabel = (k: SortKey) =>
     !twoReadings && (k === 'hgab3' || k === 'hgab2') ? 'House amount' : SORT_LABELS[k];
   const firstRow = total != null && total > 0 ? (filters.page - 1) * filters.size + 1 : 0;
@@ -503,6 +536,7 @@ export default function HgabProjects({
               {head(houseKey, twoReadings ? STAGE_LABELS[houseKey].short : 'House', 'num',
                 twoReadings ? STAGE_LABELS[houseKey].label : 'House bill; the second and third reading publish the same list')}
               {head('delta', `Change from the ${STAGE_LABELS.nep.short}`, 'num', 'Latest House amount minus the NEP, when both exist')}
+              <th className="num senate-col-senate" title="The Senate committee report on the House bill (under citizen review)">Senate</th>
               <th>Pages</th>
             </tr>
           </thead>
@@ -540,6 +574,7 @@ export default function HgabProjects({
                   {twoReadings && <td className="num"><Amt v={r.hgab2_php} /></td>}
                   <td className="num"><Amt v={houseKey === 'hgab3' ? r.hgab3_php : r.hgab2_php} strong blank={splitFlags(r.flags).includes('column_added')} /></td>
                   <td className="num"><DeltaCell delta={r.delta_php} base={r.nep_php} /></td>
+                  <td className="num senate-col-senate"><SenateCell k={key} id={r.id} v={senateBy?.get(r.id)} loading={!senateBy} /></td>
                   <td><PageLinks row={r} dataset={dataset} docs={docs} /></td>
                 </tr>
               );

@@ -28,6 +28,7 @@
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
     "build:senate-cr": "bash scripts/senate-cr/run.sh",
+    "upload:senate": "tsx scripts/upload-hgab-to-r2.ts --out=data/senate/2027 --prefix=senate/2027/ --skip-verify",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
     "build:hgab-documents": "tsx scripts/build-hgab-documents.ts",
