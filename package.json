@@ -27,6 +27,7 @@
     "build:hgab-not-ignorant": "tsx scripts/build-hgab-not-ignorant.ts",
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",
+    "build:senate-cr": "bash scripts/senate-cr/run.sh",
     "build:hgab-history": "tsx scripts/build-hgab-history.ts",
     "build:hgab-fap": "tsx scripts/build-hgab-fap.ts",
     "build:hgab-documents": "tsx scripts/build-hgab-documents.ts",

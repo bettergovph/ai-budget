@@ -1,0 +1,120 @@
+# Senate Committee Report on HB 10858 (FY2027): parsed and mapped to the House bill
+
+The Senate Committee on Finance's report on the FY2027 General Appropriations Bill (HB 10858) is the
+budget's next stage after the House bill. It comes as born-digital PDFs (the files in
+"Senate CR 2027.zip", from Jason, 2026-11-20; prepared by LBRMO 2026-11-19), so it is parsed
+from the text layer with word positions (pdfplumber). It is not OCR'd or read by an LLM. Every amount is
+checked against a printed total.
+
+`npm run build:senate-cr` runs `scripts/senate-cr/run.sh` (about 2 minutes). The outputs go to
+`data/senate-cr/2027/`. That is not under `data/hgab/2027`, so `upload:hgab` does not publish them.
+
+The outputs are not committed: `data/` is gitignored, and they rebuild exactly from the PDFs. The PDFs aren't
+committed either. A copy sits in `data/senate-cr/2027/pdf/` with `SHA256SUMS`, and these are the checksums of
+the inputs this pipeline was built and checked against:
+
+```
+7345416b34d94c36b3696059f1907ddc3d2e64cc4904b484613a30c5b75e53bd  General Summary of Committee Report No. __ on House Bill No. 10858 (FY 2027 GAB).pdf
+77065842846fe14f2942464d8ba6ddca9b13200445dfe4ecf483fafeb4a7abb8  Annex A - Line By Line Amendments (1).pdf
+176ff3411000942d858d9e4850a965cf1d7cafb85e9137d7d1b74d17c80484e8  Annex A-1 DA Farm-to-Market Roads.pdf
+87ff59ac9f0fbd8ec541252370918bc45080b9977d0ca2261bb745229ef5e5dd  Annex A-2 DOH Health Facilities Enhancement Program (HFEP).pdf
+587dcd6b83f32c172b88cbaaab601e69f628c46e136faad0347730cf16895824  Annex A-3 BSGC-OEOs-NIA-Details of NIA's Operations Budget.pdf
+8b849fd8661d142ae9b35d35238e8d3d76d688f279ee4fbca9f1a90e90750194  Annex A-4 Details of DPWH's Programs-Projects (FY 2027 General Appropriations Bill Volume I-C).pdf
+e845de4fdaf729053580eb80b72fe8c7c62c0134f1d7fe9e295eb9f5071541e4  Annex A-5 Details of BSGC-DOT-TIEZA and TPB.pdf
+e562247978059abbce55aefb6c2133a10c569522f5fdb3103465776782e51719  Annex B - Amendments to the Special and General Provisions.pdf
+```
+
+## What the report contains
+
+| File | What it is | Parser | Output |
+|---|---|---|---|
+| General Summary (8 pp.) | House bill vs committee report by department and agency, thousand pesos | `parse_summary.py` | `general_summary.json` |
+| Annex A (167 pp.) | Line-by-line amendments to Vol I-A and I-B. Each row cites the House bill page and line. | `parse_annex_a.py`, `map_annex_a.py` | `annex_a.json`, `annex_a_mapped.csv` |
+| Annex A-1 (148 pp.) | DA farm-to-market roads: House description, committee-report description, five amounts | `parse_two_col.py fmr`, `map_projects.py` | `annex_a1_fmr*.{json,csv}` |
+| Annex A-2 (5 pp.) | DOH HFEP: the committee's changes by facility (infrastructure, equipment, vehicles) | `parse_hfep.py`, `map_hfep.py` | `annex_a2_hfep*.{json,csv}` |
+| Annex A-3 (107 pp.) | NIA projects, same layout as A-1, plus A-3B (the watershed list, not parsed) | `parse_two_col.py nia`, `map_projects.py` | `annex_a3_nia*.{json,csv}` |
+| Annex A-4 (210 pp.) | DPWH projects (Vol I-C) the Senate changed or renamed: House name, "Revised Project Name", five amounts in pesos | `parse_annex_a4.py`, `map_annex_a4.py` | `annex_a4*.{json,csv}` |
+| Annex A-5 (3 pp.) | TIEZA (₱5M, Pink Mosque) and TPB (₱15M) inserted under BSGC | not parsed; already in Annex A's BSGC rows | |
+| Annex B (120 pp.) | Amendments to special and general provisions, by House volume, page and line | `parse_annex_b.py` | `annex_b.json` (186 amendments) |
+
+The deliverable for the four programs is `{dpwh,fmr,nia,hfep}_senate.csv`. It has one row per House bill
+project in `data/hgab/2027/<program>/projects.parquet`, keyed by our `id`, plus one row per Senate
+insertion. Its columns are `status` (unchanged / renamed / cut / reduced / raised / added), `hb_php`,
+`senate_php`, `hb_title`, `senate_title`, `replaces_id` and `match`. `programs_summary.json` holds the
+totals and counts.
+
+## Results (all reconcile to the peso with the report's printed totals)
+
+- **Whole bill:** programmed appropriations stay at ₱4,494,082,001 thousand, with ₱204.63B moved between
+  lines (departments −₱28.55B, special purpose funds +₱28.55B). Unprogrammed falls by ₱812.8M, and the
+  total is ₱4,605,253,699 thousand.
+- **DPWH:** ₱654.10B → ₱587.90B. Projects go from ₱587,075,661,000 to ₱520,876,384,250.
+  - 3,479 projects are cut to zero (−₱99.30B). No project is cut partway.
+  - 13 foreign-assisted projects are raised (+₱33.10B).
+  - 5,182 are renamed with the same amount (the Senate adds stations, coordinates and corrected names).
+  - 7,597 are not listed, so they are unchanged.
+- **FMR:** ₱19.63B → ₱16.00B.
+  - 577 House roads are cut and 406 Senate roads added.
+  - 142 of the 406 revise a cut road: the Senate cuts a row and re-adds it with new coordinates or a
+    corrected name. `replaces_id` links the two.
+  - 122 are renamed in place.
+- **NIA:** ₱18.00B → ₱17.75B. 660 are renamed in place (the Senate's description adds stations and
+  coordinates), 148 cut and 112 added.
+- **HFEP:** ₱10.02B → ₱15.51B. Annex A-2 is the net +₱5,491,400,000.
+  - 23 facility components add to a House row; 2 more match after a spelling difference.
+  - 164 are facilities the House bill does not fund.
+  - Dr. Jose N. Rodriguez Memorial Hospital is cut by ₱100M.
+- **Annex A:** 3,172 amount rows.
+  - 1,665 match a House bill node peso for peso, at the cited page and line or a few lines off.
+  - 47 add an expense class to an existing House line, 949 are Senate insertions and 177 are subtotals.
+  - 19 are in Unprogrammed Appropriations or the DOE corporations' budgets, which our House tables don't
+    parse.
+  - 20 are unmatched and 8 cite a House amount that differs from the bill (typos in the Senate copy, listed
+    in the CSV).
+
+## How the matching works
+
+- **Annex A → House tables:** a row cites the volume, the printed page (printed only when it changes, so
+  it carries forward) and the line. It matches the House node (`data/hgab-lines/2027/tables-vol*.json`) at
+  that place whose amount for the same column (PS/MOOE/CO/FinEx/Total, a fund line, or an object of
+  expenditure) equals the cited House amount. `hb_doc` + `hb_pdf_page` + `hb_node_line` + `exp_cd` is the
+  explorer's key for that line.
+  - **Fallbacks, used only when the amount is equal:** the page either side (the Senate copy sometimes
+    forgets a page change, e.g. BFAR objects on p. 166 cited as 165), and up to 4 lines off. The House
+    bill prints DPWH activities twice, as sub-program and activity, and our parser keeps the first.
+- **Annex A-4 → DPWH projects:** the House name plus the House amount is the key (8,682 exact).
+  - Then fuzzy names with the same office, and one name being the start of the other. Our House titles
+    sometimes carry coordinates or the next printed line on the end.
+  - Then a large amount that only one row prints. A title on the last page is drawn twice over itself and
+    reads as garbage.
+  - All 8,713 Senate rows match. `house_row_split`: our row "Construction of Multi-Purpose Building,
+    Poblacion West, Taysan, Batangas" (₱25M) is two printed lines in the House PDF, ₱15M and ₱10M
+    ("Barangay Poblacion West"). **This is an error in our House data, from the upstream workbench.**
+- **A-1 / A-3 → FMR / NIA:** name and amount, one-to-one, region first. Every House row matches (964/964 and
+  828/828).
+  - **Revision links (FMR):** a Senate insertion is linked to the nearest cut row above it in the same
+    region that names the same municipality and whose site words are ≥ 80 similar. "Site words" are the
+    places and features before the municipality, not "Construction of Brgy … FMR".
+  - A looser rule linked different barangays in one town, so it is not used.
+- **A-2 → HFEP:** the same facility name and component, or a similar name with the same kind of facility
+  (hospital / RHU / health center) in the same region.
+
+## Source quirks (in the Senate copy, not our parse)
+
+- A few rows don't add up as printed:
+  - "REPAIRS AND MAINTENANCE 23,683" (NMIS) prints no committee-report amount.
+  - The DSWD Northern Mindanao centre is re-inserted with only a committee-report amount.
+  - Two SUC "Supplies and Materials" rows print the amount on the line above.
+- FMR region headings count gross increases and decreases; project rows print only the net, so the
+  headings' increase and decrease columns don't sum. The House and Senate amounts do, region by region.
+- NIA prints a big project as an activity (its name, then region headings). MARIIS and UPRIIS sit at
+  region level.
+
+## Not done yet
+
+- Not in the site, the API or D1. The next step is adding a Senate column to the explorer and the four
+  program pages.
+- Unprogrammed Appropriations and DOE corporations: Annex A rows are parsed, but our House tables don't
+  hold those sections.
+- Annex A-3B (the NIA watershed list) and Annex A-5 (TIEZA/TPB pages) are not parsed into rows.
+- Annex B is text only, keyed to House page and line; we don't hold parsed House provisions to diff against.
