@@ -1,15 +1,15 @@
 /**
  * The project reviewer's filter bar (`/hgab/2027/review`), shared with the Senate committee report's DPWH projects
  * (`/senate/2027/dpwh?view=projects`): "Start from" presets, red flags, the team's questions, documents, review status,
- * region, DPWH office, budget and a search, each a funnel step (src/lib/hgab-review.ts). Moved here unchanged from
- * HgabReview.tsx; `extra` adds a page's own filters before the search.
+ * region, DPWH office, budget and a search, each a funnel step (src/lib/hgab-review.ts); and the funnel strip, what
+ * each step keeps. Moved here unchanged from HgabReview.tsx; `extra` adds a page's own filters before the search.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { FlagFamily, ReviewIndex } from '../lib/hgab-documents';
+import type { FlagFamily, ReviewIndex, ReviewIndexFlag } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LIST_STATUSES, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PRESETS,
   SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, checkedValues, countBy, flagYields, foldText, isReviewed, pesoShort,
-  projectsWithout, readerText, setSingle, setValues, stepTest, toggleFlag,
+  projectsWithout, readerText, runFunnel, setSingle, setValues, stepLabel, stepTest, toggleFlag,
   type ListStatus, type MultiKind, type ReviewProject, type Step, type StepContext,
 } from '../lib/hgab-review';
 import { MAPPING_STATUS, QUESTIONS, REGISTRY } from '../lib/hgab-redflags-team';
@@ -17,6 +17,7 @@ import '../hgab-review.css';
 
 const n = (v: number) => v.toLocaleString('en-US');
 const shortOffice = (name: string) => name.replace(/\bDistrict Engineering Office\b/i, 'DEO');
+const TEAM_TITLES: ReadonlyMap<string, string> = new Map(QUESTIONS.map((q) => [q.id, q.title]));
 
 
 /** A filter button in the bar that opens a panel of checkboxes; closes on Escape or a click outside. */
@@ -289,5 +290,41 @@ export function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSte
 
       {steps.length > 0 && <button type="button" className="rv-clear" onClick={() => { setQ(''); onSteps(() => []); }}>Clear all</button>}
     </div>
+  );
+}
+
+/** The funnel: every step with how many projects (and how much budget) it keeps; a step can be flipped or removed. */
+export function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
+  levels: ReturnType<typeof runFunnel>;
+  flags: readonly ReviewIndexFlag[];
+  offices: ReviewIndex['offices'];
+  onRemove: (i: number) => void;
+  onFlip: (i: number) => void;
+}) {
+  const total = levels[0].projects.length || 1;
+  return (
+    <ol className="rv-strip" aria-label="Red-flag funnel">
+      {levels.map((L, i) => {
+        const prev = i ? levels[i - 1].projects.length : null;
+        const label = L.step ? stepLabel(L.step, flags, offices, TEAM_TITLES) : 'All DPWH projects';
+        return (
+          <li key={i} className={`rv-stage ${i === levels.length - 1 ? 'is-last' : ''}`}>
+            <div className="rv-stage-head">
+              <span className="rv-stage-label" title={label}>{label}</span>
+              {L.step?.kind === 'flag' && (
+                <button type="button" className="rv-stage-btn" onClick={() => onFlip(i - 1)}
+                  title={L.step.not ? 'Keep these instead' : 'Leave these out instead'} aria-label={L.step.not ? `Keep: ${label}` : `Leave out: ${label}`}>⇄</button>
+              )}
+              {L.step && <button type="button" className="rv-stage-btn" onClick={() => onRemove(i - 1)} aria-label={`Remove: ${label}`} title="Remove this step">×</button>}
+            </div>
+            <div className="rv-stage-bar" aria-hidden="true"><span style={{ width: `${Math.max((L.projects.length / total) * 100, L.projects.length ? 0.8 : 0)}%` }} /></div>
+            <div className="rv-stage-figs">
+              <span><b>{n(L.projects.length)}</b> · {pesoShort(L.amount)}</span>
+              {prev != null && prev !== L.projects.length && <em>−{n(prev - L.projects.length)}</em>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }

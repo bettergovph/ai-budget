@@ -36,3 +36,22 @@
 .senate-moved { color: #3a2350; font-weight: 700; }
 /* Five figures in a row (NEP, House bill, Senate, vs House bill, vs NEP); phones fall back to two columns. */
 .senate-kpi5 .kpi-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* DPWH projects with the reviewer's filters (SenateDpwhProjects.tsx): the reviewer's bar, in the page's column. */
+.senate-rv-bar { margin: 4px 0 14px; }
+.senate-rv-bar .rv-filters { flex-wrap: wrap; row-gap: 8px; padding: 0; border: 0; background: none; position: static; }
+.senate-rv-bar .rv-strip { margin-top: 10px; padding: 8px 0; overflow-x: auto; }
+.senate-list-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 6px 0 8px; }
+.senate-list-head .nep-table-count { flex: 1 1 420px; margin: 0; }
+.senate-sort { font-size: 0.85rem; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.senate-sort select { padding: 4px 6px; }
+.senate-proj-table .hgab-ex-name { min-width: 320px; max-width: 520px; white-space: normal; }
+.senate-rename-to { display: block; font-size: 0.8rem; color: #3a2350; margin-top: 2px; }
+.senate-flags { display: inline-block; margin-top: 4px; font-size: 0.72rem; padding: 1px 6px; border-radius: 3px; background: #fbeaea; color: var(--negative); font-weight: 600; }
+.senate-review-cell { white-space: nowrap; font-size: 0.82rem; }
+.senate-review-cell > * { display: block; }
+.senate-review-btn { display: inline-block !important; margin: 4px 0 2px; padding: 3px 10px; border-radius: 4px; background: var(--accent, #0b4cc2); color: #fff !important; font-weight: 600; text-decoration: none; }
+.senate-review-btn:hover { filter: brightness(1.1); }
+.senate-pager button.is-on { font-weight: 700; text-decoration: underline; }
+.senate-pager { flex-wrap: wrap; }
+.senate-shared { color: #3a2350; font-weight: 700; margin-left: 2px; cursor: help; }

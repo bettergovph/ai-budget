@@ -20,19 +20,19 @@ import { cached, getJson, HGAB_ROOT, pdfUrl, recordPath } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import {
   NAMED_TYPES, REVIEW_INDEX_PATH, detailShardPath, type DetailFile, type ReviewDetail, type ReviewDetailShard,
-  type ReviewIndex, type ReviewIndexFlag,
+  type ReviewIndex,
 } from '../lib/hgab-documents';
 import {
   DETAIL_NOTE_TEXT as NOTE_TEXT, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
   DEFAULT_SORT, INSERTION_FLAG, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, decodeIndex, docCount, isReviewed, listStatus, pageCount, pageOf, pageWindow, projectVerdict,
-  hasDoc, pesoFull, pesoShort, readerText, runFunnel, sortProjects, stepLabel, stepToParam, stepsFromSearch, type ListStatus, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatusIndex, type SortKey, type Step, type VerdictCounts,
+  hasDoc, pesoFull, pesoShort, readerText, runFunnel, sortProjects, stepToParam, stepsFromSearch, type ListStatus, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatusIndex, type SortKey, type Step, type VerdictCounts,
 } from '../lib/hgab-review';
 import {
   BUDGET_SOURCE_VERSION, QUESTIONS, REGISTRY, RETIRED_STORES, VERDICT_LABEL, caseTouched, classifyProject,
   detectorsForQuestion, newCaseReview, newId, type CaseReview, type Reviewer, type Verdict,
 } from '../lib/hgab-redflags-team';
 import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
-import { FilterBar } from '../components/ReviewFilterBar';
+import { FilterBar, FunnelStrip } from '../components/ReviewFilterBar';
 import MemberProvider from '../components/HgabReviewMember';
 import { downloadReviews } from '../lib/hgab-review-export';
 import {
@@ -233,44 +233,8 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
   );
 }
 
-const TEAM_TITLES: ReadonlyMap<string, string> = new Map(QUESTIONS.map((q) => [q.id, q.title]));
 
 /** The funnel, left to right: every project, then what each step keeps. */
-function FunnelStrip({ levels, flags, offices, onRemove, onFlip }: {
-  levels: ReturnType<typeof runFunnel>;
-  flags: readonly ReviewIndexFlag[];
-  offices: ReviewIndex['offices'];
-  onRemove: (i: number) => void;
-  onFlip: (i: number) => void;
-}) {
-  const total = levels[0].projects.length || 1;
-  return (
-    <ol className="rv-strip" aria-label="Red-flag funnel">
-      {levels.map((L, i) => {
-        const prev = i ? levels[i - 1].projects.length : null;
-        const label = L.step ? stepLabel(L.step, flags, offices, TEAM_TITLES) : 'All DPWH projects';
-        return (
-          <li key={i} className={`rv-stage ${i === levels.length - 1 ? 'is-last' : ''}`}>
-            <div className="rv-stage-head">
-              <span className="rv-stage-label" title={label}>{label}</span>
-              {L.step?.kind === 'flag' && (
-                <button type="button" className="rv-stage-btn" onClick={() => onFlip(i - 1)}
-                  title={L.step.not ? 'Keep these instead' : 'Leave these out instead'} aria-label={L.step.not ? `Keep: ${label}` : `Leave out: ${label}`}>⇄</button>
-              )}
-              {L.step && <button type="button" className="rv-stage-btn" onClick={() => onRemove(i - 1)} aria-label={`Remove: ${label}`} title="Remove this step">×</button>}
-            </div>
-            <div className="rv-stage-bar" aria-hidden="true"><span style={{ width: `${Math.max((L.projects.length / total) * 100, L.projects.length ? 0.8 : 0)}%` }} /></div>
-            <div className="rv-stage-figs">
-              <span><b>{n(L.projects.length)}</b> · {pesoShort(L.amount)}</span>
-              {prev != null && prev !== L.projects.length && <em>−{n(prev - L.projects.length)}</em>}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 // --- Project list -----------------------------------------------------------------------------------------------
 
 function DocDots({ mask }: { mask: number }) {

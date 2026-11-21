@@ -14,6 +14,7 @@ import {
 import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import { pdfUrl, recordPath } from '../lib/hgab';
+import { REVIEW_ROOT } from '../lib/hgab-review';
 import { sqlStr } from '../lib/hgab-query';
 import {
   PROGRAM_SHORT, SENATE_STATUS, changeKpi, coerceSenateProject as coerce, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl, senateRecordPath, type SenateProject,
@@ -93,6 +94,9 @@ export default function SenateRecord() {
             <a href={pdfUrl(r.house_doc, r.house_page)} target="_blank" rel="noreferrer">The House bill page →</a>
           )}
           {r.house_id && <Link to={recordPath(key, r.house_id)}>This project in the House bill, with its documents →</Link>}
+          {key === 'dpwh' && r.house_id && (
+            <Link className="senate-review-btn" to={`${REVIEW_ROOT}?p=${encodeURIComponent(r.house_id)}`}>Review this project →</Link>
+          )}
         </p>
         {cur.replaced && (
           <p className="hgab-ex-gap">

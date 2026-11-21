@@ -15,6 +15,7 @@ import { KpiStrip, SkeletonRows } from '../components/Nep2027Bits';
 import {
   SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenateReviewBanner, SenateStatusChip, SignedChange,
 } from '../components/SenateBits';
+import SenateDpwhProjects from '../components/SenateDpwhProjects';
 import { runQuery } from '../lib/duckdb';
 import { downloadCsv } from '../lib/csv';
 import * as fmt from '../lib/format';
@@ -93,7 +94,7 @@ export default function SenateProgram() {
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner compact />
         {view === 'overview' && <OverviewView k={key} sum={sum} />}
-        {view === 'projects' && <ProjectsView k={key} />}
+        {view === 'projects' && (key === 'dpwh' ? <SenateDpwhProjects /> : <ProjectsView k={key} />)}
         {view === 'changes' && <ChangesView k={key} sum={sum} />}
         <p className="nep-provenance">
           From the Senate committee report's <a href={senatePdfUrl(sum.senate_doc)} target="_blank" rel="noreferrer">annex for this program</a>,
