@@ -55,3 +55,8 @@
 .senate-pager button.is-on { font-weight: 700; text-decoration: underline; }
 .senate-pager { flex-wrap: wrap; }
 .senate-shared { color: #3a2350; font-weight: 700; margin-left: 2px; cursor: help; }
+/* The Senate project page (SenateRecord.tsx) uses the House project page's cards (hgab-dataset.css). */
+.hgab-rec-card.is-senate { border-top-color: #3a2350; }
+.hgab-rec-card-amt.is-second { margin-top: 10px; font-size: 1.35rem; }
+.senate-rec-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 16px 0 24px; }
+.hgab-rec-head + .hgab-review { margin-top: 14px; }
