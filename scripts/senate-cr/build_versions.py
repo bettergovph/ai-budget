@@ -19,6 +19,10 @@ import sys
 
 import duckdb
 
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
+from pairs import rename_pairs  # noqa: E402
+from regions import canon_region  # noqa: E402
+
 # Printed committee-report totals of the four annexes (pesos), and the House totals they start from.
 EXPECT = {
     "dpwh": (587_075_661_000, 520_876_384_250),   # Annex A-4, "OPERATIONS" (the projects; GAS/STO are in Annex A)
@@ -96,6 +100,23 @@ def main(src, hgab, out):
                 x["senate_pdf_page"], x["match"] = parts[0]["senate_pdf_page"], "house_row_split"
         for x in rows.values():
             x["status"] = status(x["hb_php"], x["senate_php"], x.pop("_renamed", False))
+        if prog in ("fmr", "nia"):
+            # The annex prints a corrected House project as a removal plus an insertion: pair them back, so the
+            # project reads as renamed (or raised / reduced) under the Senate's name, not removed and inserted.
+            removed = [x for x in rows.values() if x["status"] == "cut"]
+            at = {x["id"]: j for j, x in enumerate(removed)}
+            pairs = rename_pairs(extra, removed, region=lambda r: canon_region(r["region"]),
+                                 title_a=lambda r: r["senate_title"], title_b=lambda r: r["hb_title"],
+                                 amount_a=lambda r: r["senate_php"], amount_b=lambda r: r["hb_php"],
+                                 linked=lambda i: at.get(extra[i]["replaces_id"]))
+            for i, j, sc in pairs:
+                e, x = extra[i], removed[j]
+                x.update(senate_php=e["senate_php"], senate_title=e["senate_title"], senate_pdf_page=e["senate_pdf_page"],
+                         match="rename_pair")
+                x["status"] = status(x["hb_php"], x["senate_php"], True)
+            gone = {i for i, _, _ in pairs}
+            extra = [e for i, e in enumerate(extra) if i not in gone]
+            print(f"  {prog}: {len(pairs)} insertions paired with the removed House project they rename", file=sys.stderr)
         for x in extra:
             x["status"] = "added"
         allrows = list(rows.values()) + extra
