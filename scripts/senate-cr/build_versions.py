@@ -78,6 +78,10 @@ def main(src, hgab, out):
                     # garbage; the House name stands (the report doesn't rename it legibly).
                     x["senate_title"] = x["hb_title"] if r["match"] == "amount_unique" else (r["senate_title"] or x["hb_title"])
                     x["senate_pdf_page"], x["match"] = r["senate_pdf_page"], r["match"]
+                    # NIA's House rows carry no region (the House bill lists them by sub-program); the annex prints
+                    # each under its region.
+                    if not x["region"] and r.get("region"):
+                        x["region"] = r["region"]
                     x["_renamed"] = r.get("renamed") == "1" and r["match"] != "amount_unique"
                 elif r["match"] in ("new",) or not int(r.get("hb_php") or 0):
                     extra.append({"id": "", "hb_title": "", "region": r.get("region", ""), "office": r.get("office", "") or r.get("province", ""),

@@ -162,6 +162,15 @@ Totals count each Senate row once; rows that share one Senate row (one House row
 The FMR, HFEP and NIA lists use the same filter style (Senate status and Region menus with counts), with no
 reviewer link: the reviewer covers DPWH only.
 
+**Regions** (`regions.py`, Jason 2026-11-21: "why are so many regions with 0 numbers"): every project's region is
+put in one form ("Region I", "Region IV-A", "MIMAROPA", "CAR", "NCR", "NIR", "BARMM"), as the DPWH data spells
+them. Before, one region showed as two or three rows: FMR's NEP-only rows say "Region I - ILOCOS" where its House
+rows say "REGION I - ILOCOS"; the NIA annex says "REGION 1", "REGION 4A" and "REGION IV-A"; HFEP's additions say
+"Cordillera Administrative Region (CAR)" for the House rows' "CAR". The House bill's NIA rows have no region (it
+lists them by sub-program), so they take the region the annex prints them under; rows the annex doesn't list take
+their irrigation system's region when all its listed rows share one. 30 NIA rows (₱100M in the House bill, ₱1.24B
+NEP) are left "Not recorded". The annex's MARIIS and UPRIIS headings count under Region II and Region III.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.

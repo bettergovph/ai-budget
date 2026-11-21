@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 
 import duckdb
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from regions import canon_region  # noqa: E402
+
 PDFS = [  # key, title, file name prefix in the report's zip
     ("senate-cr-general-summary", "General Summary", "General Summary"),
     ("senate-cr-annex-a", "Annex A: Line-by-line amendments", "Annex A - Line"),
@@ -161,6 +164,23 @@ def main(src, hgab, out):
                 "senate_doc": PROGRAM_PDF[key], "senate_page": None,
                 "search_text": " ".join(x for x in (r[1], r[2], r[3], r[4], r[5]) if x).lower(),
             })
+        for x in recs:
+            x["region"] = canon_region(x["region"])
+        if key == "nia":
+            # NIA rows the annex doesn't list (unchanged, NEP only) have no region: take their irrigation system's
+            # ("San Ramon RIS: Concreting of ..."), when every listed row of that system is in one region.
+            system = lambda t: (t or "").split(":")[0].strip().lower()
+            seen = defaultdict(set)
+            for x in recs:
+                if x["region"]:
+                    seen[system(x["hb_title"] or x["title"])].add(x["region"])
+            for x in recs:
+                if not x["region"]:
+                    regs = seen.get(system(x["hb_title"] or x["title"]))
+                    if regs and len(regs) == 1:
+                        x["region"] = next(iter(regs))
+        for x in recs:
+            x["search_text"] = " ".join(v for v in (x["search_text"], (x["region"] or "").lower()) if v)
         con.execute("create or replace temp table t as select * from read_json_auto(?)", [_tmp_json(out, key, recs)])
         con.execute(f"""copy (select id, house_id, status, title, hb_title, renamed, region, office, program, pap,
                                nep_php::bigint nep_php, house_php::bigint house_php, senate_php::bigint senate_php,
