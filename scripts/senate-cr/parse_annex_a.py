@@ -122,7 +122,11 @@ def main(pdf_path, out_path):
             top, pref, lref, tw, amts = lines[i]
             if amts and not tw and pref is None and lref is None and i + 1 < len(lines):
                 ntop, npref, nlref, ntw, namts = lines[i + 1]
-                if ntw and ntop - top < 12 and not (set(amts) & set(namts)):
+                both = {**namts, **amts}
+                # ... unless they don't add up with the label's own House amount: then they are a line of their own
+                # (SUCs, p. 42-43: an unnamed object, +1,000, printed above "Supplies and Materials Expenses 14,969").
+                adds = not ("gab" in namts and "net" in both and "sv" in both) or namts["gab"] + both["net"] == both["sv"]
+                if ntw and ntop - top < 12 and not (set(amts) & set(namts)) and adds:
                     lines[i + 1] = (ntop, npref, nlref, ntw, {**namts, **amts})
                     i += 1
                     continue
