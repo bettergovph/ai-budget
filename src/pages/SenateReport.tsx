@@ -25,7 +25,7 @@ interface Line { department: string; agency: string | null; item: string | null;
 interface StatusSum { n: number; house: number | null; senate: number | null; change: number | null }
 interface Program {
   house: number; senate: number; nep: number;
-  status: Partial<Record<'cut' | 'reduced' | 'raised' | 'added' | 'renamed' | 'unchanged', StatusSum>>;
+  status: Partial<Record<'cut' | 'reduced' | 'raised' | 'added' | 'restored' | 'renamed' | 'unchanged', StatusSum>>;
   replaces: number;
   house_inserted: { n: number; house: number; removed_n: number; removed: number };
   nep_proposed: { n: number; house: number; removed_n: number; removed: number };
@@ -412,6 +412,7 @@ function ProgramsPage({ r }: { r: Report }) {
               <tr>
                 <th scope="col">Program</th><th scope="col" className="num">NEP</th><th scope="col" className="num">House bill</th><th scope="col" className="num">Senate</th>
                 <th scope="col" className="num">Change</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Inserted by the Senate</th>
+                <th scope="col" className="num">Restored from the NEP</th>
               </tr>
             </thead>
             <tbody>
@@ -424,6 +425,7 @@ function ProgramsPage({ r }: { r: Report }) {
                     <td className="num"><Chg v={p.senate - p.house} base={p.house} /></td>
                     <td className="num">{p.status.cut ? <Link to={senateListPath(k, 'status', 'cut')}>{n(p.status.cut.n)}</Link> : '—'}{p.status.cut && <small> · {php(p.status.cut.house)}</small>}</td>
                     <td className="num">{p.status.added ? <Link to={senateListPath(k, 'status', 'added')}>{n(p.status.added.n)}</Link> : '—'}{p.status.added && <small> · {php(p.status.added.senate)}</small>}</td>
+                    <td className="num">{p.status.restored ? <Link to={senateListPath(k, 'status', 'restored')}>{n(p.status.restored.n)}</Link> : '—'}{p.status.restored && <small> · {php(p.status.restored.senate)}</small>}</td>
                   </tr>
                 );
               })}
@@ -433,15 +435,19 @@ function ProgramsPage({ r }: { r: Report }) {
         <ul className="sr-findings">
           <Finding head={`Farm-to-market roads: ${php(fmr.house)} to ${php(fmr.senate)}.`}>
             The Senate removes {n(fmr.status.cut?.n ?? 0)} roads ({php(fmr.status.cut?.house ?? 0)}), {n(fmr.house_inserted.removed_n)} of the {n(fmr.house_inserted.n)} House insertions
-            among them, and inserts {n(fmr.status.added?.n ?? 0)} of its own ({php(fmr.status.added?.senate ?? 0)}); {n(fmr.replaces)} of those revise a removed road (a corrected name or new coordinates).
+            among them; inserts {n(fmr.status.added?.n ?? 0)} of its own ({php(fmr.status.added?.senate ?? 0)}) and restores {n(fmr.status.restored?.n ?? 0)} NEP roads the House
+            dropped ({php(fmr.status.restored?.senate ?? 0)}). {n(fmr.status.renamed?.n ?? 0)} House roads keep their budget under a revised name; many of them the annex prints as
+            removed and inserted again, and we read them as one project.
           </Finding>
           <Finding head={`Irrigation (NIA): ${php(nia.house)} to ${php(nia.senate)}.`}>
             {n(nia.status.cut?.n ?? 0)} projects removed ({php(nia.status.cut?.house ?? 0)}), {n(nia.house_inserted.removed_n)} of the {n(nia.house_inserted.n)} House insertions among them;
-            {' '}{n(nia.status.added?.n ?? 0)} inserted by the Senate ({php(nia.status.added?.senate ?? 0)}) and {n(nia.status.raised?.n ?? 0)} raised. {n(nia.status.renamed?.n ?? 0)} keep their amount under a revised name.
+            {' '}{n(nia.status.added?.n ?? 0)} inserted by the Senate ({php(nia.status.added?.senate ?? 0)}), {n(nia.status.restored?.n ?? 0)} restored from the NEP
+            ({php(nia.status.restored?.senate ?? 0)}) and {n(nia.status.raised?.n ?? 0)} raised. {n(nia.status.renamed?.n ?? 0)} keep their amount under a revised name.
           </Finding>
           <Finding head={`Health facilities (HFEP): ${php(hf.house)} to ${php(hf.senate)}.`}>
-            The Senate adds {r.hfep_kinds.map((k) => `${php(k.change)} for ${k.kind.toLowerCase().replace(/vehicle$/, 'vehicles')}`).join(', ')}: {n(hf.status.added?.n ?? 0)} facilities
-            inserted and {n(hf.status.raised?.n ?? 0)} raised. It removes one.
+            The Senate adds {r.hfep_kinds.map((k) => `${php(k.change)} for ${k.kind.toLowerCase().replace(/vehicle$/, 'vehicles')}`).join(', ')}: {n(hf.status.added?.n ?? 0)} facility
+            components inserted (some for a facility whose other component the House bill funds), {n(hf.status.restored?.n ?? 0)} restored from the NEP and {n(hf.status.raised?.n ?? 0)} raised.
+            It removes one.
           </Finding>
         </ul>
       </section>
