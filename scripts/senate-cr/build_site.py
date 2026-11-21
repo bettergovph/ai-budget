@@ -131,8 +131,15 @@ def main(src, hgab, out):
     programs = []
     for key, label, agency in PROGRAMS:
         os.makedirs(f"{out}/{key}", exist_ok=True)
+        # The House bill page: the third reading's when recorded; for the one-list programs (FMR, NIA, HFEP) the House
+        # data reads the second-reading copy, whose pages the third-reading copy repeats (overview.json `same_pages`),
+        # so cite the third reading at the same page, as the House bill pages do.
+        same = next(((d.get("documents") or {}).get("same_pages") for d in json.load(open(f"{hgab}/overview.json")).get("datasets", []) if d.get("key") == key), None) or {}
         hb = {r[0]: r for r in con.execute(
-            f"select id, nep_php, hgab3_doc, hgab3_page, nep_doc, nep_page from '{hgab}/{key}/projects.parquet'").fetchall()}
+            f"""select id, nep_php,
+                       coalesce(hgab3_doc, case when hgab2_doc = ? then ? else hgab2_doc end) house_doc,
+                       coalesce(hgab3_page, hgab2_page) house_page, nep_doc, nep_page
+                from '{hgab}/{key}/projects.parquet'""", [same.get("extracted"), same.get("third")]).fetchall()}
         recs = []
         for i, r in enumerate(csv.DictReader(open(f"{src}/{key}_senate.csv"))):
             h = hb.get(r["id"]) if r["id"] else None
