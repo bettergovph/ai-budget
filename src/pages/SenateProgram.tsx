@@ -297,21 +297,21 @@ function ProjectsView({ k }: { k: DatasetKey }) {
             <div className="rv-dd-cols">
               <div className="rv-dd-group">
                 <h3>In the Senate committee report</h3>
-                {SENATE_STATUS_ORDER.filter((x) => facets?.status.get(x) || statuses.includes(x)).map((x) => (
+                {SENATE_STATUS_ORDER.filter((x) => x !== 'nep_only' || facets?.status.get(x) || statuses.includes(x)).map((x) => (
                   <Check key={x} checked={statuses.includes(x)} onChange={() => toggle('status', statuses, x)} label={SENATE_STATUS[x].label}
                     note={SENATE_STATUS[x].help} k={facets?.status.get(x) ?? 0} max={Math.max(1, facets?.statusBase ?? 1)} />
                 ))}
               </div>
               <div className="rv-dd-group">
                 <h3>In the House bill</h3>
-                <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted"
-                  note="Added by the House: no matching line in the NEP." k={facets?.ins.get('yes') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
-                <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted"
-                  note="In the NEP too, or added by the Senate." k={facets?.ins.get('no') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
+                <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted by the House"
+                  note="No matching line in the NEP." k={facets?.ins.get('yes') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
+                <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted by the House"
+                  note="In the NEP too, or inserted by the Senate." k={facets?.ins.get('no') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
               </div>
             </div>
             <PanelFoot>
-              <span>Projects with any checked change; both columns checked, projects must match each.</span>
+              <span>Projects with any checked change; with both columns checked, projects must match each.</span>
               {statuses.length + ins.length > 0 && <button type="button" onClick={() => set({ status: null, ins: null })}>Clear</button>}
             </PanelFoot>
           </Dropdown>

@@ -202,21 +202,21 @@ export default function SenateDpwhProjects() {
               <div className="rv-dd-cols">
                 <div className="rv-dd-group">
                   <h3>In the Senate committee report</h3>
-                  {SENATE_STATUS_ORDER.filter((v) => v !== 'nep_only' && (v !== 'added' || svCounts.get(v))).map((v) => (
+                  {SENATE_STATUS_ORDER.filter((v) => v !== 'nep_only').map((v) => (
                     <Check key={v} checked={sv.includes(v)} onChange={() => toggle('sv', sv, v)}
                       label={SENATE_STATUS[v].label} note={SENATE_STATUS[v].help} k={svCounts.get(v) ?? 0} max={Math.max(1, byIns.length)} />
                   ))}
                 </div>
                 <div className="rv-dd-group">
                   <h3>In the House bill</h3>
-                  <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted"
-                    note="Added by the House: no matching line in the NEP." k={insCounts.get('yes') ?? 0} max={Math.max(1, bySv.length)} />
-                  <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted"
+                  <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted by the House"
+                    note="No matching line in the NEP." k={insCounts.get('yes') ?? 0} max={Math.max(1, bySv.length)} />
+                  <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted by the House"
                     note="A line the NEP proposed too." k={insCounts.get('no') ?? 0} max={Math.max(1, bySv.length)} />
                 </div>
               </div>
               <PanelFoot>
-                <span>Projects with any checked change; both columns checked, projects must match each.</span>
+                <span>Projects with any checked change; with both columns checked, projects must match each.</span>
                 {sv.length + ins.length > 0 && <button type="button" onClick={() => update((p) => { p.delete('sv'); p.delete('ins'); p.delete('pg'); })}>Clear</button>}
               </PanelFoot>
             </Dropdown>
