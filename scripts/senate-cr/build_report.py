@@ -18,6 +18,29 @@ def i(v):
     return None if v is None or pd.isna(v) else int(v)
 
 
+REGION = re.compile(r"^(Region\b|National Capital Region|Cordillera|Negros Island|Bangsamoro|BARMM\b|Nationwide|CENTRAL OFFICE)", re.I)
+
+def amendment_name(r):
+    """What the row changes, as on the department pages: the House bill's name for its activity, else the report's
+    heading (its wrapped lines joined) up to the region; in unprogrammed appropriations, the lettered purpose."""
+    if isinstance(r.house_bill_path, str) and r.house_bill_path:
+        parts = r.house_bill_path.split(" > ")
+        at = next((n for n, x in enumerate(parts) if REGION.match(x.strip())), len(parts))
+        name = parts[max(0, at - 1)].strip()
+        # A loan-assisted project's funding line: say which ("GOP Counterpart", "Loan Proceeds").
+        if parts[-1].strip().lower() in ("gop counterpart", "loan proceeds") and name.lower() != parts[-1].strip().lower():
+            prev = next((x for x in reversed(parts[:-1]) if not REGION.match(x.strip()) and x.strip().lower() != "central office"), name)
+            return f"{prev.strip()} ({parts[-1].strip()})"
+        return name
+    heading = r.printed_heading if isinstance(r.printed_heading, str) else ""
+    parts = [x.strip() for x in heading.strip("[] ").split(" / ") if x.strip()]
+    lettered = next((n for n, x in enumerate(parts) if re.match(r"^[A-Z]{1,2}\.\s", x)), None)
+    if lettered is not None:
+        parts = parts[lettered:]
+    at = next((n for n, x in enumerate(parts) if REGION.match(x)), len(parts))
+    return " ".join(parts[:at]).strip("[] ") or r.label
+
+
 def main(site, hgab):
     d = f"{site}/downloads"
     p = pd.read_parquet(f"{d}/senate-2027-projects.parquet")
@@ -51,29 +74,8 @@ def main(site, hgab):
     c = c.drop_duplicates(["department_id", "agency", "net_php", "senate_php", "senate_page"])
     c["abs"] = c.net_php.abs()
 
-    region = re.compile(r"^(Region\b|National Capital Region|Cordillera|Negros Island|Bangsamoro|BARMM\b|Nationwide|CENTRAL OFFICE)", re.I)
-
-    def name_of(r):
-        """What the row changes, as on the department pages: the House bill's name for its activity, else the report's
-        heading (its wrapped lines joined) up to the region; in unprogrammed appropriations, the lettered purpose."""
-        if isinstance(r.house_bill_path, str) and r.house_bill_path:
-            parts = r.house_bill_path.split(" > ")
-            at = next((n for n, x in enumerate(parts) if region.match(x.strip())), len(parts))
-            name = parts[max(0, at - 1)].strip()
-            # A loan-assisted project's funding line: say which ("GOP Counterpart", "Loan Proceeds").
-            if parts[-1].strip().lower() in ("gop counterpart", "loan proceeds") and name.lower() != parts[-1].strip().lower():
-                prev = next((x for x in reversed(parts[:-1]) if not region.match(x.strip()) and x.strip().lower() != "central office"), name)
-                return f"{prev.strip()} ({parts[-1].strip()})"
-            return name
-        parts = [x.strip() for x in (r.printed_heading or "").strip("[] ").split(" / ") if x.strip()]
-        lettered = next((n for n, x in enumerate(parts) if re.match(r"^[A-Z]{1,2}\.\s", x)), None)
-        if lettered is not None:
-            parts = parts[lettered:]
-        at = next((n for n, x in enumerate(parts) if region.match(x)), len(parts))
-        return " ".join(parts[:at]).strip("[] ") or r.label
-
     def item(r):
-        return {"department": r.department, "agency": r.agency, "item": name_of(r),
+        return {"department": r.department, "agency": r.agency, "item": amendment_name(r),
                 "label": r.label, "house": i(r.house_php), "net": i(r.net_php), "senate": i(r.senate_php), "status": r.status,
                 "page": i(r.senate_page)}
     lines = c[~c.department_id.isin(["department-of-public-works-and-highways", "unprogrammed-appropriations"])]
