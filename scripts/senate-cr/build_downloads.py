@@ -39,7 +39,7 @@ ASSETS = "https://budget-assets.bettergov.ph"
 STEM = "senate-2027"
 PROGRAMS = {"dpwh": "DPWH projects (Annex A-4)", "fmr": "DA farm-to-market roads (Annex A-1)",
             "hfep": "DOH Health Facilities Enhancement Program (Annex A-2)", "nia": "NIA projects (Annex A-3)"}
-STATUS_LABEL = {"cut": "Removed", "reduced": "Reduced", "raised": "Raised", "added": "Inserted by the Senate",
+STATUS_LABEL = {"cut": "Removed", "reduced": "Reduced", "raised": "Raised", "added": "Documented addition",
                 "restored": "Restored from the NEP",
                 "renamed": "Renamed", "unchanged": "Unchanged", "nep_only": "NEP only"}
 ANNEX_STATUS = {

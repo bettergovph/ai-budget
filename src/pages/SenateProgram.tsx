@@ -308,7 +308,7 @@ function ProjectsView({ k }: { k: DatasetKey }) {
                 <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted by the House"
                   note="No matching line in the NEP." k={facets?.ins.get('yes') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
                 <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted by the House"
-                  note="In the NEP too, or inserted by the Senate." k={facets?.ins.get('no') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
+                  note="In the NEP too, or a documented addition by the Senate." k={facets?.ins.get('no') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
               </div>
             </div>
             <PanelFoot>

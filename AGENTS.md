@@ -254,6 +254,9 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
   `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 38 checks (26 on the report's
   printed totals and arithmetic, where a failure stops the build; 12 on page links, reported). Sub-nav: Overview, Line by line, the four programs, Provisions, About.
+  Leaderboards `/senate/2027/leaderboard` (2026-11-21): 18 boards on the House leaderboards' office groups and people
+  (`build_leaderboard.py`, `SenateLeaderboard.tsx`, `src/lib/senate-leaderboard.ts`); the House board pieces take
+  their boards and address from `LeaderboardSiteContext`. No share images yet.
   Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
   Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
 

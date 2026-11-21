@@ -156,3 +156,26 @@
 /* Pages in the project lists: one per line, so the three documents read as a column. */
 .senate-pages { flex-direction: column; gap: 2px; }
 .senate-warn { color: #8a5a00; font-weight: 600; white-space: nowrap; }
+
+/* Overview: each program as House bill and Senate bars on one scale (ProgramCard). */
+.senate-pc-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 12px; font-size: 0.9rem; color: var(--ink-3); }
+.senate-pc-total b { color: var(--ink); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.senate-pc-total .nep-delta { display: inline; margin-left: auto; font-size: 0.85rem; }
+.senate-pc-total .nep-delta-pct { margin-left: 4px; }
+.senate-pc-bars { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin-bottom: 12px; }
+.senate-pc-label { font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
+.senate-pc-bar { display: flex; height: 16px; border-radius: 3px; overflow: hidden; background: transparent; }
+.senate-pc-bar i, .senate-pc-parts i { display: block; height: 100%; }
+.senate-pc-bars .is-kept, .senate-pc-parts .is-kept { background: #9aa3b2; }
+.is-removed { background: var(--negative); }
+.is-raised { background: var(--positive); }
+.is-inserted { background: #2f6fb3; }
+.is-restored { background: #1f7f86; }
+.senate-pc-parts { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; color: var(--ink-2); }
+.senate-pc-parts li { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--rule-soft, #eee); }
+.senate-pc-parts li i { width: 10px; height: 10px; border-radius: 2px; align-self: center; }
+.senate-pc-parts b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.senate-pc-nep { margin: 10px 0 0; font-size: 0.8rem; color: var(--ink-3); }
+.senate-pc-nep .nep-delta { display: inline; }
+.senate-pc-nep .nep-delta-pct { margin-left: 4px; }
+.senate-pc-open { display: block; margin-top: 8px; font-size: 0.85rem; color: var(--accent); }

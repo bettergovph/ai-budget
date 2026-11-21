@@ -202,7 +202,8 @@ NEP OCR misreadings within ~75 similarity). 12 checks, one per program and docum
 name our House data reads as "cYanmGtalo Tab]" (NEP p. 10: Governor Benjamin T. Romualdez General Hospital and
 Schistosomiasis Center), an upstream fix for the House data.
 
-**Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
+**Status names** (Jason, 2026-11-21, again: the Senate's own projects in FMR, NIA and HFEP are **Documented addition**, not
+"Inserted"; "Inserted by the House" and the Annex A line tag keep their wording.) (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
 every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
 House" / "Not inserted by the House".
@@ -263,6 +264,37 @@ multi-purpose buildings, region, district engineering office (office, not distri
 kept by red flags and documents; the foreign-assisted projects raised; FMR, NIA, HFEP; provisions; what the report
 does not say. The red-flag comparison is a pattern in the data, never the Senate's reason: the report gives none.
 To publish it, link it from the Senate overview and drop `noindex`.
+
+**Program cards on the overview** (Jason, 2026-11-21: "needs a better design. They are hard to understand. Will a pie
+chart for each help as well?"): each program is two bars on one scale, House bill above and Senate below. What stays
+is grey on both; what the Senate removes (projects removed, and the reduced part) is red on the House bar; what it
+adds (raises, insertions, restored NEP projects) is coloured on the Senate bar. Each part has a plain sentence with its
+count and amount, and the NEP is a line under them. Not pies: a pie splits one total, and the Senate both takes from
+the House budget and adds from outside it; four pies of different sizes don't compare.
+
+## Leaderboards
+
+`/senate/2027/leaderboard` (Jason, 2026-11-21: "Next is work on leaderboards, our reports are a good start"; "Leaderboards"
+after "Line by line" in the Senate sub-nav). 18 boards in three sections, ranking what the executive report analyses:
+- **The big picture:** House bill budget the Senate removes, by region, and the share removed.
+- **The Senate against the House bill** (DPWH, by office): most budget removed, largest share removed (offices with
+  ₱1B+), most projects removed, most House insertions removed, most House insertions kept, largest Senate DPWH
+  amounts, biggest increases over the NEP.
+- **The whole bill:** departments (₱ and % with a ₱1B floor), agencies and Annex A lines by the Senate's change, and
+  the largest lines the Senate inserts.
+
+Data: `build_leaderboard.py` (in `build:senate-cr`) writes `senate/2027/leaderboard.json` in the House leaderboard's
+shape. It reuses `data/hgab/2027/leaderboard.json`'s 190 office groups and people (Lone/Shared, never split) and adds
+a `senate` block to each. The block holds the Senate DPWH rows under the label the House bill lists for the office
+(`districts.json` 2027 hgab3 `matched_label`). Entries + Central Office tie out to the program totals (the build
+checks). The Senate figures count every House bill DPWH line under the office, so 23 offices' House totals differ
+slightly from the House boards, which hold out lines that changed office.
+
+Page: `SenateLeaderboard.tsx`, with the House pieces (`BoardTile`, `PlaceCell`, `ValueCell`, `BoardPager`, ...) given
+the Senate boards and address through `LeaderboardSiteContext` (`src/lib/leaderboard-site.ts`; the House's by
+default). Its tables show the House bill and the Senate beside the ranked figure. Boards: `src/lib/senate-leaderboard.ts`
+(`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
+(`hgab-share-render.ts`) is House-specific.
 
 ## Not done yet
 

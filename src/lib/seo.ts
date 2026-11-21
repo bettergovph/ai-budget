@@ -355,6 +355,12 @@ export function pageMeta(pathname: string): PageMeta {
       noindex: true,
     };
   }
+  if (p === "/senate/2027/leaderboard" || p.startsWith("/senate/2027/leaderboard/")) {
+    return {
+      title: `Senate leaderboards 2027 — what the Senate committee report changes, ranked · ${SITE}`,
+      description: "DPWH offices ranked by the House bill budget the Senate committee report removes or keeps, and departments, agencies and budget lines by the Senate's change.",
+    };
+  }
   if (p === "/senate/2027/data") {
     return {
       title: `Senate committee report 2027 — download the dataset · ${SITE}`,
