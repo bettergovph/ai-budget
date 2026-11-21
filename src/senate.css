@@ -20,7 +20,7 @@
 .senate-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
 .senate-filters select, .senate-filters input[type='search'] { max-width: 260px; }
 .senate-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin: 10px 0; font-size: 0.9rem; }
-.senate-prov { border-top: 1px solid var(--rule); padding: 12px 0; }
+.senate-prov { max-width: 900px; border-top: 1px solid var(--rule); padding: 12px 0; }
 .senate-prov h3 { font-size: 0.95rem; margin: 0 0 4px; }
 .senate-prov p { margin: 4px 0; font-size: 0.92rem; }
 .senate-prov .senate-prov-text { white-space: pre-wrap; background: var(--paper-2, #f6f5f1); padding: 8px 10px; border-radius: 6px; font-size: 0.88rem; }
