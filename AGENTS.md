@@ -250,8 +250,8 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   shared with `HgabReview.tsx`) and Changes (Senate status + Inserted), and a Review button per project
   (2026-11-21). No "Changes" view: `?view=changes` redirects to the list.
   Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
-  `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 26 checks against the report's
-  printed totals; a failed check stops the build. Sub-nav: Overview, Line by line, the four programs, Provisions, About.
+  `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 38 checks (26 on the report's
+  printed totals and arithmetic, where a failure stops the build; 12 on page links, reported). Sub-nav: Overview, Line by line, the four programs, Provisions, About.
   Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
   Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
 

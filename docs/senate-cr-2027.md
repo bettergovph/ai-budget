@@ -229,7 +229,8 @@ step of `npm run build:senate-cr`, writes `data/senate/2027/downloads/` (publish
   House, and the Senate, House bill and NEP page of each), `senate-2027-annex-a` (2,719 rows, as printed),
   `senate-2027-general-summary` (450 rows: totals, departments, agencies, sub-agencies, group headings, the
   DOE-attached corporate budgets regrouped) and `senate-2027-provisions` (186), each CSV (UTF-8 with BOM) and Parquet.
-- `senate-2027-checks.csv`: 26 checks, all passing. They cover the source PDFs' SHA-256, each program's House bill
+- `senate-2027-checks.csv`: 38 checks: 26 on totals and arithmetic, all passing (a failure stops the build), and 12 on
+  page links (one per program and document, reported; see "Pages on every list row"). They cover the source PDFs' SHA-256, each program's House bill
   and Senate totals against the annex's printed total, row arithmetic, the General Summary's own sums (agencies
   only: sub-agencies and group headings would count twice), and the line-by-line Senate amounts against the
   General Summary. **A failed check stops the build.**
