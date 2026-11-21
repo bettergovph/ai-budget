@@ -241,6 +241,8 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   the merge). The House pages gained a Senate column (explorer, project tables) and a Senate box on project
   pages. `budget-stage.ts` now has the Senate as current (the House bill's month is not known: "Approved").
   "Under citizen review" banner until `SENATE_UNDER_REVIEW` is set false.
+  The DPWH project list has the reviewer's filter bar (`ReviewFilterBar.tsx`, shared with `HgabReview.tsx`) and a
+  Review button per project (2026-11-21); keep the two in step when the reviewer's filters change.
 
 ### Citizen Reports (`/citizen-reports`, #53)
 

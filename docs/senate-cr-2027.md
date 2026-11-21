@@ -149,6 +149,19 @@ NEP amount of the House line they cite (`annex_a_nep.json`, from build_explorer_
 Unprogrammed appropriations have no NEP figure here (the explorer's NEP data leaves them out; they are the same in
 both), so their "vs NEP" is blank rather than an addition.
 
+Layout and navigation follow the House bill section (Jason, 2026-11-21: "the navigation for the pages is
+inconsistent compared to the hgab version"): `SenateHeader` uses the House sub-nav's program labels and menus,
+pages have the House bill's heroes, page trails and project page layout (`SenateRecord.tsx`).
+
+**DPWH projects link to the reviewer** (`SenateDpwhProjects.tsx`, Jason: "link it to our reviewer so a project can
+be reviewed. I also like our reviewers filter for infra projects"): the list takes the reviewer's filter bar
+(`src/components/ReviewFilterBar.tsx`, shared with `HgabReview.tsx`: start from, red flags, questions, documents,
+review status, region, DPWH office, budget) plus a **Senate** filter (`sv=`), each row with its review status and a
+**Review** button (`/hgab/2027/review?p=<house id>`). House projects not in the reviewer show "Not in the reviewer".
+Totals count each Senate row once; rows that share one Senate row (one House row printed as two lines) carry `*`.
+The FMR, HFEP and NIA lists use the same filter style (Senate status and Region menus with counts), with no
+reviewer link: the reviewer covers DPWH only.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
