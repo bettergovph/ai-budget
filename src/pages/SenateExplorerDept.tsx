@@ -83,7 +83,7 @@ export default function SenateExplorerDept() {
       <SenateHero
         compact
         crumb={crumb}
-        title={name}
+        title={`${name} in the Senate`}
         dek="What the Senate committee report changes in this department, then every House bill line with its Senate amount."
       />
       <main className="nep-main hgab-ex-main">
@@ -100,9 +100,10 @@ export default function SenateExplorerDept() {
 
         <section className="nep-section senate-annex-box">
           <SectionHead
-            eyebrow="What the report changes"
-            headline={classRows.length ? `${classRows.length.toLocaleString()} ${classRows.length === 1 ? 'amendment' : 'amendments'} in Annex A` : 'No amendments to this department'}
-            dek="Each line the report changes, by agency and activity, beside the NEP. Tags: PS personnel, MOOE operating expenses, CO capital outlays. Page links open the House bill and the report."
+            size="sm"
+            eyebrow="What the Senate changes"
+            headline={classRows.length ? `${classRows.length.toLocaleString()} Senate ${classRows.length === 1 ? 'amendment' : 'amendments'} in Annex A` : 'No Senate amendments to this department'}
+            dek="Each line the Senate committee report changes, by agency and activity, beside the NEP. Tags: PS personnel, MOOE operating expenses, CO capital outlays. Page links open the House bill and the report."
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={showObjects} onChange={(e) => setShowObjects(e.target.checked)} /> Also by object of expenditure
@@ -117,7 +118,7 @@ export default function SenateExplorerDept() {
         {dept && lookup && (
           <section className="nep-section">
             <SectionHead
-              eyebrow="Every line"
+              eyebrow="Every line, with the Senate amount"
               headline="The House bill’s lines with their Senate amounts"
               dek="The House bill's own tables, by agency, program, region and office, with the committee report's amount for each. A line the report does not change keeps its House bill amount."
             />
@@ -196,10 +197,10 @@ function AmendmentAgency({ agency, rows, single }: { agency: string; rows: Senat
   return (
     <div className="hgab-ex-agency is-open senate-am">
       <header className="hgab-ex-agency-head">
-        <span className="hgab-ex-agency-name">{single ? 'Amendments' : agency}</span>
+        <span className="hgab-ex-agency-name">{single ? 'Senate amendments' : agency}</span>
         <span className="hgab-ex-agency-figs">
           <span>{classes.length.toLocaleString()} {classes.length === 1 ? 'line' : 'lines'}</span>
-          <span title="Net change in these lines, vs the House bill"><SignedChange v={net} base={house || null} /></span>
+          <span title="The Senate's net change in these lines, vs the House bill"><SignedChange v={net} base={house || null} /></span>
         </span>
       </header>
       <div className="nep-table-wrap">

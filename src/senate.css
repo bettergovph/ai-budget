@@ -103,3 +103,10 @@
   .senate-annex-box { padding: 4px 12px 14px; border-radius: 8px; }
   .senate-annex-box .hgab-ex-agency { padding: 2px 8px 8px; }
 }
+/* Smaller headings inside the Annex A box. */
+.senate-annex-box .hgab-ex-agency-name { font-size: 0.95rem; font-weight: 600; }
+.senate-annex-box .hgab-ex-agency-head { padding: 6px 0; }
+.senate-annex-box .senate-am-group td { font-size: 0.82rem; }
+.senate-annex-box .eyebrow { margin-bottom: 6px; }
+.senate-annex-box .headline { margin-top: 0; }
+.senate-annex-box .dek { font-size: 0.88rem; line-height: 1.5; margin-top: 4px; }
