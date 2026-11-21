@@ -168,7 +168,9 @@ questions, review status) are ignored in its URL. The FMR, HFEP and NIA lists ha
 A"): the amendments read one line each, the activity or project with its region and office below, the expense class
 as a tag (PS, MOOE, CO) and Inserted / Removed / New expense class tags; consecutive rows of one activity sit under
 its name with their sum; the report's instruction ("Between lines 36 and 37, insert …") shows once; an agency folds
-after 12 lines. All-caps names from the report are set in title case, keeping acronyms (`nameCase`).
+after 12 lines. All-caps names from the report are set in title case, keeping acronyms (`nameCase`). The section sits in a tinted
+box (`.senate-annex-box`), each agency a white card, apart from "Every line" below (Jason: "a container … so it feels
+like a different section").
 
 **Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu

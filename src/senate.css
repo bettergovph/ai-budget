@@ -91,3 +91,15 @@
 .senate-am-more:hover { border-color: var(--ink-3); }
 .senate-am .hgab-ex-agency-figs .nep-delta { display: inline; }
 .senate-am .hgab-ex-agency-figs .nep-delta-pct { margin-left: 0.3em; }
+/* Department page: the Annex A amendments in a box of their own, apart from "Every line" below. */
+.senate-annex-box {
+  background: var(--paper-2, #f6f5f1); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 8px 24px 20px; margin-top: 28px;
+}
+.senate-annex-box .hgab-ex-agency { background: var(--paper, #fff); border: 1px solid var(--rule); border-radius: 8px; padding: 4px 14px 10px; margin-top: 14px; }
+.senate-annex-box .hgab-ex-agency .nep-table-wrap { border: 0; }
+.senate-annex-box .senate-am-group td { background: var(--paper-3, #efede6); }
+@media (max-width: 700px) {
+  .senate-annex-box { padding: 4px 12px 14px; border-radius: 8px; }
+  .senate-annex-box .hgab-ex-agency { padding: 2px 8px 8px; }
+}

@@ -98,7 +98,7 @@ export default function SenateExplorerDept() {
           ]}
         /></div>
 
-        <section className="nep-section">
+        <section className="nep-section senate-annex-box">
           <SectionHead
             eyebrow="What the report changes"
             headline={classRows.length ? `${classRows.length.toLocaleString()} ${classRows.length === 1 ? 'amendment' : 'amendments'} in Annex A` : 'No amendments to this department'}
