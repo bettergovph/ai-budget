@@ -98,9 +98,10 @@ function contentTypeFor(path: string): string {
 const isLetter = (path: string) => /[\\/]letters[\\/][^\\/]+$/.test(path);
 /**
  * explorer/downloads/, contractors/downloads/ and documents/downloads/: the line-by-line, contractor and DPWH
- * projects-documents-red-flags datasets (build:hgab-review-dataset), fixed names rebuilt with the data.
+ * projects-documents-red-flags datasets (build:hgab-review-dataset), fixed names rebuilt with the data; and
+ * senate/2027/downloads/ (upload:senate), the Senate committee report dataset (scripts/senate-cr/build_downloads.py).
  */
-const isLineDownload = (path: string) => /[\\/](explorer|contractors|documents)[\\/]downloads[\\/][^\\/]+$/.test(path);
+const isLineDownload = (path: string) => /[\\/](explorer|contractors|documents|senate[\\/]2027)[\\/]downloads[\\/][^\\/]+$/.test(path);
 /** JSON, CSV, the letters and the line-by-line downloads change with every rebuild; parquet and the source PDFs are pinned to the manifest commit. */
 function cacheControlFor(path: string): string {
   return path.endsWith(".json") || path.endsWith(".geojson") || path.endsWith(".csv") || path.endsWith(".html") || isLetter(path) || isLineDownload(path) ? "public, max-age=300" : "public, max-age=86400";
