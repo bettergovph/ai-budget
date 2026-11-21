@@ -24,7 +24,7 @@ import { pageMeta } from '../lib/seo';
 import { datasetPath, type DatasetKey } from '../lib/hgab';
 import { sqlStr } from '../lib/hgab-query';
 import {
-  PROGRAM_SHORT, SENATE_PROGRAM_VIEWS, SENATE_STATUS, SENATE_STATUS_ORDER, changeKpi, coerceSenateProject as coerce, loadSenateProgram, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl,
+  PROGRAM_SHORT, SENATE_PROGRAM_VIEWS, SENATE_STATUS, SENATE_STATUS_ORDER, changeKpi, coerceSenateProject as coerce, loadSenateProgram, programKey, senateListPath, senatePdfUrl, senateProgramPath, senateProjectsUrl,
   senateRecordPath, type SenateDimRow, type SenateProgramSummary, type SenateProject, type SenateStatus,
 } from '../lib/senate';
 import '../nep2027.css';
@@ -128,7 +128,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
             <tbody>
               {SENATE_STATUS_ORDER.filter((x) => sum.status[x]).map((x) => (
                 <tr key={x}>
-                  <td><Link to={`${senateProgramPath(k, 'projects')}&status=${x}`}><SenateStatusChip status={x} /></Link></td>
+                  <td><Link to={senateListPath(k, 'status', x)}><SenateStatusChip status={x} /></Link></td>
                   <td className="num">{sum.status[x]!.count.toLocaleString()}</td>
                   <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.nep_php)}</td>
                   <td className="num nep-td-base">{fmt.shortPhp(sum.status[x]!.house_php)}</td>
@@ -149,7 +149,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
   );
 }
 
-function DimTable({ title, rows, k, param, note }: { title: string; rows: SenateDimRow[]; k: DatasetKey; param: string; note?: string }) {
+function DimTable({ title, rows, k, param, note }: { title: string; rows: SenateDimRow[]; k: DatasetKey; param: 'region' | 'office' | 'program' | 'pap'; note?: string }) {
   return (
     <section className="nep-section">
       <SectionHead eyebrow="Breakdown" headline={title} dek={note} />
@@ -159,7 +159,7 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
           <tbody>
             {rows.map((r) => (
               <tr key={r.label}>
-                <td className="nep-td-name"><Link to={`${senateProgramPath(k, 'projects')}&${param}=${encodeURIComponent(r.label)}`}>{r.label}</Link></td>
+                <td className="nep-td-name"><Link to={senateListPath(k, param, r.label)}>{r.label}</Link></td>
                 <td className="num nep-td-base">{fmt.shortPhp(r.nep_php)}</td>
                 <td className="num nep-td-base">{fmt.shortPhp(r.house_php)}</td>
                 <td className="num nep-td-amt">{fmt.shortPhp(r.senate_php)}</td>
@@ -187,7 +187,7 @@ function ChangesView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) {
           <SectionHead
             eyebrow={<SenateStatusChip status={g} />}
             headline={title}
-            dek={<Link to={`${senateProgramPath(k, 'projects')}&status=${g}`}>All {sum.status[g]?.count.toLocaleString()} {SENATE_STATUS[g].plural} →</Link>}
+            dek={<Link to={senateListPath(k, 'status', g)}>All {sum.status[g]?.count.toLocaleString()} {SENATE_STATUS[g].plural} →</Link>}
           />
           <ProjectTable k={k} rows={sum.top[g]! as SenateProject[]} />
         </section>

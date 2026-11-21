@@ -53,6 +53,17 @@ export function senateProgramPath(key: DatasetKey, view?: string): string {
   return view && view !== 'overview' ? `${SENATE_ROOT}/${key}?view=${view}` : `${SENATE_ROOT}/${key}`;
 }
 
+/**
+ * The program's project list filtered to one value. The DPWH list is the reviewer's, so it reads the reviewer's
+ * steps (`s=region:Region I`) and `sv=` for the Senate status; the other three read `status=`, `region=`, ….
+ */
+export function senateListPath(key: DatasetKey, param: 'status' | 'region' | 'office' | 'program' | 'pap', value: string): string {
+  const base = senateProgramPath(key, 'projects');
+  if (key !== 'dpwh') return `${base}&${param}=${encodeURIComponent(value)}`;
+  if (param === 'status') return `${base}&sv=${encodeURIComponent(value)}`;
+  return `${base}&s=${encodeURIComponent(`${param === 'pap' ? 'program' : param}:${value}`)}`;
+}
+
 export function senateRecordPath(key: DatasetKey, id: string): string {
   return `${SENATE_ROOT}/${key}/p/${encodeURIComponent(id)}`;
 }
