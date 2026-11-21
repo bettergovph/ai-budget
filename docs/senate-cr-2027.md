@@ -49,7 +49,7 @@ totals and counts.
   lines (departments −₱28.55B, special purpose funds +₱28.55B). Unprogrammed falls by ₱812.8M, and the
   total is ₱4,605,253,699 thousand.
 - **DPWH:** ₱654.10B → ₱587.90B. Projects go from ₱587,075,661,000 to ₱520,876,384,250.
-  - 3,479 projects are cut to zero (−₱99.30B). No project is cut partway.
+  - 3,479 projects are removed (cut to zero, −₱99.30B). No project is cut partway.
   - 13 foreign-assisted projects are raised (+₱33.10B).
   - 5,182 are renamed with the same amount (the Senate adds stations, coordinates and corrected names).
   - 7,597 are not listed, so they are unchanged.
@@ -160,9 +160,14 @@ share one Senate row (one House row printed as two lines) carry `*`. Filters (Ja
 doesn't fit well … only filter by Region, DPWH Office, Budget, Senate (rename to Changes, also add Inserted),
 Documents"): four of the reviewer's (`FilterBar` with `only=`, from `src/components/ReviewFilterBar.tsx`, shared
 with `HgabReview.tsx`) and **Changes**: the Senate status (`sv=`) and **Inserted** (`ins=yes|no`: a House line with
-no NEP line, 6,193 DPWH projects, 3,078 of them cut to zero). Reviewer steps the list doesn't show (red flags,
+no NEP line, 6,193 DPWH projects, 3,078 of them removed). Reviewer steps the list doesn't show (red flags,
 questions, review status) are ignored in its URL. The FMR, HFEP and NIA lists have Region and the same Changes menu
 (`status=`, `ins=`); no reviewer link, the reviewer covers DPWH only.
+
+**Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
+Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
+every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
+House" / "Not inserted by the House".
 
 **No "Changes" page** (2026-11-21, "we don't need the changes page anymore as it does both now"): the lists filter
 by change, so `?view=changes` redirects to the list (`&status=` kept, as `sv=` on DPWH). Links into the DPWH list
