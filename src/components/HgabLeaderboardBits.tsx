@@ -20,17 +20,21 @@
  *
  * Styles: src/hgab-leaderboard.css (.hgab-lb-*).
  */
-import { Component, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useContext, useState, type ErrorInfo, type ReactNode } from 'react';
+import { LeaderboardSiteContext } from '../lib/leaderboard-site';
 import { Link } from 'react-router-dom';
 import { REGION_LABELS, type RegionKey } from '../lib/hgab';
 import { DeoBadges } from './HgabBits';
 import {
-  BOARDS, displayName, entryTitle, formatPesoFull, formatValue, leaderboardPath, officeLabel, rankByCongress,
+  displayName, entryTitle, formatPesoFull, formatValue, leaderboardPath, officeLabel, rankByCongress,
   rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
   rankLines, type RankedLine, rankMpb, type RankedMpb,
 } from '../lib/hgab-leaderboard';
+
+/** Which leaderboard these pieces draw (src/lib/leaderboard-site.ts): the House bill's unless a page provides another. */
+const useSite = () => useContext(LeaderboardSiteContext);
 
 // ---------------------------------------------------------------------------
 // Wording the contract does not carry: column headings per board
@@ -314,8 +318,9 @@ function tileValue(board: BoardDef, v: number): string {
  * so "Open" is decoration rather than a second link to the same page.
  */
 export function BoardTile({ data, board, region }: { data: LeaderboardData; board: BoardDef; region: string | null }) {
+  const site = useSite();
   const scoped = board.regionFilter ? region : null;
-  const to = leaderboardPath(board.id, { region: scoped });
+  const to = site.path(board.id, { region: scoped });
   let body: ReactNode;
 
   if (board.kind === 'shift') {
@@ -538,7 +543,7 @@ const FIRST = 20;
  * so the figure stays on screen; the same facts then show inside the name and
  * value cells (`.hgab-lb-phone`), which desktop hides.
  */
-function ValueCell({
+export function ValueCell({
   value,
   kind,
   title,
@@ -647,7 +652,7 @@ function PeopleCell({ people }: { people: LeaderPerson[] }) {
  * page). The tier closes both. The amount beside it is the office's, never a
  * person's.
  */
-function PlaceCell({ entry, face = 28 }: { entry: LeaderEntry; face?: number }) {
+export function PlaceCell({ entry, face = 28 }: { entry: LeaderEntry; face?: number }) {
   const shared = officeLabel(entry) != null;
   return (
     <td className="hgab-lb-place-cell">
@@ -681,7 +686,7 @@ function ShowAll({ total, open, onOpen }: { total: number; open: boolean; onOpen
   );
 }
 
-function EmptyRow({ cols, children }: { cols: number; children: ReactNode }) {
+export function EmptyRow({ cols, children }: { cols: number; children: ReactNode }) {
   return (
     <tr>
       <td colSpan={cols} className="hgab-lb-empty">{children}</td>
@@ -733,7 +738,7 @@ export function RankingTable({ data, board, region }: { data: LeaderboardData; b
   );
 }
 
-function TableFoot({ shown, total, open, onOpen }: { shown: number; total: number; open: boolean; onOpen: () => void }) {
+export function TableFoot({ shown, total, open, onOpen }: { shown: number; total: number; open: boolean; onOpen: () => void }) {
   if (total === 0) return null;
   return (
     <p className="hgab-lb-tablefoot">
@@ -1056,10 +1061,11 @@ export function MpbTable({ data, board, region }: { data: LeaderboardData; board
 
 /** Previous and next board in BOARDS order, and the way back to the gallery. */
 export function BoardPager({ board, region, format }: { board: BoardDef; region: string | null; format: ShareFormat }) {
-  const i = BOARDS.findIndex((b) => b.id === board.id);
-  const prev = i > 0 ? BOARDS[i - 1] : null;
-  const next = i >= 0 && i < BOARDS.length - 1 ? BOARDS[i + 1] : null;
-  const href = (b: BoardDef) => leaderboardPath(b.id, { region: b.regionFilter ? region : null, format });
+  const { boards, path } = useSite();
+  const i = boards.findIndex((b) => b.id === board.id);
+  const prev = i > 0 ? boards[i - 1] : null;
+  const next = i >= 0 && i < boards.length - 1 ? boards[i + 1] : null;
+  const href = (b: BoardDef) => path(b.id, { region: b.regionFilter ? region : null, format });
   return (
     <nav className="hgab-lb-pager" aria-label="Other leaderboards">
       {prev ? (
@@ -1068,7 +1074,7 @@ export function BoardPager({ board, region, format }: { board: BoardDef; region:
           <span>{prev.title}</span>
         </Link>
       ) : <span />}
-      <Link className="is-all" to={leaderboardPath()}>All leaderboards</Link>
+      <Link className="is-all" to={path()}>All leaderboards</Link>
       {next ? (
         <Link className="is-next" to={href(next)}>
           <small>Next →</small>
@@ -1081,11 +1087,12 @@ export function BoardPager({ board, region, format }: { board: BoardDef; region:
 
 /** Every board as a plain list of links, for the not-found state. */
 export function BoardLinks() {
+  const { boards, path } = useSite();
   return (
     <ul className="hgab-lb-links">
-      {BOARDS.map((b) => (
+      {boards.map((b) => (
         <li key={b.id}>
-          <Link to={leaderboardPath(b.id)}>{b.title}</Link>
+          <Link to={path(b.id)}>{b.title}</Link>
         </li>
       ))}
     </ul>

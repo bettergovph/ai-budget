@@ -315,8 +315,11 @@ export interface WholeBillRow {
   /** The explorer page that lists its lines. */
   href: string;
   /** Lines only: "house_only" when no line of that name is in the NEP for the agency (a candidate). */
-  status?: 'same' | 'higher' | 'lower' | 'house_only' | 'nep_only';
+  status?: 'same' | 'higher' | 'lower' | 'house_only' | 'nep_only' | 'senate_new';
   note?: string | null;
+  /** The Senate leaderboards: the Senate committee report's figure (delta_php is then Senate − House bill) and its page. */
+  senate_php?: number;
+  page?: number | null;
 }
 
 export interface WholeBillData {
@@ -334,7 +337,9 @@ export interface WholeBillData {
 // ---------------------------------------------------------------------------
 
 export type BoardKind = 'ranking' | 'members' | 'congress' | 'shift' | 'regions' | 'lines' | 'mpb';
-export type BoardSection = 'fy2027' | 'wholebill' | 'history' | 'mpb' | 'members' | 'picture';
+export type BoardSection = 'fy2027' | 'wholebill' | 'history' | 'mpb' | 'members' | 'picture'
+  // The Senate leaderboards (src/lib/senate-leaderboard.ts).
+  | 'senate-picture' | 'senate-dpwh' | 'senate-wholebill';
 export type ValueKind = 'php' | 'signed_php' | 'count' | 'pct' | 'share';
 
 export const BOARD_SECTIONS: ReadonlyArray<{ key: BoardSection; label: string; blurb: string }> = [
@@ -384,6 +389,8 @@ export interface BoardDef {
   mpbPeople?: boolean;
   mpbMetric?: (r: MpbBoardRow) => number | null;
   mpbDetail?: (r: MpbBoardRow) => string | null;
+  /** The board's own "not in any district" footnote (the Senate boards); otherwise residualLine's by board id. */
+  residual?: (d: LeaderboardData) => string | null;
 }
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
@@ -1115,6 +1122,7 @@ function sliceSum(d: LeaderboardData, f: (s: LeaderSlice) => number, kinds: Resi
  * the whole budget.
  */
 export function residualLine(d: LeaderboardData, board: BoardDef): string | null {
+  if (board.residual) return board.residual(d);
   if (board.kind === 'mpb') {
     const r = board.mpbSet && d.mpb ? d.mpb.residual[board.mpbSet] : null;
     if (!r) return null;
