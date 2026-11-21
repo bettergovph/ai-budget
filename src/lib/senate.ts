@@ -16,6 +16,7 @@
 import { dataUrl } from './data-url';
 import { shortPhp } from './format';
 import { cached, getJson, type DatasetKey } from './hgab';
+import { HUB_VIEWS } from './hgab-ui';
 
 export const SENATE_YEAR = 2027;
 export const SENATE_BASE = `senate/${SENATE_YEAR}`;
@@ -44,6 +45,9 @@ export function senatePdfUrl(docKey: string, page?: number | null): string {
 }
 
 export const SENATE_PROGRAMS: readonly DatasetKey[] = ['dpwh', 'fmr', 'hfep', 'nia'];
+
+/** A program's views, named as the House bill section's (HUB_VIEWS); the Senate pages have no map or readings. */
+export const SENATE_PROGRAM_VIEWS = HUB_VIEWS.filter((v) => v.key === 'overview' || v.key === 'projects' || v.key === 'changes');
 
 export function senateProgramPath(key: DatasetKey, view?: string): string {
   return view && view !== 'overview' ? `${SENATE_ROOT}/${key}?view=${view}` : `${SENATE_ROOT}/${key}`;

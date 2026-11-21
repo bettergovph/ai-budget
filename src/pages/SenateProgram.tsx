@@ -22,7 +22,7 @@ import { pageMeta } from '../lib/seo';
 import { datasetPath, type DatasetKey } from '../lib/hgab';
 import { sqlStr } from '../lib/hgab-query';
 import {
-  PROGRAM_SHORT, SENATE_STATUS, SENATE_STATUS_ORDER, changeKpi, coerceSenateProject as coerce, loadSenateProgram, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl,
+  PROGRAM_SHORT, SENATE_PROGRAM_VIEWS, SENATE_STATUS, SENATE_STATUS_ORDER, changeKpi, coerceSenateProject as coerce, loadSenateProgram, programKey, senatePdfUrl, senateProgramPath, senateProjectsUrl,
   senateRecordPath, type SenateDimRow, type SenateProgramSummary, type SenateProject, type SenateStatus,
 } from '../lib/senate';
 import '../nep2027.css';
@@ -58,15 +58,13 @@ export default function SenateProgram() {
   if (cur?.err) return <SenateError message={cur.err} />;
   if (!cur?.sum) return <SenateLoading what={`${PROGRAM_SHORT[key]} in the Senate committee report`} />;
   const sum = cur.sum;
-  const crumb = (
+  // The trail as the House bill section's program pages: the agency, then the view.
+  const viewLabel = SENATE_PROGRAM_VIEWS.find((v) => v.key === view)?.label ?? 'Overview';
+  const crumb = view === 'overview' ? sum.agency : (
     <>
-      <Link to={senateProgramPath(key)}>{PROGRAM_SHORT[key]}</Link>
-      {view !== 'overview' && (
-        <>
-          <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-          <span className="hgab-crumb-here">{view === 'projects' ? 'Every project' : 'What changed'}</span>
-        </>
-      )}
+      <Link to={senateProgramPath(key)}>{sum.agency}</Link>
+      <span className="hgab-crumb-sep" aria-hidden="true">·</span>
+      <span className="hgab-crumb-here">{viewLabel}</span>
     </>
   );
   const st = sum.status;
@@ -91,15 +89,7 @@ export default function SenateProgram() {
             {st.renamed?.count ? <>; {st.renamed.count.toLocaleString()} keep their amount under a revised name</> : null}.
           </>
         }
-      >
-        <nav className="view-tabs hgab-viewtabs" aria-label="Views">
-          {VIEWS.map((v) => (
-            <Link key={v} to={senateProgramPath(key, v)} className={v === view ? 'active' : ''} aria-current={v === view ? 'page' : undefined}>
-              {v === 'overview' ? 'Overview' : v === 'projects' ? 'Every project' : 'What changed'}
-            </Link>
-          ))}
-        </nav>
-      </SenateHero>
+      />
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner compact />
         {view === 'overview' && <OverviewView k={key} sum={sum} />}
@@ -152,7 +142,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
       </section>
       <DimTable title="By region" rows={sum.regions} k={k} param="region" />
       <DimTable title={k === 'hfep' ? 'By kind of budget' : 'By program line'} rows={sum.programs} k={k} param={k === 'hfep' ? 'pap' : 'program'} />
-      {sum.offices && <DimTable title="By office" rows={sum.offices.slice(0, 40)} k={k} param="office" note="The 40 offices with the most House bill money; filter Every project for the rest." />}
+      {sum.offices && <DimTable title="By office" rows={sum.offices.slice(0, 40)} k={k} param="office" note="The 40 offices with the most House bill money; filter Projects for the rest." />}
     </>
   );
 }
