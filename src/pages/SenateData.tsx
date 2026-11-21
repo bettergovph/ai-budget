@@ -50,7 +50,11 @@ export default function SenateData() {
   if (!d) return <SenateLoading what="the Senate dataset" />;
   const file = (name: string) => d.files.find((f) => f.file === name);
   const zip = file('senate-2027-dataset.zip');
-  const failed = d.check_rows.filter((c) => !c.ok);
+  const failed = d.check_rows.filter((c) => !c.ok && c.blocking !== false);
+  const pageChecks = d.check_rows.filter((c) => c.blocking === false);
+  const pageOk = pageChecks.reduce((a, c) => a + Number(c.ours), 0);
+  const pageAll = pageChecks.reduce((a, c) => a + Number(c.printed), 0);
+  const misses = file('senate-2027-page-misses.csv');
   return (
     <>
       <SenateHeader crumb="Download data" />
@@ -103,6 +107,12 @@ export default function SenateData() {
                   <td>{file('senate-2027-checks.csv') && <Sha v={file('senate-2027-checks.csv')!.sha256} />}</td>
                 </tr>
                 <tr>
+                  <td className="nep-td-name"><strong>Page links to check</strong><span className="senate-am-sub">Page links whose page doesn’t print the project’s name.</span></td>
+                  <td className="num">{(pageAll - pageOk).toLocaleString()}</td>
+                  <td className="senate-dl-links"><FileLink f={misses} label="CSV" /></td>
+                  <td>{misses && <Sha v={misses.sha256} />}</td>
+                </tr>
+                <tr>
                   <td className="nep-td-name"><strong>README, manifest and checksums</strong><span className="senate-am-sub">What each column means; every file's size and SHA-256.</span></td>
                   <td />
                   <td className="senate-dl-links">
@@ -138,6 +148,11 @@ export default function SenateData() {
               and <code>house_pdf_url</code> (and <code>nep_pdf_url</code> for projects) for the House bill and the NEP.
             </li>
             <li>
+              <strong>Every page link prints its project.</strong> For each project the build opens the Senate, House bill and NEP page it cites and
+              looks for the project’s name there: {pageOk.toLocaleString()} of {pageAll.toLocaleString()} page links do
+              {pageAll > pageOk && <> (the rest are listed in <code>senate-2027-page-misses.csv</code>, to check by hand)</>}. Every project list shows these pages.
+            </li>
+            <li>
               <strong>The totals add up.</strong> {d.checks.passed} of {d.checks.run} checks pass: each program's House bill and Senate totals against
               the totals the annexes print, the row arithmetic, the General Summary's own sums, and our line-by-line Senate amounts against the
               General Summary. The build stops if one fails.
@@ -163,7 +178,9 @@ export default function SenateData() {
                     <td className="nep-td-name">{c.check}<span className="senate-am-sub">{c.source}{c.note ? ` · ${c.note}` : ''}</span></td>
                     <td className="num">{typeof c.ours === 'number' ? c.ours.toLocaleString() : <Sha v={String(c.ours)} />}</td>
                     <td className="num">{typeof c.printed === 'number' ? c.printed.toLocaleString() : <Sha v={String(c.printed)} />}</td>
-                    <td>{c.ok ? <span className="senate-ok">✓ Matches</span> : <span className="senate-bad">✗ Differs by {c.difference?.toLocaleString() ?? '—'}</span>}</td>
+                    <td>{c.ok ? <span className="senate-ok">✓ Matches</span>
+                      : c.blocking === false ? <span className="senate-warn">{Math.abs(c.difference ?? 0).toLocaleString()} to check</span>
+                      : <span className="senate-bad">✗ Differs by {c.difference?.toLocaleString() ?? '—'}</span>}</td>
                   </tr>
                 ))}
               </tbody>

@@ -278,14 +278,14 @@ export interface SenateProvision {
 const get = <T,>(p: string, what: string) => getJson<T>(dataUrl(`${SENATE_BASE}/${p}`), `Could not load ${what}`);
 
 export interface SenateDownloadFile { file: string; bytes: number; sha256: string; url: string }
-export interface SenateDownloadCheck { check: string; ours: number | string; printed: number | string; difference: number | null; ok: boolean; source: string; note: string }
+export interface SenateDownloadCheck { check: string; ours: number | string; printed: number | string; difference: number | null; ok: boolean; source: string; note: string; blocking?: boolean }
 export interface SenateDownloads {
   title: string;
   built_at: string;
   source_commit: string | null;
   sources: Array<{ key: string; title: string; original_file: string; sha256: string; bytes: number; url: string }>;
   tables: Array<{ name: string; about: string; rows: number; columns: string[] }>;
-  checks: { run: number; passed: number; file: string };
+  checks: { run: number; passed: number; blocking_failed?: number; file: string };
   under_citizen_review: boolean;
   files: SenateDownloadFile[];
   check_rows: SenateDownloadCheck[];
