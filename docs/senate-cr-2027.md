@@ -264,6 +264,13 @@ kept by red flags and documents; the foreign-assisted projects raised; FMR, NIA,
 does not say. The red-flag comparison is a pattern in the data, never the Senate's reason: the report gives none.
 To publish it, link it from the Senate overview and drop `noindex`.
 
+**Program cards on the overview** (Jason, 2026-11-21: "needs a better design. They are hard to understand. Will a pie
+chart for each help as well?"): each program is two bars on one scale, House bill above and Senate below. What stays
+is grey on both; what the Senate removes (projects removed, and the reduced part) is red on the House bar; what it
+adds (raises, insertions, restored NEP projects) is coloured on the Senate bar. Each part has a plain sentence with its
+count and amount, and the NEP is a line under them. Not pies: a pie splits one total, and the Senate both takes from
+the House budget and adds from outside it; four pies of different sizes don't compare.
+
 ## Leaderboards
 
 `/senate/2027/leaderboard` (Jason, 2026-11-21: "Next is work on leaderboards, our reports are a good start"; "Leaderboards"
