@@ -32,6 +32,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_versions import EXPECT  # noqa: E402
+from page_check import Pages, prints  # noqa: E402
 
 SITE_URL = "https://budget.bettergov.ph"
 ASSETS = "https://budget-assets.bettergov.ph"
@@ -64,6 +65,10 @@ def present(v):
     return v is not None and not pd.isna(v) and v != ""
 
 
+def txt(v):
+    return v if isinstance(v, str) else None
+
+
 def pdf_url(prefix, doc, page):
     if not present(doc):
         return None
@@ -83,10 +88,10 @@ def main(src, site):
     site_manifest = json.load(open(f"{site}/manifest.json"))
     checks = []
 
-    def check(what, ours, printed, source, note=""):
+    def check(what, ours, printed, source, note="", blocking=True):
         ok = ours == printed
         checks.append({"check": what, "ours": ours, "printed": printed, "difference": (ours - printed) if isinstance(ours, int) and isinstance(printed, int) else None,
-                       "ok": ok, "source": source, "note": note})
+                       "ok": ok, "source": source, "note": note, "blocking": blocking})
         return ok
 
     # --- The source PDFs: the copies we publish are the bytes we read. ---------------------------------------------
@@ -115,6 +120,34 @@ def main(src, site):
         bad = rows[(rows.house_php.fillna(0) + rows.change_php) != rows.senate_php]
         check(f"{PROGRAMS[key]}: House bill + change = Senate, every project", len(rows) - len(bad), len(rows), "row arithmetic")
     p = pd.concat(frames, ignore_index=True)
+
+    # Every page link in the project lists opens a page that prints the project (page_check.py). Reported, with the
+    # misses listed to check; not blocking, as a miss can be the source's own misprint or OCR.
+    pages, misses = Pages(), []
+    hgab_pdf = os.path.join(os.path.dirname(os.path.abspath(site)), "..", "hgab", "2027", "pdf")
+    hgab_pdf = os.path.normpath(hgab_pdf)
+    for key in PROGRAMS:
+        rows = p[p.program_key == key]
+        for doc_label, dcol, pcol, path_of, names in (
+            ("Senate committee report", "senate_doc", "senate_page", lambda d: f"{site}/pdf/{d}.pdf", lambda r: (r.title, txt(r.hb_title))),
+            ("House bill", "house_doc", "house_page", lambda d: f"{hgab_pdf}/{d}.pdf", lambda r: (txt(r.hb_title) or r.title,)),
+            ("NEP", "nep_doc", "nep_page", lambda d: f"{hgab_pdf}/{d}.pdf", lambda r: (txt(r.hb_title) or r.title,)),
+        ):
+            n = ok = 0
+            for r in rows.itertuples():
+                doc, pg = getattr(r, dcol), getattr(r, pcol)
+                if not present(doc) or not present(pg):
+                    continue
+                res = prints(pages, path_of(doc), int(pg), *names(r))
+                if res is None:
+                    continue
+                n += 1
+                ok += bool(res)
+                if not res:
+                    misses.append({"program": key, "document": doc_label, "id": r.id, "title": names(r)[0], "doc": doc, "page": int(pg),
+                                   "pdf_url": pdf_url("senate/2027" if dcol == "senate_doc" else "hgab/2027", doc, pg)})
+            check(f"{PROGRAMS[key]}: {doc_label} page links print their project", ok, n, f"{doc_label} PDFs, page by page",
+                  "misses in senate-2027-page-misses.csv" if ok != n else "", blocking=False)
     projects = pd.DataFrame({
         "program": p.program_key,
         "id": p.id,
@@ -281,10 +314,12 @@ def main(src, site):
         df.to_parquet(f"{out}/{stem}.parquet", index=False, compression="zstd")
         files.append({"name": name, "about": about, "rows": len(df), "columns": list(df.columns)})
 
-    failed = [c for c in checks if not c["ok"]]
+    failed = [c for c in checks if not c["ok"] and c["blocking"]]
+    pd.DataFrame(misses, columns=["program", "document", "id", "title", "doc", "page", "pdf_url"]).to_csv(
+        f"{out}/{STEM}-page-misses.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame(checks).to_csv(f"{out}/{STEM}-checks.csv", index=False, encoding="utf-8-sig")
     readme = README.format(built=built, commit=commit or "unknown", n_projects=len(projects), n_annex=len(annex),
-                           n_summary=len(summary), n_prov=len(provisions), n_checks=len(checks), n_ok=len(checks) - len(failed),
+                           n_summary=len(summary), n_prov=len(provisions), n_checks=len(checks), n_ok=sum(c["ok"] for c in checks),
                            sources="\n".join(f"- {s['title']}: `{s['original_file']}`, SHA-256 `{s['sha256']}`, {s['url']}" for s in sources),
                            programs="\n".join(f"| {k} | {v} |" for k, v in PROGRAMS.items()),
                            statuses="\n".join(f"| `{k}` | {v} |" for k, v in STATUS_LABEL.items()),
@@ -300,7 +335,7 @@ def main(src, site):
         "built_at": built, "source_commit": commit, "build": "npm run build:senate-cr (scripts/senate-cr/run.sh)",
         "repository": "https://github.com/bettergovph/ai-reports", "site": f"{SITE_URL}/senate/2027/data",
         "sources": sources, "tables": files, "files": entries,
-        "checks": {"run": len(checks), "passed": len(checks) - len(failed), "file": f"{STEM}-checks.csv"},
+        "checks": {"run": len(checks), "passed": sum(c["ok"] for c in checks), "blocking_failed": len(failed), "file": f"{STEM}-checks.csv"},
         "under_citizen_review": True,
     }
     json.dump(manifest, open(f"{out}/manifest.json", "w"), indent=1, ensure_ascii=False)
@@ -318,9 +353,9 @@ def main(src, site):
     json.dump(index, open(f"{out}/index.json", "w"), indent=1, ensure_ascii=False)
 
     print(f"downloads: {len(projects):,} projects, {len(annex):,} Annex A rows, {len(summary)} summary rows, "
-          f"{len(provisions)} provisions; checks {len(checks) - len(failed)}/{len(checks)} passed", file=sys.stderr)
-    for c in failed:
-        print(f"  ✗ {c['check']}: ours {c['ours']} vs printed {c['printed']} {c['note']}", file=sys.stderr)
+          f"{len(provisions)} provisions; checks {sum(c['ok'] for c in checks)}/{len(checks)} passed; page misses {len(misses)}", file=sys.stderr)
+    for c in (c for c in checks if not c["ok"]):
+        print(f"  {'✗' if c['blocking'] else '·'} {c['check']}: ours {c['ours']} vs printed {c['printed']} {c['note']}", file=sys.stderr)
     if failed:
         sys.exit(1)
 
@@ -347,6 +382,7 @@ committee report are versions of one budget: compare them, never add them.
 | senate-2027-provisions.csv / .parquet | {n_prov:,} | Annex B, the amendments to the provisions |
 | senate-2027-pairings.csv / .parquet | | insertions paired or flagged, to check (columns as the projects file's) |
 | senate-2027-checks.csv | {n_checks} | the checks this build ran ({n_ok} of {n_checks} passed) |
+| senate-2027-page-misses.csv | | page links whose page doesn't print the project's name, to check by hand |
 | manifest.json | | sources, files, row counts and SHA-256 |
 | senate-2027-dataset.zip | | the CSVs, the checks, this README, the manifest and SHA256SUMS.txt (its own SHA-256 is on the download page and in index.json) |
 | SHA256SUMS.txt | | SHA-256 of every file and of the source PDFs |
@@ -370,10 +406,13 @@ The House bill (HB 10858, third reading) and the NEP pages cited are at budget-a
    you get from the Senate.
 3. **Every amount cites its page.** `senate_pdf_url` opens the report at the page that prints the row;
    `house_pdf_url` and `nep_pdf_url` open the House bill and the NEP at theirs.
-4. **The totals add up.** senate-2027-checks.csv lists every check the build ran: each program's House bill and
+4. **Every page link prints its project.** For each project the build opens the Senate, House bill and NEP page it
+   cites and looks for the project's name there (allowing for OCR misreadings in the NEP). The checks give how many
+   pass; senate-2027-page-misses.csv lists any that don't, to check by hand.
+5. **The totals add up.** senate-2027-checks.csv lists every check the build ran: each program's House bill and
    Senate totals against the totals the annexes print, the row arithmetic, the General Summary's own sums, and our
    line-by-line Senate amounts against the General Summary. The build stops if one fails.
-5. **Rebuild it.** The code is public: `npm run build:senate-cr` with the report's PDFs in /data/senate-cr-2027/raw
+6. **Rebuild it.** The code is public: `npm run build:senate-cr` with the report's PDFs in /data/senate-cr-2027/raw
    reproduces these files from commit `{commit}`.
 
 Found a wrong figure? https://github.com/bettergovph/ai-reports/issues (give the file, the row and the page).
@@ -488,6 +527,7 @@ printed, with an empty `label`.
 | printed | the figure it must equal (the report's printed total, or the count of rows checked) |
 | difference, ok | ours minus printed; whether they are equal |
 | source, note | where the printed figure comes from; what differs, if anything |
+| blocking | a failed blocking check stops the build; page-link checks are reported, with their misses listed |
 """
 
 if __name__ == "__main__":
