@@ -46,7 +46,7 @@ interface Report {
   dpwh_central_office: { house: number; senate: number; removed_n: number; removed: number };
   hfep_kinds: Array<{ kind: string; n: number; change: number }>;
   provisions: { n: number; general: number; by_department: Array<{ department: string; n: number }> };
-  checks: { run: number; passed: number };
+  checks: { run: number; passed: number; totals_run?: number; totals_passed?: number; page_links?: number; page_links_ok?: number };
 }
 
 const loadReport = () => cached('senate:report', () => getJson<Report>(dataUrl(`${SENATE_BASE}/report.json`), 'Could not load the Senate report'));
@@ -644,7 +644,8 @@ function AboutPage({ r }: { r: Report }) {
         <h3 className="rr-h3">Where every figure comes from</h3>
         <p className="rr-note">
           The <Link to={SENATE_DATA_ROOT}>Senate committee report dataset</Link>: every project, amendment, General Summary line and provision, read from the report’s PDFs,
-          with {r.checks.passed} of {r.checks.run} checks against its printed totals passing. Red flags and documents: the House bill <Link to={REVIEW_ROOT}>project reviewer</Link>.
+          with {r.checks.totals_passed ?? r.checks.passed} of {r.checks.totals_run ?? r.checks.run} checks against its printed totals and arithmetic passing
+          {r.checks.page_links ? <>, and {r.checks.page_links_ok?.toLocaleString()} of {r.checks.page_links.toLocaleString()} page links opening a page that prints their project</> : null}. Red flags and documents: the House bill <Link to={REVIEW_ROOT}>project reviewer</Link>.
           Report built {r.built_at.slice(0, 10)}{r.source_commit && <> from commit <code>{r.source_commit.slice(0, 10)}</code></>} (<code>scripts/senate-cr/build_report.py</code>).
         </p>
       </section>

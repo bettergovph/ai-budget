@@ -52,6 +52,8 @@ export default function SenateData() {
   const zip = file('senate-2027-dataset.zip');
   const failed = d.check_rows.filter((c) => !c.ok && c.blocking !== false);
   const pageChecks = d.check_rows.filter((c) => c.blocking === false);
+  const totalChecks = d.check_rows.filter((c) => c.blocking !== false);
+  const totalsOk = totalChecks.filter((c) => c.ok).length;
   const pageOk = pageChecks.reduce((a, c) => a + Number(c.ours), 0);
   const pageAll = pageChecks.reduce((a, c) => a + Number(c.printed), 0);
   const misses = file('senate-2027-page-misses.csv');
@@ -153,7 +155,7 @@ export default function SenateData() {
               {pageAll > pageOk && <> (the rest are listed in <code>senate-2027-page-misses.csv</code>, to check by hand)</>}. Every project list shows these pages.
             </li>
             <li>
-              <strong>The totals add up.</strong> {d.checks.passed} of {d.checks.run} checks pass: each program's House bill and Senate totals against
+              <strong>The totals add up.</strong> {totalsOk} of {totalChecks.length} checks pass: each program's House bill and Senate totals against
               the totals the annexes print, the row arithmetic, the General Summary's own sums, and our line-by-line Senate amounts against the
               General Summary. The build stops if one fails.
             </li>
@@ -165,7 +167,7 @@ export default function SenateData() {
         </section>
 
         <section className="nep-section">
-          <SectionHead size="sm" eyebrow="Checks" headline={`${d.checks.passed} of ${d.checks.run} checks against the Senate committee report pass`} />
+          <SectionHead size="sm" eyebrow="Checks" headline={`${totalsOk} of ${totalChecks.length} total checks pass · ${pageOk.toLocaleString()} of ${pageAll.toLocaleString()} page links print their project`} />
           {failed.length > 0 && <p className="nep-status-error">{failed.length} checks failed in this build; see the list.</p>}
           <div className="nep-table-wrap">
             <table className="nep-table senate-dl-table">

@@ -159,7 +159,12 @@ def main(site, hgab):
     # --- Provisions -------------------------------------------------------------------------------------------------
     out["provisions"] = {"n": len(prov), "general": int((prov.part == "general").sum()),
                          "by_department": [{"department": k, "n": int(v)} for k, v in prov.department.value_counts().head(6).items()]}
-    out["checks"] = index["checks"]
+    # The dataset's checks, by kind: the totals and arithmetic (a failure stops the build), and the page links.
+    rows = index.get("check_rows", [])
+    totals_rows = [c for c in rows if c.get("blocking", True)]
+    page_rows = [c for c in rows if not c.get("blocking", True)]
+    out["checks"] = {**index["checks"], "totals_run": len(totals_rows), "totals_passed": sum(c["ok"] for c in totals_rows),
+                     "page_links": sum(int(c["printed"]) for c in page_rows), "page_links_ok": sum(int(c["ours"]) for c in page_rows)}
     json.dump(out, open(f"{site}/report.json", "w"), indent=1, ensure_ascii=False, default=lambda o: o.item() if hasattr(o, "item") else str(o))
     f = out["dpwh_flags"]
     print(f"report: DPWH removed {progs['dpwh']['status']['cut']['n']:,}, red-flag profile removed {f['removed']['insertion_flag']}% vs kept "
