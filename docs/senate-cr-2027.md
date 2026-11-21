@@ -221,6 +221,19 @@ only if they add up with its own House amount.
 The page: `/senate/2027/data` ("Download data" in About, `SenateData.tsx`): the ZIP, each table's CSV and Parquet
 with rows and SHA-256, the five ways to check, every check with its result, and the source PDFs' SHA-256.
 
+## Executive report (unlinked)
+
+`/senate/2027/report` (Jason, 2026-11-21: "an executive report of what was changed and our analysis based on that
+data ... don't link it for now"): no menu, not in the sitemap, noindex (`seo.ts`). `SenateReport.tsx` renders
+`senate/2027/report.json`, which `build_report.py` (after `build_downloads.py` in `build:senate-cr`) computes from
+the published dataset and, for DPWH red flags and documents, the reviewer's `documents/review.json`. Sections: key
+findings; the whole bill and departments; the largest single amendments (Annex A, one per printed amount, DPWH
+apart); unprogrammed appropriations; the four programs; DPWH by origin (House insertion or NEP), program line,
+multi-purpose buildings, region, district engineering office (office, not district: Lone/Shared shown); removed vs
+kept by red flags and documents; the foreign-assisted projects raised; FMR, NIA, HFEP; provisions; what the report
+does not say. The red-flag comparison is a pattern in the data, never the Senate's reason: the report gives none.
+To publish it, link it from the Senate overview and drop `noindex`.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
