@@ -29,8 +29,8 @@ const ABOUT = [
 ];
 
 /**
- * Masthead + the section's sub-nav, in the House bill section's shape (HgabHeader): Overview, Line by line and
- * Provisions; the four programs' menus, named as there (PROGRAM_NAV); About.
+ * Masthead + the section's sub-nav, in the House bill section's shape (HgabHeader): Overview and Line by line; the
+ * four programs' menus, named as there (PROGRAM_NAV); Provisions, before About (Jason, 2026-11-21); About.
  */
 export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb?: ReactNode; compiledMeta?: ReactNode; heroBlend?: boolean }) {
   const { pathname, search } = useLocation();
@@ -39,8 +39,8 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
   const lead = [
     { to: `${SENATE_ROOT}/overview`, label: 'Overview', on: path === SENATE_ROOT || path === `${SENATE_ROOT}/overview` },
     { to: SENATE_EXPLORER_ROOT, label: 'Line by line', on: path === SENATE_EXPLORER_ROOT || path.startsWith(`${SENATE_EXPLORER_ROOT}/`) },
-    { to: SENATE_PROVISIONS_ROOT, label: 'Provisions', on: path === SENATE_PROVISIONS_ROOT },
   ];
+  const tail = [{ to: SENATE_PROVISIONS_ROOT, label: 'Provisions', on: path === SENATE_PROVISIONS_ROOT }];
   const programOn = (k: DatasetKey) => path === `${SENATE_ROOT}/${k}` || path.startsWith(`${SENATE_ROOT}/${k}/`);
   const aboutKey = ABOUT.find((a) => path === a.to)?.key ?? null;
   const link = (n: { to: string; label: string; on: boolean }) => (
@@ -63,6 +63,7 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
               currentKey={programOn(p.key) && path === `${SENATE_ROOT}/${p.key}` ? view : null}
             />
           ))}
+          {tail.map(link)}
           <SectionMenu label="About" items={ABOUT} active={aboutKey != null} currentKey={aboutKey} />
         </nav>
       }
@@ -82,6 +83,7 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
               </div>
             </div>
           ))}
+          {tail.map(link)}
           {ABOUT.map((a) => <Link key={a.key} to={a.to} className={aboutKey === a.key ? 'active' : ''}>{a.label}</Link>)}
         </nav>
       }
