@@ -223,8 +223,12 @@ with rows and SHA-256, the five ways to check, every check with its result, and 
 
 ## Executive report (unlinked)
 
-`/senate/2027/report` (Jason, 2026-11-21: "an executive report of what was changed and our analysis based on that
-data ... don't link it for now"): no menu, not in the sitemap, noindex (`seo.ts`). `SenateReport.tsx` renders
+`/senate/2027/report/*` (Jason, 2026-11-21: "an executive report of what was changed and our analysis based on that
+data ... don't link it for now"): no menu, not in the sitemap, noindex (`seo.ts` and a robots meta tag). It looks like
+the House bill review report ("make it look like our hgab's review report"): its own bar, pages listed on the left,
+a notice box, cards and tables, with `hgab-review-report.css`. Ten pages: Overview (key findings), The whole bill,
+Largest amendments, Unprogrammed, Infrastructure programs, DPWH, District offices, Red flags, Provisions, About this
+report. `SenateReport.tsx` renders
 `senate/2027/report.json`, which `build_report.py` (after `build_downloads.py` in `build:senate-cr`) computes from
 the published dataset and, for DPWH red flags and documents, the reviewer's `documents/review.json`. Sections: key
 findings; the whole bill and departments; the largest single amendments (Annex A, one per printed amount, DPWH

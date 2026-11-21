@@ -252,7 +252,7 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
   `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 26 checks against the report's
   printed totals; a failed check stops the build. Sub-nav: Overview, Line by line, the four programs, Provisions, About.
-  Executive report `/senate/2027/report` (2026-11-21): **unlinked on purpose** (no menu, no sitemap, noindex) until
+  Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
   Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
 
 ### Citizen Reports (`/citizen-reports`, #53)
