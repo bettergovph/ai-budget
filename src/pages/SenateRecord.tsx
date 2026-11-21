@@ -90,6 +90,15 @@ export default function SenateRecord() {
             {r.renamed && <span className="hgab-rec-label"><em>Name</em>Revised by the Senate</span>}
           </div>
           <p className="hgab-rec-help">{SENATE_STATUS[r.status].help}</p>
+          {r.check_note && (
+            <p className="senate-check is-box">
+              {r.check_note}.{' '}
+              {r.check_id && (r.matched_by === 'restored_nep'
+                ? <Link to={recordPath(key, r.check_id)}>The NEP project →</Link>
+                : r.check_id !== r.id && <Link to={senateRecordPath(key, r.check_id)}>The House bill project →</Link>)}
+              {' '}Our matching paired or flagged it; check it against the annex page.
+            </p>
+          )}
         </div>
         <SenateReviewBanner compact />
 

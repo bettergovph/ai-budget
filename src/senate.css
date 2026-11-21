@@ -147,3 +147,8 @@
 .rr-card.sr-down { border-top: 3px solid var(--negative); }
 .rr-card.sr-up { border-top: 3px solid var(--positive); }
 @media (max-width: 900px) { .sr-split { grid-template-columns: 1fr; } }
+
+/* An insertion our matching paired or flagged (scripts/senate-cr/pairs.py): what to check. */
+.senate-check { display: block; margin-top: 3px; font-size: 0.74rem; color: #8a5a00; }
+.senate-check::before { content: "⚑ "; }
+.senate-check.is-box { margin: 8px 0 0; padding: 6px 10px; border: 1px solid #f1d39b; border-radius: 6px; background: #fff8eb; font-size: 0.85rem; }

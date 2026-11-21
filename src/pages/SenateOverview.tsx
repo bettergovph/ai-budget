@@ -162,7 +162,7 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
         {SENATE_STATUS_ORDER.map((s) => {
           const v = p.status[s];
           if (!v) return null;
-          const w = ((s === 'added' ? v.senate_php : v.house_php) / total) * 100;
+          const w = ((s === 'added' || s === 'restored' ? v.senate_php : v.house_php) / total) * 100;
           return <span key={s} style={{ width: `${w}%`, background: SENATE_STATUS[s].tone }} title={SENATE_STATUS[s].label} />;
         })}
       </div>
@@ -181,7 +181,7 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
 /** What a status group's money means: cut and renamed carry the House amount, added the Senate's, raised and
  * reduced the change. */
 function statusAmount(s: string, v: { nep_php: number; house_php: number; senate_php: number }): string {
-  if (s === 'added') return fmt.shortPhp(v.senate_php);
+  if (s === 'added' || s === 'restored') return fmt.shortPhp(v.senate_php);
   if (s === 'nep_only') return `NEP ${fmt.shortPhp(v.nep_php)}`;
   if (s === 'raised' || s === 'reduced') {
     const d = v.senate_php - v.house_php;

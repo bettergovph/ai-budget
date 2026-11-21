@@ -74,7 +74,7 @@ export default function SenateProgram() {
     </>
   );
   const st = sum.status;
-  const changedCount = (['cut', 'reduced', 'raised', 'added'] as SenateStatus[]).reduce((a, k) => a + (st[k]?.count ?? 0), 0);
+  const changedCount = (['cut', 'reduced', 'raised', 'added', 'restored'] as SenateStatus[]).reduce((a, k) => a + (st[k]?.count ?? 0), 0);
   return (
     <>
       <SenateHeader
@@ -90,7 +90,7 @@ export default function SenateProgram() {
           <>
             {fmt.shortPhp(sum.house_php)} in the House bill, {fmt.shortPhp(sum.senate_php)} in the Senate committee report.
             {' '}{changedCount.toLocaleString()} projects change in amount
-            {' '}({(['cut', 'reduced', 'raised', 'added'] as SenateStatus[]).filter((x) => st[x]?.count)
+            {' '}({(['cut', 'reduced', 'raised', 'added', 'restored'] as SenateStatus[]).filter((x) => st[x]?.count)
               .map((x) => `${st[x]!.count.toLocaleString()} ${SENATE_STATUS[x].plural}`).join(', ')})
             {st.renamed?.count ? <>; {st.renamed.count.toLocaleString()} keep their amount under a revised name</> : null}.
           </>
@@ -357,7 +357,8 @@ function ProjectsView({ k }: { k: DatasetKey }) {
                 <td className="hgab-ex-name">
                   <Link to={senateRecordPath(k, r.id)}>{r.title}</Link>
                   {r.hb_title && r.renamed && <span className="senate-rename">{r.hb_title}</span>}
-                  <span className="hgab-ex-sub">{[r.office, r.region].filter(Boolean).join(' · ')}</span>
+                  <span className="hgab-ex-sub">{[k === 'hfep' ? r.pap : null, r.office, r.region].filter(Boolean).join(' · ')}</span>
+                  {r.check_note && <span className="senate-check" title="Paired or flagged by our matching: check it against the annex page">{r.check_note}</span>}
                 </td>
                 <td className="num nep-td-base">{r.nep_php != null ? fmt.shortPhp(r.nep_php) : <span className="hgab-ds-null">—</span>}</td>
                 <td className="num">{r.house_php != null ? fmt.shortPhp(r.house_php) : <span className="hgab-ds-null">—</span>}</td>

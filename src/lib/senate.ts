@@ -88,8 +88,8 @@ export function senateProjectsUrl(key: DatasetKey): string {
 // Status of a project in the committee report
 // ---------------------------------------------------------------------------
 
-export type SenateStatus = 'cut' | 'reduced' | 'raised' | 'added' | 'renamed' | 'unchanged' | 'nep_only';
-export const SENATE_STATUS_ORDER: readonly SenateStatus[] = ['cut', 'reduced', 'raised', 'added', 'renamed', 'unchanged', 'nep_only'];
+export type SenateStatus = 'cut' | 'reduced' | 'raised' | 'added' | 'restored' | 'renamed' | 'unchanged' | 'nep_only';
+export const SENATE_STATUS_ORDER: readonly SenateStatus[] = ['cut', 'reduced', 'raised', 'added', 'restored', 'renamed', 'unchanged', 'nep_only'];
 
 export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string; help: string; tone: string }> = {
   cut: {
@@ -107,6 +107,10 @@ export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string
   added: {
     label: 'Inserted', plural: 'inserted by the Senate', tone: '#2f6fb3',
     help: 'Not in the House bill; the Senate committee report inserts it. Some revise a House project it removes (a corrected name or new coordinates).',
+  },
+  restored: {
+    label: 'Restored from the NEP', plural: 'restored from the NEP', tone: '#1f7f86',
+    help: 'In the NEP but not in the House bill; the Senate committee report puts it back.',
   },
   renamed: {
     label: 'Renamed', plural: 'renamed', tone: '#6b5bb3',
@@ -229,6 +233,11 @@ export interface SenateProject {
   nep_page: number | null;
   senate_doc: string;
   senate_page: number | null;
+  /** How the row was matched; `rename_pair`, `restored_nep`, `possible_duplicate`, `same_facility` (scripts/senate-cr/pairs.py). */
+  matched_by?: string | null;
+  /** The project it was paired with or looks like, and what to check. */
+  check_id?: string | null;
+  check_note?: string | null;
 }
 
 export interface SenateDimRow { label: string; nep_php: number; house_php: number; senate_php: number; count: number; changed: number }
