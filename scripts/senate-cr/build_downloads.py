@@ -39,6 +39,7 @@ STEM = "senate-2027"
 PROGRAMS = {"dpwh": "DPWH projects (Annex A-4)", "fmr": "DA farm-to-market roads (Annex A-1)",
             "hfep": "DOH Health Facilities Enhancement Program (Annex A-2)", "nia": "NIA projects (Annex A-3)"}
 STATUS_LABEL = {"cut": "Removed", "reduced": "Reduced", "raised": "Raised", "added": "Inserted by the Senate",
+                "restored": "Restored from the NEP",
                 "renamed": "Renamed", "unchanged": "Unchanged", "nep_only": "NEP only"}
 ANNEX_STATUS = {
     "exact": "matched to the House bill line the report cites",
@@ -144,7 +145,19 @@ def main(src, site):
         "nep_page": p.nep_page,
         "nep_pdf_url": [pdf_url("hgab/2027", d, pg) for d, pg in zip(p.nep_doc, p.nep_page)],
         "page_url": [f"{SITE_URL}/senate/2027/{k}/p/{i}" for k, i in zip(p.program_key, p.id)],
+        "matched_by": p.matched_by,
+        "check_id": p.check_id,
+        "check_note": p.check_note,
     })
+
+    # What to check: every insertion we paired with a removed House project or an NEP project, and every one that
+    # looks like a House project (Jason, 2026-11-21: "It needs further checking").
+    review = projects[projects.matched_by.isin(["rename_pair", "restored_nep", "possible_duplicate", "same_facility"])].copy()
+    other = projects.set_index("id")
+    review["paired_title"] = [other.title.get(c) if isinstance(c, str) and c in other.index else h
+                              for c, h in zip(review.check_id, review.house_title)]
+    review = review[["program", "matched_by", "status", "status_label", "id", "title", "paired_title", "house_title", "region", "pap",
+                     "nep_php", "house_php", "senate_php", "check_note", "senate_page", "senate_pdf_url", "page_url"]]
 
     # --- Annex A, as printed ---------------------------------------------------------------------------------------
     arows = []
@@ -256,6 +269,7 @@ def main(src, site):
         ("annex-a", annex, "Annex A, the line-by-line amendments, as printed: one row per amount the report changes, tied to the House bill line it cites."),
         ("general-summary", summary, "The General Summary: House bill, increase, decrease, net change and Senate amount by department and agency, in pesos (the report prints thousands)."),
         ("provisions", provisions, "Annex B: the amendments to the special and general provisions, each with the House bill page and lines it changes."),
+        ("pairings", review, "Insertions we read as a renamed House project, a restored NEP project, a possible duplicate, or the same facility's other component: to check."),
     ]
     files = []
     for name, df, about in tables:
@@ -331,6 +345,7 @@ committee report are versions of one budget: compare them, never add them.
 | senate-2027-annex-a.csv / .parquet | {n_annex:,} | Annex A, the line-by-line amendments, as printed |
 | senate-2027-general-summary.csv / .parquet | {n_summary:,} | the General Summary by department and agency |
 | senate-2027-provisions.csv / .parquet | {n_prov:,} | Annex B, the amendments to the provisions |
+| senate-2027-pairings.csv / .parquet | | insertions paired or flagged, to check (columns as the projects file's) |
 | senate-2027-checks.csv | {n_checks} | the checks this build ran ({n_ok} of {n_checks} passed) |
 | manifest.json | | sources, files, row counts and SHA-256 |
 | senate-2027-dataset.zip | | the CSVs, the checks, this README, the manifest and SHA256SUMS.txt (its own SHA-256 is on the download page and in index.json) |
@@ -388,6 +403,8 @@ The four programs whose projects the report lists one by one: Annex A-1 to A-4.
 | title | the project's name in the Senate committee report (the House bill's when it isn't listed) |
 | house_title | the project's name in the House bill |
 | renamed | the report gives it a revised name |
+| matched_by | how the row was matched: the annex's own name (exact, prefix, fuzzy, ...); `rename_pair`, an insertion paired with the removed House project it revises; `restored_nep`, an insertion that is an NEP project the House bill doesn't have; `possible_duplicate` / `same_facility`, an insertion that looks like a House project (not merged) |
+| check_id, check_note | the project it was paired with or looks like, and what to check |
 | region, office | where; regions in one form ("Region IV-A", "CAR") |
 | program_line, pap | the program line, or (HFEP) the kind of budget |
 | nep_php, house_php, senate_php | the amount in each version; empty when the version doesn't have it |
@@ -402,6 +419,13 @@ The four programs whose projects the report lists one by one: Annex A-1 to A-4.
 | status | |
 | --- | --- |
 {statuses}
+
+The annexes print a corrected House project as a removal plus an insertion, and an NEP project the House dropped as
+an insertion. We pair them back: an insertion and the removed House project it revises (same region; names at least
+85 similar, or 75 with the same amount and municipality; or the annex's own link) become one renamed, raised or
+reduced project; an insertion that is an NEP project (names at least 90 similar, or 85 with the NEP amount; HFEP: the
+same facility and component) becomes `restored`. Insertions that still look like a House project are flagged in
+`check_note`, not merged. senate-2027-pairings lists them all.
 
 A House bill project the annex doesn't list is unchanged: the annexes list every changed or renamed row. NEP-only
 rows are NEP projects with no House bill line; they are in neither the House bill nor the report.
