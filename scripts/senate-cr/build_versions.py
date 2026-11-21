@@ -74,9 +74,11 @@ def main(src, hgab, out):
                 if i:
                     x = rows[i]
                     x["senate_php"] = int(r["senate_php"] or 0)
-                    x["senate_title"] = r["senate_title"] or x["hb_title"]
+                    # Matched only by a unique amount: the annex prints this title twice over itself, so it reads as
+                    # garbage; the House name stands (the report doesn't rename it legibly).
+                    x["senate_title"] = x["hb_title"] if r["match"] == "amount_unique" else (r["senate_title"] or x["hb_title"])
                     x["senate_pdf_page"], x["match"] = r["senate_pdf_page"], r["match"]
-                    x["_renamed"] = r.get("renamed") == "1"
+                    x["_renamed"] = r.get("renamed") == "1" and r["match"] != "amount_unique"
                 elif r["match"] in ("new",) or not int(r.get("hb_php") or 0):
                     extra.append({"id": "", "hb_title": "", "region": r.get("region", ""), "office": r.get("office", "") or r.get("province", ""),
                                   "program": "", "pap": "", "hb_php": 0, "senate_php": int(r["senate_php"] or 0),
