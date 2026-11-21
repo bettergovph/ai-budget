@@ -177,6 +177,20 @@ explicitly state Senate around"): page titles end "in the Senate" (programs, dep
 Senate ("11 Senate amendments in Annex A", "Largest Senate cuts", "186 Senate amendments to the bill's provisions"),
 and each project page carries a "Version: Senate committee report" label. Headings inside the Annex A box are small.
 
+**Renamed, restored or a possible duplicate** (`pairs.py`; Jason, 2026-11-21: "Some FMRs, NIA, DOH are showing
+inserted instead of renamed or have potential duplicates. It needs further checking"). The project annexes print a
+corrected House project as a removal plus an insertion, and an NEP project the House dropped as an insertion:
+- FMR: 178 insertions are paired with the removed House road they revise (`build_versions.py`: the annex's own link,
+  then the same region and names >= 85 similar, or >= 75 with the same amount and municipality). They read as
+  renamed, raised or reduced under the Senate's name. NIA has none (its insertions are other systems).
+- 85 insertions are NEP projects the House bill doesn't have (FMR 72, NIA 8, HFEP 5): status **Restored from the
+  NEP** (`restored`), one row with the NEP amount instead of an insertion plus an NEP-only row (`build_site.py`).
+- Insertions that still look like a House project are flagged, not merged (`check_note`): 3 FMR possible
+  duplicates; 15 HFEP components for a facility whose other component the House bill funds.
+- 29 FMR pairs whose names differ more than a spelling carry a "check the pairing" note.
+Every pairing and flag: `senate-2027-pairings.csv` in the dataset; `matched_by`, `check_id`, `check_note` on each
+project. The list and project pages show the note (⚑). Totals and checks are unchanged (26/26).
+
 **Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
 every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
