@@ -164,6 +164,12 @@ no NEP line, 6,193 DPWH projects, 3,078 of them removed). Reviewer steps the lis
 questions, review status) are ignored in its URL. The FMR, HFEP and NIA lists have Region and the same Changes menu
 (`status=`, `ins=`); no reviewer link, the reviewer covers DPWH only.
 
+**Department pages** (`SenateExplorerDept.tsx`, 2026-11-21, Jason: "the text is overwhelming especially the Annex
+A"): the amendments read one line each, the activity or project with its region and office below, the expense class
+as a tag (PS, MOOE, CO) and Inserted / Removed / New expense class tags; consecutive rows of one activity sit under
+its name with their sum; the report's instruction ("Between lines 36 and 37, insert …") shows once; an agency folds
+after 12 lines. All-caps names from the report are set in title case, keeping acronyms (`nameCase`).
+
 **Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
 every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
