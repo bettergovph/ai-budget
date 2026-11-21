@@ -176,13 +176,42 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
 }
 
 function ChangesView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) {
+  const [params, setParams] = useSearchParams();
   const groups: Array<[SenateStatus, string]> = [
     ['cut', 'Largest projects cut to zero'], ['reduced', 'Reduced'], ['raised', 'Raised'],
     ['added', 'Largest projects the Senate adds'], ['renamed', 'Largest renamed projects (same amount)'],
   ];
+  const shown = groups.filter(([g]) => sum.top[g]?.length);
+  // One group at a time, or all of them (`?view=changes&status=cut`).
+  const pick = shown.find(([g]) => g === params.get('status'))?.[0] ?? null;
+  const choose = (g: SenateStatus | null) => {
+    const n = new URLSearchParams(params);
+    if (g) n.set('status', g); else n.delete('status');
+    setParams(n, { replace: true });
+  };
+  // The change each group makes (Senate − House bill); renames keep their amount, so theirs is the House amount.
+  const amount = (g: SenateStatus) => {
+    const s = sum.status[g];
+    return s ? (g === 'renamed' ? s.house_php : s.senate_php - s.house_php) : 0;
+  };
   return (
     <>
-      {groups.filter(([g]) => sum.top[g]?.length).map(([g, title]) => (
+      <div className="senate-change-tabs" role="group" aria-label="Show changes">
+        <button type="button" className={pick ? '' : 'is-on'} aria-pressed={!pick} onClick={() => choose(null)}>
+          <span className="senate-change-tab-label">All</span>
+          <span className="senate-change-tab-n">{shown.reduce((a, [g]) => a + (sum.status[g]?.count ?? 0), 0).toLocaleString()} projects</span>
+        </button>
+        {shown.map(([g]) => (
+          <button key={g} type="button" className={pick === g ? 'is-on' : ''} aria-pressed={pick === g} onClick={() => choose(g)}
+            style={{ ['--tone' as string]: SENATE_STATUS[g].tone }}>
+            <span className="senate-change-tab-label">{SENATE_STATUS[g].label}</span>
+            <span className="senate-change-tab-n">
+              {(sum.status[g]?.count ?? 0).toLocaleString()} · {g === 'renamed' ? fmt.shortPhp(amount(g)) : <SignedChange v={amount(g)} />}
+            </span>
+          </button>
+        ))}
+      </div>
+      {shown.filter(([g]) => !pick || g === pick).map(([g, title]) => (
         <section className="nep-section" key={g}>
           <SectionHead
             eyebrow={<SenateStatusChip status={g} />}
