@@ -347,6 +347,14 @@ export function pageMeta(pathname: string): PageMeta {
       description: "Every amendment the FY 2027 Senate committee report makes to the House bill's special and general provisions, with its page.",
     };
   }
+  // The executive report: unlinked for now, kept out of search.
+  if (p === "/senate/2027/report") {
+    return {
+      title: `What the Senate changed in the 2027 budget — executive report · ${SITE}`,
+      description: "An executive report on the FY 2027 Senate committee report: what the Senate changed in the House bill, and what the data shows.",
+      noindex: true,
+    };
+  }
   if (p === "/senate/2027/data") {
     return {
       title: `Senate committee report 2027 — download the dataset · ${SITE}`,

@@ -20,7 +20,7 @@ import * as fmt from '../lib/format';
 import { pdfUrl } from '../lib/hgab';
 import { explorerPath, loadExplorerDept, titleCase, type ExAgency, type ExDept } from '../lib/hgab-explorer';
 import {
-  SENATE_EXPLORER_ROOT, changeKpi, loadSenateExplorer, loadSenateLines, senateLookup, senatePdfUrl,
+  SENATE_EXPLORER_ROOT, changeKpi, loadSenateExplorer, loadSenateLines, nameCase, senateLookup, senatePdfUrl,
   type SenateExplorerDept as SenateEx, type SenateLineRow, type SenateLines,
 } from '../lib/senate';
 import '../nep2027.css';
@@ -156,20 +156,6 @@ function whatWhere(r: SenateLineRow): { what: string; where: string | null } {
   const what = (r.hb_path ? head[head.length - 1] : head.join(' ')).replace(/^(Project\(s\)\s*)?(Locally-Funded Project\(s\)\s*)/i, '');
   const where = at > 0 ? parts.slice(at).filter((x, i, xs) => i === 0 || x !== xs[i - 1]).join(' · ') : null;
   return { what: nameCase((what || r.hb_label || r.label).trim()), where: where ? nameCase(where) : null };
-}
-
-/** Acronyms the report prints in its all-caps names, kept when the name is set in title case. */
-const ACRONYMS = new Set(['UP', 'PGH', 'NCPAG', 'GRIT', 'DRRM', 'TVUP', 'XDP', 'PH', 'ICT', 'DOH', 'DEPED', 'CHED', 'TESDA', 'AFP', 'PNP',
-  'BFP', 'DILG', 'LGU', 'LGUS', 'SUC', 'SUCS', 'NCR', 'CAR', 'BARMM', 'MIMAROPA', 'CALABARZON', 'SOCCSKSARGEN', 'PCC', 'PCIC', 'NIA', 'DPWH', 'ADB', 'JICA']);
-/** The report's all-caps names in title case, keeping acronyms and short words in parentheses ("(CAL)"). */
-function nameCase(s: string): string {
-  if (s !== s.toUpperCase()) return s;
-  const src = s.split(/(\s+)/), out = titleCase(s).split(/(\s+)/);
-  if (src.length !== out.length) return out.join('');
-  return out.map((w, i) => {
-    const pieces = src[i].split('-').map((x) => x.replace(/[^\p{L}]/gu, '')).filter(Boolean);
-    return (pieces.length && pieces.every((x) => ACRONYMS.has(x))) || /^\(\p{L}{2,6}\)[,.;:]?$/u.test(src[i]) ? src[i] : w;
-  }).join('');
 }
 
 const CLASS_TAG: Record<string, string> = { PS: 'PS', MOOE: 'MOOE', CO: 'CO', FINEX: 'FinEx' };

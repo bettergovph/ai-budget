@@ -13,6 +13,7 @@
  * Docs: docs/senate-cr-2027.md. Integer pesos throughout; "Senate" means the committee report, not a
  * passed Senate bill.
  */
+import { titleCase } from './hgab-explorer';
 import { dataUrl } from './data-url';
 import { shortPhp } from './format';
 import { cached, getJson, type DatasetKey } from './hgab';
@@ -25,6 +26,8 @@ export const SENATE_EXPLORER_ROOT = `${SENATE_ROOT}/explorer`;
 export const SENATE_PROVISIONS_ROOT = `${SENATE_ROOT}/provisions`;
 /** The downloadable dataset: files, checksums, the source PDFs and the build's checks (build_downloads.py). */
 export const SENATE_DATA_ROOT = `${SENATE_ROOT}/data`;
+/** The executive report: unlinked for now (no menu, not in the sitemap, noindex). */
+export const SENATE_REPORT_ROOT = `${SENATE_ROOT}/report`;
 
 /**
  * Nothing here has been reviewed by a person yet. While true, every Senate page and the Senate column on the
@@ -365,4 +368,22 @@ export function changeKpi(label: string, senate: number | null | undefined, base
     tone: v ? (v > 0 ? ('up' as const) : ('down' as const)) : undefined,
     sub: `${pct ? `${pct} · ` : ''}Senate minus ${what}`,
   };
+}
+
+/** Acronyms the report prints in its all-caps names, kept when the name is set in title case. */
+const ACRONYMS = new Set(['UP', 'PGH', 'NCPAG', 'GRIT', 'DRRM', 'TVUP', 'XDP', 'PH', 'ICT', 'DOH', 'DEPED', 'CHED', 'TESDA', 'AFP', 'PNP',
+  'BFP', 'DILG', 'LGU', 'LGUS', 'SUC', 'SUCS', 'NCR', 'CAR', 'BARMM', 'MIMAROPA', 'CALABARZON', 'SOCCSKSARGEN', 'PCC', 'PCIC', 'NIA', 'DPWH', 'ADB', 'JICA',
+  'DAR', 'DA', 'DOTR', 'DOE', 'DENR', 'DSWD', 'DICT', 'DTI', 'DOST', 'DOF', 'DND', 'DFA', 'IBRD', 'WB', 'AIIB', 'KEDCF', 'EDCF', 'PRDP', 'SU',
+  'PLUS', 'GOP', 'PBBM', 'NSCR', 'MMSP', 'LRT', 'MRT', 'PDIC', 'PHILHEALTH', 'PHIC', 'SBFP', 'AICS', 'MAIFIP', 'HFEP', 'FMR', 'BCIB', 'LLRN']);
+/** The report's all-caps names in title case, keeping acronyms and short words in parentheses ("(CAL)"). */
+export function nameCase(s: string): string {
+  if (s !== s.toUpperCase()) return s;
+  const src = s.split(/(\s+)/), out = titleCase(s).split(/(\s+)/);
+  if (src.length !== out.length) return out.join('');
+  return out.map((w, i) => {
+    const pieces = src[i].split('-').map((x) => x.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+    // Kept as printed: acronyms, words in parentheses ("(CAL)"), loan numbers ("4432-PHI") and lettered items ("AK.").
+    const keep = (pieces.length && pieces.every((x) => ACRONYMS.has(x))) || /^\(\p{L}{2,6}\)[,.;:]?$/u.test(src[i]) || /\d/.test(src[i]) || (/^[A-Z]{1,2}\.$/.test(src[i]) && src[i] !== "NO.");
+    return keep ? src[i] : w;
+  }).join('');
 }
