@@ -1,16 +1,18 @@
 /**
- * The Senate committee report's DPWH projects (`/senate/2027/dpwh?view=projects`), with the project reviewer's
- * filters: every DPWH project of the House bill from the reviewer's index (documents/review.json: red flags,
- * documents, the office and the districts it serves), joined by its comparison row id to its Senate amount and
- * status (senate/2027/dpwh/projects.parquet). The filter bar and funnel are the reviewer's own
- * (ReviewFilterBar.tsx); a Senate filter narrows by what the committee report does to a project. Each project
- * opens in the reviewer to be reviewed, and on its Senate and House bill pages.
+ * The Senate committee report's DPWH projects (`/senate/2027/dpwh?view=projects`): every DPWH project of the
+ * House bill from the reviewer's index (documents/review.json: red flags, documents, the office and the districts
+ * it serves), joined by its comparison row id to its Senate amount and status (senate/2027/dpwh/projects.parquet).
+ * Five of the reviewer's filters (ReviewFilterBar.tsx: region, DPWH office, budget, documents) and our own
+ * Changes: what the committee report does to a project, and whether the House inserted it (no NEP line). Each
+ * project opens in the reviewer to be reviewed, and on its Senate and House bill pages. This list is also the
+ * program's "changes" view (Jason, 2026-11-21), which redirects here.
  *
- * State lives in the URL as the reviewer's: `s=` funnel steps, plus `sv=` Senate statuses, `sort=` and `pg=`.
+ * State lives in the URL as the reviewer's: `s=` filter steps, plus `sv=` Senate statuses, `ins=` (yes|no),
+ * `sort=` and `pg=`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Check, Dropdown, FilterBar, FunnelStrip, PanelFoot } from './ReviewFilterBar';
+import { Check, Dropdown, FilterBar, PanelFoot } from './ReviewFilterBar';
 import { SenateStatusChip, SignedChange } from './SenateBits';
 import { runQuery } from '../lib/duckdb';
 import { dataUrl } from '../lib/data-url';
@@ -19,11 +21,10 @@ import * as fmt from '../lib/format';
 import { cached, getJson, recordPath } from '../lib/hgab';
 import { REVIEW_INDEX_PATH, type ReviewIndex } from '../lib/hgab-documents';
 import {
-  LIST_STATUS_LABEL, PAGE_SIZE, PRESETS, REVIEW_ROOT, countBy, decodeIndex, listStatus, pageCount, pageWindow, projectVerdict,
+  LIST_STATUS_LABEL, PAGE_SIZE, REVIEW_ROOT, countBy, decodeIndex, listStatus, pageCount, pageWindow, projectVerdict,
   runFunnel, stepToParam, stepsFromSearch,
   type ListStatus, type ReviewProject, type ReviewStatusIndex, type Step,
 } from '../lib/hgab-review';
-import { QUESTIONS, detectorsForQuestion } from '../lib/hgab-redflags-team';
 import { fetchStatus } from '../lib/hgab-review-api';
 import {
   SENATE_STATUS, SENATE_STATUS_ORDER, senateProjectsUrl, senateRecordPath, type SenateStatus,
@@ -59,6 +60,10 @@ const loadSenate = () => cached('senate:dpwh-rows', async () => {
     office: x.office == null ? null : String(x.office), region: x.region == null ? null : String(x.region), program: x.program == null ? null : String(x.program),
   } as SenateRow));
 });
+
+type Ins = 'yes' | 'no';
+/** The reviewer's filter steps this list shows: region, office, budget (program, at least), documents, search. */
+const STEP_KINDS = ['region', 'office', 'program', 'min', 'docs', 'source', 'flag', 'q'] as const;
 
 type Sort = 'change' | 'house' | 'senate' | 'vsnep' | 'title' | 'review';
 const SORT_LABEL: Record<Sort, string> = {
@@ -96,21 +101,28 @@ export default function SenateDpwhProjects() {
   }, [reviewed, senateRows]);
   const inReviewer = useMemo(() => new Set(reviewed.map((p) => p.hgabId)), [reviewed]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
-  const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
+  // Only the filters this list shows: a reviewer link's red flags, questions or review status don't apply here.
+  const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())).filter((x) => (STEP_KINDS as readonly string[]).includes(x.kind)
+    && (x.kind !== 'flag' || !!index?.flags[flagIndex.get(x.code) ?? -1]?.computed)), [params, flagIndex, index]);
   const autoRows = index?.auto?.rows;
   const statusOf = useCallback((h: string): ListStatus => {
     const entry = shared?.[h];
     return listStatus(entry ? projectVerdict(entry.verdicts) : null, (entry?.reviews ?? 0) > 0, !!entry?.auto || !!autoRows?.[h]);
   }, [shared, autoRows]);
-  const teamIndex = useMemo(() => new Map(QUESTIONS.map((q) => [q.id, detectorsForQuestion(q.id).map((c) => flagIndex.get(c)).filter((i): i is number => i != null)])), [flagIndex]);
-  const ctx = useMemo(() => ({ flagIndex, statusOf, teamIndex }), [flagIndex, statusOf, teamIndex]);
+  const ctx = useMemo(() => ({ flagIndex, statusOf }), [flagIndex, statusOf]);
   const levels = useMemo(() => runFunnel(all, steps, ctx), [all, steps, ctx]);
   const afterSteps = levels[levels.length - 1].projects;
 
-  // The Senate filter, after the reviewer's steps.
+  // Changes, after the reviewer's steps: what the Senate does (`sv=`) and whether the House inserted it (`ins=`).
   const sv = useMemo(() => (params.get('sv') ?? '').split('|').filter((v): v is SenateStatus => (SENATE_STATUS_ORDER as readonly string[]).includes(v)), [params]);
+  const ins = useMemo(() => (params.get('ins') ?? '').split('|').filter((v): v is Ins => v === 'yes' || v === 'no'), [params]);
   const senateOf = useCallback((p: ReviewProject) => bySenate.get(p.projectId) ?? null, [bySenate]);
-  const current = useMemo(() => (sv.length ? afterSteps.filter((p) => sv.includes(senateOf(p)?.status ?? 'unchanged')) : afterSteps), [afterSteps, sv, senateOf]);
+  const statusIn = useCallback((p: ReviewProject) => senateOf(p)?.status ?? 'unchanged', [senateOf]);
+  // Inserted by the House: no NEP line (the Senate row's NEP amount; the reviewer's mark for the few it lacks).
+  const insOf = useCallback((p: ReviewProject): Ins => { const s = senateOf(p); return (s ? s.nep_php == null : p.insertion) ? 'yes' : 'no'; }, [senateOf]);
+  const bySv = useMemo(() => (sv.length ? afterSteps.filter((p) => sv.includes(statusIn(p))) : afterSteps), [afterSteps, sv, statusIn]);
+  const byIns = useMemo(() => (ins.length ? afterSteps.filter((p) => ins.includes(insOf(p))) : afterSteps), [afterSteps, ins, insOf]);
+  const current = useMemo(() => (ins.length ? bySv.filter((p) => ins.includes(insOf(p))) : bySv), [bySv, ins, insOf]);
   const sort: Sort = (params.get('sort') as Sort) in SORT_LABEL ? (params.get('sort') as Sort) : 'change';
   const listed = useMemo(() => {
     const val = (p: ReviewProject): number | string => {
@@ -144,7 +156,8 @@ export default function SenateDpwhProjects() {
     stepsRef.current = next;
     update((p) => { p.delete('s'); p.delete('pg'); next.forEach((s) => p.append('s', stepToParam(s))); });
   };
-  const setSv = (v: SenateStatus[]) => update((p) => { if (v.length) p.set('sv', v.join('|')); else p.delete('sv'); p.delete('pg'); });
+  const setList = (key: 'sv' | 'ins', v: string[]) => update((p) => { if (v.length) p.set(key, v.join('|')); else p.delete(key); p.delete('pg'); });
+  const toggle = <T extends string>(key: 'sv' | 'ins', cur: T[], v: T) => setList(key, cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]);
 
   // A House bill row printed as two lines is two projects in the reviewer and one Senate row: count it once.
   const lines = useMemo(() => countBy(all, (p) => p.projectId), [all]);
@@ -159,7 +172,9 @@ export default function SenateDpwhProjects() {
       return t;
     }, { nep: 0, house: 0, senate: 0 });
   }, [current, senateOf]);
-  const svCounts = useMemo(() => countBy(afterSteps, (p) => senateOf(p)?.status ?? 'unchanged'), [afterSteps, senateOf]);
+  // Each group counted against the other's checks, as the reviewer's filters.
+  const svCounts = useMemo(() => countBy(byIns, statusIn), [byIns, statusIn]);
+  const insCounts = useMemo(() => countBy(bySv, insOf), [bySv, insOf]);
 
   const exportCsv = () => {
     const cols = ['house_id', 'reviewer_id', 'title', 'senate_title', 'office', 'districts', 'region', 'program', 'nep_php', 'house_php', 'senate_php',
@@ -176,28 +191,36 @@ export default function SenateDpwhProjects() {
 
   if (err) return <p className="nep-status-error">{err}</p>;
   if (!index || !senateRows) return <p className="hgab-ex-none" role="status">Loading the projects and their red flags…</p>;
-  const presets = PRESETS.filter((p) => p.steps.every((s) => s.kind !== 'flag' || flagIndex.has(s.code)));
 
   return (
     <section className="nep-section senate-dpwh-projects">
       <div className="senate-rv-bar">
         <FilterBar key={params.getAll('s').filter((x) => x.startsWith('q:')).join()} ix={index} all={all} steps={steps} current={current}
-          ctx={ctx} presets={presets} shared={!!shared} onSteps={applySteps}
+          ctx={ctx} presets={[]} shared={!!shared} onSteps={applySteps} only={['region', 'office', 'budget', 'extra', 'documents']}
           extra={
-            <Dropdown label="Senate" count={sv.length} active={sv.length > 0}>
-              {SENATE_STATUS_ORDER.filter((v) => v !== 'nep_only' && v !== 'added').map((v) => (
-                <Check key={v} checked={sv.includes(v)} onChange={() => setSv(sv.includes(v) ? sv.filter((x) => x !== v) : [...sv, v])}
-                  label={SENATE_STATUS[v].label} note={SENATE_STATUS[v].help} k={svCounts.get(v) ?? 0} max={Math.max(1, afterSteps.length)} />
-              ))}
+            <Dropdown label="Changes" count={sv.length + ins.length} active={sv.length + ins.length > 0} wide>
+              <div className="rv-dd-cols">
+                <div className="rv-dd-group">
+                  <h3>In the Senate committee report</h3>
+                  {SENATE_STATUS_ORDER.filter((v) => v !== 'nep_only' && (v !== 'added' || svCounts.get(v))).map((v) => (
+                    <Check key={v} checked={sv.includes(v)} onChange={() => toggle('sv', sv, v)}
+                      label={SENATE_STATUS[v].label} note={SENATE_STATUS[v].help} k={svCounts.get(v) ?? 0} max={Math.max(1, byIns.length)} />
+                  ))}
+                </div>
+                <div className="rv-dd-group">
+                  <h3>In the House bill</h3>
+                  <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted"
+                    note="Added by the House: no matching line in the NEP." k={insCounts.get('yes') ?? 0} max={Math.max(1, bySv.length)} />
+                  <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted"
+                    note="A line the NEP proposed too." k={insCounts.get('no') ?? 0} max={Math.max(1, bySv.length)} />
+                </div>
+              </div>
               <PanelFoot>
-                <span>What the Senate committee report does to the project.</span>
-                {sv.length > 0 && <button type="button" onClick={() => setSv([])}>Clear</button>}
+                <span>Projects with any checked change; both columns checked, projects must match each.</span>
+                {sv.length + ins.length > 0 && <button type="button" onClick={() => update((p) => { p.delete('sv'); p.delete('ins'); p.delete('pg'); })}>Clear</button>}
               </PanelFoot>
             </Dropdown>
           } />
-        <FunnelStrip levels={levels} flags={index.flags} offices={index.offices}
-          onRemove={(i) => applySteps((cur) => cur.filter((_, j) => j !== i))}
-          onFlip={(i) => applySteps((cur) => cur.map((s, j) => (j === i && s.kind === 'flag' ? { ...s, not: !s.not } : s)))} />
       </div>
 
       <div className="senate-list-head">
