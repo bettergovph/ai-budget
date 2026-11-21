@@ -65,16 +65,3 @@
 .nep-table-count .nep-delta { display: inline; }
 .nep-table-count .nep-delta-pct { margin-left: 0.3em; }
 
-/* "Changes": one status group at a time. */
-.senate-change-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 4px; }
-.senate-change-tabs button {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; min-width: 140px;
-  border: 1px solid var(--rule); border-left: 3px solid var(--tone, var(--ink-3)); border-radius: 6px;
-  background: var(--paper, #fff); color: var(--ink); cursor: pointer; text-align: left; font: inherit;
-}
-.senate-change-tabs button:hover { border-color: var(--ink-3); border-left-color: var(--tone, var(--ink-3)); }
-.senate-change-tabs button.is-on { background: var(--ink); color: var(--paper, #fff); border-color: var(--ink); }
-.senate-change-tab-label { font-weight: 600; font-size: 0.92rem; }
-.senate-change-tab-n { font-family: var(--font-mono); font-size: 0.78rem; opacity: 0.8; }
-.senate-change-tab-n .nep-delta { display: inline; color: inherit !important; }
-.senate-change-tab-n .nep-delta-pct { display: none; }

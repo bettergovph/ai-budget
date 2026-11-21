@@ -4,7 +4,6 @@
  *   overview   totals, what happened to the House bill's projects, by region and by program line
  *   projects   every project, queried in the browser with DuckDB-Wasm over `<program>/projects.parquet`;
  *              filters and paging in the URL so a view can be shared; CSV of what is filtered
- *   changes    the largest cuts, raises and additions, and renamed projects
  * NEP is shown for reference; "Change" is the committee report minus the House bill.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,7 +30,7 @@ import '../nep2027.css';
 import '../hgab-explorer.css';
 import '../hgab-dataset.css';
 
-const VIEWS = ['overview', 'projects', 'changes'] as const;
+const VIEWS = ['overview', 'projects'] as const;
 /** The House bill section's names for the four programs (its overview.json labels). */
 const PROGRAM_TITLE: Record<DatasetKey, string> = {
   dpwh: 'DPWH national infrastructure', fmr: 'DA farm-to-market roads', hfep: 'DOH Health Facilities Enhancement Program', nia: 'NIA irrigation',
@@ -56,6 +55,11 @@ export default function SenateProgram() {
     if (key) document.title = pageMeta(senateProgramPath(key, view)).title;
   }, [key, view]);
   if (!key) return <Navigate to="/senate/2027/overview" replace />;
+  // "Changes" was a page of its own until the project lists filtered by change (2026-11-21): its links open the list.
+  if (params.get('view') === 'changes') {
+    const st = params.get('status');
+    return <Navigate to={st ? senateListPath(key, 'status', st) : senateProgramPath(key, 'projects')} replace />;
+  }
   const cur = s?.key === key ? s : null;
   if (cur?.err) return <SenateError message={cur.err} />;
   if (!cur?.sum) return <SenateLoading what={`${PROGRAM_SHORT[key]} in the Senate committee report`} />;
@@ -96,7 +100,6 @@ export default function SenateProgram() {
         <SenateReviewBanner compact />
         {view === 'overview' && <OverviewView k={key} sum={sum} />}
         {view === 'projects' && (key === 'dpwh' ? <SenateDpwhProjects /> : <ProjectsView k={key} />)}
-        {view === 'changes' && <ChangesView k={key} sum={sum} />}
         <p className="nep-provenance">
           From the Senate committee report's <a href={senatePdfUrl(sum.senate_doc)} target="_blank" rel="noreferrer">annex for this program</a>,
           {' '}matched to the House bill's projects (<Link to={datasetPath(key)}>{PROGRAM_SHORT[key]} in the House bill</Link>). Built {sum.built_at.slice(0, 10)}.
@@ -175,94 +178,8 @@ function DimTable({ title, rows, k, param, note }: { title: string; rows: Senate
   );
 }
 
-function ChangesView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) {
-  const [params, setParams] = useSearchParams();
-  const groups: Array<[SenateStatus, string]> = [
-    ['cut', 'Largest projects cut to zero'], ['reduced', 'Reduced'], ['raised', 'Raised'],
-    ['added', 'Largest projects the Senate adds'], ['renamed', 'Largest renamed projects (same amount)'],
-  ];
-  const shown = groups.filter(([g]) => sum.top[g]?.length);
-  // One group at a time, or all of them (`?view=changes&status=cut`).
-  const pick = shown.find(([g]) => g === params.get('status'))?.[0] ?? null;
-  const choose = (g: SenateStatus | null) => {
-    const n = new URLSearchParams(params);
-    if (g) n.set('status', g); else n.delete('status');
-    setParams(n, { replace: true });
-  };
-  // The change each group makes (Senate − House bill); renames keep their amount, so theirs is the House amount.
-  const amount = (g: SenateStatus) => {
-    const s = sum.status[g];
-    return s ? (g === 'renamed' ? s.house_php : s.senate_php - s.house_php) : 0;
-  };
-  return (
-    <>
-      <div className="senate-change-tabs" role="group" aria-label="Show changes">
-        <button type="button" className={pick ? '' : 'is-on'} aria-pressed={!pick} onClick={() => choose(null)}>
-          <span className="senate-change-tab-label">All</span>
-          <span className="senate-change-tab-n">{shown.reduce((a, [g]) => a + (sum.status[g]?.count ?? 0), 0).toLocaleString()} projects</span>
-        </button>
-        {shown.map(([g]) => (
-          <button key={g} type="button" className={pick === g ? 'is-on' : ''} aria-pressed={pick === g} onClick={() => choose(g)}
-            style={{ ['--tone' as string]: SENATE_STATUS[g].tone }}>
-            <span className="senate-change-tab-label">{SENATE_STATUS[g].label}</span>
-            <span className="senate-change-tab-n">
-              {(sum.status[g]?.count ?? 0).toLocaleString()} · {g === 'renamed' ? fmt.shortPhp(amount(g)) : <SignedChange v={amount(g)} />}
-            </span>
-          </button>
-        ))}
-      </div>
-      {shown.filter(([g]) => !pick || g === pick).map(([g, title]) => (
-        <section className="nep-section" key={g}>
-          <SectionHead
-            eyebrow={<SenateStatusChip status={g} />}
-            headline={title}
-            dek={<Link to={senateListPath(k, 'status', g)}>All {sum.status[g]?.count.toLocaleString()} {SENATE_STATUS[g].plural} →</Link>}
-          />
-          <ProjectTable k={k} rows={sum.top[g]! as SenateProject[]} />
-        </section>
-      ))}
-    </>
-  );
-}
-
-/** A table of projects: name (with the House bill's name when the Senate renames it), NEP, House, Senate, change. */
-function ProjectTable({ k, rows }: { k: DatasetKey; rows: SenateProject[] }) {
-  return (
-    <div className="nep-table-wrap">
-      <table className="nep-table hgab-ex-tree">
-        <thead>
-          <tr>
-            <th className="nep-th-name">Project</th>
-            <th className="num">NEP</th>
-            <th className="num">House bill</th>
-            <th className="num senate-col-senate">Senate</th>
-            <th className="num" title="Senate minus the House bill">vs House bill</th>
-            <th className="num" title="Senate minus the NEP">vs NEP</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td className="hgab-ex-name">
-                <Link to={senateRecordPath(k, r.id)}>{r.title}</Link>
-                {r.hb_title && r.renamed && <span className="senate-rename">{r.hb_title}</span>}
-                <span className="hgab-ex-sub">{[r.office, r.region].filter(Boolean).join(' · ')}</span>
-              </td>
-              <td className="num nep-td-base">{r.nep_php != null ? fmt.shortPhp(r.nep_php) : <span className="hgab-ds-null">—</span>}</td>
-              <td className="num">{r.house_php != null ? fmt.shortPhp(r.house_php) : <span className="hgab-ds-null">—</span>}</td>
-              <td className="num senate-col-senate"><strong>{fmt.shortPhp(r.senate_php)}</strong></td>
-              <td className="num"><SignedChange v={r.change_php} base={r.house_php} /></td>
-              <td className="num"><SignedChange v={r.nep_php != null ? r.senate_php - r.nep_php : null} base={r.nep_php} /></td>
-              <td><SenateStatusChip status={r.status} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
+/** A House bill line with no NEP line: inserted by the House. */
+const INSERTED_SQL = 'nep_php IS NULL AND house_php IS NOT NULL';
 const PAGE = 50;
 type SortKey = 'house' | 'senate' | 'change' | 'vsnep' | 'title';
 const SORT_SQL: Record<SortKey, string> = {
@@ -275,6 +192,8 @@ function ProjectsView({ k }: { k: DatasetKey }) {
   // Several values each, as the reviewer's filters: `status=cut|added`, `region=Region I|Region II`.
   const statuses = useMemo(() => (params.get('status') ?? '').split('|').filter(Boolean), [params]);
   const regionsOn = useMemo(() => (params.get('region') ?? '').split('|').filter(Boolean), [params]);
+  // Inserted by the House: a House bill line with no NEP line (`ins=yes|no`).
+  const ins = useMemo(() => (params.get('ins') ?? '').split('|').filter((v) => v === 'yes' || v === 'no'), [params]);
   const program = params.get('program') ?? '';
   const pap = params.get('pap') ?? '';
   const office = params.get('office') ?? '';
@@ -289,20 +208,21 @@ function ProjectsView({ k }: { k: DatasetKey }) {
   };
   const url = senateProjectsUrl(k);
   // Every filter but `skip`: a filter's options are counted against the others, as in the reviewer.
-  const whereOf = useCallback((skip?: 'status' | 'region') => {
+  const whereOf = useCallback((skip?: 'status' | 'region' | 'ins') => {
     const w: string[] = [];
     for (const word of q.toLowerCase().split(/\s+/).filter(Boolean)) w.push(`search_text LIKE ${sqlStr(`%${word.replace(/[%_]/g, '')}%`)}`);
     if (statuses.length && skip !== 'status') w.push(`status IN (${statuses.map(sqlStr).join(', ')})`);
+    if (ins.length === 1 && skip !== 'ins') w.push(`(${INSERTED_SQL}) = ${ins[0] === 'yes'}`);
     if (regionsOn.length && skip !== 'region') w.push(`coalesce(region, 'Not recorded') IN (${regionsOn.map(sqlStr).join(', ')})`);
     if (program) w.push(`coalesce(program, 'Not recorded') = ${sqlStr(program)}`);
     if (pap) w.push(`coalesce(pap, 'Not recorded') = ${sqlStr(pap)}`);
     if (office) w.push(`coalesce(office, 'Not recorded') = ${sqlStr(office)}`);
     return w.length ? `WHERE ${w.join(' AND ')}` : '';
-  }, [q, statuses, regionsOn, program, pap, office]);
+  }, [q, statuses, regionsOn, ins, program, pap, office]);
   const where = useMemo(() => whereOf(), [whereOf]);
   const [res, setRes] = useState<{ sig: string; rows: SenateProject[]; total: { n: number; house: number; senate: number; nep: number } } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [facets, setFacets] = useState<{ sig: string; status: Map<string, number>; statusBase: number; region: Map<string, number>; regionBase: number } | null>(null);
+  const [facets, setFacets] = useState<{ sig: string; status: Map<string, number>; statusBase: number; region: Map<string, number>; regionBase: number; ins: Map<string, number>; insBase: number } | null>(null);
   const sig = `${where}|${sort}|${dir}|${page}`;
   useEffect(() => {
     let live = true;
@@ -326,15 +246,16 @@ function ProjectsView({ k }: { k: DatasetKey }) {
     Promise.all([
       runQuery<{ k: string; n: unknown }>(`SELECT status k, count(*) n FROM ${src} ${whereOf('status')} GROUP BY 1`),
       runQuery<{ k: string; n: unknown }>(`SELECT coalesce(region, 'Not recorded') k, count(*) n FROM ${src} ${whereOf('region')} GROUP BY 1 ORDER BY 1`),
-    ]).then(([a, b]) => {
+      runQuery<{ k: string; n: unknown }>(`SELECT CASE WHEN ${INSERTED_SQL} THEN 'yes' ELSE 'no' END k, count(*) n FROM ${src} ${whereOf('ins')} GROUP BY 1`),
+    ]).then(([a, b, c]) => {
       if (!live) return;
       const m = (rows: Array<{ k: string; n: unknown }>) => new Map(rows.map((x) => [x.k, Number(x.n)]));
       const sum = (rows: Array<{ n: unknown }>) => rows.reduce((t, x) => t + Number(x.n), 0);
-      setFacets({ sig: where, status: m(a.rows), statusBase: sum(a.rows), region: m(b.rows), regionBase: sum(b.rows) });
+      setFacets({ sig: where, status: m(a.rows), statusBase: sum(a.rows), region: m(b.rows), regionBase: sum(b.rows), ins: m(c.rows), insBase: sum(c.rows) });
     }).catch(() => {});
     return () => { live = false; };
   }, [url, whereOf, where]);
-  const toggle = (key: 'status' | 'region', cur: string[], v: string) => {
+  const toggle = (key: 'status' | 'region' | 'ins', cur: string[], v: string) => {
     const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
     set({ [key]: next.join('|') || null });
   };
@@ -365,19 +286,34 @@ function ProjectsView({ k }: { k: DatasetKey }) {
       <div className="senate-rv-bar">
         <div className="rv-filters" role="toolbar" aria-label="Filters">
           <span className="rv-filters-label" aria-hidden="true">Filter</span>
-          <Dropdown label="Senate" count={statuses.length} active={statuses.length > 0}>
-            {SENATE_STATUS_ORDER.map((x) => (
-              <Check key={x} checked={statuses.includes(x)} onChange={() => toggle('status', statuses, x)} label={SENATE_STATUS[x].label}
-                note={SENATE_STATUS[x].help} k={facets?.status.get(x) ?? 0} max={Math.max(1, facets?.statusBase ?? 1)} />
-            ))}
-            {statuses.length > 0 && <PanelFoot><span>Projects with any checked status.</span><button type="button" onClick={() => set({ status: null })}>Clear</button></PanelFoot>}
-          </Dropdown>
           <Dropdown label="Region" count={regionsOn.length} active={regionsOn.length > 0}>
             {[...(facets?.region.keys() ?? [])].map((x) => (
               <Check key={x} checked={regionsOn.includes(x)} onChange={() => toggle('region', regionsOn, x)} label={x}
                 k={facets?.region.get(x) ?? 0} max={Math.max(1, facets?.regionBase ?? 1)} />
             ))}
             {regionsOn.length > 0 && <PanelFoot><span>Projects in any checked region.</span><button type="button" onClick={() => set({ region: null })}>Clear</button></PanelFoot>}
+          </Dropdown>
+          <Dropdown label="Changes" count={statuses.length + ins.length} active={statuses.length + ins.length > 0} wide>
+            <div className="rv-dd-cols">
+              <div className="rv-dd-group">
+                <h3>In the Senate committee report</h3>
+                {SENATE_STATUS_ORDER.filter((x) => facets?.status.get(x) || statuses.includes(x)).map((x) => (
+                  <Check key={x} checked={statuses.includes(x)} onChange={() => toggle('status', statuses, x)} label={SENATE_STATUS[x].label}
+                    note={SENATE_STATUS[x].help} k={facets?.status.get(x) ?? 0} max={Math.max(1, facets?.statusBase ?? 1)} />
+                ))}
+              </div>
+              <div className="rv-dd-group">
+                <h3>In the House bill</h3>
+                <Check checked={ins.includes('yes')} onChange={() => toggle('ins', ins, 'yes')} label="Inserted"
+                  note="Added by the House: no matching line in the NEP." k={facets?.ins.get('yes') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
+                <Check checked={ins.includes('no')} onChange={() => toggle('ins', ins, 'no')} label="Not inserted"
+                  note="In the NEP too, or added by the Senate." k={facets?.ins.get('no') ?? 0} max={Math.max(1, facets?.insBase ?? 1)} />
+              </div>
+            </div>
+            <PanelFoot>
+              <span>Projects with any checked change; both columns checked, projects must match each.</span>
+              {statuses.length + ins.length > 0 && <button type="button" onClick={() => set({ status: null, ins: null })}>Clear</button>}
+            </PanelFoot>
           </Dropdown>
           {(program || pap || office) && (
             <button type="button" className="rv-clear" onClick={() => set({ program: null, pap: null, office: null })}>
@@ -387,8 +323,8 @@ function ProjectsView({ k }: { k: DatasetKey }) {
           <form className="rv-filter-search" onSubmit={(e) => { e.preventDefault(); set({ q: (new FormData(e.currentTarget).get('q') as string) ?? '' }); }}>
             <input className="rv-input" type="search" name="q" placeholder="Search title, place, office" defaultValue={q} aria-label="Search projects (press Enter)" />
           </form>
-          {(statuses.length || regionsOn.length || q || program || pap || office) ? (
-            <button type="button" className="rv-clear" onClick={() => set({ status: null, region: null, q: null, program: null, pap: null, office: null })}>Clear all</button>
+          {(statuses.length || regionsOn.length || ins.length || q || program || pap || office) ? (
+            <button type="button" className="rv-clear" onClick={() => set({ status: null, region: null, ins: null, q: null, program: null, pap: null, office: null })}>Clear all</button>
           ) : null}
         </div>
       </div>
