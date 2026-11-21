@@ -154,13 +154,19 @@ inconsistent compared to the hgab version"): `SenateHeader` uses the House sub-n
 pages have the House bill's heroes, page trails and project page layout (`SenateRecord.tsx`).
 
 **DPWH projects link to the reviewer** (`SenateDpwhProjects.tsx`, Jason: "link it to our reviewer so a project can
-be reviewed. I also like our reviewers filter for infra projects"): the list takes the reviewer's filter bar
-(`src/components/ReviewFilterBar.tsx`, shared with `HgabReview.tsx`: start from, red flags, questions, documents,
-review status, region, DPWH office, budget) plus a **Senate** filter (`sv=`), each row with its review status and a
-**Review** button (`/hgab/2027/review?p=<house id>`). House projects not in the reviewer show "Not in the reviewer".
-Totals count each Senate row once; rows that share one Senate row (one House row printed as two lines) carry `*`.
-The FMR, HFEP and NIA lists use the same filter style (Senate status and Region menus with counts), with no
-reviewer link: the reviewer covers DPWH only.
+be reviewed"): every House DPWH project with its review status and a **Review** button (`/hgab/2027/review?p=<house
+id>`); House projects not in the reviewer show "Not in the reviewer". Totals count each Senate row once; rows that
+share one Senate row (one House row printed as two lines) carry `*`. Filters (Jason, 2026-11-21: "the review filters
+doesn't fit well … only filter by Region, DPWH Office, Budget, Senate (rename to Changes, also add Inserted),
+Documents"): four of the reviewer's (`FilterBar` with `only=`, from `src/components/ReviewFilterBar.tsx`, shared
+with `HgabReview.tsx`) and **Changes**: the Senate status (`sv=`) and **Inserted** (`ins=yes|no`: a House line with
+no NEP line, 6,193 DPWH projects, 3,078 of them cut to zero). Reviewer steps the list doesn't show (red flags,
+questions, review status) are ignored in its URL. The FMR, HFEP and NIA lists have Region and the same Changes menu
+(`status=`, `ins=`); no reviewer link, the reviewer covers DPWH only.
+
+**No "Changes" page** (2026-11-21, "we don't need the changes page anymore as it does both now"): the lists filter
+by change, so `?view=changes` redirects to the list (`&status=` kept, as `sv=` on DPWH). Links into the DPWH list
+use the reviewer's URL (`senateListPath`).
 
 **Regions** (`regions.py`, Jason 2026-11-21: "why are so many regions with 0 numbers"): every project's region is
 put in one form ("Region I", "Region IV-A", "MIMAROPA", "CAR", "NCR", "NIR", "BARMM"), as the DPWH data spells
