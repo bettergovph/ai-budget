@@ -172,6 +172,11 @@ after 12 lines. All-caps names from the report are set in title case, keeping ac
 box (`.senate-annex-box`), each agency a white card, apart from "Every line" below (Jason: "a container … so it feels
 like a different section").
 
+**"Senate" on every page** (2026-11-21, Jason: "some people may get lost so it's important for the Senate pages
+explicitly state Senate around"): page titles end "in the Senate" (programs, departments), section headings name the
+Senate ("11 Senate amendments in Annex A", "Largest Senate cuts", "186 Senate amendments to the bill's provisions"),
+and each project page carries a "Version: Senate committee report" label. Headings inside the Annex A box are small.
+
 **Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
 every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
