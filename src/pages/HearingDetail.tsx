@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import SiteHeader from '../components/SiteHeader';
+import { HgabHeader } from '../components/HgabBits';
 import SiteFooter from '../components/SiteFooter';
 import {
   fetchHearing,
@@ -782,7 +782,7 @@ export default function HearingDetail() {
   if (notFound) {
     return (
       <div className="hearings-page">
-        <SiteHeader crumb="Budget Briefing/Hearings" />
+        <HgabHeader crumb="Budget Briefing/Hearings" />
         <main className="nep-main hearings-main">
           <p className="nep-empty">
             Hearing not found. <Link to="/hearings">Back to all hearings</Link>
@@ -937,7 +937,7 @@ export default function HearingDetail() {
 
   return (
     <div className="hearings-page">
-      <SiteHeader crumb="Budget Briefing/Hearings" />
+      <HgabHeader crumb="Budget Briefing/Hearings" />
       <main className="nep-main hearings-main hearing-detail" aria-busy={!hearing}>
         {!hearing && (
           <span className="visually-hidden" role="status">Loading the hearing…</span>

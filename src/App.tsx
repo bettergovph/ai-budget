@@ -34,6 +34,15 @@ const Nep2027Methodology = lazy(() => import('./pages/Nep2027Methodology'));
 const Hearings = lazy(() => import('./pages/Hearings'));
 const HearingDetail = lazy(() => import('./pages/HearingDetail'));
 const HgabOverview = lazy(() => import('./pages/HgabOverview'));
+const SenateOverview = lazy(() => import('./pages/SenateOverview'));
+const SenateExplorer = lazy(() => import('./pages/SenateExplorer'));
+const SenateExplorerDept = lazy(() => import('./pages/SenateExplorerDept'));
+const SenateProgram = lazy(() => import('./pages/SenateProgram'));
+const SenateRecord = lazy(() => import('./pages/SenateRecord'));
+const SenateProvisions = lazy(() => import('./pages/SenateProvisions'));
+const SenateAbout = lazy(() => import('./pages/SenateAbout'));
+const SenateData = lazy(() => import('./pages/SenateData'));
+const SenateReport = lazy(() => import('./pages/SenateReport'));
 const HgabSources = lazy(() => import('./pages/HgabSources'));
 const HgabExplorer = lazy(() => import('./pages/HgabExplorer'));
 const HgabExplorerDept = lazy(() => import('./pages/HgabExplorerDept'));
@@ -196,6 +205,21 @@ export default function App() {
           <Route path="/hgab/2027/explorer/:deptId" element={<HgabExplorerDept />} />
           <Route path="/hgab/2027/:dataset" element={<HgabDataset />} />
           <Route path="/hgab/2027/:dataset/p/:id" element={<HgabRecord />} />
+          {/* FY2027 Senate committee report on HB 10858 vs the House bill (src/lib/senate.ts). Static pages are
+              declared before `:dataset`. */}
+          <Route path="/senate" element={<Navigate to="/senate/2027/overview" replace />} />
+          <Route path="/senate/2027" element={<Navigate to="/senate/2027/overview" replace />} />
+          <Route path="/senate/2027/overview" element={<SenateOverview />} />
+          <Route path="/senate/2027/explorer" element={<SenateExplorer />} />
+          <Route path="/senate/2027/explorer/:deptId" element={<SenateExplorerDept />} />
+          <Route path="/senate/2027/provisions" element={<SenateProvisions />} />
+          <Route path="/senate/2027/sources" element={<SenateAbout which="sources" />} />
+          <Route path="/senate/2027/methodology" element={<SenateAbout which="methodology" />} />
+          <Route path="/senate/2027/data" element={<SenateData />} />
+          {/* Unlinked for now: no menu, not in the sitemap, noindex (seo.ts). */}
+          <Route path="/senate/2027/report/*" element={<SenateReport />} />
+          <Route path="/senate/2027/:dataset" element={<SenateProgram />} />
+          <Route path="/senate/2027/:dataset/p/:id" element={<SenateRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -49,6 +49,7 @@ export function php(n: number | null | undefined, opts: PhpOptions = {}): string
 
 export function shortPhp(n: number | null | undefined, unit?: Unit): string {
   if (n == null || !Number.isFinite(n)) return '—';
+  if (n === 0) return '0'; // not "0K" or "0.00B"
   let u: Unit = unit || 'auto';
   if (u === 'auto') {
     if (Math.abs(n) >= 1e12) u = 'T';

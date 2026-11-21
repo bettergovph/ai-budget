@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import SiteHeader from '../components/SiteHeader';
+import { HgabHeader } from '../components/HgabBits';
 import SiteFooter from '../components/SiteFooter';
 import {
   fetchHearings,
@@ -65,7 +65,7 @@ export default function Hearings() {
 
   return (
     <div className="hearings-page">
-      <SiteHeader
+      <HgabHeader
         crumb="Budget Briefing/Hearings"
         compiledMeta={`${withTranscripts} transcripts`}
       />

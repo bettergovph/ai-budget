@@ -55,7 +55,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
  * `/hgab/2027` redirect), Line by line (the whole-bill explorer), Red Flags (PBC's red-flag basket; Jason, 2026-11-04:
  * "add a link 'Red Flags' after Line by Line") and Leaderboards; then the dropdowns Districts, the
  * four programs and Multi-purpose buildings; Foreign-assisted (Jason, 2026-11-12: "Move Foreign Assisted after
- * Multi-purpose buildings"); Write a letter; and About (Sources, Methodology, Indicators). The story-style
+ * Multi-purpose buildings"); Hearings (the House's budget hearings, `/hearings`, under House since 2026-11-21); Write a
+ * letter; and About (Sources, Methodology, Indicators). The story-style
  * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
  * entries out for now, keeping their pages at their addresses.
  */
@@ -72,6 +73,8 @@ const LEAD_LINKS: readonly NavLink[] = [
 ];
 const TAIL_LINKS: readonly NavLink[] = [
   { to: FAP_ROOT, label: 'Foreign-assisted' },
+  // The House Committee on Appropriations' briefings and hearings, a primary tab until 2026-11-21.
+  { to: '/hearings', label: 'Hearings' },
   { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
 ];
 /**
@@ -248,7 +251,7 @@ export function HgabHeader({
  * navigation (it is keyed to the location, so a route change closes it
  * without an effect). Pointers that can hover open it on hover as well.
  */
-function SectionMenu({
+export function SectionMenu({
   label,
   items,
   active,
@@ -761,9 +764,12 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
  */
 const STAGE_STATE_TEXT: Record<StageState, string> = { done: 'Done', current: 'Current stage', future: 'Not yet' };
 
-export function HgabStageStrip() {
-  // The current stage is this section, so it is not a link here.
-  const stages = BUDGET_2027_STAGES.map((s) => (s.state === 'current' ? { ...s, to: undefined } : s));
+/**
+ * `here` is the stage the page belongs to (the House bill section, the Senate section): it is marked "You are here"
+ * and not linked. The budget's current stage is marked as such; on its own section's page they are the same.
+ */
+export function HgabStageStrip({ here }: { here: string }) {
+  const stages = BUDGET_2027_STAGES.map((s) => (s.name === here ? { ...s, to: undefined } : s));
   return (
     <section className="hgab-timeline" aria-labelledby="hgab-timeline-title">
       <p className="hgab-timeline-kicker" id="hgab-timeline-title">Where the 2027 budget is now</p>
@@ -787,7 +793,7 @@ export function HgabStageStrip() {
                 <span className="hgab-tl-name">{s.name}</span>
               )}
               <span className="hgab-tl-meta">{s.meta}</span>
-              {s.state === 'current' ? (
+              {s.name === here ? (
                 <span className="hgab-tl-here">You are here</span>
               ) : (
                 <span className="visually-hidden">{STAGE_STATE_TEXT[s.state]}</span>

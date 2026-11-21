@@ -6,7 +6,7 @@
  * One JSON per department (`explorer/d/<id>.json`; DepEd, with every secondary school, is the
  * largest at about 4 MB, 0.6 MB compressed). Agencies open on demand.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
@@ -19,6 +19,7 @@ import {
   EXPLORER_ROOT, PROJECTS_DEPT, STATUS_LABEL, STATUS_ORDER, agencyCsvRows, fullPhp, explorerPath, loadExplorerDept, titleCase, toCsv,
   type ExAgency, type ExDept,
 } from '../lib/hgab-explorer';
+import { loadSenateExplorer, senateExplorerPath, senateLookup, type SenateExplorerDept, type SenateLookup } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
 
@@ -36,6 +37,15 @@ export default function HgabExplorerDept() {
   }, [deptId]);
 
   const dept = loaded?.id === deptId ? loaded.dept : null;
+  // The Senate committee report's amounts for this department's lines (optional: a Senate column when present).
+  const [senateEx, setSenateEx] = useState<{ id: string; d: SenateExplorerDept } | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadSenateExplorer(deptId).then((d) => { if (live) setSenateEx({ id: deptId, d }); }).catch(() => {});
+    return () => { live = false; };
+  }, [deptId]);
+  const senateD = senateEx?.id === deptId ? senateEx.d : null;
+  const senate = useMemo(() => (senateD ? senateLookup(senateD) : undefined), [senateD]);
   const err = loaded?.id === deptId ? loaded.err : null;
 
   // DPWH: its project pages compare projects only; reconcile them with this page (optional context).
@@ -149,8 +159,15 @@ export default function HgabExplorerDept() {
           </span>
         </div>
 
+        {senateD && (
+          <p className="hgab-ex-gap">
+            The Senate column is the Senate committee report on this bill: {senateD.senate != null ? <>{fmt.shortPhp(senateD.senate)} for the department ({senateD.senate - dept.house >= 0 ? '+' : '−'}{fmt.shortPhp(Math.abs(senateD.senate - dept.house))} vs the House bill)</> : 'its amounts'}.
+            {' '}<Link to={senateExplorerPath(deptId)}>What the Senate changes here →</Link>
+          </p>
+        )}
         {shown.map((a) => (
-          <AgencyBlock key={a.id} dept={dept} agency={a} changedOnly={changedOnly} query={q} single={shown.length === 1} />
+          <AgencyBlock key={a.id} dept={dept} agency={a} changedOnly={changedOnly} query={q} single={shown.length === 1}
+            senate={senate} senateTotal={senateD?.agencies[a.id]?.senate ?? null} />
         ))}
         {!shown.length && <p className="nep-empty">No agency here has a line that matches.</p>}
 
@@ -170,12 +187,14 @@ function agencyMatches(a: ExAgency, q: string): boolean {
   return a.name.toLowerCase().includes(q) || walk(a.tree);
 }
 
-function AgencyBlock({ dept, agency, changedOnly, query, single }: {
+function AgencyBlock({ dept, agency, changedOnly, query, single, senate, senateTotal }: {
   dept: ExDept;
   agency: ExAgency;
   changedOnly: boolean;
   query: string;
   single: boolean;
+  senate?: SenateLookup;
+  senateTotal: number | null;
 }) {
   const changed = agency.lines - (agency.status.same ?? 0);
   const hasQuery = query.trim().length > 0;
@@ -195,6 +214,9 @@ function AgencyBlock({ dept, agency, changedOnly, query, single }: {
           <span><span className="hgab-ex-fig-label">NEP</span> <span title={fullPhp(agency.nep)}>{agency.nep ? fmt.shortPhp(agency.nep) : '—'}</span></span>
           <span><span className="hgab-ex-fig-label">House bill</span> <strong title={fullPhp(agency.house)}>{fmt.shortPhp(agency.house)}</strong></span>
           <ExChange nep={agency.nep} house={agency.house} />
+          {senateTotal != null && (
+            <span title={`Senate committee report: ${fullPhp(senateTotal)}`}><span className="hgab-ex-fig-label">Senate</span> {fmt.shortPhp(senateTotal)}</span>
+          )}
           <span className="hgab-ex-sub">{changed ? `${changed.toLocaleString()} of ${agency.lines.toLocaleString()} lines differ` : `${agency.lines.toLocaleString()} lines, all the same`}</span>
           <button
             type="button"
@@ -208,7 +230,7 @@ function AgencyBlock({ dept, agency, changedOnly, query, single }: {
       {agency.nep_name && agency.nep_name.toLowerCase() !== agency.name.toLowerCase() && !sameName && (
         <p className="hgab-ex-nepname">In the NEP: {agency.nep_name}</p>
       )}
-      {open && <ExTree nodes={agency.tree} changedOnly={changedOnly} query={query} openDepth={single ? 2 : 1} />}
+      {open && <ExTree nodes={agency.tree} changedOnly={changedOnly} query={query} openDepth={single ? 2 : 1} senate={senate} />}
     </section>
   );
 }

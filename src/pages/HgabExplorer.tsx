@@ -18,6 +18,7 @@ import {
   EXPLORER_ROOT, STATUS_LABEL, downloadUrl, explorerPath, fileSize, fullPhp, loadExplorerDownloads, loadExplorerIndex, titleCase,
   type DownloadsManifest, type ExIndex, type ExIndexRow, type LineStatus,
 } from '../lib/hgab-explorer';
+import { loadSenateDepartments, senateExplorerPath } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
 
@@ -31,9 +32,14 @@ export default function HgabExplorer() {
   const [sort, setSort] = useState<Sort>('nep');
   const [dir, setDir] = useState<'asc' | 'desc'>('desc');
 
+  // The Senate committee report's department totals, for the Senate column (optional: the page reads the same without).
+  const [senate, setSenate] = useState<Map<string, number> | null>(null);
   useEffect(() => {
     document.title = pageMeta(EXPLORER_ROOT).title;
     loadExplorerIndex().then(setIdx).catch((e) => setErr(String(e?.message || e)));
+    loadSenateDepartments()
+      .then((d) => setSenate(new Map(d.departments.filter((x) => x.id && x.senate != null).map((x) => [x.id!, x.senate!]))))
+      .catch(() => {});
   }, []);
 
   const rows = useMemo(() => {
@@ -109,7 +115,7 @@ export default function HgabExplorer() {
           <SectionHead
             eyebrow="By department"
             headline={`${idx.departments.length} departments and funds`}
-            dek="Open one to see its agencies, programs, regions and offices, line by line, with the page each House bill line is published on."
+            dek={<>Open one to see its agencies, programs, regions and offices, line by line, with the page each House bill line is published on.{senate ? <> The Senate column is the <Link to={senateExplorerPath()}>Senate committee report</Link>; a dot marks a department it changes.</> : null}</>}
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} />
@@ -135,6 +141,7 @@ export default function HgabExplorer() {
                   {head('name', 'Department or fund', 'nep-th-name')}
                   {head('nep', 'NEP', 'num')}
                   {head('house', 'House bill', 'num')}
+                  {senate && <th className="num senate-col-senate" title="The Senate committee report on the House bill">Senate</th>}
                   {head('delta', 'Change', 'num')}
                   {head('changed', 'Lines that differ', 'num')}
                 </tr>
@@ -148,6 +155,15 @@ export default function HgabExplorer() {
                     </td>
                     <td className="num nep-td-base" title={fullPhp(d.nep)}>{d.nep ? fmt.shortPhp(d.nep) : '—'}</td>
                     <td className="num nep-td-amt" title={fullPhp(d.house)}>{fmt.shortPhp(d.house)}</td>
+                    {senate && (
+                      <td className="num senate-col-senate">
+                        {senate.has(d.id) ? (
+                          <Link to={senateExplorerPath(d.id)} title={`Senate committee report: ${fullPhp(senate.get(d.id)!)} (${senate.get(d.id)! - d.house >= 0 ? '+' : ''}${fullPhp(senate.get(d.id)! - d.house)} vs the House bill)`}>
+                            {fmt.shortPhp(senate.get(d.id)!)}{senate.get(d.id) !== d.house && <span className="senate-moved" aria-hidden="true"> •</span>}
+                          </Link>
+                        ) : '—'}
+                      </td>
+                    )}
                     <td className="num">
                       {d.name === 'UNPROGRAMMED APPROPRIATIONS'
                         ? <ExStatusChip status="unprogrammed" />
@@ -158,7 +174,7 @@ export default function HgabExplorer() {
                     </td>
                   </tr>
                 ))}
-                {!rows.length && <tr><td colSpan={5} className="nep-empty">No department matches that filter.</td></tr>}
+                {!rows.length && <tr><td colSpan={senate ? 6 : 5} className="nep-empty">No department matches that filter.</td></tr>}
               </tbody>
             </table>
           </div>

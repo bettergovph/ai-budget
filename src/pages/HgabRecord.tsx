@@ -23,10 +23,12 @@ import { DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabLoading, Stat
 import { Amt } from '../components/HgabProjects';
 import HgabEvidence from '../components/HgabEvidence';
 import HgabRecordDocuments from '../components/HgabRecordDocuments';
+import { SENATE_STATUS, coerceSenateProject, senatePdfUrl, senateProjectsUrl, senateRecordPath, type SenateProject } from '../lib/senate';
+import '../senate.css';
 import { runQuery } from '../lib/duckdb';
 import * as fmt from '../lib/format';
 import {
-  HGAB_ROOT, READING_LABELS, STAGE_LABELS,
+  HGAB_ROOT, READING_LABELS, STAGE_LABELS, type DatasetKey,
   datasetPath, formatPct, houseAmount, isDatasetKey, loadHgabOverview, pctChange, pdfUrl, projectsParquetUrl,
   traceInfo,
   type HgabDatasetMeta, type HgabOverview, type ProjectRecord, type StageKey,
@@ -371,6 +373,8 @@ export default function HgabRecord() {
           <HgabEvidence docKey={open.doc} page={open.page} docTitle={docTitle(open.doc)} onClose={() => setEvidence(null)} />
         )}
 
+        <SenateVersion k={key} id={row.id} house={house} />
+
         {/* DPWH lines: the project's own documents (Senate copies once redacted, DPWH Transparency files). */}
         {key === 'dpwh' && <HgabRecordDocuments projectId={row.id} />}
 
@@ -601,3 +605,33 @@ function StageCard({
   );
 }
 
+/** What the Senate committee report does to this House project: its amount, its name there, and a link to its page. */
+function SenateVersion({ k, id, house }: { k: DatasetKey; id: string; house: number | null }) {
+  const [v, setV] = useState<{ id: string; row: SenateProject | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    runQuery(`SELECT * EXCLUDE (search_text) FROM read_parquet('${senateProjectsUrl(k)}') WHERE house_id = '${id.replace(/'/g, "''")}' LIMIT 1`)
+      .then((r) => { if (live) setV({ id, row: r.rows[0] ? coerceSenateProject(r.rows[0] as Record<string, unknown>) : null }); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [k, id]);
+  const row = v?.id === id ? v.row : null;
+  if (!row) return null;
+  const st = SENATE_STATUS[row.status];
+  const d = house != null ? row.senate_php - house : null;
+  return (
+    <div className="hgab-rec-section senate-rec-box">
+      <SectionHead size="sm" eyebrow="Next stage" headline="In the Senate committee report" />
+      <p>
+        <span className="hgab-chip senate-chip" style={{ ['--hgab-group' as string]: st.tone }}>{st.label}</span>{' '}
+        <strong>{fmt.shortPhp(row.senate_php)}</strong>
+        {d != null && d !== 0 && <> ({d > 0 ? '+' : '−'}{fmt.shortPhp(Math.abs(d))} vs the House bill)</>}. {st.help}
+      </p>
+      {row.renamed && <p className="senate-rename-full"><strong>Name in the Senate report:</strong> {row.title}</p>}
+      <p className="senate-refs">
+        <Link to={senateRecordPath(k, row.id)}>This project in the Senate committee report →</Link>
+        {row.senate_page && <a href={senatePdfUrl(row.senate_doc, row.senate_page)} target="_blank" rel="noreferrer">The report's page →</a>}
+      </p>
+    </div>
+  );
+}

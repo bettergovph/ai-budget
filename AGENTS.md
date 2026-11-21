@@ -225,6 +225,38 @@ The House bill is HB 10858 at second and third reading, compared with the NEP. S
   - "Be a citizen reviewer. Help review House insertions." (2026-11-17, `npm run build:hgab-poster-review`): the "Be a citizen budget reviewer" poster's layout, pointed at the reviewer (`budget.bettergov.ph/review`): why (the House insertions, figures from `documents/review.json`), four steps as the reviewer works, what to look for from the team's questions; the wall is the insertions in bill order. Feed 1080×1350 and the reviewer's link preview 1200×630. Insertions are candidates: "aren't wrong, but each needs its documents and a reason".
   - Builders are `scripts/build-hgab-poster*.ts`; several still sit untracked in worktrees (see In progress).
 
+### FY2027 Senate Committee Report (`/senate/2027`, started 2026-11-20)
+
+The Senate Committee on Finance's report on HB 10858 is the next budget stage. `npm run build:senate-cr` parses its
+born-digital PDFs (no OCR, no LLM) and maps them onto our House bill data in `data/senate-cr/2027/` (not published).
+Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-2027.md`.
+- Annex A (line-by-line) joins to the House tables by the page and line it cites, peso for peso.
+- Annexes A-1 to A-4 (FMR, HFEP, NIA, DPWH) give `{dpwh,fmr,nia,hfep}_senate.csv`: every House project by our `id`
+  with its Senate amount, Senate name and status (renames linked).
+- **DPWH:** 3,479 projects cut to zero (−₱99.30B), 13 foreign-assisted raised (+₱33.10B), 5,182 renamed.
+- Our House data's Taysan, Batangas MPB row is two printed lines (₱15M + ₱10M); the doc has the details.
+- **Primary nav** (2026-11-21, Jason: "rename our navs to NEP, HOUSE, SENATE, GAA 2000-2026 … remove budget hearings
+  and put it under House"): the tabs read NEP, House, Senate, GAA 2000–2026 (full names in each tab's `title`), then
+  Citizen Reports and Learn (`SiteHeader.tsx`). Budget hearings (`/hearings`) left the primary nav: "Hearings" in the
+  House bill sub-nav (`TAIL_LINKS`, `HgabBits.tsx`), the hearings pages use `HgabHeader`, and House is the active tab
+  there. **The Senate tab is hidden for now** (Jason, 2026-11-21): `SHOW_SENATE_TAB = false` in `SiteHeader.tsx` (tab and
+  drawer); the /senate/2027 pages stay at their addresses and other links to them (the budget-stage timeline, the
+  House pages' Senate column) remain.
+- **The section** (PR #106 follow-up, branch `senate-cr-2027`): `/senate/2027` with its own primary tab
+  ("Senate"): overview, line by line, the four programs project by project, provisions, sources,
+  methodology. It reads `data/senate/2027/` from R2 `senate/2027/` (`npm run upload:senate`; upload before
+  the merge). The House pages gained a Senate column (explorer, project tables) and a Senate box on project
+  pages. `budget-stage.ts` now has the Senate as current (the House bill's month is not known: "Approved").
+  "Under citizen review" banner until `SENATE_UNDER_REVIEW` is set false.
+  The DPWH project list shows five filters: four of the reviewer's (`FilterBar` `only=`, `ReviewFilterBar.tsx`,
+  shared with `HgabReview.tsx`) and Changes (Senate status + Inserted), and a Review button per project
+  (2026-11-21). No "Changes" view: `?view=changes` redirects to the list.
+  Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
+  `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 38 checks (26 on the report's
+  printed totals and arithmetic, where a failure stops the build; 12 on page links, reported). Sub-nav: Overview, Line by line, the four programs, Provisions, About.
+  Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
+  Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
+
 ### Citizen Reports (`/citizen-reports`, #53)
 
 Cards for budget analyses on other sites, with screenshots (`npm run build:citizen-reports`). The list is in `src/lib/citizen-reports.ts`. Bylines name only people the site names publicly.
@@ -292,6 +324,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Districts 2027 NEP correction + As of + change log | worktree `headline-basis`, branch `hgab-district-headline-basis` (preview :5140) | Committed, not pushed; needs a PR |
 | Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5144 | PR #82 open 2026-11-12; `documents/` on R2; Clerk sign-in + D1 submissions added 2026-11-13 (production secret, build variable and remote tables not set up yet); open: nav link |
 | "Multi-purpose buildings or classrooms?" page + poster (`/hgab/2027/multi-purpose/documents`) | worktree `mpb-documents`, branch `hgab-mpb-documents`, preview :5147 | PR #95 MERGED 2026-11-15 (data, paper posters and og image on R2); Taglish street posters on R2 2026-11-15; reviewer either-id links + documents on DPWH project pages + Taglish poster script in branch `hgab-record-documents` |
+| Senate Committee Report: parse + map, then the `/senate/2027` section | worktree `senate-cr`, branch `senate-cr-2027`, PR #106, preview :5155 | Data in `data/senate-cr/2027/` and `data/senate/2027/` (not on R2 yet); source PDFs in `/data/senate-cr-2027/raw`; awaiting review before upload + merge |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**

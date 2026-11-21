@@ -319,6 +319,67 @@ export function pageMeta(pathname: string): PageMeta {
         "published page of each House bill line.",
     };
   }
+  // FY2027 Senate committee report on HB 10858 (src/lib/senate.ts).
+  if (p === "/senate" || p === "/senate/2027" || p === "/senate/2027/overview") {
+    return {
+      title: `Senate Budget Analysis 2027 — the Senate committee report vs the House bill · ${SITE}`,
+      description:
+        "The Senate Finance Committee's report on the FY 2027 budget (House Bill 10858), line by line " +
+        "against the House bill: what it cuts, raises, adds and renames, department by department and " +
+        "project by project for DPWH, farm-to-market roads, health facilities and irrigation.",
+    };
+  }
+  if (p === "/senate/2027/explorer") {
+    return {
+      title: `Senate committee report 2027, line by line — every department vs the House bill · ${SITE}`,
+      description: "Every department and fund in the FY 2027 Senate committee report beside the House bill, with the lines the report changes.",
+    };
+  }
+  if (p.startsWith("/senate/2027/explorer/")) {
+    return {
+      title: `One department in the Senate committee report 2027, line by line · ${SITE}`,
+      description: "One department's FY 2027 Senate committee report amendments, with the House bill page and line each one changes.",
+    };
+  }
+  if (p === "/senate/2027/provisions") {
+    return {
+      title: `Senate committee report 2027 — amendments to the special and general provisions · ${SITE}`,
+      description: "Every amendment the FY 2027 Senate committee report makes to the House bill's special and general provisions, with its page.",
+    };
+  }
+  // The executive report: unlinked for now, kept out of search.
+  if (p === "/senate/2027/report" || p.startsWith("/senate/2027/report/")) {
+    return {
+      title: `What the Senate changed in the 2027 budget — executive report · ${SITE}`,
+      description: "An executive report on the FY 2027 Senate committee report: what the Senate changed in the House bill, and what the data shows.",
+      noindex: true,
+    };
+  }
+  if (p === "/senate/2027/data") {
+    return {
+      title: `Senate committee report 2027 — download the dataset · ${SITE}`,
+      description: "The FY 2027 Senate committee report as data: every project, amendment, General Summary line and provision, with SHA-256 checksums and the checks against the report's printed totals.",
+    };
+  }
+  if (p === "/senate/2027/sources" || p === "/senate/2027/methodology") {
+    return {
+      title: `Senate committee report 2027 — ${p.endsWith("sources") ? "sources" : "methodology"} · ${SITE}`,
+      description: "The FY 2027 Senate committee report's documents, and how this site reads them and matches them to the House bill.",
+    };
+  }
+  {
+    const m = /^\/senate\/2027\/(dpwh|fmr|hfep|nia)(\/p\/.+)?$/.exec(p);
+    if (m) {
+      const names: Record<string, string> = { dpwh: "DPWH projects", fmr: "Farm-to-market roads", hfep: "Health facilities", nia: "Irrigation" };
+      const name = names[m[1]];
+      return {
+        title: m[2]
+          ? `A ${name.toLowerCase()} project in the Senate committee report 2027 · ${SITE}`
+          : `${name} in the Senate committee report 2027 vs the House bill · ${SITE}`,
+        description: `FY 2027 ${name.toLowerCase()}, project by project: the House bill amount, the Senate committee report's, and what changed.`,
+      };
+    }
+  }
   if (p === "/hgab/2027/sources") {
     return {
       title: `House Budget Analysis 2027 Sources & Downloads — Documents, Checksums, Parquet · ${SITE}`,
