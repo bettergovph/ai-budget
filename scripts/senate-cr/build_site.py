@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 import duckdb
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pairs import near as near_house, restore_pairs, score as name_score  # noqa: E402
 from regions import canon_region  # noqa: E402
 
 PDFS = [  # key, title, file name prefix in the report's zip
@@ -44,7 +45,7 @@ PROGRAMS = [("dpwh", "DPWH projects", "Department of Public Works and Highways")
             ("fmr", "Farm-to-market roads", "Department of Agriculture"),
             ("hfep", "Health facilities", "Department of Health"),
             ("nia", "Irrigation", "National Irrigation Administration")]
-STATUS_ORDER = ["cut", "reduced", "raised", "added", "renamed", "unchanged", "nep_only"]
+STATUS_ORDER = ["cut", "reduced", "raised", "added", "restored", "renamed", "unchanged", "nep_only"]
 
 
 def slug(s):
@@ -150,8 +151,14 @@ def main(src, hgab, out):
                 "house_doc": h[2] if h else None, "house_page": h[3] if h else None,
                 "nep_doc": h[4] if h else None, "nep_page": h[5] if h else None,
                 "senate_doc": PROGRAM_PDF[key], "senate_page": int(r["senate_pdf_page"]) if r["senate_pdf_page"] else None,
+                "matched_by": r["match"] or None, "check_id": None, "check_note": None,
                 "search_text": " ".join(x for x in (title, r["hb_title"], r["region"], r["office"], r["program"], r["pap"]) if x).lower(),
             })
+            # A removed House project and the Senate's insertion paired as one (build_versions.py): say so when the two
+            # names differ more than a spelling would.
+            x = recs[-1]
+            if r["match"] == "rename_pair" and name_score(title, r["hb_title"]) < 85:
+                x["check_note"] = "Paired with the House project it revises; the names differ, so check the pairing"
         # NEP projects with no House bill line (the House section's deletion candidates): in neither the House bill
         # nor the committee report, listed so the NEP column is the whole program.
         for r in con.execute(f"""select id, title, region, office, program, pap, nep_php, nep_doc, nep_page
@@ -161,7 +168,7 @@ def main(src, hgab, out):
                 "region": r[2], "office": r[3], "program": r[4], "pap": r[5], "nep_php": r[6], "house_php": None,
                 "senate_php": 0, "change_php": 0, "replaces_id": None, "house_doc": None, "house_page": None,
                 "nep_doc": r[7], "nep_page": r[8],
-                "senate_doc": PROGRAM_PDF[key], "senate_page": None,
+                "senate_doc": PROGRAM_PDF[key], "senate_page": None, "matched_by": None,
                 "search_text": " ".join(x for x in (r[1], r[2], r[3], r[4], r[5]) if x).lower(),
             })
         for x in recs:
@@ -179,6 +186,37 @@ def main(src, hgab, out):
                     regs = seen.get(system(x["hb_title"] or x["title"]))
                     if regs and len(regs) == 1:
                         x["region"] = next(iter(regs))
+        # An insertion that is an NEP project the House dropped: "restored" (the Senate puts it back), one row with its
+        # NEP amount, not an insertion plus an NEP-only row.
+        for x in recs:
+            x.setdefault("check_id", None)
+            x.setdefault("check_note", None)
+        added = [x for x in recs if x["status"] == "added"]
+        nep_rows = [x for x in recs if x["status"] == "nep_only"]
+        dropped = set()
+        for i, j, _ in restore_pairs(added, nep_rows, hfep=key == "hfep"):
+            a, b = added[i], nep_rows[j]
+            a.update(status="restored", nep_php=b["nep_php"], nep_doc=b["nep_doc"], nep_page=b["nep_page"], matched_by="restored_nep",
+                     check_id=b["id"], check_note=f"In the NEP as “{b['title']}”, not in the House bill")
+            dropped.add(id(b))
+        recs = [x for x in recs if id(x) not in dropped]
+        # What still reads as an insertion but looks like a House project: flagged, not merged.
+        house_rows = [x for x in recs if x["house_php"] is not None]
+        n_flag = 0
+        for a in (x for x in recs if x["status"] == "added"):
+            m = near_house(a, house_rows, hfep=key == "hfep")
+            if not m:
+                continue
+            b, sc = m
+            n_flag += 1
+            a["check_id"] = b["id"]
+            a["matched_by"] = "same_facility" if key == "hfep" and b["pap"] != a["pap"] else "possible_duplicate"
+            if key == "hfep":
+                a["check_note"] = f"The House bill funds this facility's {(b['pap'] or 'other').lower()}" if b["pap"] != a["pap"] \
+                    else "The House bill funds this facility and component too: possible duplicate"
+            else:
+                a["check_note"] = f"Possible duplicate of a House bill project: “{b['hb_title'] or b['title']}”"
+        print(f"  {key}: {len(dropped)} insertions restore an NEP project; {n_flag} flagged as like a House project", file=sys.stderr)
         for x in recs:
             x["search_text"] = " ".join(v for v in (x["search_text"], (x["region"] or "").lower()) if v)
         con.execute("create or replace temp table t as select * from read_json_auto(?)", [_tmp_json(out, key, recs)])
@@ -186,7 +224,8 @@ def main(src, hgab, out):
                                nep_php::bigint nep_php, house_php::bigint house_php, senate_php::bigint senate_php,
                                change_php::bigint change_php, replaces_id::varchar replaces_id, house_doc::varchar house_doc,
                                house_page::integer house_page, nep_doc::varchar nep_doc, nep_page::integer nep_page,
-                               senate_doc, senate_page::integer senate_page, search_text
+                               senate_doc, senate_page::integer senate_page, matched_by::varchar matched_by,
+                               check_id::varchar check_id, check_note::varchar check_note, search_text
                         from t order by status, senate_php desc)
                         to '{out}/{key}/projects.parquet' (format parquet, compression zstd)""")
         os.remove(f"{out}/{key}/_rows.json")
@@ -224,6 +263,7 @@ def main(src, hgab, out):
             "offices": dim("office") if key == "dpwh" else None,
             "top": {"cut": top("cut", lambda x: x["change_php"]), "reduced": top("reduced", lambda x: x["change_php"]),
                     "raised": top("raised", lambda x: -x["change_php"]), "added": top("added", lambda x: -x["senate_php"]),
+                    "restored": top("restored", lambda x: -x["senate_php"]),
                     "renamed": top("renamed", lambda x: -(x["house_php"] or 0))},
             "senate_doc": PROGRAM_PDF[key],
         }
