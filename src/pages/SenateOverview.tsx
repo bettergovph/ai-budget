@@ -11,15 +11,15 @@ import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
 import { HgabStageStrip } from '../components/HgabBits';
 import {
-  SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenateReviewBanner, SenateStatusChip, SignedChange,
+  SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenateReviewBanner, SignedChange,
 } from '../components/SenateBits';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
 import { titleCase } from '../lib/hgab-explorer';
 import {
-  PROGRAM_SHORT, SENATE_DOC, SENATE_EXPLORER_ROOT, SENATE_PROVISIONS_ROOT, SENATE_ROOT, SENATE_STATUS, SENATE_STATUS_ORDER,
+  PROGRAM_SHORT, SENATE_DOC, SENATE_EXPLORER_ROOT, SENATE_PROVISIONS_ROOT, SENATE_ROOT,
   loadSenateDepartments, loadSenateOverview, senateExplorerPath, senateProgramPath, senatePdfUrl,
-  type SenateDepartments, type SenateOverview as Overview, type SenateProgramRow,
+  type SenateDepartments, type SenateOverview as Overview, type SenateProgramRow, type SenateStatus,
 } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
@@ -146,48 +146,76 @@ export default function SenateOverview() {
   );
 }
 
+/**
+ * One program: the House bill and the Senate as two bars on one scale (Jason, 2026-11-21: "needs a better design. They
+ * are hard to understand"). What stays is grey on both; what the Senate removes is red on the House bar; what it adds
+ * (raises, insertions, NEP projects it restores) is coloured on the Senate bar. Each part has a plain sentence.
+ * Not a pie: a pie splits one total, and here the Senate both takes from the House budget and adds from outside it.
+ */
 function ProgramCard({ p }: { p: SenateProgramRow }) {
-  const total = Object.values(p.status).reduce((a, s) => a + (s?.house_php ?? 0) + (s?.senate_php ?? 0), 0) || 1;
+  const st = p.status;
+  const h = (k: SenateStatus) => st[k]?.house_php ?? 0;
+  const sv = (k: SenateStatus) => st[k]?.senate_php ?? 0;
+  const n = (k: SenateStatus) => st[k]?.count ?? 0;
+  // The House budget the Senate keeps as it is, and the parts that leave it or come in.
+  const kept = h('unchanged') + h('renamed') + h('raised') + sv('reduced');
+  const removed = h('cut') + (h('reduced') - sv('reduced'));
+  const raised = sv('raised') - h('raised');
+  const inserted = sv('added');
+  const restored = sv('restored');
+  const scale = Math.max(p.house_php, p.senate_php) || 1;
+  const w = (v: number) => `${(Math.max(0, v) / scale) * 100}%`;
+  const same = n('unchanged') + n('renamed');
+  const parts: Array<{ key: string; tone: string; text: string; amount: string; show: boolean }> = [
+    { key: 'removed', tone: 'is-removed', show: removed > 0,
+      text: `${(n('cut') + n('reduced')).toLocaleString()} ${n('cut') + n('reduced') === 1 ? 'project' : 'projects'} removed${n('reduced') ? ` or reduced (${n('reduced')} reduced)` : ''}`,
+      amount: `−${fmt.shortPhp(removed)}` },
+    { key: 'raised', tone: 'is-raised', show: raised > 0,
+      text: `${n('raised').toLocaleString()} ${n('raised') === 1 ? 'project' : 'projects'} raised`, amount: `+${fmt.shortPhp(raised)}` },
+    { key: 'inserted', tone: 'is-inserted', show: inserted > 0,
+      text: `${n('added').toLocaleString()} new ${n('added') === 1 ? 'project' : 'projects'} inserted by the Senate`, amount: `+${fmt.shortPhp(inserted)}` },
+    { key: 'restored', tone: 'is-restored', show: restored > 0,
+      text: `${n('restored').toLocaleString()} NEP ${n('restored') === 1 ? 'project' : 'projects'} the House dropped, restored`, amount: `+${fmt.shortPhp(restored)}` },
+    { key: 'kept', tone: 'is-kept', show: true,
+      text: `${same.toLocaleString()} projects keep the same budget${n('renamed') ? ` (${n('renamed').toLocaleString()} under a revised name)` : ''}`,
+      // Only the projects whose budget doesn't move; the grey bar also carries the raised and reduced projects' base.
+      amount: fmt.shortPhp(h('unchanged') + h('renamed')) },
+  ];
   return (
     <Link to={senateProgramPath(p.key)} className="senate-program-card">
       <h3>{PROGRAM_SHORT[p.key]}</h3>
-      <p className="senate-flow">
-        <small>NEP</small>{fmt.shortPhp(p.nep_php)}<small>→ House bill</small>{fmt.shortPhp(p.house_php)}<small>→ Senate</small>{fmt.shortPhp(p.senate_php)}
+      <p className="senate-pc-total">
+        <span>House bill <b>{fmt.shortPhp(p.house_php)}</b></span>
+        <span aria-hidden="true">→</span>
+        <span>Senate <b>{fmt.shortPhp(p.senate_php)}</b></span>
+        <SignedChange v={p.change_php} base={p.house_php} />
       </p>
-      <p className="senate-flow-change">
-        <SignedChange v={p.change_php} base={p.house_php} /> <small>vs the House bill</small>
-        {' · '}<SignedChange v={p.senate_php - p.nep_php} base={p.nep_php} /> <small>vs the NEP</small>
-      </p>
-      <div className="senate-statusbar" aria-hidden="true">
-        {SENATE_STATUS_ORDER.map((s) => {
-          const v = p.status[s];
-          if (!v) return null;
-          const w = ((s === 'added' || s === 'restored' ? v.senate_php : v.house_php) / total) * 100;
-          return <span key={s} style={{ width: `${w}%`, background: SENATE_STATUS[s].tone }} title={SENATE_STATUS[s].label} />;
-        })}
+      <div className="senate-pc-bars" role="img"
+        aria-label={`House bill ${fmt.shortPhp(p.house_php)}: ${fmt.shortPhp(kept)} kept, ${fmt.shortPhp(removed)} removed. Senate ${fmt.shortPhp(p.senate_php)}: ${fmt.shortPhp(kept)} kept, ${fmt.shortPhp(raised + inserted + restored)} added.`}>
+        <span className="senate-pc-label">House bill</span>
+        <span className="senate-pc-bar">
+          <i className="is-kept" style={{ width: w(kept) }} />
+          <i className="is-removed" style={{ width: w(removed) }} />
+        </span>
+        <span className="senate-pc-label">Senate</span>
+        <span className="senate-pc-bar">
+          <i className="is-kept" style={{ width: w(kept) }} />
+          <i className="is-raised" style={{ width: w(raised) }} />
+          <i className="is-inserted" style={{ width: w(inserted) }} />
+          <i className="is-restored" style={{ width: w(restored) }} />
+        </span>
       </div>
-      <ul>
-        {SENATE_STATUS_ORDER.filter((s) => p.status[s] && s !== 'unchanged').map((s) => (
-          <li key={s}>
-            <SenateStatusChip status={s} />
-            <span>{p.status[s]!.count.toLocaleString()} · {statusAmount(s, p.status[s]!)}</span>
-          </li>
+      <ul className="senate-pc-parts">
+        {parts.filter((x) => x.show).map((x) => (
+          <li key={x.key}><i className={x.tone} aria-hidden="true" /><span>{x.text}</span><b>{x.amount}</b></li>
         ))}
       </ul>
+      <p className="senate-pc-nep">
+        NEP {fmt.shortPhp(p.nep_php)} · the Senate is <SignedChange v={p.senate_php - p.nep_php} base={p.nep_php} /> from it
+      </p>
+      <span className="senate-pc-open">See every project →</span>
     </Link>
   );
-}
-
-/** What a status group's money means: cut and renamed carry the House amount, added the Senate's, raised and
- * reduced the change. */
-function statusAmount(s: string, v: { nep_php: number; house_php: number; senate_php: number }): string {
-  if (s === 'added' || s === 'restored') return fmt.shortPhp(v.senate_php);
-  if (s === 'nep_only') return `NEP ${fmt.shortPhp(v.nep_php)}`;
-  if (s === 'raised' || s === 'reduced') {
-    const d = v.senate_php - v.house_php;
-    return `${d >= 0 ? '+' : '−'}${fmt.shortPhp(Math.abs(d))}`;
-  }
-  return fmt.shortPhp(v.house_php);
 }
 
 function DeptList({ title, rows }: { title: string; rows: Overview['biggest'] }) {
