@@ -105,8 +105,9 @@ export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string
     help: 'In both, with a bigger budget in the Senate committee report.',
   },
   added: {
-    label: 'Inserted', plural: 'inserted by the Senate', tone: '#2f6fb3',
-    help: 'Not in the House bill; the Senate committee report inserts it. Some revise a House project it removes (a corrected name or new coordinates).',
+    // "Documented addition" (Jason, 2026-11-21): the Senate's own projects in FMR, NIA and HFEP, listed in its annexes.
+    label: 'Documented addition', plural: 'documented additions', tone: '#2f6fb3',
+    help: 'Not in the House bill; the Senate committee report adds it and lists it in its annex. Some revise a House project it removes (a corrected name or new coordinates).',
   },
   restored: {
     label: 'Restored from the NEP', plural: 'restored from the NEP', tone: '#1f7f86',

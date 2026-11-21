@@ -173,7 +173,7 @@ function ProgramCard({ p }: { p: SenateProgramRow }) {
     { key: 'raised', tone: 'is-raised', show: raised > 0,
       text: `${n('raised').toLocaleString()} ${n('raised') === 1 ? 'project' : 'projects'} raised`, amount: `+${fmt.shortPhp(raised)}` },
     { key: 'inserted', tone: 'is-inserted', show: inserted > 0,
-      text: `${n('added').toLocaleString()} new ${n('added') === 1 ? 'project' : 'projects'} inserted by the Senate`, amount: `+${fmt.shortPhp(inserted)}` },
+      text: `${n('added').toLocaleString()} ${n('added') === 1 ? 'documented addition' : 'documented additions'} by the Senate`, amount: `+${fmt.shortPhp(inserted)}` },
     { key: 'restored', tone: 'is-restored', show: restored > 0,
       text: `${n('restored').toLocaleString()} NEP ${n('restored') === 1 ? 'project' : 'projects'} the House dropped, restored`, amount: `+${fmt.shortPhp(restored)}` },
     { key: 'kept', tone: 'is-kept', show: true,
