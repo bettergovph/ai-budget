@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, Dropdown, FilterBar, PanelFoot } from './ReviewFilterBar';
-import { SenateStatusChip, SignedChange } from './SenateBits';
+import { SenatePages, SenateStatusChip, SignedChange } from './SenateBits';
 import { runQuery } from '../lib/duckdb';
 import { dataUrl } from '../lib/data-url';
 import { downloadCsv } from '../lib/csv';
@@ -46,18 +46,26 @@ interface SenateRow {
   office: string | null;
   region: string | null;
   program: string | null;
+  nep_doc: string | null;
+  nep_page: number | null;
+  house_doc: string | null;
+  house_page: number | null;
+  senate_doc: string;
+  senate_page: number | null;
 }
 
 const loadIndex = () => cached('review-index', () => getJson<ReviewIndex>(dataUrl(`hgab/2027/${REVIEW_INDEX_PATH}`), 'Failed to load the project list'));
 const loadSenate = () => cached('senate:dpwh-rows', async () => {
   const r = await runQuery<Record<string, unknown>>(
-    `SELECT id, house_id, status, title, hb_title, renamed, nep_php, house_php, senate_php, change_php, office, region, program FROM read_parquet('${senateProjectsUrl('dpwh')}')`);
+    `SELECT id, house_id, status, title, hb_title, renamed, nep_php, house_php, senate_php, change_php, office, region, program, nep_doc, nep_page, house_doc, house_page, senate_doc, senate_page FROM read_parquet('${senateProjectsUrl('dpwh')}')`);
   const num = (v: unknown) => (v == null ? null : Number(v));
   return r.rows.map((x) => ({
     id: String(x.id), house_id: x.house_id == null ? null : String(x.house_id), status: x.status as SenateStatus, title: String(x.title),
     hb_title: x.hb_title == null ? null : String(x.hb_title), renamed: !!x.renamed, nep_php: num(x.nep_php), house_php: num(x.house_php),
     senate_php: Number(x.senate_php ?? 0), change_php: Number(x.change_php ?? 0),
     office: x.office == null ? null : String(x.office), region: x.region == null ? null : String(x.region), program: x.program == null ? null : String(x.program),
+    nep_doc: x.nep_doc == null ? null : String(x.nep_doc), nep_page: num(x.nep_page), house_doc: x.house_doc == null ? null : String(x.house_doc),
+    house_page: num(x.house_page), senate_doc: String(x.senate_doc ?? 'senate-cr-annex-a4'), senate_page: num(x.senate_page),
   } as SenateRow));
 });
 
@@ -178,13 +186,14 @@ export default function SenateDpwhProjects() {
 
   const exportCsv = () => {
     const cols = ['house_id', 'reviewer_id', 'title', 'senate_title', 'office', 'districts', 'region', 'program', 'nep_php', 'house_php', 'senate_php',
-      'vs_house_php', 'vs_nep_php', 'senate_status', 'review_status', 'red_flags'];
+      'vs_house_php', 'vs_nep_php', 'senate_status', 'review_status', 'red_flags', 'nep_doc', 'nep_page', 'house_doc', 'house_page', 'senate_doc', 'senate_page'];
     const esc = (v: unknown) => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
     const lines = listed.map((p) => {
       const s = senateOf(p);
       return [p.projectId, p.hgabId, p.title, s?.renamed ? s.title : '', p.office.name, p.office.districts.join('; '), p.region, p.program,
         s?.nep_php, s?.house_php ?? p.amount, s?.senate_php, s?.change_php, s && s.nep_php != null ? s.senate_php - s.nep_php : '',
-        s ? SENATE_STATUS[s.status].label : '', LIST_STATUS_LABEL[statusOf(p.hgabId)], p.flags.map((i) => index!.flags[i].code).join('; ')].map(esc).join(',');
+        s ? SENATE_STATUS[s.status].label : '', LIST_STATUS_LABEL[statusOf(p.hgabId)], p.flags.map((i) => index!.flags[i].code).join('; '),
+        s?.nep_doc, s?.nep_page, s?.house_doc, s?.house_page, s?.senate_doc, s?.senate_page].map(esc).join(',');
     });
     downloadCsv('senate-committee-report-2027-dpwh-projects.csv', [cols.join(','), ...lines].join('\n'), { excelBom: true });
   };
@@ -248,6 +257,7 @@ export default function SenateDpwhProjects() {
               <th className="num">vs House bill</th>
               <th className="num">vs NEP</th>
               <th>Senate</th>
+              <th>Pages</th>
               <th>Review</th>
             </tr>
           </thead>
@@ -277,6 +287,7 @@ export default function SenateDpwhProjects() {
                   <td className="num"><SignedChange v={s ? s.change_php : null} base={s?.house_php} /></td>
                   <td className="num"><SignedChange v={s && s.nep_php != null ? s.senate_php - s.nep_php : null} base={s?.nep_php} /></td>
                   <td>{s && <SenateStatusChip status={s.status} />}</td>
+                  <td>{s ? <SenatePages r={s} program="dpwh" /> : <span className="hgab-ds-null">—</span>}</td>
                   <td className="senate-review-cell">
                     {inReviewer.has(p.hgabId) ? (
                       <>
@@ -284,12 +295,12 @@ export default function SenateDpwhProjects() {
                         <Link className="senate-review-btn" to={`${REVIEW_ROOT}?p=${encodeURIComponent(p.hgabId)}`}>Review →</Link>
                       </>
                     ) : <span className="hgab-ex-none" title="The reviewer lists the projects with documents to check; this one isn't among them yet">Not in the reviewer</span>}
-                    <Link className="senate-house-link" to={recordPath('dpwh', p.projectId)}>House bill page</Link>
+                    <Link className="senate-house-link" to={recordPath('dpwh', p.projectId)}>House bill project</Link>
                   </td>
                 </tr>
               );
             })}
-            {!rows.length && <tr><td colSpan={8} className="nep-empty">No project passes these filters.</td></tr>}
+            {!rows.length && <tr><td colSpan={9} className="nep-empty">No project passes these filters.</td></tr>}
           </tbody>
         </table>
       </div>

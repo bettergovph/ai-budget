@@ -152,3 +152,7 @@
 .senate-check { display: block; margin-top: 3px; font-size: 0.74rem; color: #8a5a00; }
 .senate-check::before { content: "⚑ "; }
 .senate-check.is-box { margin: 8px 0 0; padding: 6px 10px; border: 1px solid #f1d39b; border-radius: 6px; background: #fff8eb; font-size: 0.85rem; }
+
+/* Pages in the project lists: one per line, so the three documents read as a column. */
+.senate-pages { flex-direction: column; gap: 2px; }
+.senate-warn { color: #8a5a00; font-weight: 600; white-space: nowrap; }

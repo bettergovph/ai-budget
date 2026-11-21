@@ -11,12 +11,12 @@ import { Link, useLocation } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import * as fmt from '../lib/format';
 import { SectionMenu } from './HgabBits';
-import { type DatasetKey } from '../lib/hgab';
+import { pdfUrl, type DatasetKey } from '../lib/hgab';
 import { PROGRAM_NAV } from '../lib/hgab-ui';
 import { INDICATORS_ROOT } from '../lib/indicators';
 import {
   SENATE_DOC, SENATE_EXPLORER_ROOT, SENATE_PROGRAM_VIEWS, SENATE_PROVISIONS_ROOT, SENATE_ROOT, SENATE_STATUS,
-  SENATE_UNDER_REVIEW, senateProgramPath, senateReportUrl, type SenateStatus,
+  SENATE_UNDER_REVIEW, senatePdfUrl, senateProgramPath, senateReportUrl, type SenateStatus,
 } from '../lib/senate';
 import '../hgab.css';
 import '../senate.css';
@@ -229,6 +229,28 @@ export function SignedChange({ v, base }: { v: number | null | undefined; base?:
     <span className="nep-delta" style={{ color }} title={`${v > 0 ? '+' : '−'}₱${Math.abs(v).toLocaleString()}`}>
       <span className="nep-delta-abs">{v > 0 ? '+' : '−'}{fmt.shortPhp(Math.abs(v))}</span>
       {pct != null && <span className="nep-delta-pct">{v > 0 ? '+' : '−'}{(Math.abs(pct) * 100).toFixed(1)}%</span>}
+    </span>
+  );
+}
+
+/** A project's pages, one link each, opening the PDF at that page: "NEP p.12 · HB p.669 · Senate p.4". Every amount in
+ * a Senate list can be checked against the page that prints it (Jason, 2026-11-21: "make it trustworthy"). */
+export function SenatePages({ r, program }: {
+  r: { status: string; nep_doc: string | null; nep_page: number | null; house_doc: string | null; house_page: number | null; senate_doc: string; senate_page: number | null };
+  program: DatasetKey;
+}) {
+  const annex = program === 'dpwh' ? 'Annex A-4' : program === 'fmr' ? 'Annex A-1' : program === 'nia' ? 'Annex A-3' : 'Annex A-2';
+  return (
+    <span className="hgab-ds-pages senate-pages">
+      {r.nep_doc && r.nep_page
+        ? <a href={pdfUrl(r.nep_doc, r.nep_page)} target="_blank" rel="noopener" title={`The NEP, PDF page ${r.nep_page}`}>NEP p.{r.nep_page}</a>
+        : <span title="Not in the NEP, or no NEP page found">NEP —</span>}
+      {r.house_doc && r.house_page
+        ? <a href={pdfUrl(r.house_doc, r.house_page)} target="_blank" rel="noopener" title={`House Bill 10858, third reading, PDF page ${r.house_page}`}>HB p.{r.house_page}</a>
+        : <span title="Not in the House bill">HB —</span>}
+      {r.senate_page
+        ? <a href={senatePdfUrl(r.senate_doc, r.senate_page)} target="_blank" rel="noopener" title={`Senate committee report, ${annex}, PDF page ${r.senate_page}`}>Senate p.{r.senate_page}</a>
+        : <span title={r.status === 'nep_only' ? 'Not in the Senate committee report' : `Not listed in ${annex}: the same as in the House bill`}>Senate —</span>}
     </span>
   );
 }

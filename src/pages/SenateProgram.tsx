@@ -12,7 +12,7 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip, SkeletonRows } from '../components/Nep2027Bits';
 import {
-  SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenateReviewBanner, SenateStatusChip, SignedChange,
+  SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenatePages, SenateReviewBanner, SenateStatusChip, SignedChange,
 } from '../components/SenateBits';
 import SenateDpwhProjects from '../components/SenateDpwhProjects';
 import { Check, Dropdown, PanelFoot } from '../components/ReviewFilterBar';
@@ -262,7 +262,8 @@ function ProjectsView({ k }: { k: DatasetKey }) {
 
   const exportCsv = async () => {
     const r = await runQuery<Record<string, unknown>>(`SELECT * EXCLUDE (search_text) FROM read_parquet(${sqlStr(url)}) ${where} ORDER BY ${SORT_SQL[sort]} ${dir.toUpperCase()} NULLS LAST, id`);
-    const cols = ['id', 'house_id', 'status', 'title', 'hb_title', 'region', 'office', 'program', 'pap', 'nep_php', 'house_php', 'senate_php', 'change_php', 'replaces_id', 'senate_page'];
+    const cols = ['id', 'house_id', 'status', 'title', 'hb_title', 'region', 'office', 'program', 'pap', 'nep_php', 'house_php', 'senate_php', 'change_php',
+      'nep_doc', 'nep_page', 'house_doc', 'house_page', 'senate_doc', 'senate_page', 'matched_by', 'check_note'];
     const esc = (v: unknown) => (v == null ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
     const text = [cols.join(','), ...r.rows.map((x) => cols.map((c) => esc(typeof x[c] === 'bigint' ? Number(x[c]) : x[c])).join(','))].join('\n');
     downloadCsv(`senate-committee-report-2027-${k}.csv`, text, { excelBom: true });
@@ -349,6 +350,7 @@ function ProjectsView({ k }: { k: DatasetKey }) {
               {head('change', 'vs House bill', 'num')}
               {head('vsnep', 'vs NEP', 'num')}
               <th>Status</th>
+              <th>Pages</th>
             </tr>
           </thead>
           <tbody>
@@ -366,9 +368,10 @@ function ProjectsView({ k }: { k: DatasetKey }) {
                 <td className="num"><SignedChange v={r.change_php} base={r.house_php} /></td>
               <td className="num"><SignedChange v={r.nep_php != null ? r.senate_php - r.nep_php : null} base={r.nep_php} /></td>
                 <td><SenateStatusChip status={r.status} /></td>
+                <td><SenatePages r={r} program={k} /></td>
               </tr>
             ))}
-            {cur && !cur.rows.length && <tr><td colSpan={7} className="nep-empty">No project matches.</td></tr>}
+            {cur && !cur.rows.length && <tr><td colSpan={8} className="nep-empty">No project matches.</td></tr>}
           </tbody>
         </table>
       </div>
