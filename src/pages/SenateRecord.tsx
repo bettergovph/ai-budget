@@ -85,6 +85,7 @@ export default function SenateRecord() {
             {r.house_id && <span className="nep-code" title="Line reference, for citing this line">{r.house_id}</span>}
           </p>
           <div className="hgab-rec-labels">
+            <span className="hgab-rec-label"><em>Version</em>Senate committee report</span>
             <SenateStatusChip status={r.status} />
             {r.renamed && <span className="hgab-rec-label"><em>Name</em>Revised by the Senate</span>}
           </div>

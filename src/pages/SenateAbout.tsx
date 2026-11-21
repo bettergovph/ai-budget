@@ -28,7 +28,7 @@ export default function SenateAbout({ which }: { which: 'sources' | 'methodology
       <main className="nep-main hgab-ex-main">
         {which === 'sources' ? (
           <section className="nep-section">
-            <SectionHead eyebrow="The documents" headline={o?.report.title ?? 'The committee report'} dek={o ? `${o.report.committee}; prepared by ${o.report.prepared}.` : undefined} />
+            <SectionHead eyebrow="The documents" headline={o?.report.title ?? 'The Senate committee report'} dek={o ? `${o.report.committee}; prepared by ${o.report.prepared}.` : undefined} />
             <div className="nep-table-wrap">
               <table className="nep-table">
                 <thead><tr><th>Document</th><th>What it holds</th><th>SHA-256</th></tr></thead>
@@ -60,7 +60,7 @@ export default function SenateAbout({ which }: { which: 'sources' | 'methodology
               </p>
             </section>
             <section className="nep-section">
-              <SectionHead eyebrow="Matching" headline="Each change, tied to the House bill line it amends" />
+              <SectionHead eyebrow="Matching" headline="Each Senate change, tied to the House bill line it amends" />
               <ul>
                 <li>
                   <strong>Line-by-line amendments (Annex A)</strong> cite the House bill volume, page and line they change.

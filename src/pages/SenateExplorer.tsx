@@ -83,13 +83,13 @@ export default function SenateExplorer() {
             { label: 'Departments, NEP', value: fmt.shortPhp(nepDepts, 'T') },
             { label: 'Departments, House bill', value: fmt.shortPhp(t.house ?? 0, 'T') },
             { label: 'Departments, Senate', value: fmt.shortPhp(t.senate ?? 0, 'T'), sub: `${fmt.shortPhp(t.net ?? 0, 'B')} vs the House bill` },
-            { label: 'Raised · cut', value: `+${fmt.shortPhp(t.increase ?? 0, 'B')} · −${fmt.shortPhp(Math.abs(t.decrease ?? 0), 'B')}`, sub: 'in departments, by the Senate' },
+            { label: 'Senate raised · cut', value: `+${fmt.shortPhp(t.increase ?? 0, 'B')} · −${fmt.shortPhp(Math.abs(t.decrease ?? 0), 'B')}`, sub: 'in departments, by the Senate' },
           ]}
         />
         <section className="nep-section">
           <SectionHead
             eyebrow="By department"
-            headline="NEP, House bill and Senate committee report"
+            headline="NEP, House bill and the Senate committee report"
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Only those that change

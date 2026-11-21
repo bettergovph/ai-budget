@@ -77,7 +77,7 @@ export default function SenateOverview() {
         <section className="nep-section">
           <SectionHead
             eyebrow="Project by project"
-            headline="The four infrastructure programs"
+            headline="The four infrastructure programs in the Senate"
             dek="Every House bill project, with what the Senate committee report does to it: removed, reduced, raised, renamed or left as it is, and the projects it inserts."
           />
           <div className="senate-programs">
@@ -88,12 +88,12 @@ export default function SenateOverview() {
         <section className="nep-section">
           <SectionHead
             eyebrow="By department"
-            headline={`${o.departments_changed} of ${o.departments} departments and funds change`}
+            headline={`${o.departments_changed} of ${o.departments} departments and funds change in the Senate`}
             dek={<>Each department's NEP, House bill and committee report totals; "Change" is the Senate committee report minus the House bill. <Link to={SENATE_EXPLORER_ROOT}>See every line →</Link></>}
           />
           <div className="senate-split">
-            <DeptList title="Largest cuts" rows={cuts} />
-            <DeptList title="Largest increases" rows={raises} />
+            <DeptList title="Largest Senate cuts" rows={cuts} />
+            <DeptList title="Largest Senate increases" rows={raises} />
           </div>
           {deps && (
             <details className="hgab-details">
@@ -122,13 +122,13 @@ export default function SenateOverview() {
         <section className="nep-section">
           <SectionHead
             eyebrow="Beyond the amounts"
-            headline={`${o.provisions} amendments to the bill's provisions`}
+            headline={`${o.provisions} Senate amendments to the bill's provisions`}
             dek={<>The report also rewrites the rules attached to the budget: amounts in special provisions, conditions on releases, reports agencies must file. <Link to={SENATE_PROVISIONS_ROOT}>Read them →</Link></>}
           />
         </section>
 
         <section className="nep-section">
-          <SectionHead eyebrow="The documents" headline="The committee report, as published" />
+          <SectionHead eyebrow="The documents" headline="The Senate committee report, as published" />
           <ul className="senate-refs">
             {o.documents.map((d) => (
               <li key={d.key}><a href={senatePdfUrl(d.key)} target="_blank" rel="noreferrer">{d.title}</a></li>

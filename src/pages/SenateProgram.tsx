@@ -85,7 +85,7 @@ export default function SenateProgram() {
       <SenateHero
         compact={view !== 'overview'}
         crumb={crumb}
-        title={PROGRAM_TITLE[key]}
+        title={`${PROGRAM_TITLE[key]} in the Senate`}
         dek={
           <>
             {fmt.shortPhp(sum.house_php)} in the House bill, {fmt.shortPhp(sum.senate_php)} in the Senate committee report.
@@ -124,7 +124,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
         ]}
       /></div>
       <section className="nep-section">
-        <SectionHead eyebrow="What happened to each project" headline="Every project: NEP, House bill and Senate committee report" />
+        <SectionHead eyebrow="What the Senate did to each project" headline="Every project: NEP, House bill and Senate committee report" />
         <div className="nep-table-wrap">
           <table className="nep-table">
             <thead><tr><th>Status</th><th className="num">Projects</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th><th>What it means</th></tr></thead>
@@ -155,7 +155,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
 function DimTable({ title, rows, k, param, note }: { title: string; rows: SenateDimRow[]; k: DatasetKey; param: 'region' | 'office' | 'program' | 'pap'; note?: string }) {
   return (
     <section className="nep-section">
-      <SectionHead eyebrow="Breakdown" headline={title} dek={note} />
+      <SectionHead eyebrow="Senate changes, breakdown" headline={title} dek={note} />
       <div className="nep-table-wrap">
         <table className="nep-table">
           <thead><tr><th className="nep-th-name">{title.replace(/^By /, '')}</th><th className="num">NEP</th><th className="num">House bill</th><th className="num">Senate</th><th className="num">vs House bill</th><th className="num">vs NEP</th><th className="num">Projects changed</th></tr></thead>
