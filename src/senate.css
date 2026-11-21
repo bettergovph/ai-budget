@@ -65,3 +65,29 @@
 .nep-table-count .nep-delta { display: inline; }
 .nep-table-count .nep-delta-pct { margin-left: 0.3em; }
 
+
+/* Department page, Annex A: one line per amendment, rows of one activity under its name. */
+.senate-am .hgab-ex-agency-figs { gap: 14px; }
+.senate-am-table td.hgab-ex-name { max-width: 560px; }
+.senate-am-group td { background: var(--paper-2, #f6f5f1); font-weight: 600; font-size: 0.88rem; }
+.senate-am-group .nep-delta { font-weight: 400; }
+.senate-am-count { font-weight: 400; font-size: 0.75rem; color: var(--ink-3); margin-left: 6px; }
+.senate-am-in td.hgab-ex-name { padding-left: 28px; }
+.senate-am-sub { display: block; font-size: 0.76rem; color: var(--ink-3); margin-top: 2px; }
+.senate-am-instr { display: block; font-size: 0.74rem; font-style: italic; color: var(--ink-3); margin-top: 2px; }
+.senate-am-obj { color: var(--ink-2, #444); }
+.senate-tag {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px solid var(--rule); border-radius: 3px;
+  font-family: var(--font-mono); font-size: 0.68rem; line-height: 1.5; color: var(--ink-3); vertical-align: 1px; white-space: nowrap;
+}
+.senate-tag.is-new { color: #2f6fb3; border-color: #2f6fb3; }
+.senate-tag.is-removed { color: var(--negative); border-color: var(--negative); }
+.senate-am-refs { white-space: nowrap; font-family: var(--font-mono); font-size: 0.74rem; }
+.senate-am-refs > * + * { margin-left: 8px; }
+.senate-am-more {
+  margin: 8px 0 4px; padding: 6px 12px; border: 1px solid var(--rule); border-radius: 6px; background: none;
+  font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--ink);
+}
+.senate-am-more:hover { border-color: var(--ink-3); }
+.senate-am .hgab-ex-agency-figs .nep-delta { display: inline; }
+.senate-am .hgab-ex-agency-figs .nep-delta-pct { margin-left: 0.3em; }

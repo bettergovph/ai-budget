@@ -1,9 +1,9 @@
 /**
  * `/senate/2027/explorer/:deptId`: one department in the Senate committee report.
  *
- *   1. What the report changes: its Annex A rows for the department, as the report prints them (the House
- *      bill amount, the change and the committee report amount), each with its House bill page and its page
- *      in the report.
+ *   1. What the report changes: its Annex A rows for the department, by agency and activity (Jason,
+ *      2026-11-21: "the text is overwhelming especially the Annex A"): what changes and where on one line, the
+ *      expense class as a tag, rows that share an activity under its name, long agencies folded after 12 rows.
  *   2. Every line: the House bill explorer's tree for the department with a Senate column; "Change" and
  *      "only lines that differ" compare the committee report with the House bill.
  */
@@ -27,8 +27,8 @@ import '../nep2027.css';
 import '../hgab-explorer.css';
 
 const ROW_NOTE: Record<string, string> = {
-  new: 'Inserted by the Senate',
-  new_class: 'New expense class on this line',
+  new: 'Inserted',
+  new_class: 'New expense class',
   unmatched: 'House line not found',
   ref_only: 'House amount differs from the bill',
   no_hb_table: '',
@@ -73,6 +73,7 @@ export default function SenateExplorerDept() {
   const house = ex?.house ?? dept?.house ?? 0;
   const senate = ex?.senate ?? null;
   // Expense-class rows (TOTAL repeats them); the object-of-expenditure view of the same money on request.
+  const classRows = lines.rows.filter((r) => r.kind === 'class' && r.label.toUpperCase() !== 'TOTAL');
   const shownRows = lines.rows.filter((r) => (r.kind === 'class' && r.label.toUpperCase() !== 'TOTAL') || (showObjects && r.kind === 'object'));
   const byAgency = groupBy(shownRows, (r) => r.agency ?? name);
 
@@ -83,12 +84,10 @@ export default function SenateExplorerDept() {
         compact
         crumb={crumb}
         title={name}
-        dek={senate != null
-          ? <>{dept?.nep ? <>NEP {fmt.shortPhp(dept.nep)} → </> : null}House bill {fmt.shortPhp(house)} → Senate committee report {fmt.shortPhp(senate)} (<SignedChange v={senate - house} base={house} /> vs the House bill{dept?.nep ? <>, <SignedChange v={senate - dept.nep} base={dept.nep} /> vs the NEP</> : null}).</>
-          : undefined}
+        dek="What the Senate committee report changes in this department, then every House bill line with its Senate amount."
       />
       <main className="nep-main hgab-ex-main">
-        <SenateReviewBanner />
+        <SenateReviewBanner compact />
         <div className="senate-kpi5"><KpiStrip
           items={[
             { label: 'NEP', value: dept?.nep ? fmt.shortPhp(dept.nep) : '—', sub: dept?.nep ? `₱${dept.nep.toLocaleString()}` : undefined },
@@ -102,8 +101,8 @@ export default function SenateExplorerDept() {
         <section className="nep-section">
           <SectionHead
             eyebrow="What the report changes"
-            headline={lines.rows.length ? 'The Senate committee report’s amendments, line by line' : 'No amendments to this department'}
-            dek="As Annex A prints them: the House bill amount, the change and the committee report amount, with the House bill page and line it cites. The NEP amount is the same line's in the NEP."
+            headline={classRows.length ? `${classRows.length.toLocaleString()} ${classRows.length === 1 ? 'amendment' : 'amendments'} in Annex A` : 'No amendments to this department'}
+            dek="Each line the report changes, by agency and activity, beside the NEP. Tags: PS personnel, MOOE operating expenses, CO capital outlays. Page links open the House bill and the report."
             right={
               <label className="nep-toggle">
                 <input type="checkbox" checked={showObjects} onChange={(e) => setShowObjects(e.target.checked)} /> Also by object of expenditure
@@ -111,25 +110,7 @@ export default function SenateExplorerDept() {
             }
           />
           {[...byAgency.entries()].map(([agency, rows]) => (
-            <div key={agency} className="hgab-ex-agency is-open">
-              <header className="hgab-ex-agency-head"><span className="hgab-ex-agency-name">{titleCase(agency)}</span></header>
-              <div className="nep-table-wrap">
-                <table className="nep-table hgab-ex-tree">
-                  <thead>
-                    <tr>
-                      <th className="nep-th-name">Line</th>
-                      <th className="num">NEP</th>
-                      <th className="num">House bill</th>
-                      <th className="num senate-col-senate">Senate</th>
-                      <th className="num" title="Senate committee report minus the House bill">vs House bill</th>
-                      <th className="num" title="Senate committee report minus the NEP">vs NEP</th>
-                      <th>Pages</th>
-                    </tr>
-                  </thead>
-                  <tbody>{rows.map((r, i) => <AmendmentRow key={i} r={r} />)}</tbody>
-                </table>
-              </div>
-            </div>
+            <AmendmentAgency key={agency} agency={titleCase(agency)} rows={rows} single={byAgency.size === 1} />
           ))}
         </section>
 
@@ -161,22 +142,131 @@ export default function SenateExplorerDept() {
   );
 }
 
-function AmendmentRow({ r }: { r: SenateLineRow }) {
+/** A region heading in a House bill path ("Region IX - Zamboanga Peninsula", "National Capital Region (NCR)"). */
+const REGION_PART = /^(Region\b|National Capital Region|Cordillera|Negros Island|Bangsamoro|BARMM\b|Nationwide)/i;
+
+/** What a row changes and where: the activity or project, and the region and office below it. */
+function whatWhere(r: SenateLineRow): { what: string; where: string | null } {
+  // The House bill's own path when matched (clean names); else the report's text above the row, whose lines wrap
+  // mid-name, so its pieces are words of one name unless one is a region.
+  const parts = r.hb_path ? r.hb_path.split(' > ') : (r.context ?? '').replace(/^\[|\]$/g, '').split(' > ');
+  const at = parts.findIndex((x) => REGION_PART.test(x.trim()));
+  const head = at > 0 ? parts.slice(0, at) : parts;
+  const what = (r.hb_path ? head[head.length - 1] : head.join(' ')).replace(/^(Project\(s\)\s*)?(Locally-Funded Project\(s\)\s*)/i, '');
+  const where = at > 0 ? parts.slice(at).filter((x, i, xs) => i === 0 || x !== xs[i - 1]).join(' · ') : null;
+  return { what: nameCase((what || r.hb_label || r.label).trim()), where: where ? nameCase(where) : null };
+}
+
+/** Acronyms the report prints in its all-caps names, kept when the name is set in title case. */
+const ACRONYMS = new Set(['UP', 'PGH', 'NCPAG', 'GRIT', 'DRRM', 'TVUP', 'XDP', 'PH', 'ICT', 'DOH', 'DEPED', 'CHED', 'TESDA', 'AFP', 'PNP',
+  'BFP', 'DILG', 'LGU', 'LGUS', 'SUC', 'SUCS', 'NCR', 'CAR', 'BARMM', 'MIMAROPA', 'CALABARZON', 'SOCCSKSARGEN', 'PCC', 'PCIC', 'NIA', 'DPWH', 'ADB', 'JICA']);
+/** The report's all-caps names in title case, keeping acronyms and short words in parentheses ("(CAL)"). */
+function nameCase(s: string): string {
+  if (s !== s.toUpperCase()) return s;
+  const src = s.split(/(\s+)/), out = titleCase(s).split(/(\s+)/);
+  if (src.length !== out.length) return out.join('');
+  return out.map((w, i) => {
+    const pieces = src[i].split('-').map((x) => x.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+    return (pieces.length && pieces.every((x) => ACRONYMS.has(x))) || /^\(\p{L}{2,6}\)[,.;:]?$/u.test(src[i]) ? src[i] : w;
+  }).join('');
+}
+
+const CLASS_TAG: Record<string, string> = { PS: 'PS', MOOE: 'MOOE', CO: 'CO', FINEX: 'FinEx' };
+
+/** One agency's amendments: rows sharing an activity under its name, folded after FOLD rows. */
+function AmendmentAgency({ agency, rows, single }: { agency: string; rows: SenateLineRow[]; single: boolean }) {
+  const FOLD = 12;
+  const [all, setAll] = useState(false);
+  // The report's instruction ("Between lines 36 and 37, insert ...") once, at the first row it covers.
+  const items = rows.map((r, k) => ({ r, ...whatWhere(r), instruction: r.instruction && r.instruction !== rows[k - 1]?.instruction ? r.instruction : null }));
+  const groups: Array<{ what: string; items: typeof items }> = [];
+  for (const it of items) {
+    const g = groups[groups.length - 1];
+    if (g && g.what === it.what) g.items.push(it);
+    else groups.push({ what: it.what, items: [it] });
+  }
+  const classes = rows.filter((r) => r.kind === 'class');
+  const net = classes.reduce((t, r) => t + (r.net ?? 0), 0);
+  const house = classes.reduce((t, r) => t + (r.house ?? 0), 0);
+  // Fold by rows shown, whole groups at a time.
+  let shown = 0;
+  const visible = all ? groups : groups.filter((g) => { const keep = shown < FOLD; shown += g.items.length; return keep; });
+  const hidden = rows.length - visible.reduce((t, g) => t + g.items.length, 0);
+  const sum = (xs: Array<number | null>) => (xs.some((x) => x != null) ? xs.reduce<number>((t, x) => t + (x ?? 0), 0) : null);
+  return (
+    <div className="hgab-ex-agency is-open senate-am">
+      <header className="hgab-ex-agency-head">
+        <span className="hgab-ex-agency-name">{single ? 'Amendments' : agency}</span>
+        <span className="hgab-ex-agency-figs">
+          <span>{classes.length.toLocaleString()} {classes.length === 1 ? 'line' : 'lines'}</span>
+          <span title="Net change in these lines, vs the House bill"><SignedChange v={net} base={house || null} /></span>
+        </span>
+      </header>
+      <div className="nep-table-wrap">
+        <table className="nep-table hgab-ex-tree senate-am-table">
+          <thead>
+            <tr>
+              <th className="nep-th-name">Line</th>
+              <th className="num">NEP</th>
+              <th className="num">House bill</th>
+              <th className="num senate-col-senate">Senate</th>
+              <th className="num" title="Senate committee report minus the House bill">vs House bill</th>
+              <th className="num" title="Senate committee report minus the NEP">vs NEP</th>
+              <th>Pages</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((g, gi) => {
+              const grouped = g.items.length > 1;
+              const cls = g.items.filter((x) => x.r.kind === 'class').map((x) => x.r);
+              const gNep = sum(cls.map((r) => r.nep)), gHouse = sum(cls.map((r) => r.house)), gSenate = sum(cls.map((r) => r.senate));
+              return [
+                grouped && (
+                  <tr key={`g${gi}`} className="senate-am-group">
+                    <td className="hgab-ex-name">{g.what} <span className="senate-am-count">{g.items.length} lines</span></td>
+                    <td className="num nep-td-base">{gNep != null ? fmt.shortPhp(gNep) : '—'}</td>
+                    <td className="num">{gHouse != null ? fmt.shortPhp(gHouse) : '—'}</td>
+                    <td className="num senate-col-senate">{gSenate != null ? fmt.shortPhp(gSenate) : '—'}</td>
+                    <td className="num"><SignedChange v={gSenate != null && gHouse != null ? gSenate - gHouse : null} base={gHouse} /></td>
+                    <td className="num"><SignedChange v={gSenate != null && gNep != null ? gSenate - gNep : null} base={gNep} /></td>
+                    <td />
+                  </tr>
+                ),
+                ...g.items.map((it, i) => (
+                  <AmendmentRow key={`${gi}-${i}`} r={it.r} what={grouped ? null : g.what} where={it.where}
+                    instruction={it.instruction} indent={grouped} />
+                )),
+              ];
+            })}
+          </tbody>
+        </table>
+      </div>
+      {hidden > 0 && (
+        <button type="button" className="senate-am-more" onClick={() => setAll(true)}>Show {hidden.toLocaleString()} more {hidden === 1 ? 'line' : 'lines'}</button>
+      )}
+    </div>
+  );
+}
+
+function AmendmentRow({ r, what, where, instruction, indent }: {
+  r: SenateLineRow; what: string | null; where: string | null; instruction: string | null; indent: boolean;
+}) {
   const [doc, pdf, printed, line] = r.hb;
   const note = ROW_NOTE[r.status];
-  // The House bill's own path for a matched line (clean names); else the report's text above the row, whose
-  // lines wrap mid-name.
-  const where = (r.hb_path ? r.hb_path.split(' > ').slice(-3) : r.context ? [r.context.split(' > ').join(' ')] : [])
-    .filter((x) => x.toLowerCase() !== r.label.toLowerCase());
+  const removed = r.deleted || (r.senate === 0 && (r.house ?? 0) > 0);
+  // The class as a tag, unless the row's name is the class itself (a grouped row with no place).
+  const tag = r.kind === 'object' || (!what && !where) ? null : (CLASS_TAG[r.label.toUpperCase()] ?? r.label);
   return (
-    <tr className="hgab-ex-line">
+    <tr className={`hgab-ex-line ${indent ? 'senate-am-in' : ''}`.trim()}>
       <td className="hgab-ex-name">
-        <span className={r.deleted ? 'senate-deleted' : undefined}>
-          {where.length ? <span className="hgab-ex-sub">{where.join(' · ')}</span> : null}
-          <strong> {r.kind === 'object' ? r.label : expense(r.label)}</strong>
+        <span className={removed ? 'senate-deleted' : undefined}>
+          {r.kind === 'object' ? <span className="senate-am-obj">{r.label}</span> : (what ?? where ?? expense(r.label))}
         </span>
-        {note && <span className="hgab-ex-moved"> {note}</span>}
-        {r.instruction && <span className="senate-instr">{r.instruction}</span>}
+        {tag && <span className="senate-tag" title={expense(r.label)}>{tag}</span>}
+        {removed && <span className="senate-tag is-removed">Removed</span>}
+        {note && <span className={`senate-tag ${r.status === 'new' ? 'is-new' : ''}`.trim()}>{note}</span>}
+        {what && where && <span className="senate-am-sub">{where}</span>}
+        {instruction && <span className="senate-am-instr">{instruction}</span>}
       </td>
       <td className="num nep-td-base">
         {r.nep != null ? fmt.shortPhp(r.nep)
@@ -186,19 +276,13 @@ function AmendmentRow({ r }: { r: SenateLineRow }) {
       <td className="num senate-col-senate"><strong>{r.senate != null ? fmt.shortPhp(r.senate) : '—'}</strong></td>
       <td className="num"><SignedChange v={r.net} base={r.house} /></td>
       <td className="num"><SignedChange v={r.nep != null && r.senate != null ? r.senate - r.nep : null} base={r.nep} /></td>
-      <td className="hgab-ex-page">
-        <span className="hgab-ex-refs">
-          {doc && pdf ? (
-            <a className="hgab-ex-ref" href={pdfUrl(doc, pdf)} target="_blank" rel="noreferrer" title={`House bill page ${printed ?? ''}${line ? `, line ${line}` : ''}`}>
-              <span className="hgab-ex-ref-doc">HB</span> p.{printed ?? pdf}{line ? ` l.${line}` : ''}
-            </a>
-          ) : printed ? (
-            <span className="hgab-ex-ref is-none" title="The House bill page the report cites"><span className="hgab-ex-ref-doc">HB</span> p.{printed}{line ? ` l.${line}` : ''}</span>
-          ) : null}
-          <a className="hgab-ex-ref" href={senatePdfUrl('senate-cr-annex-a', r.senate_page)} target="_blank" rel="noreferrer" title="The page of the Senate committee report (Annex A) that prints this amendment">
-            <span className="hgab-ex-ref-doc">Senate</span> p.{r.senate_page}
-          </a>
-        </span>
+      <td className="senate-am-refs">
+        {doc && pdf ? (
+          <a href={pdfUrl(doc, pdf)} target="_blank" rel="noreferrer" title={`House bill page ${printed ?? ''}${line ? `, line ${line}` : ''}`}>HB {printed ?? pdf}</a>
+        ) : printed ? (
+          <span title="The House bill page the report cites">HB {printed}</span>
+        ) : null}
+        <a href={senatePdfUrl('senate-cr-annex-a', r.senate_page)} target="_blank" rel="noreferrer" title="The page of Annex A, the Senate committee report, that prints this amendment">Senate {r.senate_page}</a>
       </td>
     </tr>
   );
