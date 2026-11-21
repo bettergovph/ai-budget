@@ -217,7 +217,7 @@ export default function App() {
           <Route path="/senate/2027/methodology" element={<SenateAbout which="methodology" />} />
           <Route path="/senate/2027/data" element={<SenateData />} />
           {/* Unlinked for now: no menu, not in the sitemap, noindex (seo.ts). */}
-          <Route path="/senate/2027/report" element={<SenateReport />} />
+          <Route path="/senate/2027/report/*" element={<SenateReport />} />
           <Route path="/senate/2027/:dataset" element={<SenateProgram />} />
           <Route path="/senate/2027/:dataset/p/:id" element={<SenateRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

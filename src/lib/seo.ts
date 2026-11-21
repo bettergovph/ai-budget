@@ -348,7 +348,7 @@ export function pageMeta(pathname: string): PageMeta {
     };
   }
   // The executive report: unlinked for now, kept out of search.
-  if (p === "/senate/2027/report") {
+  if (p === "/senate/2027/report" || p.startsWith("/senate/2027/report/")) {
     return {
       title: `What the Senate changed in the 2027 budget — executive report · ${SITE}`,
       description: "An executive report on the FY 2027 Senate committee report: what the Senate changed in the House bill, and what the data shows.",
