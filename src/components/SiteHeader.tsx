@@ -176,35 +176,34 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </div>
 
           <nav className="primary-nav" aria-label="Primary">
+            {/* The budget's stages, short (Jason, 2026-11-21); the House's budget hearings sit under House. */}
             <Link
               to="/2027"
+              title="National Expenditure Program 2027"
               className={`primary-nav-link ${location.pathname.startsWith('/2027') ? 'active' : ''}`}
             >
-              National Expenditures 2027
+              NEP
             </Link>
             <Link
               to="/hgab"
-              className={`primary-nav-link ${location.pathname.startsWith('/hgab') ? 'active' : ''}`}
+              title="House Appropriations Bill 2027, and the House's budget hearings"
+              className={`primary-nav-link ${location.pathname.startsWith('/hgab') || location.pathname.startsWith('/hearings') ? 'active' : ''}`}
             >
-              House Appropriations Bill 2027
+              House
             </Link>
             <Link
               to="/senate/2027/overview"
+              title="Senate committee report on the 2027 budget"
               className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
             >
-              Senate Budget 2027
-            </Link>
-            <Link
-              to="/hearings"
-              className={`primary-nav-link ${location.pathname.startsWith('/hearings') ? 'active' : ''}`}
-            >
-              Budget Hearings
+              Senate
             </Link>
             <Link
               to="/gaa"
+              title="General Appropriations Acts, 2000–2026"
               className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
             >
-              General Appropriations 2000–2026
+              GAA 2000–2026
             </Link>
             <Link
               to={CITIZEN_REPORTS_ROOT}
@@ -261,16 +260,13 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
         </div>
         <nav className="drawer-nav" aria-label="Site sections">
           <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
-            NEP 2027 <span className="drawer-link-arrow">→</span>
+            NEP <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
-            House bill 2027 <span className="drawer-link-arrow">→</span>
+            House <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
-            Senate committee report 2027 <span className="drawer-link-arrow">→</span>
-          </Link>
-          <Link className="drawer-link" to="/hearings" onClick={() => setMenuOpen(false)}>
-            Budget Hearings <span className="drawer-link-arrow">→</span>
+            Senate <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>

@@ -55,7 +55,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
  * `/hgab/2027` redirect), Line by line (the whole-bill explorer), Red Flags (PBC's red-flag basket; Jason, 2026-11-04:
  * "add a link 'Red Flags' after Line by Line") and Leaderboards; then the dropdowns Districts, the
  * four programs and Multi-purpose buildings; Foreign-assisted (Jason, 2026-11-12: "Move Foreign Assisted after
- * Multi-purpose buildings"); Write a letter; and About (Sources, Methodology, Indicators). The story-style
+ * Multi-purpose buildings"); Hearings (the House's budget hearings, `/hearings`, under House since 2026-11-21); Write a
+ * letter; and About (Sources, Methodology, Indicators). The story-style
  * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
  * entries out for now, keeping their pages at their addresses.
  */
@@ -72,6 +73,8 @@ const LEAD_LINKS: readonly NavLink[] = [
 ];
 const TAIL_LINKS: readonly NavLink[] = [
   { to: FAP_ROOT, label: 'Foreign-assisted' },
+  // The House Committee on Appropriations' briefings and hearings, a primary tab until 2026-11-21.
+  { to: '/hearings', label: 'Hearings' },
   { to: `${HGAB_ROOT}/letter`, label: 'Write a letter' },
 ];
 /**
