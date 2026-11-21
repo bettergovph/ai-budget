@@ -27,8 +27,13 @@ import {
 } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
+import '../hgab-dataset.css';
 
 const VIEWS = ['overview', 'projects', 'changes'] as const;
+/** The House bill section's names for the four programs (its overview.json labels). */
+const PROGRAM_TITLE: Record<DatasetKey, string> = {
+  dpwh: 'DPWH national infrastructure', fmr: 'DA farm-to-market roads', hfep: 'DOH Health Facilities Enhancement Program', nia: 'NIA irrigation',
+};
 type View = (typeof VIEWS)[number];
 
 export default function SenateProgram() {
@@ -68,17 +73,22 @@ export default function SenateProgram() {
   const changedCount = (['cut', 'reduced', 'raised', 'added'] as SenateStatus[]).reduce((a, k) => a + (st[k]?.count ?? 0), 0);
   return (
     <>
-      <SenateHeader crumb={crumb} />
+      <SenateHeader
+        crumb={PROGRAM_SHORT[key]}
+        compiledMeta={`${fmt.shortPhp(sum.senate_php)} · Senate · ${fmt.shortPhp(sum.house_php)} House bill`}
+        heroBlend={view === 'overview'}
+      />
       <SenateHero
-        compact
+        compact={view !== 'overview'}
         crumb={crumb}
-        title={`${sum.label}: ${fmt.shortPhp(sum.house_php)} in the House bill, ${fmt.shortPhp(sum.senate_php)} in the Senate committee report`}
+        title={PROGRAM_TITLE[key]}
         dek={
           <>
-            {changedCount.toLocaleString()} projects change in amount: {(st.cut?.count ?? 0).toLocaleString()} cut to zero,
-            {' '}{(st.raised?.count ?? 0).toLocaleString()} raised, {(st.added?.count ?? 0).toLocaleString()} added by the Senate
-            {st.reduced ? `, ${st.reduced.count.toLocaleString()} reduced` : ''}. {(st.renamed?.count ?? 0).toLocaleString()} keep
-            their amount under a revised name.
+            {fmt.shortPhp(sum.house_php)} in the House bill, {fmt.shortPhp(sum.senate_php)} in the Senate committee report.
+            {' '}{changedCount.toLocaleString()} projects change in amount
+            {' '}({(['cut', 'reduced', 'raised', 'added'] as SenateStatus[]).filter((x) => st[x]?.count)
+              .map((x) => `${st[x]!.count.toLocaleString()} ${SENATE_STATUS[x].plural}`).join(', ')})
+            {st.renamed?.count ? <>; {st.renamed.count.toLocaleString()} keep their amount under a revised name</> : null}.
           </>
         }
       >
@@ -109,7 +119,7 @@ export default function SenateProgram() {
 function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) {
   return (
     <>
-      <KpiStrip
+      <div className="senate-kpi5"><KpiStrip
         items={[
           { label: 'NEP', value: fmt.shortPhp(sum.nep_php), sub: 'every NEP project, with those the House bill doesn’t have' },
           { label: 'House bill', value: fmt.shortPhp(sum.house_php) },
@@ -117,7 +127,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
           changeKpi('vs House bill', sum.senate_php, sum.house_php, 'the House bill'),
           changeKpi('vs NEP', sum.senate_php, sum.nep_php, 'the NEP'),
         ]}
-      />
+      /></div>
       <section className="nep-section">
         <SectionHead eyebrow="What happened to each project" headline="Every project: NEP, House bill and Senate committee report" />
         <div className="nep-table-wrap">

@@ -34,3 +34,5 @@
 .senate-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .senate-split-title { font-size: 1rem; margin: 8px 0; }
 .senate-moved { color: #3a2350; font-weight: 700; }
+/* Five figures in a row (NEP, House bill, Senate, vs House bill, vs NEP); phones fall back to two columns. */
+.senate-kpi5 .kpi-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }

@@ -89,7 +89,7 @@ export default function SenateExplorerDept() {
       />
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner />
-        <KpiStrip
+        <div className="senate-kpi5"><KpiStrip
           items={[
             { label: 'NEP', value: dept?.nep ? fmt.shortPhp(dept.nep) : '—', sub: dept?.nep ? `₱${dept.nep.toLocaleString()}` : undefined },
             { label: 'House bill', value: fmt.shortPhp(house), sub: `₱${house.toLocaleString()}` },
@@ -97,7 +97,7 @@ export default function SenateExplorerDept() {
             changeKpi('vs House bill', senate, house, 'the House bill'),
             changeKpi('vs NEP', senate, dept?.nep || null, 'the NEP'),
           ]}
-        />
+        /></div>
 
         <section className="nep-section">
           <SectionHead

@@ -23,6 +23,7 @@ import {
 } from '../lib/senate';
 import '../nep2027.css';
 import '../hgab-explorer.css';
+import '../hgab-overview.css';
 
 export default function SenateOverview() {
   const [o, setO] = useState<Overview | null>(null);
@@ -47,22 +48,22 @@ export default function SenateOverview() {
 
   return (
     <>
-      <SenateHeader />
-      <SenateHero
-        crumb="Overview"
-        title="Senate Budget Analysis"
-        dek={
-          <>
+      <SenateHeader crumb="Overview" heroBlend />
+      {/* As the House overview: the hero says only the section's name; what it says opens the page. */}
+      <SenateHero crumb="Overview" title="Senate Budget Analysis" />
+      <main className="nep-main">
+        <div className="hgab-ov-intro">
+          <p className="hgab-ov-lede">
             The Senate Committee on Finance keeps the House bill's programmed total at{' '}
             {fmt.shortPhp(prog.senate ?? 0, 'T')}, and moves {fmt.shortPhp(prog.increase ?? 0, 'B')} between lines.
-            {dpwh ? <> DPWH projects fall {fmt.shortPhp(Math.abs(dpwh.change_php), 'B')}.</> : null}
-          </>
-        }
-        note={SENATE_DOC.plain}
-      >
-        <HgabStageStrip />
-      </SenateHero>
-      <main className="nep-main hgab-ex-main">
+            {dpwh ? <> DPWH projects fall {fmt.shortPhp(Math.abs(dpwh.change_php), 'B')}, from {fmt.shortPhp(dpwh.house_php)} in the House bill to {fmt.shortPhp(dpwh.senate_php)}.</> : null}
+          </p>
+          <p className="hgab-ov-scope">
+            {SENATE_DOC.plain} Every line of the bill is set beside the NEP and the House bill on the{' '}
+            <Link to={SENATE_EXPLORER_ROOT}>Line by line</Link> pages, and four programs project by project, further down.
+          </p>
+        </div>
+        <HgabStageStrip here="Senate" />
         <SenateReviewBanner />
         <KpiStrip
           items={[

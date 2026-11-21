@@ -63,7 +63,7 @@ export default function SenateRecord() {
       <SenateHero compact crumb={crumb} title={r.title} dek={<><SenateStatusChip status={r.status} /> {SENATE_STATUS[r.status].help}</>} />
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner compact />
-        <KpiStrip
+        <div className="senate-kpi5"><KpiStrip
           items={[
             { label: 'NEP', value: r.nep_php != null ? fmt.shortPhp(r.nep_php) : '—', sub: r.nep_php != null ? `₱${r.nep_php.toLocaleString()}` : 'not in the NEP' },
             { label: 'House bill', value: r.house_php != null ? fmt.shortPhp(r.house_php) : '—', sub: r.house_php != null ? `₱${r.house_php.toLocaleString()}` : 'not in the House bill' },
@@ -71,7 +71,7 @@ export default function SenateRecord() {
             changeKpi('vs House bill', r.senate_php, r.house_php, 'the House bill'),
             changeKpi('vs NEP', r.senate_php, r.nep_php, 'the NEP'),
           ]}
-        />
+        /></div>
         <div className="senate-record-names">
           {r.hb_title && <div><strong>House bill</strong>{r.hb_title}</div>}
           <div className="is-senate"><strong>Senate committee report</strong>{r.title}{r.hb_title && !r.renamed ? ' (same name)' : ''}</div>

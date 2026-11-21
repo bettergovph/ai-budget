@@ -32,7 +32,7 @@ const ABOUT = [
 ];
 
 /** Masthead + the section's sub-nav: Overview, Line by line, the four programs, Provisions, About. */
-export function SenateHeader({ crumb }: { crumb?: ReactNode }) {
+export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb?: ReactNode; compiledMeta?: ReactNode; heroBlend?: boolean }) {
   const { pathname, search } = useLocation();
   const path = pathname.replace(/\/+$/, '') || SENATE_ROOT;
   const view = new URLSearchParams(search).get('view') ?? 'overview';
@@ -48,8 +48,9 @@ export function SenateHeader({ crumb }: { crumb?: ReactNode }) {
   const provisions = { to: SENATE_PROVISIONS_ROOT, label: 'Provisions', on: path === SENATE_PROVISIONS_ROOT };
   return (
     <SiteHeader
+      headerClassName={heroBlend ? 'masthead-hero-blend' : undefined}
       crumb={crumb}
-      compiledMeta="Senate committee report on HB 10858"
+      compiledMeta={compiledMeta ?? 'Senate committee report on HB 10858'}
       subNav={
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 Senate committee report sections">
           {lead.map(link)}

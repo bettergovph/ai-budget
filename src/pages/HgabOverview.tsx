@@ -111,7 +111,7 @@ export default function HgabOverview() {
             everything else are in <Link to="/2027/browse">the NEP browser</Link>.
           </p>
         </div>
-        <HgabStageStrip />
+        <HgabStageStrip here="House bill" />
 
         {whole && <HgabWholeBill s={whole} projects={dpwhInsertions(ov.candidate_changes)} />}
 

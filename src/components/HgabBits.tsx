@@ -761,9 +761,12 @@ export function DatasetSwitch({ current }: { current: DatasetKey }) {
  */
 const STAGE_STATE_TEXT: Record<StageState, string> = { done: 'Done', current: 'Current stage', future: 'Not yet' };
 
-export function HgabStageStrip() {
-  // The current stage is this section, so it is not a link here.
-  const stages = BUDGET_2027_STAGES.map((s) => (s.state === 'current' ? { ...s, to: undefined } : s));
+/**
+ * `here` is the stage the page belongs to (the House bill section, the Senate section): it is marked "You are here"
+ * and not linked. The budget's current stage is marked as such; on its own section's page they are the same.
+ */
+export function HgabStageStrip({ here }: { here: string }) {
+  const stages = BUDGET_2027_STAGES.map((s) => (s.name === here ? { ...s, to: undefined } : s));
   return (
     <section className="hgab-timeline" aria-labelledby="hgab-timeline-title">
       <p className="hgab-timeline-kicker" id="hgab-timeline-title">Where the 2027 budget is now</p>
@@ -787,7 +790,7 @@ export function HgabStageStrip() {
                 <span className="hgab-tl-name">{s.name}</span>
               )}
               <span className="hgab-tl-meta">{s.meta}</span>
-              {s.state === 'current' ? (
+              {s.name === here ? (
                 <span className="hgab-tl-here">You are here</span>
               ) : (
                 <span className="visually-hidden">{STAGE_STATE_TEXT[s.state]}</span>
