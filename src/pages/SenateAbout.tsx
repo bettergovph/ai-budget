@@ -74,7 +74,7 @@ export default function SenateAbout({ which }: { which: 'sources' | 'methodology
                 </li>
                 <li>
                   <strong>Farm-to-market roads and irrigation (Annexes A-1 and A-3)</strong> are matched by name and House bill
-                  amount; every House bill project is found. When the report cuts a road and adds it back with a corrected
+                  amount; every House bill project is found. When the report removes a road and inserts it back with a corrected
                   name or new coordinates, the two are linked if they name the same municipality and the same site.
                 </li>
                 <li>

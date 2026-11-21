@@ -27,7 +27,7 @@ import '../nep2027.css';
 import '../hgab-explorer.css';
 
 const ROW_NOTE: Record<string, string> = {
-  new: 'Added by the Senate',
+  new: 'Inserted by the Senate',
   new_class: 'New expense class on this line',
   unmatched: 'House line not found',
   ref_only: 'House amount differs from the bill',

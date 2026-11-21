@@ -135,7 +135,7 @@ export default function SenateRecord() {
         </p>
         {cur.replaced && (
           <p className="hgab-ex-gap">
-            The Senate adds this project in place of one it cuts, which reads almost the same:{' '}
+            The Senate inserts this project in place of one it removes, which reads almost the same:{' '}
             <Link to={senateRecordPath(key, cur.replaced.id)}>{cur.replaced.title}</Link> ({fmt.shortPhp(cur.replaced.house_php ?? 0)} in the House bill).
           </p>
         )}

@@ -78,7 +78,7 @@ export default function SenateOverview() {
           <SectionHead
             eyebrow="Project by project"
             headline="The four infrastructure programs"
-            dek="Every House bill project, with what the Senate committee report does to it: cut, reduced, raised, renamed or left as it is, and the projects it adds."
+            dek="Every House bill project, with what the Senate committee report does to it: removed, reduced, raised, renamed or left as it is, and the projects it inserts."
           />
           <div className="senate-programs">
             {o.programs.map((p) => <ProgramCard key={p.key} p={p} />)}

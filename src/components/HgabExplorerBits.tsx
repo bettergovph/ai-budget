@@ -201,7 +201,7 @@ function SenateLineLabel({ house, senate }: { house: number; senate: number | nu
   if (senate == null) return <span className="hgab-ex-moved" title="The report changes a heading above this line, without the split below it.">Split not given</span>;
   if (senate === house) return <span className="hgab-ex-none">Same</span>;
   const tone = senate === 0 ? 'var(--negative)' : senate < house ? '#b06a12' : 'var(--positive)';
-  const label = senate === 0 ? 'Cut to zero' : senate < house ? 'Lower' : 'Higher';
+  const label = senate === 0 ? 'Removed' : senate < house ? 'Lower' : 'Higher';
   return <span className="hgab-chip hgab-ex-chip" style={{ ['--hgab-group' as string]: tone }}>{label}</span>;
 }
 
