@@ -9,7 +9,7 @@
  */
 import {
   FLAG_FAMILIES, NAMED_TYPES, parseHgabId, type DetailFile, type FlagFamily, type LinkMethod, type ReviewDetail, type ReviewIndex,
-  type ReviewIndexFlag, type ReviewIndexOffice,
+  type ReviewIndexFlag, type ReviewIndexOffice, type ReviewSenateIndex,
 } from './hgab-documents';
 import { QUESTION_OF_FLAG, RATINGS, VERDICT_LABEL, readVerdict, worseRating, type Verdict } from './hgab-redflags-team';
 
@@ -42,16 +42,39 @@ export interface ReviewProject {
    * (DPWH Transparency). Null in a review.json built before 2026-11-18.
    */
   bySource?: { senate: { docs: number; files: number }; nep: { docs: number; files: number } } | null;
+  /**
+   * What the Senate committee report did to it (documents/senate.json): removed (cut to zero, labelled SENATE:REMOVED)
+   * or kept; null without the Senate file.
+   */
+  senate?: ReviewSenateStatus | null;
+  /** For a removed project, the page of the report's annex that lists it. */
+  senatePage?: number | null;
 }
 
-export function decodeIndex(ix: ReviewIndex): ReviewProject[] {
+/** The Senate committee report's verdict on a House project: cut to zero, or still funded. */
+export const SENATE_STATUSES = ['removed', 'kept'] as const;
+export type ReviewSenateStatus = (typeof SENATE_STATUSES)[number];
+/** The label on a project the Senate committee report cuts to zero (Jason, 2026-11-21: "Add 'SENATE:REMOVED'"). */
+export const SENATE_REMOVED_LABEL = 'SENATE:REMOVED';
+export const SENATE_STATUS_LABEL: Record<ReviewSenateStatus, string> = { removed: 'Removed by the Senate', kept: 'Kept by the Senate' };
+export const SENATE_STATUS_NOTE: Record<ReviewSenateStatus, string> = {
+  removed: 'Cut to zero in the Senate committee report',
+  kept: 'Still funded in the Senate committee report: unchanged, renamed or with a new amount',
+};
+
+export function decodeIndex(ix: ReviewIndex, senate?: ReviewSenateIndex | null): ReviewProject[] {
+  const removed = senate ? new Map(senate.removed) : null;
   const ins = ix.flags.findIndex((f) => f.code === INSERTION_FLAG);
   return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from, sDocs, pDocs, sFiles, pFiles]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
     const a = ix.auto?.rows[hgabId];
     const auto = a ? { rules: a.r.map((i) => ix.auto!.rules[i]?.code).filter(Boolean), score: a.s } : null;
     const bySource = sDocs == null || pDocs == null ? null : { senate: { docs: sDocs, files: sFiles ?? 0 }, nep: { docs: pDocs, files: pFiles ?? 0 } };
-    return { hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files, source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto, bySource };
+    const senateStatus: ReviewSenateStatus | null = removed ? (removed.has(hgabId) ? 'removed' : 'kept') : null;
+    return {
+      hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files,
+      source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto, bySource, senate: senateStatus, senatePage: removed?.get(hgabId) ?? null,
+    };
   });
 }
 
@@ -62,7 +85,7 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 
 export type DocsFilter = 'none' | 'incomplete' | 'complete';
 /** Filters where checking several values keeps projects matching any of them (one funnel step each). */
-export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status' | 'source';
+export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status' | 'source' | 'senate';
 export type Step =
   | { kind: 'flag'; code: string; not?: boolean }
   | { kind: 'region'; values: string[] }
@@ -77,6 +100,8 @@ export type Step =
   | { kind: 'status'; values: ListStatus[] }
   /** Where the documents come from (SOURCE_GROUPS). */
   | { kind: 'source'; values: SourceGroup[] }
+  /** What the Senate committee report did to it (SENATE_STATUSES). */
+  | { kind: 'senate'; values: ReviewSenateStatus[] }
   /** The signed-in member's own reviews ("Show my reviews"). */
   | { kind: 'mine' };
 
@@ -248,7 +273,7 @@ const SEP = '|';
 export function stepToParam(s: Step): string {
   switch (s.kind) {
     case 'flag': return `${s.not ? '-' : ''}flag:${s.code}`;
-    case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': case 'source': return `${s.kind}:${s.values.join(SEP)}`;
+    case 'region': case 'office': case 'program': case 'docs': case 'team': case 'status': case 'source': case 'senate': return `${s.kind}:${s.values.join(SEP)}`;
     case 'mine': return 'mine:yes';
     default: return `${s.kind}:${s.value}`;
   }
@@ -271,6 +296,7 @@ export function stepFromParam(p: string): Step | null {
       return ok.length ? { kind, values: ok } : null;
     }
     case 'source': { const ok = values.filter((v): v is SourceGroup => (SOURCE_GROUPS as readonly string[]).includes(v)); return ok.length ? { kind, values: ok } : null; }
+    case 'senate': { const ok = values.filter((v): v is ReviewSenateStatus => (SENATE_STATUSES as readonly string[]).includes(v)); return ok.length ? { kind, values: ok } : null; }
     case 'q': return value.trim() ? { kind, value } : null;
     case 'mine': return value === 'yes' ? { kind } : null;
     case 'min': { const n = Number(value); return Number.isFinite(n) && n > 0 ? { kind, value: n } : null; }
@@ -351,6 +377,8 @@ export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boole
     }
     case 'status': { const v = new Set<string>(s.values); return (p) => v.has(ctx.statusOf(p.hgabId)); }
     case 'source': { const v = new Set<string>(s.values); return (p) => v.has(p.source); }
+    // Without the Senate file no project has a Senate status, so the step keeps none.
+    case 'senate': { const v = new Set<string>(s.values); return (p) => !!p.senate && v.has(p.senate); }
     case 'mine': return (p) => !!ctx.isMine?.(p.hgabId);
   }
 }
@@ -553,6 +581,7 @@ export function stepLabel(s: Step, flags: readonly ReviewIndexFlag[], offices: r
     case 'q': return `Search: “${s.value}”`;
     case 'mine': return 'My reviews';
     case 'source': return s.values.map((v) => SOURCE_GROUP_LABEL[v]).join(' or ');
+    case 'senate': return s.values.length === 1 ? (s.values[0] === 'removed' ? SENATE_REMOVED_LABEL : SENATE_STATUS_LABEL.kept) : 'Removed or kept by the Senate';
     case 'status':
       if (s.values.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => s.values.includes(v))) return 'Not yet reviewed';
       return `Review: ${s.values.map((v) => LIST_STATUS_LABEL[v]).join(' or ')}`;

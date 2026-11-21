@@ -2,15 +2,18 @@
  * The project reviewer's filter bar (`/hgab/2027/review`), shared with the Senate committee report's DPWH projects
  * (`/senate/2027/dpwh?view=projects`): "Start from" presets, red flags, the team's questions, documents, review status,
  * region, DPWH office, budget and a search, each a funnel step (src/lib/hgab-review.ts); and the funnel strip, what
- * each step keeps. Moved here unchanged from HgabReview.tsx; `extra` adds a page's own filters before the search.
+ * each step keeps. Moved here unchanged from HgabReview.tsx; `extra` adds a page's own filters before the search. The
+ * reviewer's Senate filter ("senate", after review status) keeps the projects the Senate committee report cuts to zero
+ * (SENATE:REMOVED, documents/senate.json) or keeps funded; it shows only once that file has loaded.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { FlagFamily, ReviewIndex, ReviewIndexFlag } from '../lib/hgab-documents';
 import {
   DOCS_FILTERS, DOCS_FILTER_LABEL, FAMILY_LABEL, FAMILY_ORDER, LIST_STATUSES, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PRESETS,
+  SENATE_REMOVED_LABEL, SENATE_STATUSES, SENATE_STATUS_LABEL, SENATE_STATUS_NOTE,
   SOURCE_GROUPS, SOURCE_GROUP_LABEL, SOURCE_GROUP_NOTE, checkedValues, countBy, flagYields, foldText, isReviewed, pesoShort,
   projectsWithout, readerText, runFunnel, setSingle, setValues, stepLabel, stepTest, toggleFlag,
-  type ListStatus, type MultiKind, type ReviewProject, type Step, type StepContext,
+  type ListStatus, type MultiKind, type ReviewProject, type ReviewSenateStatus, type Step, type StepContext,
 } from '../lib/hgab-review';
 import { MAPPING_STATUS, QUESTIONS, REGISTRY } from '../lib/hgab-redflags-team';
 import '../hgab-review.css';
@@ -19,6 +22,15 @@ const n = (v: number) => v.toLocaleString('en-US');
 const shortOffice = (name: string) => name.replace(/\bDistrict Engineering Office\b/i, 'DEO');
 const TEAM_TITLES: ReadonlyMap<string, string> = new Map(QUESTIONS.map((q) => [q.id, q.title]));
 
+
+/**
+ * SENATE:REMOVED, the label on a project the Senate committee report cuts to zero (Jason, 2026-11-21); its tooltip names
+ * the Annex A-4 page that lists it.
+ */
+export function SenateRemoved({ page }: { page?: number | null }) {
+  const where = `Cut to zero in the Senate committee report${page ? ` (Annex A-4, page ${page})` : ''}`;
+  return <span className="rv-senate" title={where} aria-label={`${SENATE_REMOVED_LABEL}: ${where}`}>{SENATE_REMOVED_LABEL}</span>;
+}
 
 /** A filter button in the bar that opens a panel of checkboxes; closes on Escape or a click outside. */
 export function Dropdown({ label, count, active, wide, children }: { label: string; count?: number; active?: boolean; wide?: boolean; children: ReactNode }) {
@@ -99,7 +111,7 @@ function TeamPanel({ all, steps, ctx, onSteps }: { all: ReviewProject[]; steps: 
 }
 
 /** The filters of the bar, in the reviewer's order; a page can show some of them, in its own order. */
-const FILTER_PARTS = ['presets', 'flags', 'questions', 'documents', 'hide', 'status', 'region', 'office', 'budget', 'extra'] as const;
+const FILTER_PARTS = ['presets', 'flags', 'questions', 'documents', 'hide', 'status', 'senate', 'region', 'office', 'budget', 'extra'] as const;
 export type FilterPart = (typeof FILTER_PARTS)[number];
 
 export function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSteps, extra, only }: {
@@ -167,6 +179,9 @@ export function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSte
   const minStep = steps.find((s) => s.kind === 'min');
   const minBase = projectsWithout(all, steps, 'min', ctx);
   const status = multi('status', (p) => ctx.statusOf(p.hgabId));
+  // What the Senate committee report did (SENATE:REMOVED); shown once its file has loaded.
+  const senate = multi('senate', (p) => p.senate ?? '');
+  const hasSenate = all.some((p) => p.senate);
   // "Hide reviewed" is the status step with exactly the not-yet-reviewed statuses.
   const hideOn = status.checked.length === NOT_REVIEWED_STATUSES.length && NOT_REVIEWED_STATUSES.every((v) => status.checked.includes(v));
   const hiddenCount = [...status.counts].filter(([k]) => isReviewed(k as ListStatus)).reduce((a, [, v]) => a + v, 0);
@@ -240,6 +255,19 @@ export function FilterBar({ ix, all, steps, current, ctx, presets, shared, onSte
           <PanelFoot>
             <span>{shared ? 'From every member’s reviews and the automatic review.' : 'Reviewing isn’t open yet; the automatic review shows.'}</span>
             {status.checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'status', []))}>Clear</button>}
+          </PanelFoot>
+        </Dropdown>
+    ),
+    senate: hasSenate && (
+        <Dropdown label="Senate" count={senate.checked.length} active={senate.checked.length > 0}>
+          {SENATE_STATUSES.map((v: ReviewSenateStatus) => (
+            <Check key={v} checked={senate.checked.includes(v)} onChange={() => toggleValue('senate', v)}
+              label={v === 'removed' ? <>{SENATE_STATUS_LABEL[v]} <SenateRemoved /></> : SENATE_STATUS_LABEL[v]}
+              note={SENATE_STATUS_NOTE[v]} k={senate.counts.get(v) ?? 0} max={senate.base} />
+          ))}
+          <PanelFoot>
+            <span>From the Senate Committee on Finance’s report on HB 10858: the amendments it proposes (Annex A-4).</span>
+            {senate.checked.length > 0 && <button type="button" onClick={() => onSteps((cur) => setValues(cur, 'senate', []))}>Clear</button>}
           </PanelFoot>
         </Dropdown>
     ),
