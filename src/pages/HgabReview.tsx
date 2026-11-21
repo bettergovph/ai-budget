@@ -19,8 +19,8 @@ import { DisclaimerNotice } from '../components/HgabBits';
 import { cached, getJson, HGAB_ROOT, pdfUrl, recordPath } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import {
-  NAMED_TYPES, REVIEW_INDEX_PATH, detailShardPath, type DetailFile, type ReviewDetail, type ReviewDetailShard,
-  type ReviewIndex,
+  NAMED_TYPES, REVIEW_INDEX_PATH, REVIEW_SENATE_PATH, detailShardPath, type DetailFile, type ReviewDetail, type ReviewDetailShard,
+  type ReviewIndex, type ReviewSenateIndex,
 } from '../lib/hgab-documents';
 import {
   DETAIL_NOTE_TEXT as NOTE_TEXT, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
@@ -32,7 +32,7 @@ import {
   detectorsForQuestion, newCaseReview, newId, type CaseReview, type Reviewer, type Verdict,
 } from '../lib/hgab-redflags-team';
 import HgabReviewForm, { type SaveResult } from '../components/HgabReviewForm';
-import { FilterBar, FunnelStrip } from '../components/ReviewFilterBar';
+import { FilterBar, FunnelStrip, SenateRemoved } from '../components/ReviewFilterBar';
 import MemberProvider from '../components/HgabReviewMember';
 import { downloadReviews } from '../lib/hgab-review-export';
 import {
@@ -51,6 +51,9 @@ import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
 const loadIndex = () => cached('review-index', () => getJson<ReviewIndex>(dataUrl(`${HGAB_BASE}/${REVIEW_INDEX_PATH}`), 'Failed to load the project list'));
+/** The Senate committee report's removals (optional: without them, no SENATE:REMOVED label or Senate filter). */
+const loadSenate = () => cached('review-senate', () => getJson<ReviewSenateIndex>(dataUrl(`${HGAB_BASE}/${REVIEW_SENATE_PATH}`), 'Failed to load the Senate removals'));
+
 const loadShard = (seq: number) => {
   const path = detailShardPath(seq);
   return cached(`review-detail:${path}`, () => getJson<ReviewDetailShard>(dataUrl(`${HGAB_BASE}/${path}`), 'Failed to load the project’s documents'));
@@ -280,6 +283,7 @@ function ProjectList({ projects, selected, statusOf, reviewsOf, verdictsOf, mine
                 <b>{pesoShort(p.amount)}</b>
                 <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
                 <DocDots mask={p.docs} />
+                {p.senate === 'removed' && <SenateRemoved page={p.senatePage} />}
                 {mine[p.hgabId] && <span className="rv-yours">Yours</span>}
               </span>
             </button>
@@ -722,6 +726,9 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
             </h2>
           ) : <h2 className="rv-project-title">{project.title}</h2>}
           <p className="rv-project-sub"><b>{pesoFull(project.amount)}</b> · {officeName} · {project.region}</p>
+          {project.senate === 'removed' && (
+            <p className="rv-project-senate"><SenateRemoved page={project.senatePage} /> Cut to zero in the Senate committee report{project.senatePage ? ` (Annex A-4, page ${project.senatePage})` : ''}.</p>
+          )}
         </div>
 
         <div className="rv-project-body">
@@ -921,6 +928,7 @@ export default function HgabReview() {
 
 function Reviewer() {
   const [index, setIndex] = useState<ReviewIndex | null>(null);
+  const [senateCuts, setSenateCuts] = useState<ReviewSenateIndex | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
   const member = useMember();
@@ -946,9 +954,11 @@ function Reviewer() {
   }, []);
   useEffect(() => {
     loadIndex().then(setIndex).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    // Optional: the list works without it.
+    loadSenate().then(setSenateCuts).catch(() => setSenateCuts(null));
   }, []);
 
-  const all = useMemo(() => (index ? decodeIndex(index) : []), [index]);
+  const all = useMemo(() => (index ? decodeIndex(index, senateCuts) : []), [index, senateCuts]);
   const flagIndex = useMemo(() => new Map((index?.flags ?? []).map((f, i) => [f.code, i])), [index]);
   const steps = useMemo(() => stepsFromSearch(params, new Set(flagIndex.keys())), [params, flagIndex]);
   // A project's status is its final status from every member's review (the status API, patched after each save; this

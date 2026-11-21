@@ -24,6 +24,7 @@
     "build:hgab-poster-mpb-classrooms": "tsx scripts/build-hgab-poster-mpb-classrooms.ts",
     "build:hgab-poster-mpb-classrooms-taglish": "tsx scripts/build-hgab-poster-mpb-classrooms-taglish.ts",
     "build:hgab-poster-review": "tsx scripts/build-hgab-poster-review.ts",
+    "build:hgab-review-senate": "tsx scripts/build-hgab-review-senate.ts",
     "build:hgab-not-ignorant": "tsx scripts/build-hgab-not-ignorant.ts",
     "build:hgab-letters": "tsx scripts/build-hgab-letters.ts",
     "build:hgab-lines": "bash scripts/hgab-lines/run.sh",

@@ -5,10 +5,10 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "node:test";
-import { REVIEW_INDEX_PATH, autoScore, scoreBand, type ReviewIndex } from "../src/lib/hgab-documents";
+import { REVIEW_INDEX_PATH, REVIEW_SENATE_PATH, autoScore, scoreBand, type ReviewIndex, type ReviewSenateIndex } from "../src/lib/hgab-documents";
 import {
   INSERTION_FLAG, NOT_REVIEWED_STATUSES, PRESETS, buildStatusIndex, projectVerdict, reviewProgress, sourceGroup, isReviewed, listStatus, stepLabel, checkedValues, countBy, furthestStatus, pageCount, pageOf, pageWindow, decodeIndex, docCount, flagYields, projectsWithout, readerText, runFunnel, setValues,
-  sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, type Step,
+  sortProjects, stepFromParam, stepToParam, stepsFromSearch, toggleFlag, SENATE_REMOVED_LABEL, type Step,
 } from "../src/lib/hgab-review";
 
 const path = resolve("data/hgab/2027", REVIEW_INDEX_PATH);
@@ -257,4 +257,35 @@ test("only DPWH Transparency PDFs come through the Worker; our own files are rea
   const ours = "https://budget-assets.bettergov.ph/hgab/2027/dpwh/supporting-documents/Region%20VIII/x.pdf";
   assert.equal(pdfSource(ours), ours);
   assert.equal(pdfSource("https://example.com/x.pdf"), null);
+});
+
+test("SENATE:REMOVED: the Senate committee report's removals label projects and filter the list", { skip: !ix && "review.json not built" }, () => {
+  const senatePath = resolve("data/hgab/2027", REVIEW_SENATE_PATH);
+  const all = decodeIndex(ix!);
+  assert.ok(all.every((p) => p.senate == null), "without the Senate file, no project has a Senate status");
+  const ctx = { flagIndex: new Map(ix!.flags.map((f, i) => [f.code, i])), statusOf: () => "not_started" as const };
+  assert.equal(runFunnel(all, [{ kind: "senate", values: ["removed"] }], ctx)[1].projects.length, 0, "and the step keeps none");
+  // A small Senate file: two removals.
+  const two = all.slice(0, 2).map((p) => p.hgabId);
+  const fake: ReviewSenateIndex = { schema: 1, built_at: "t", source: { report: "r", annex: "Annex A-4", file: "f", sha256: "s", rows: 1 }, removed: [[two[0], 12], [two[1], null]], removed_php: 0 };
+  const withSenate = decodeIndex(ix!, fake);
+  assert.equal(withSenate.filter((p) => p.senate === "removed").length, 2);
+  assert.equal(withSenate[0].senatePage, 12);
+  assert.equal(withSenate.filter((p) => p.senate === "kept").length, all.length - 2);
+  assert.equal(runFunnel(withSenate, [{ kind: "senate", values: ["removed"] }], ctx)[1].projects.length, 2);
+  assert.equal(runFunnel(withSenate, [{ kind: "senate", values: ["removed", "kept"] }], ctx)[1].projects.length, all.length);
+  // The URL and the funnel's words.
+  assert.equal(stepToParam({ kind: "senate", values: ["removed"] }), "senate:removed");
+  assert.deepEqual(stepFromParam("senate:removed|nonsense"), { kind: "senate", values: ["removed"] });
+  assert.equal(stepFromParam("senate:cut"), null);
+  assert.equal(stepLabel({ kind: "senate", values: ["removed"] }, ix!.flags), SENATE_REMOVED_LABEL, "the funnel step reads as the label");
+  assert.equal(SENATE_REMOVED_LABEL, "SENATE:REMOVED");
+  // The built file, when there is one: every removal is a reviewer row, as the Senate report pipeline counts them.
+  if (existsSync(senatePath)) {
+    const s = JSON.parse(readFileSync(senatePath, "utf8")) as ReviewSenateIndex;
+    const real = decodeIndex(ix!, s);
+    assert.equal(real.filter((p) => p.senate === "removed").length, s.removed.length);
+    assert.equal(s.removed.length, 3479, "PR #106: 3,479 DPWH projects cut to zero");
+    assert.equal(real.filter((p) => p.senate === "removed").reduce((a, p) => a + p.amount, 0), s.removed_php);
+  }
 });

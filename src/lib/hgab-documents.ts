@@ -196,6 +196,31 @@ export interface DocumentFile {
 // ---------------------------------------------------------------------------------------------------------------------
 
 export const REVIEW_INDEX_PATH = `${DOCUMENTS_DIR}/review.json`;
+/**
+ * What the Senate committee report did to each House DPWH project, for the reviewer's SENATE:REMOVED label and filter:
+ * documents/senate.json (npm run build:hgab-review-senate, from the Senate report pipeline's dpwh_senate.csv). Optional:
+ * without it the reviewer shows no Senate label.
+ */
+export const REVIEW_SENATE_PATH = `${DOCUMENTS_DIR}/senate.json`;
+export interface ReviewSenateIndex {
+  schema: 1;
+  built_at: string;
+  source: {
+    /** "Senate Committee on Finance, Committee Report on HB 10858 (FY 2027 GAB)" */
+    report: string;
+    /** The annex that lists the DPWH projects ("Annex A-4"). */
+    annex: string;
+    /** The pipeline's file and its fingerprint (data/senate-cr/2027/dpwh_senate.csv), and its rows. */
+    file: string;
+    sha256: string;
+    rows: number;
+  };
+  /** House bill rows the report cuts to zero: the House bill row id and the annex page that lists it. */
+  removed: [hgabId: string, annexPage: number | null][];
+  /** Their House bill amount, in pesos. */
+  removed_php: number;
+}
+
 /** Rows per detail shard, by bill row (`seq`): shard NN holds seq NN*500 … NN*500+499. */
 export const DETAIL_SHARD_ROWS = 500;
 export const detailShardPath = (seq: number) => `${DOCUMENTS_DIR}/detail/${String(Math.floor(seq / DETAIL_SHARD_ROWS)).padStart(2, "0")}.json`;
