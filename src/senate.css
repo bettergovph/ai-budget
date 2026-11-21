@@ -110,3 +110,26 @@
 .senate-annex-box .eyebrow { margin-bottom: 6px; }
 .senate-annex-box .headline { margin-top: 0; }
 .senate-annex-box .dek { font-size: 0.88rem; line-height: 1.5; margin-top: 4px; }
+/* /senate/2027/data: the dataset to download and check. */
+.senate-dl-main { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin: 4px 0 18px; }
+.senate-dl-zip {
+  display: inline-block; padding: 10px 18px; border-radius: 6px; background: var(--accent, #0b45c2); color: #fff !important;
+  font-weight: 600; text-decoration: none;
+}
+.senate-dl-zip:hover { filter: brightness(1.1); }
+.senate-dl-note { margin: 0; font-size: 0.85rem; color: var(--ink-3); max-width: 720px; }
+.senate-dl-links { white-space: nowrap; }
+.senate-dl-file {
+  display: inline-flex; gap: 6px; align-items: baseline; margin-right: 8px; padding: 3px 9px; border: 1px solid var(--rule);
+  border-radius: 5px; font-size: 0.82rem; text-decoration: none;
+}
+.senate-dl-file small { color: var(--ink-3); font-family: var(--font-mono); font-size: 0.72rem; }
+.senate-dl-file:hover { border-color: var(--ink-3); }
+.senate-dl-table td { vertical-align: top; }
+.senate-sha, .senate-sha-full { font-family: var(--font-mono); font-size: 0.72rem; color: var(--ink-2, #444); }
+.senate-sha-full { word-break: break-all; }
+.senate-verify { max-width: 820px; padding-left: 20px; font-size: 0.92rem; line-height: 1.6; }
+.senate-verify li { margin-bottom: 8px; }
+.senate-verify code { font-family: var(--font-mono); font-size: 0.8rem; background: var(--paper-2, #f6f5f1); padding: 1px 4px; border-radius: 3px; }
+.senate-ok { color: var(--positive); font-weight: 600; white-space: nowrap; }
+.senate-bad { color: var(--negative); font-weight: 600; white-space: nowrap; }

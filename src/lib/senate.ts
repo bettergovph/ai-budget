@@ -23,6 +23,8 @@ export const SENATE_BASE = `senate/${SENATE_YEAR}`;
 export const SENATE_ROOT = `/senate/${SENATE_YEAR}`;
 export const SENATE_EXPLORER_ROOT = `${SENATE_ROOT}/explorer`;
 export const SENATE_PROVISIONS_ROOT = `${SENATE_ROOT}/provisions`;
+/** The downloadable dataset: files, checksums, the source PDFs and the build's checks (build_downloads.py). */
+export const SENATE_DATA_ROOT = `${SENATE_ROOT}/data`;
 
 /**
  * Nothing here has been reviewed by a person yet. While true, every Senate page and the Senate column on the
@@ -262,6 +264,21 @@ export interface SenateProvision {
 }
 
 const get = <T,>(p: string, what: string) => getJson<T>(dataUrl(`${SENATE_BASE}/${p}`), `Could not load ${what}`);
+
+export interface SenateDownloadFile { file: string; bytes: number; sha256: string; url: string }
+export interface SenateDownloadCheck { check: string; ours: number | string; printed: number | string; difference: number | null; ok: boolean; source: string; note: string }
+export interface SenateDownloads {
+  title: string;
+  built_at: string;
+  source_commit: string | null;
+  sources: Array<{ key: string; title: string; original_file: string; sha256: string; bytes: number; url: string }>;
+  tables: Array<{ name: string; about: string; rows: number; columns: string[] }>;
+  checks: { run: number; passed: number; file: string };
+  under_citizen_review: boolean;
+  files: SenateDownloadFile[];
+  check_rows: SenateDownloadCheck[];
+}
+export const loadSenateDownloads = () => cached('senate:downloads', () => get<SenateDownloads>('downloads/index.json', 'the Senate dataset'));
 
 export const loadSenateOverview = () => cached('senate:overview', () => get<SenateOverview>('overview.json', 'the Senate committee report overview'));
 export const loadSenateDepartments = () =>

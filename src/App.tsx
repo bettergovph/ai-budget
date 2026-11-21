@@ -41,6 +41,7 @@ const SenateProgram = lazy(() => import('./pages/SenateProgram'));
 const SenateRecord = lazy(() => import('./pages/SenateRecord'));
 const SenateProvisions = lazy(() => import('./pages/SenateProvisions'));
 const SenateAbout = lazy(() => import('./pages/SenateAbout'));
+const SenateData = lazy(() => import('./pages/SenateData'));
 const HgabSources = lazy(() => import('./pages/HgabSources'));
 const HgabExplorer = lazy(() => import('./pages/HgabExplorer'));
 const HgabExplorerDept = lazy(() => import('./pages/HgabExplorerDept'));
@@ -213,6 +214,7 @@ export default function App() {
           <Route path="/senate/2027/provisions" element={<SenateProvisions />} />
           <Route path="/senate/2027/sources" element={<SenateAbout which="sources" />} />
           <Route path="/senate/2027/methodology" element={<SenateAbout which="methodology" />} />
+          <Route path="/senate/2027/data" element={<SenateData />} />
           <Route path="/senate/2027/:dataset" element={<SenateProgram />} />
           <Route path="/senate/2027/:dataset/p/:id" element={<SenateRecord />} />
           <Route path="*" element={<Navigate to="/" replace />} />

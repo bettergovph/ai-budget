@@ -347,6 +347,12 @@ export function pageMeta(pathname: string): PageMeta {
       description: "Every amendment the FY 2027 Senate committee report makes to the House bill's special and general provisions, with its page.",
     };
   }
+  if (p === "/senate/2027/data") {
+    return {
+      title: `Senate committee report 2027 — download the dataset · ${SITE}`,
+      description: "The FY 2027 Senate committee report as data: every project, amendment, General Summary line and provision, with SHA-256 checksums and the checks against the report's printed totals.",
+    };
+  }
   if (p === "/senate/2027/sources" || p === "/senate/2027/methodology") {
     return {
       title: `Senate committee report 2027 — ${p.endsWith("sources") ? "sources" : "methodology"} · ${SITE}`,

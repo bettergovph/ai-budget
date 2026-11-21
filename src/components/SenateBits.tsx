@@ -21,10 +21,11 @@ import {
 import '../hgab.css';
 import '../senate.css';
 
-/** About, as the House bill section's: Sources, Methodology, Indicators. */
+/** About, as the House bill section's: Sources, Methodology, Indicators; and the dataset to download. */
 const ABOUT = [
   { key: 'sources', label: 'Sources', to: `${SENATE_ROOT}/sources` },
   { key: 'methodology', label: 'Methodology', to: `${SENATE_ROOT}/methodology` },
+  { key: 'data', label: 'Download data', to: `${SENATE_ROOT}/data` },
   { key: 'indicators', label: 'Indicators', to: INDICATORS_ROOT },
 ];
 
