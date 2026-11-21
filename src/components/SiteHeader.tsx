@@ -4,6 +4,12 @@ import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
 import { INDICATORS_ROOT } from '../lib/indicators';
 
+/**
+ * The Senate tab (the FY2027 Senate committee report, /senate/2027): hidden for now (Jason, 2026-11-21: "hide the
+ * Senate link from the nav for now"). The pages stay at their addresses; set true to show the tab again.
+ */
+const SHOW_SENATE_TAB = false;
+
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
 interface SiteHeaderProps {
@@ -191,13 +197,15 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             >
               House
             </Link>
-            <Link
-              to="/senate/2027/overview"
-              title="Senate committee report on the 2027 budget"
-              className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
-            >
-              Senate
-            </Link>
+            {SHOW_SENATE_TAB && (
+              <Link
+                to="/senate/2027/overview"
+                title="Senate committee report on the 2027 budget"
+                className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
+              >
+                Senate
+              </Link>
+            )}
             <Link
               to="/gaa"
               title="General Appropriations Acts, 2000–2026"
@@ -265,9 +273,11 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
             House <span className="drawer-link-arrow">→</span>
           </Link>
-          <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
-            Senate <span className="drawer-link-arrow">→</span>
-          </Link>
+          {SHOW_SENATE_TAB && (
+            <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
+              Senate <span className="drawer-link-arrow">→</span>
+            </Link>
+          )}
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>
           </Link>

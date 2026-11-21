@@ -239,7 +239,9 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   and put it under House"): the tabs read NEP, House, Senate, GAA 2000–2026 (full names in each tab's `title`), then
   Citizen Reports and Learn (`SiteHeader.tsx`). Budget hearings (`/hearings`) left the primary nav: "Hearings" in the
   House bill sub-nav (`TAIL_LINKS`, `HgabBits.tsx`), the hearings pages use `HgabHeader`, and House is the active tab
-  there.
+  there. **The Senate tab is hidden for now** (Jason, 2026-11-21): `SHOW_SENATE_TAB = false` in `SiteHeader.tsx` (tab and
+  drawer); the /senate/2027 pages stay at their addresses and other links to them (the budget-stage timeline, the
+  House pages' Senate column) remain.
 - **The section** (PR #106 follow-up, branch `senate-cr-2027`): `/senate/2027` with its own primary tab
   ("Senate"): overview, line by line, the four programs project by project, provisions, sources,
   methodology. It reads `data/senate/2027/` from R2 `senate/2027/` (`npm run upload:senate`; upload before
