@@ -202,7 +202,8 @@ NEP OCR misreadings within ~75 similarity). 12 checks, one per program and docum
 name our House data reads as "cYanmGtalo Tab]" (NEP p. 10: Governor Benjamin T. Romualdez General Hospital and
 Schistosomiasis Center), an upstream fix for the House data.
 
-**Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
+**Status names** (Jason, 2026-11-21, again: the Senate's own projects in FMR, NIA and HFEP are **Documented addition**, not
+"Inserted"; "Inserted by the House" and the Annex A line tag keep their wording.) (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
 every Senate status shows even at 0 (DPWH has no Senate insertions), and the House column reads "Inserted by the
 House" / "Not inserted by the House".
