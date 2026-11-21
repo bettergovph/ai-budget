@@ -264,6 +264,30 @@ kept by red flags and documents; the foreign-assisted projects raised; FMR, NIA,
 does not say. The red-flag comparison is a pattern in the data, never the Senate's reason: the report gives none.
 To publish it, link it from the Senate overview and drop `noindex`.
 
+## Leaderboards
+
+`/senate/2027/leaderboard` (Jason, 2026-11-21: "Next is work on leaderboards, our reports are a good start"; "Leaderboards"
+after "Line by line" in the Senate sub-nav). 18 boards in three sections, ranking what the executive report analyses:
+- **The big picture:** House bill budget the Senate removes, by region, and the share removed.
+- **The Senate against the House bill** (DPWH, by office): most budget removed, largest share removed (offices with
+  ₱1B+), most projects removed, most House insertions removed, most House insertions kept, largest Senate DPWH
+  amounts, biggest increases over the NEP.
+- **The whole bill:** departments (₱ and % with a ₱1B floor), agencies and Annex A lines by the Senate's change, and
+  the largest lines the Senate inserts.
+
+Data: `build_leaderboard.py` (in `build:senate-cr`) writes `senate/2027/leaderboard.json` in the House leaderboard's
+shape. It reuses `data/hgab/2027/leaderboard.json`'s 190 office groups and people (Lone/Shared, never split) and adds
+a `senate` block to each. The block holds the Senate DPWH rows under the label the House bill lists for the office
+(`districts.json` 2027 hgab3 `matched_label`). Entries + Central Office tie out to the program totals (the build
+checks). The Senate figures count every House bill DPWH line under the office, so 23 offices' House totals differ
+slightly from the House boards, which hold out lines that changed office.
+
+Page: `SenateLeaderboard.tsx`, with the House pieces (`BoardTile`, `PlaceCell`, `ValueCell`, `BoardPager`, ...) given
+the Senate boards and address through `LeaderboardSiteContext` (`src/lib/leaderboard-site.ts`; the House's by
+default). Its tables show the House bill and the Senate beside the ranked figure. Boards: `src/lib/senate-leaderboard.ts`
+(`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
+(`hgab-share-render.ts`) is House-specific.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
