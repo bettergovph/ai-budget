@@ -187,6 +187,7 @@ const STATIC_SITEMAP_PATHS = [
   "/senate/2027/sources",
   "/senate/2027/methodology",
   "/senate/2027/data",
+  "/senate/2027/leaderboard",
   "/hgab/2027/sources",
   "/hgab/2027/methodology",
   "/hgab/2027/dpwh",
