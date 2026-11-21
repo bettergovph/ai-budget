@@ -195,6 +195,32 @@ lists them by sub-program), so they take the region the annex prints them under;
 their irrigation system's region when all its listed rows share one. 30 NIA rows (₱100M in the House bill, ₱1.24B
 NEP) are left "Not recorded". The annex's MARIIS and UPRIIS headings count under Region II and Region III.
 
+## The dataset: downloadable and verifiable
+
+(Jason, 2026-11-21: "we need to have our dataset downloadable and verifiable.") `build_downloads.py`, the last
+step of `npm run build:senate-cr`, writes `data/senate/2027/downloads/` (published with `upload:senate`):
+
+- `senate-2027-projects` (21,098 rows: the four programs, NEP / House bill / Senate, status, inserted by the
+  House, and the Senate, House bill and NEP page of each), `senate-2027-annex-a` (2,719 rows, as printed),
+  `senate-2027-general-summary` (450 rows: totals, departments, agencies, sub-agencies, group headings, the
+  DOE-attached corporate budgets regrouped) and `senate-2027-provisions` (186), each CSV (UTF-8 with BOM) and Parquet.
+- `senate-2027-checks.csv`: 26 checks, all passing. They cover the source PDFs' SHA-256, each program's House bill
+  and Senate totals against the annex's printed total, row arithmetic, the General Summary's own sums (agencies
+  only: sub-agencies and group headings would count twice), and the line-by-line Senate amounts against the
+  General Summary. **A failed check stops the build.**
+- `README.md` (data dictionary, caveats, how to verify), `manifest.json` (sources, tables, files with SHA-256),
+  `SHA256SUMS.txt` (files and source PDFs: `sha256sum -c --ignore-missing SHA256SUMS.txt`), the ZIP, and
+  `index.json`, the site's listing (with the ZIP's checksum, which the manifest inside it can't hold).
+
+Annex A rows can't be summed: the report prints some insertions at more than one level (a project, its region, its
+office, each with the same amount), so the dataset says so, and the totals come from the General Summary. While
+building the checks, two SUC rows (Apayao State College, Ifugao State University, pp. 42-43) turned out to be
+an unnamed +1,000 the parser had joined to the line below. `parse_annex_a.py` now joins amounts to the next label
+only if they add up with its own House amount.
+
+The page: `/senate/2027/data` ("Download data" in About, `SenateData.tsx`): the ZIP, each table's CSV and Parquet
+with rows and SHA-256, the five ways to check, every check with its result, and the source PDFs' SHA-256.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
