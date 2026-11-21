@@ -189,7 +189,18 @@ corrected House project as a removal plus an insertion, and an NEP project the H
   duplicates; 15 HFEP components for a facility whose other component the House bill funds.
 - 29 FMR pairs whose names differ more than a spelling carry a "check the pairing" note.
 Every pairing and flag: `senate-2027-pairings.csv` in the dataset; `matched_by`, `check_id`, `check_note` on each
-project. The list and project pages show the note (⚑). Totals and checks are unchanged (26/26).
+project. The list and project pages show the note (⚑). Totals and checks are unchanged.
+
+**Pages on every list row** (Jason, 2026-11-21: "we need to display their page numbers in the lists, we need to make
+it trustworthy"): the project lists (DPWH and the other three) have a Pages column, NEP p. · HB p. · Senate p., each
+opening the PDF at that page (`SenatePages`), and the lists' CSVs carry them. FMR, NIA and HFEP rows had no House bill
+page: the House data reads those programs from the second-reading copy, whose pages the third reading repeats
+(`same_pages`), so build_site.py now cites the third reading at that page. **Page checks** (`page_check.py`, in
+`build_downloads.py`): every page link is opened and must print the project's distinctive words (spaces ignored;
+NEP OCR misreadings within ~75 similarity). 12 checks, one per program and document, non-blocking; misses go to
+`senate-2027-page-misses.csv`. On 2026-11-21 all Senate, House bill and NEP links pass but 2: an HFEP NEP-only row whose
+name our House data reads as "cYanmGtalo Tab]" (NEP p. 10: Governor Benjamin T. Romualdez General Hospital and
+Schistosomiasis Center), an upstream fix for the House data.
 
 **Status names** (2026-11-21, Jason: "rename Cut to Zero to Removed across pages"): Removed, Reduced, Raised,
 Inserted (by the Senate), Renamed, Unchanged (`SENATE_STATUS`; the data keeps `cut` and `added`). In the Changes menu
