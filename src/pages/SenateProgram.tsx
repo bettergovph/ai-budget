@@ -7,7 +7,7 @@
  *   changes    the largest cuts, raises and additions, and renamed projects
  * NEP is shown for reference; "Change" is the committee report minus the House bill.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
@@ -16,6 +16,7 @@ import {
   SenateError, SenateHeader, SenateHero, SenateLoading, SenateNotice, SenateReviewBanner, SenateStatusChip, SignedChange,
 } from '../components/SenateBits';
 import SenateDpwhProjects from '../components/SenateDpwhProjects';
+import { Check, Dropdown, PanelFoot } from '../components/ReviewFilterBar';
 import { runQuery } from '../lib/duckdb';
 import { downloadCsv } from '../lib/csv';
 import * as fmt from '../lib/format';
@@ -242,8 +243,9 @@ const SORT_SQL: Record<SortKey, string> = {
 function ProjectsView({ k }: { k: DatasetKey }) {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') ?? '';
-  const status = params.get('status') ?? '';
-  const region = params.get('region') ?? '';
+  // Several values each, as the reviewer's filters: `status=cut|added`, `region=Region I|Region II`.
+  const statuses = useMemo(() => (params.get('status') ?? '').split('|').filter(Boolean), [params]);
+  const regionsOn = useMemo(() => (params.get('region') ?? '').split('|').filter(Boolean), [params]);
   const program = params.get('program') ?? '';
   const pap = params.get('pap') ?? '';
   const office = params.get('office') ?? '';
@@ -257,19 +259,21 @@ function ProjectsView({ k }: { k: DatasetKey }) {
     setParams(n, { replace: true });
   };
   const url = senateProjectsUrl(k);
-  const where = useMemo(() => {
+  // Every filter but `skip`: a filter's options are counted against the others, as in the reviewer.
+  const whereOf = useCallback((skip?: 'status' | 'region') => {
     const w: string[] = [];
     for (const word of q.toLowerCase().split(/\s+/).filter(Boolean)) w.push(`search_text LIKE ${sqlStr(`%${word.replace(/[%_]/g, '')}%`)}`);
-    if (status) w.push(`status = ${sqlStr(status)}`);
-    if (region) w.push(`coalesce(region, 'Not recorded') = ${sqlStr(region)}`);
+    if (statuses.length && skip !== 'status') w.push(`status IN (${statuses.map(sqlStr).join(', ')})`);
+    if (regionsOn.length && skip !== 'region') w.push(`coalesce(region, 'Not recorded') IN (${regionsOn.map(sqlStr).join(', ')})`);
     if (program) w.push(`coalesce(program, 'Not recorded') = ${sqlStr(program)}`);
     if (pap) w.push(`coalesce(pap, 'Not recorded') = ${sqlStr(pap)}`);
     if (office) w.push(`coalesce(office, 'Not recorded') = ${sqlStr(office)}`);
     return w.length ? `WHERE ${w.join(' AND ')}` : '';
-  }, [q, status, region, program, pap, office]);
+  }, [q, statuses, regionsOn, program, pap, office]);
+  const where = useMemo(() => whereOf(), [whereOf]);
   const [res, setRes] = useState<{ sig: string; rows: SenateProject[]; total: { n: number; house: number; senate: number; nep: number } } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [regions, setRegions] = useState<string[]>([]);
+  const [facets, setFacets] = useState<{ sig: string; status: Map<string, number>; statusBase: number; region: Map<string, number>; regionBase: number } | null>(null);
   const sig = `${where}|${sort}|${dir}|${page}`;
   useEffect(() => {
     let live = true;
@@ -288,9 +292,23 @@ function ProjectsView({ k }: { k: DatasetKey }) {
     return () => { live = false; };
   }, [url, where, sort, dir, page, sig]);
   useEffect(() => {
-    runQuery<{ region: string }>(`SELECT DISTINCT coalesce(region, 'Not recorded') region FROM read_parquet(${sqlStr(url)}) ORDER BY 1`)
-      .then((r) => setRegions(r.rows.map((x) => x.region))).catch(() => {});
-  }, [url]);
+    let live = true;
+    const src = `read_parquet(${sqlStr(url)})`;
+    Promise.all([
+      runQuery<{ k: string; n: unknown }>(`SELECT status k, count(*) n FROM ${src} ${whereOf('status')} GROUP BY 1`),
+      runQuery<{ k: string; n: unknown }>(`SELECT coalesce(region, 'Not recorded') k, count(*) n FROM ${src} ${whereOf('region')} GROUP BY 1 ORDER BY 1`),
+    ]).then(([a, b]) => {
+      if (!live) return;
+      const m = (rows: Array<{ k: string; n: unknown }>) => new Map(rows.map((x) => [x.k, Number(x.n)]));
+      const sum = (rows: Array<{ n: unknown }>) => rows.reduce((t, x) => t + Number(x.n), 0);
+      setFacets({ sig: where, status: m(a.rows), statusBase: sum(a.rows), region: m(b.rows), regionBase: sum(b.rows) });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [url, whereOf, where]);
+  const toggle = (key: 'status' | 'region', cur: string[], v: string) => {
+    const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+    set({ [key]: next.join('|') || null });
+  };
 
   const exportCsv = async () => {
     const r = await runQuery<Record<string, unknown>>(`SELECT * EXCLUDE (search_text) FROM read_parquet(${sqlStr(url)}) ${where} ORDER BY ${SORT_SQL[sort]} ${dir.toUpperCase()} NULLS LAST, id`);
@@ -314,34 +332,49 @@ function ProjectsView({ k }: { k: DatasetKey }) {
   const pages = cur ? Math.max(1, Math.ceil(cur.total.n / PAGE)) : 1;
   return (
     <section className="nep-section">
-      <div className="senate-filters">
-        <input className="text-input nep-filter" type="search" placeholder="Find a project, place or office…" defaultValue={q}
-          onKeyDown={(e) => { if (e.key === 'Enter') set({ q: (e.target as HTMLInputElement).value }); }}
-          onBlur={(e) => { if (e.target.value !== q) set({ q: e.target.value }); }} aria-label="Search projects" />
-        <select className="text-input" value={status} onChange={(e) => set({ status: e.target.value })} aria-label="Status">
-          <option value="">Any status</option>
-          {SENATE_STATUS_ORDER.map((x) => <option key={x} value={x}>{SENATE_STATUS[x].label}</option>)}
-        </select>
-        <select className="text-input" value={region} onChange={(e) => set({ region: e.target.value })} aria-label="Region">
-          <option value="">Any region</option>
-          {regions.map((x) => <option key={x} value={x}>{x}</option>)}
-        </select>
-        {(program || pap || office) && (
-          <button type="button" className="hgab-chip" onClick={() => set({ program: null, pap: null, office: null })}>
-            {program || pap || office} ✕
-          </button>
-        )}
-        <button type="button" className="hgab-ex-csv" onClick={exportCsv}>CSV of these projects</button>
+      {/* The reviewer's filter style (ReviewFilterBar.tsx); these programs have no red flags or reviewer yet. */}
+      <div className="senate-rv-bar">
+        <div className="rv-filters" role="toolbar" aria-label="Filters">
+          <span className="rv-filters-label" aria-hidden="true">Filter</span>
+          <Dropdown label="Senate" count={statuses.length} active={statuses.length > 0}>
+            {SENATE_STATUS_ORDER.map((x) => (
+              <Check key={x} checked={statuses.includes(x)} onChange={() => toggle('status', statuses, x)} label={SENATE_STATUS[x].label}
+                note={SENATE_STATUS[x].help} k={facets?.status.get(x) ?? 0} max={Math.max(1, facets?.statusBase ?? 1)} />
+            ))}
+            {statuses.length > 0 && <PanelFoot><span>Projects with any checked status.</span><button type="button" onClick={() => set({ status: null })}>Clear</button></PanelFoot>}
+          </Dropdown>
+          <Dropdown label="Region" count={regionsOn.length} active={regionsOn.length > 0}>
+            {[...(facets?.region.keys() ?? [])].map((x) => (
+              <Check key={x} checked={regionsOn.includes(x)} onChange={() => toggle('region', regionsOn, x)} label={x}
+                k={facets?.region.get(x) ?? 0} max={Math.max(1, facets?.regionBase ?? 1)} />
+            ))}
+            {regionsOn.length > 0 && <PanelFoot><span>Projects in any checked region.</span><button type="button" onClick={() => set({ region: null })}>Clear</button></PanelFoot>}
+          </Dropdown>
+          {(program || pap || office) && (
+            <button type="button" className="rv-clear" onClick={() => set({ program: null, pap: null, office: null })}>
+              {program || pap || office} ✕
+            </button>
+          )}
+          <form className="rv-filter-search" onSubmit={(e) => { e.preventDefault(); set({ q: (new FormData(e.currentTarget).get('q') as string) ?? '' }); }}>
+            <input className="rv-input" type="search" name="q" placeholder="Search title, place, office" defaultValue={q} aria-label="Search projects (press Enter)" />
+          </form>
+          {(statuses.length || regionsOn.length || q || program || pap || office) ? (
+            <button type="button" className="rv-clear" onClick={() => set({ status: null, region: null, q: null, program: null, pap: null, office: null })}>Clear all</button>
+          ) : null}
+        </div>
       </div>
       {err && <p className="nep-status-error">{err}</p>}
-      {cur && (
-        <p className="nep-table-count">
-          {cur.total.n.toLocaleString()} projects · NEP {fmt.shortPhp(cur.total.nep)} · House bill {fmt.shortPhp(cur.total.house)} · Senate {fmt.shortPhp(cur.total.senate)}
-          {' '}(<SignedChange v={cur.total.senate - cur.total.house} base={cur.total.house} /> vs the House bill, <SignedChange v={cur.total.senate - cur.total.nep} base={cur.total.nep} /> vs the NEP) · two versions of one budget: compare them, don’t add them
-        </p>
-      )}
+      <div className="senate-list-head">
+        {cur ? (
+          <p className="nep-table-count">
+            <b>{cur.total.n.toLocaleString()}</b> projects · NEP {fmt.shortPhp(cur.total.nep)} · House bill {fmt.shortPhp(cur.total.house)} · Senate {fmt.shortPhp(cur.total.senate)}
+            {' '}(<SignedChange v={cur.total.senate - cur.total.house} base={cur.total.house} /> vs the House bill, <SignedChange v={cur.total.senate - cur.total.nep} base={cur.total.nep} /> vs the NEP)
+          </p>
+        ) : <p className="nep-table-count">Counting…</p>}
+        <button type="button" className="hgab-ex-csv" onClick={exportCsv}>CSV of these projects</button>
+      </div>
       <div className="nep-table-wrap">
-        <table className="nep-table hgab-ex-tree">
+        <table className="nep-table hgab-ex-tree senate-proj-table">
           <thead>
             <tr>
               {head('title', 'Project', 'nep-th-name')}

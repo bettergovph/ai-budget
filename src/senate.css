@@ -60,3 +60,7 @@
 .hgab-rec-card-amt.is-second { margin-top: 10px; font-size: 1.35rem; }
 .senate-rec-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 16px 0 24px; }
 .hgab-rec-head + .hgab-review { margin-top: 14px; }
+.senate-proj-table .hgab-ex-sub { display: block; }
+/* A change inside a sentence: amount and percent on one line. */
+.nep-table-count .nep-delta { display: inline; }
+.nep-table-count .nep-delta-pct { margin-left: 0.3em; }
