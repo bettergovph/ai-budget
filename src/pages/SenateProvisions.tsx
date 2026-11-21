@@ -43,7 +43,7 @@ export default function SenateProvisions() {
         compact
         crumb="Provisions"
         title={`${d.length} amendments to the bill's provisions`}
-        dek="The rules attached to the money: the amounts written into special provisions, conditions on releasing funds, and reports agencies must file. Each amendment cites the House bill page and line it changes."
+        dek="The rules attached to the budget: the amounts written into special provisions, conditions on releasing funds, and reports agencies must file. Each amendment cites the House bill page and line it changes."
       />
       <main className="nep-main hgab-ex-main">
         <SenateReviewBanner compact />

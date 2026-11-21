@@ -123,7 +123,7 @@ export default function SenateOverview() {
           <SectionHead
             eyebrow="Beyond the amounts"
             headline={`${o.provisions} amendments to the bill's provisions`}
-            dek={<>The report also rewrites the rules attached to the money: amounts in special provisions, conditions on releases, reports agencies must file. <Link to={SENATE_PROVISIONS_ROOT}>Read them →</Link></>}
+            dek={<>The report also rewrites the rules attached to the budget: amounts in special provisions, conditions on releases, reports agencies must file. <Link to={SENATE_PROVISIONS_ROOT}>Read them →</Link></>}
           />
         </section>
 

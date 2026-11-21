@@ -144,7 +144,7 @@ function OverviewView({ k, sum }: { k: DatasetKey; sum: SenateProgramSummary }) 
       </section>
       <DimTable title="By region" rows={sum.regions} k={k} param="region" />
       <DimTable title={k === 'hfep' ? 'By kind of budget' : 'By program line'} rows={sum.programs} k={k} param={k === 'hfep' ? 'pap' : 'program'} />
-      {sum.offices && <DimTable title="By office" rows={sum.offices.slice(0, 40)} k={k} param="office" note="The 40 offices with the most House bill money; filter Projects for the rest." />}
+      {sum.offices && <DimTable title="By office" rows={sum.offices.slice(0, 40)} k={k} param="office" note="The 40 offices with the biggest House bill budgets; filter Projects for the rest." />}
     </>
   );
 }

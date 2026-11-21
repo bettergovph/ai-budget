@@ -77,15 +77,15 @@ export const SENATE_STATUS_ORDER: readonly SenateStatus[] = ['cut', 'reduced', '
 export const SENATE_STATUS: Record<SenateStatus, { label: string; plural: string; help: string; tone: string }> = {
   cut: {
     label: 'Cut to zero', plural: 'cut to zero', tone: 'var(--negative)',
-    help: 'In the House bill, with no money in the Senate committee report.',
+    help: 'In the House bill, with no budget in the Senate committee report.',
   },
   reduced: {
     label: 'Reduced', plural: 'reduced', tone: '#b06a12',
-    help: 'In both, with less money in the Senate committee report.',
+    help: 'In both, with a smaller budget in the Senate committee report.',
   },
   raised: {
     label: 'Raised', plural: 'raised', tone: 'var(--positive)',
-    help: 'In both, with more money in the Senate committee report.',
+    help: 'In both, with a bigger budget in the Senate committee report.',
   },
   added: {
     label: 'Added by the Senate', plural: 'added by the Senate', tone: '#2f6fb3',
