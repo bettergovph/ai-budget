@@ -240,14 +240,16 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   and put it under House"): the tabs read NEP, House, Senate, GAA 2000–2026 (full names in each tab's `title`), then
   Citizen Reports and Learn (`SiteHeader.tsx`). Budget hearings (`/hearings`) left the primary nav: "Hearings" in the
   House bill sub-nav (`TAIL_LINKS`, `HgabBits.tsx`), the hearings pages use `HgabHeader`, and House is the active tab
-  there. **The Senate tab is hidden for now** (Jason, 2026-11-21): `SHOW_SENATE_TAB = false` in `SiteHeader.tsx` (tab and
-  drawer); the /senate/2027 pages stay at their addresses and other links to them (the budget-stage timeline, the
-  House pages' Senate column) remain.
+  there. **The Senate section isn't public yet** (Jason, 2026-11-21/22): one switch, `SENATE_PUBLIC = false` in
+  `src/lib/budget-stage.ts`, hides the Senate tab and drawer link (`SiteHeader.tsx`) and keeps the landing notice and
+  the stage timelines on the House bill ("Now"; Senate "Next", unlinked). Set it true to show the tab, the Senate
+  notice and the Senate as the current stage together. The /senate/2027 pages stay at their addresses; the House
+  pages' Senate column and box still link to them.
 - **The section** (PR #106 follow-up, branch `senate-cr-2027`): `/senate/2027` with its own primary tab
   ("Senate"): overview, line by line, the four programs project by project, provisions, sources,
   methodology. It reads `data/senate/2027/` from R2 `senate/2027/` (`npm run upload:senate`; upload before
   the merge). The House pages gained a Senate column (explorer, project tables) and a Senate box on project
-  pages. `budget-stage.ts` now has the Senate as current (the House bill's month is not known: "Approved").
+  pages. `budget-stage.ts` has the Senate as current only when `SENATE_PUBLIC` is on (the House bill's month is not known: "Approved").
   "Under citizen review" banner until `SENATE_UNDER_REVIEW` is set false.
   The DPWH project list shows five filters: four of the reviewer's (`FilterBar` `only=`, `ReviewFilterBar.tsx`,
   shared with `HgabReview.tsx`) and Changes (Senate status + Inserted), and a Review button per project

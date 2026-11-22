@@ -140,7 +140,7 @@ nav tab "Senate Budget 2027":
 
 On the House pages: a Senate column on the explorer index and department pages (`compare` stays House vs NEP),
 on the program project tables (a second query on the Senate parquet for the rows on screen), and an "In the
-Senate committee report" box on each project page. The budget-stage timeline now has the Senate as current.
+Senate committee report" box on each project page. The budget-stage timeline has the Senate as current once `SENATE_PUBLIC` (budget-stage.ts) is on; until then the landing notice and timelines stay on the House bill (2026-11-22).
 Everything carries the "Under citizen review" banner while `SENATE_UNDER_REVIEW` is true. Every Senate table and
 figure shows the NEP beside the House bill and the Senate (Jason, 2026-11-20: "a full view"); Annex A rows take the
 NEP amount of the House line they cite (`annex_a_nep.json`, from build_explorer_senate.py). A zero amount reads
