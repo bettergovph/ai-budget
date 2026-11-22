@@ -3,12 +3,14 @@ import { Link, useLocation } from 'react-router-dom';
 import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
 import { INDICATORS_ROOT } from '../lib/indicators';
+import { SENATE_PUBLIC } from '../lib/budget-stage';
 
 /**
- * The Senate tab (the FY2027 Senate committee report, /senate/2027): hidden for now (Jason, 2026-11-21: "hide the
- * Senate link from the nav for now"). The pages stay at their addresses; set true to show the tab again.
+ * The Senate tab (the FY2027 Senate committee report, /senate/2027): hidden while the Senate section isn't public
+ * (Jason, 2026-11-21: "hide the Senate link from the nav for now"). One switch, SENATE_PUBLIC in budget-stage.ts,
+ * shows it with the Senate as the current stage on the landing notice. The pages stay at their addresses.
  */
-const SHOW_SENATE_TAB = false;
+const SHOW_SENATE_TAB = SENATE_PUBLIC;
 
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 

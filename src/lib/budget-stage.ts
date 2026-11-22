@@ -5,7 +5,7 @@
  * comes next, never an invented date.
  *
  * When the budget moves on, move `current` here, then rewrite the hero notice's words (Nep2027Story.tsx,
- * StageNotice), which name the current stage.
+ * StageNotice), which name the current stage. The Senate stage is ready: set SENATE_PUBLIC to show it.
  */
 
 export type StageState = 'done' | 'current' | 'future';
@@ -21,7 +21,23 @@ export interface BudgetStage {
   state: StageState;
 }
 
-export const BUDGET_2027_STAGES: readonly BudgetStage[] = [
+/**
+ * Whether the Senate section is public (Jason, 2026-11-22: the landing "should be for the hgab still"). Off: the House
+ * bill is the current stage on the landing notice and the timelines, the Senate stage has no link, and the site
+ * header has no Senate tab (SiteHeader.tsx). On: the Senate committee report is current, linked, and has its tab.
+ */
+export const SENATE_PUBLIC = false;
+
+const HOUSE_NOW: readonly BudgetStage[] = [
+  { name: 'NEP', short: 'NEP', when: 'Aug 2026', meta: 'Submitted by the President to Congress', to: '/2027', state: 'done' },
+  { name: 'House hearings', short: 'Hearings', when: 'Aug–Sep 2026', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
+  { name: 'House bill', short: 'House bill', when: 'Now', meta: 'HB 10858, voted on at 2nd and 3rd reading', to: '/hgab/2027/overview', state: 'current' },
+  { name: 'Senate', short: 'Senate', when: 'Next', meta: 'Its own committee, then a floor vote', state: 'future' },
+  { name: 'Bicameral', short: 'Bicameral', when: 'Then', meta: 'Both chambers settle on one text', state: 'future' },
+  { name: 'Enacted budget (GAA)', short: 'GAA', when: 'Last', meta: 'Signed into law; FY2020–2026 so far', to: '/gaa', state: 'future' },
+];
+
+const SENATE_NOW: readonly BudgetStage[] = [
   { name: 'NEP', short: 'NEP', when: 'Aug 2026', meta: 'Submitted by the President to Congress', to: '/2027', state: 'done' },
   { name: 'House hearings', short: 'Hearings', when: 'Aug–Sep 2026', meta: 'Agencies answer questions on their budgets', to: '/hearings', state: 'done' },
   { name: 'House bill', short: 'House bill', when: 'Approved', meta: 'HB 10858, approved on 3rd reading', to: '/hgab/2027/overview', state: 'done' },
@@ -29,3 +45,5 @@ export const BUDGET_2027_STAGES: readonly BudgetStage[] = [
   { name: 'Bicameral', short: 'Bicameral', when: 'Then', meta: 'Both chambers settle on one text', state: 'future' },
   { name: 'Enacted budget (GAA)', short: 'GAA', when: 'Last', meta: 'Signed into law; FY2020–2026 so far', to: '/gaa', state: 'future' },
 ];
+
+export const BUDGET_2027_STAGES: readonly BudgetStage[] = SENATE_PUBLIC ? SENATE_NOW : HOUSE_NOW;
