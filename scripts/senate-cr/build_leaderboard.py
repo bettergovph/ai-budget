@@ -83,6 +83,11 @@ def add(a, b):
     return out
 
 
+def senate_href(href):
+    """A House bill district page's address as the Senate district page's (same district id)."""
+    return href.replace("/hgab/2027/districts/", "/senate/2027/districts/", 1) if href and href.startswith("/hgab/2027/districts/") else href
+
+
 def main(site, hgab):
     house_lb = json.load(open(f"{hgab}/leaderboard.json"))
     districts = json.load(open(f"{hgab}/districts.json"))
@@ -100,7 +105,9 @@ def main(site, hgab):
                 raise SystemExit(f"office label {x} in two entries")
             used.add(x)
         sub = pd.concat([by_label[x] for x in labels if x in by_label]) if any(x in by_label for x in labels) else rows.iloc[0:0]
-        entries.append({**e, "senate": block(sub)})
+        # Places link to the Senate district pages (/senate/2027/districts, build_districts.py), not the House bill's.
+        entries.append({**e, "href": senate_href(e.get("href")), "people": [{**p, "href": senate_href(p.get("href"))} for p in e.get("people", [])],
+                        "senate": block(sub)})
 
     outside = rows[~rows.office.fillna("").isin(used)]
     central = outside[outside.office == "Central Office"]

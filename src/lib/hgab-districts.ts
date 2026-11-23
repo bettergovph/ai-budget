@@ -43,8 +43,8 @@ export const DISTRICT_SORT_LABELS: Record<DistrictSortKey, string> = {
 };
 
 /** The sort label inside a sentence ("sorted by largest House bill amount"): only the first letter is lower-cased. */
-export function sortPhrase(key: DistrictSortKey): string {
-  const l = DISTRICT_SORT_LABELS[key];
+export function sortPhrase(key: DistrictSortKey, labels: Record<DistrictSortKey, string> = DISTRICT_SORT_LABELS): string {
+  const l = labels[key];
   return l.charAt(0).toLowerCase() + l.slice(1);
 }
 
@@ -536,9 +536,13 @@ export function filterDistricts(index: HgabDistrictIndex, f: Pick<DistrictFilter
   });
 }
 
-export function sortDistricts(cards: readonly DistrictCard[], index: HgabDistrictIndex, key: DistrictSortKey): DistrictCard[] {
+export function sortDistricts(
+  cards: readonly DistrictCard[], index: HgabDistrictIndex, key: DistrictSortKey,
+  /** A site's own figure for a sort (the Senate's), else the House bill's (`cardMetric`). */
+  metricOf?: (card: DistrictCard, index: HgabDistrictIndex, key: DistrictSortKey) => number | null | undefined,
+): DistrictCard[] {
   if (key === 'name') return [...cards].sort((a, b) => a.label.localeCompare(b.label));
-  const metric = new Map(cards.map((c) => [c.id, cardMetric(c, index, key)] as const));
+  const metric = new Map(cards.map((c) => [c.id, metricOf?.(c, index, key) ?? cardMetric(c, index, key)] as const));
   return [...cards].sort((a, b) => {
     const av = metric.get(a.id) ?? null;
     const bv = metric.get(b.id) ?? null;
@@ -895,7 +899,11 @@ export interface OfficeSection {
  * group's districts by label. Flattened, this is the flat list's order in
  * office mode, so a shared office's districts always sit together.
  */
-export function officeSections(cards: readonly DistrictCard[], index: HgabDistrictIndex, key: DistrictSortKey): OfficeSection[] {
+export function officeSections(
+  cards: readonly DistrictCard[], index: HgabDistrictIndex, key: DistrictSortKey,
+  /** A site's own figure for an office group (the Senate's), else the House bill's (`officeGroupMetric`). */
+  groupMetricOf?: (group: OfficeGroup, key: DistrictSortKey) => number | null | undefined,
+): OfficeSection[] {
   const og = officeGroups(index);
   const by = new Map<OfficeGroup, DistrictCard[]>();
   for (const c of cards) {
@@ -908,7 +916,7 @@ export function officeSections(cards: readonly DistrictCard[], index: HgabDistri
   const out = [...by].map(([group, cs]) => ({
     group,
     cards: cs.sort((a, b) => byLabelNumeric(a.label, b.label)),
-    metric: key === 'name' ? null : officeGroupMetric(group, key),
+    metric: key === 'name' ? null : groupMetricOf?.(group, key) ?? officeGroupMetric(group, key),
   }));
   out.sort((a, b) => {
     const an = a.group.tier == null;
@@ -1011,18 +1019,18 @@ export function unitHas(u: ListUnit, districtId: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** `/hgab/2027/districts?view=list`, with `by=office` and `#<anchor>` when given: the list, opened at a region or a card. */
-export function districtListHref(anchor?: string, by: DistrictBrowse = 'district'): string {
-  return `${districtPath()}?view=list${by === 'office' ? '&by=office' : ''}${anchor ? `#${anchor}` : ''}`;
+export function districtListHref(anchor?: string, by: DistrictBrowse = 'district', root = districtPath()): string {
+  return `${root}?view=list${by === 'office' ? '&by=office' : ''}${anchor ? `#${anchor}` : ''}`;
 }
 
 /** The list in office mode, showing one office group's districts: `?view=list&office=<param>&by=office`. */
-export function officeListHref(param: string): string {
-  return `${districtPath()}?${paramsFromDistrictFilters({ ...DEFAULT_DISTRICT_FILTERS, office: param, by: 'office' })}`;
+export function officeListHref(param: string, root = districtPath()): string {
+  return `${root}?${paramsFromDistrictFilters({ ...DEFAULT_DISTRICT_FILTERS, office: param, by: 'office' })}`;
 }
 
 /** A district's page, keeping the sidebar's office mode (`?by=office`). */
-export function districtPageHref(id: string, by: DistrictBrowse = 'district'): string {
-  return `${districtPath(id)}${by === 'office' ? '?by=office' : ''}`;
+export function districtPageHref(id: string, by: DistrictBrowse = 'district', root = districtPath()): string {
+  return `${root}/${encodeURIComponent(id)}${by === 'office' ? '?by=office' : ''}`;
 }
 
 /**

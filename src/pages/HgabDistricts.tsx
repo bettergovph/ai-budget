@@ -57,9 +57,10 @@ import {
   type DistrictCard, type HgabDistrictIndex,
 } from '../lib/hgab';
 import { districtsView } from '../lib/hgab-ui';
+import { useDistrictSite } from '../lib/district-site';
 import { DEO_MEANING } from '../lib/hgab-leaderboard';
 import {
-  DISTRICT_SORT_LABELS, FISCAL_STAGE_LONG, REGION_SECTION_ORDER, TIER_FILTER_LABELS, TIER_MEANING, andList, bangsamoroDistricts,
+  FISCAL_STAGE_LONG, REGION_SECTION_ORDER, TIER_FILTER_LABELS, TIER_MEANING, andList, bangsamoroDistricts,
   districtAnchor, districtAnchorFromHash, districtFiltersFromParams, districtListHref, districtRegionKey,
   filterDistricts, groupDistrictsByRegion, groupOfficeSectionsByRegion, hasDistrictFilters, headlineResidual, isOfficeLedger,
   listUnits, officeGroupTierText, officeGroupTitle, officeSections,
@@ -106,7 +107,7 @@ export default function HgabDistricts() {
   if (err) return <HgabError message={err} />;
   if (!index) return <HgabLoading what="the 2027 district index" heroBlend={view === 'overview'} />;
   if (view === 'list-legislative') return <DistrictsPlaced index={index} />;
-  return view === 'list' ? <DistrictsList index={index} /> : <DistrictsOverview index={index} />;
+  return view === 'list' ? <DistrictsCardsList index={index} /> : <DistrictsOverview index={index} />;
 }
 
 function plainClick(e: MouseEvent): boolean {
@@ -338,7 +339,13 @@ function RegionTable({ index }: { index: HgabDistrictIndex }) {
 // The list
 // ---------------------------------------------------------------------------
 
-function DistrictsList({ index }: { index: HgabDistrictIndex }) {
+/**
+ * The cards list (`?view=list`). The Senate committee report's districts list draws it too, with its own
+ * addresses, 2027 panel, figures and words through `DistrictSiteContext` (lib/district-site.ts).
+ */
+export function DistrictsCardsList({ index }: { index: HgabDistrictIndex }) {
+  const site = useDistrictSite();
+  const copy = site.list ?? {};
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => districtFiltersFromParams(params), [params]);
 
@@ -386,10 +393,13 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   const filtered = useMemo(() => filterDistricts(index, filters), [index, filters]);
   // Office mode: the cards under their office groups, groups ranked by the
   // group's own figure; flattened, that is also the flat list's order.
-  const sections = useMemo(() => (byOffice ? officeSections(filtered, index, filters.sort) : null), [byOffice, filtered, index, filters.sort]);
+  const sections = useMemo(
+    () => (byOffice ? officeSections(filtered, index, filters.sort, site.groupMetric) : null),
+    [byOffice, filtered, index, filters.sort, site.groupMetric],
+  );
   const visible = useMemo(
-    () => (sections ? sections.flatMap((s) => s.cards) : sortDistricts(filtered, index, filters.sort)),
-    [sections, filtered, index, filters.sort],
+    () => (sections ? sections.flatMap((s) => s.cards) : sortDistricts(filtered, index, filters.sort, site.cardMetric)),
+    [sections, filtered, index, filters.sort, site.cardMetric],
   );
   // The cards: a district on its own, or one card for a shared office and every district it serves.
   const units = useMemo(() => listUnits(visible, index), [visible, index]);
@@ -547,7 +557,7 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
   const rememberCard = (e: MouseEvent<HTMLElement>) => {
     if (!plainClick(e)) return;
     const a = (e.target as HTMLElement).closest('a[href]');
-    if (!a || !a.getAttribute('href')?.startsWith(`${districtPath()}/`)) return;
+    if (!a || !a.getAttribute('href')?.startsWith(`${site.root}/`)) return;
     const host = a.closest<HTMLElement>('.hgab-dc[id], [data-anchor]');
     const anchor = host?.dataset.anchor ?? host?.id;
     if (!anchor || window.location.hash === `#${anchor}`) return;
@@ -596,47 +606,48 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
 
   return (
     <>
-      <HgabHeader
-        crumb={<><Link to={districtPath()}>Districts</Link> › District Engineering Offices</>}
+      <site.Header
+        crumb={<><Link to={site.root}>Districts</Link> › District Engineering Offices</>}
         compiledMeta={`${all.length.toLocaleString()} districts · ${offices.length.toLocaleString()} DPWH offices`}
       />
 
-      <HgabHero
+      <site.Hero
         compact
         crumb={
           <>
-            <Link to={districtPath()}>Districts</Link>
+            <Link to={site.root}>Districts</Link>
             <span className="hgab-crumb-sep" aria-hidden="true">·</span>
             <span className="hgab-crumb-here">District Engineering Offices</span>
           </>
         }
         title="District Engineering Offices"
-        dek={
+        dek={copy.dek ?? (
           <>
             One card per legislative district, with the DPWH office that serves it as a small badge. A DPWH office that
             serves several districts has one card, listing each district and its representative. {TIER_MEANING}
           </>
-        }
-        note={
+        )}
+        note={copy.heroNote ?? (
           <>
             The representative shown holds the seat in the 20th Congress. The 2020–2025 budgets were passed by
             the 18th and 19th Congresses, whose members are not shown. Nothing here says or implies that a
             representative requested, sponsored or controlled a project. {DEO_MEANING}
           </>
-        }
+        )}
       >
         <ChartKeyRow terms={index.terms?.length ? index.terms : undefined} />
-      </HgabHero>
+      </site.Hero>
 
       <main className="nep-main hgab-dx-listmain">
-        {head && share != null && (
+        {copy.banner}
+        {copy.offCard ?? (head && share != null && (
           <p className="hgab-dx-offcard">
             <strong>{fmt.pct(share, 1)}</strong> of DPWH money in the {slotLabel(head)} is on no district card.
             It is listed under {residualWhere(head)}.{' '}
             <Link to={districtPath()}>See how much, every year →</Link>{' '}
             <Link to={placedListHref()}>Or see each project placed in its district →</Link>
           </p>
-        )}
+        ))}
 
         <div className="hgab-dx-layout" onClickCapture={rememberCard}>
           <DistrictSidebar
@@ -692,8 +703,8 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               <label>
                 <span>Sort by</span>
                 <select className="select-input" value={filters.sort} onChange={(e) => update({ sort: e.target.value as DistrictSortKey })}>
-                  {(Object.keys(DISTRICT_SORT_LABELS) as DistrictSortKey[]).map((k) => (
-                    <option key={k} value={k}>{DISTRICT_SORT_LABELS[k]}</option>
+                  {(Object.keys(site.sortLabels) as DistrictSortKey[]).map((k) => (
+                    <option key={k} value={k}>{site.sortLabels[k]}</option>
                   ))}
                 </select>
               </label>
@@ -735,25 +746,27 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
                 )}
                 {!grouped && hidden > 0 && <span>· showing the first {shown.length.toLocaleString()}</span>}
                 {byOffice
-                  ? <span>· offices sorted by {sortPhrase(filters.sort)}{grouped ? ' within each region' : ''}</span>
-                  : <span>· sorted by {sortPhrase(filters.sort)}{grouped ? ' within each region' : ''}</span>}
+                  ? <span>· offices sorted by {sortPhrase(filters.sort, site.sortLabels)}{grouped ? ' within each region' : ''}</span>
+                  : <span>· sorted by {sortPhrase(filters.sort, site.sortLabels)}{grouped ? ' within each region' : ''}</span>}
                 {filters.sort !== 'name' && <span>· {byOffice ? 'offices' : 'districts'} without a figure come last</span>}
                 {hasDistrictFilters(filters) && <button type="button" onClick={clear}>Clear filters</button>}
               </p>
             </div>
 
-            <AsOf index={index} />
-            <p className="hgab-dx-lede">
-              The NEP is the budget the President submits to Congress each August. A 2027 project “not in
-              the NEP” is an {term('insertion candidate')}. One “in the NEP only” is a {term('deletion candidate')}.
-              Both are leads to check, not findings.
-            </p>
+            {copy.asOf ?? <AsOf index={index} />}
+            {copy.lede ?? (
+              <p className="hgab-dx-lede">
+                The NEP is the budget the President submits to Congress each August. A 2027 project “not in
+                the NEP” is an {term('insertion candidate')}. One “in the NEP only” is a {term('deletion candidate')}.
+                Both are leads to check, not findings.
+              </p>
+            )}
 
             {hashCardHidden && (
               <p className="hgab-dx-hiddencard" role="status">
                 {hashCard.label} is hidden by the filters.{' '}
                 <button type="button" className="nep-more" onClick={clear}>Clear filters</button>{' '}
-                or <Link to={districtPath(hashCard.id)}>open its page</Link>.
+                or <Link to={site.districtHref(hashCard.id)}>open its page</Link>.
               </p>
             )}
 
@@ -793,22 +806,28 @@ function DistrictsList({ index }: { index: HgabDistrictIndex }) {
               </>
             )}
 
-            <p className="hgab-dx-note">
-              Card figures are the office’s totals as each document publishes them. The 2020–2026 figures are the
-              enacted budgets (GAA) for the whole office. The 2027 NEP and House bill figures, and the change beside
-              them, cover named projects only, so the two 2027 figures can be compared. They are never added. A shared
-              office has one card for all the districts it serves. A region’s totals add each office serving it once, so a shared office is not counted twice. A card’s “Projects” link opens
-              every DPWH project recorded under that office.
-            </p>
+            {copy.note ?? (
+              <p className="hgab-dx-note">
+                Card figures are the office’s totals as each document publishes them. The 2020–2026 figures are the
+                enacted budgets (GAA) for the whole office. The 2027 NEP and House bill figures, and the change beside
+                them, cover named projects only, so the two 2027 figures can be compared. They are never added. A shared
+                office has one card for all the districts it serves. A region’s totals add each office serving it once, so a shared office is not counted twice. A card’s “Projects” link opens
+                every DPWH project recorded under that office.
+              </p>
+            )}
 
-            <DisclaimerNotice compact offices />
-            <PageChanges />
-            <Provenance />
-            <DistrictsDetails index={index} />
+            {copy.foot ?? (
+              <>
+                <DisclaimerNotice compact offices />
+                <PageChanges />
+                <Provenance />
+                <DistrictsDetails index={index} />
+              </>
+            )}
           </div>
         </div>
       </main>
-      <SiteFooter source={SOURCES_LINE} />
+      <SiteFooter source={copy.sources ?? SOURCES_LINE} />
     </>
   );
 }
@@ -836,6 +855,8 @@ function RegionSection({ group, index, size, limit, onOpen }: {
   const names = regionNames(group.key);
   const anchor = regionAnchor(group.key);
   const t = useMemo(() => regionTotals(group.cards, index), [group.cards, index]);
+  const site = useDistrictSite();
+  const extra = useMemo(() => site.regionFigure?.(group.cards, index) ?? null, [site, group.cards, index]);
   const barmm = useMemo(() => bangsamoroDistricts(group.cards, index), [group.cards, index]);
   const units = useMemo(() => listUnits(group.cards, index), [group.cards, index]);
   const cards = limit == null ? units : units.slice(0, limit);
@@ -854,6 +875,7 @@ function RegionSection({ group, index, size, limit, onOpen }: {
           <span>{t.offices.toLocaleString()} {t.offices === 1 ? 'office' : 'offices'}</span>
           <span>2026 enacted budget <strong title={fmt.php(t.gaa2026_php, { unit: 'full' })}>{fmt.php(t.gaa2026_php)}</strong></span>
           <span>2027 House bill <strong title={fmt.php(t.hgab3_php, { unit: 'full' })}>{fmt.php(t.hgab3_php)}</strong></span>
+          {extra && <span>{extra.label} <strong title={fmt.php(extra.php, { unit: 'full' })}>{fmt.php(extra.php)}</strong></span>}
           <span className="hgab-dx-region-basis">sum of the offices serving these districts</span>
         </p>
         {barmm.length > 0 && (
