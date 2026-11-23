@@ -932,6 +932,7 @@ columns did not change. The page adds the figure to each card's line (with its c
 | FY2026 NEP, House bill, Senate bill | the People's Budget Coalition FY2026 tracker (`[PBC] 2026 Budget Data Analysis - DPWH/Educ/Health.csv`, columns `NEP2026`, `HGAB2026`, `SGAB2026`); default folder `~/projects/2026-budget/public/citizens-report` |
 | FY2027 NEP | `data/2027/<dept>/line_items.parquet`, `fy = 2027` |
 | FY2027 House bill | DPWH: `dpwh/projects.parquet` (`hgab3_php`, third reading); DepEd and DOH: their program lines in Volume I-A as published (`pdftotext`) |
+| FY2027 Senate committee report | DPWH: `data/senate-cr/2027/dpwh_senate.csv` (the report's amount for each House-bill line); DepEd and DOH: Annex A's TOTAL row for the printed program line (`annex_a_mapped.csv`), else the House bill's |
 
 - **The lines.** Multi-purpose buildings = BIP 300226 + SIPAG 300220 + the Local Program's
   multipurpose/facilities 300103–300104 (the National Building Program, 300105, is left out: most of its
