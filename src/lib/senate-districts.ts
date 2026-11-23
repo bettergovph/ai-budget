@@ -9,6 +9,7 @@
  * projects placed in each legislative district. Office figures follow the House pages' rules (DEO lens; an office that
  * serves several districts is shown whole, never split; office-change and no-office lines held out). Pure.
  */
+import { createContext, useContext } from 'react';
 import { dataUrl } from './data-url';
 import { cached, getJson, loadHgabDistricts, type HgabDistrictIndex } from './hgab';
 import { SENATE_BASE, SENATE_ROOT } from './senate';
@@ -91,4 +92,18 @@ export function sumOffices(offices: ReadonlyArray<{ senate: SenateOffice }>): Se
     rows: a.rows + o.senate.rows, house_php: a.house_php + o.senate.house_php, senate_php: a.senate_php + o.senate.senate_php,
     cut_rows: a.cut_rows + o.senate.status.cut.rows, cut_php: a.cut_php + o.senate.status.cut.house_php,
   }), { rows: 0, house_php: 0, senate_php: 0, cut_rows: 0, cut_php: 0 });
+}
+
+/** The offices' House bill and Senate figures added up, by House index office id; null when none has a Senate figure. */
+export function sumOfficeIds(d: SenateDistrictsFile, ids: readonly string[]): SenateTally | null {
+  const offices = [...new Set(ids)].map((id) => d.offices[id]).filter(Boolean);
+  if (!offices.length) return null;
+  return offices.reduce<SenateTally>((a, o) => ({ rows: a.rows + o.rows, house_php: a.house_php + o.house_php, senate_php: a.senate_php + o.senate_php }),
+    { rows: 0, house_php: 0, senate_php: 0 });
+}
+
+/** The Senate layer for the House district cards drawn on the Senate pages (src/components/SenateDistrictBits.tsx). */
+export const SenateDistrictsContext = createContext<SenateDistrictsFile | null>(null);
+export function useSenateDistricts(): SenateDistrictsFile | null {
+  return useContext(SenateDistrictsContext);
 }

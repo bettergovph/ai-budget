@@ -13,15 +13,16 @@ import SiteFooter from '../components/SiteFooter';
 import { SectionHead } from '../components/shared';
 import { KpiStrip } from '../components/Nep2027Bits';
 import { SignedPhp } from '../components/HgabBits';
-import { AttributionBadge } from '../components/HgabDistrictBits';
+import { SenateDistrictsProvider } from '../components/SenateDistrictBits';
+import { DistrictsCardsList } from './HgabDistricts';
 import { SenateError, SenateHeader, SenateHero, SenateLoading, SenateReviewBanner } from '../components/SenateBits';
 import * as fmt from '../lib/format';
 import { pageMeta } from '../lib/seo';
-import { REGION_ORDER, formatPct, pctChange, regionKeyOf, type DistrictCard, type RegionKey } from '../lib/hgab';
-import { regionNames } from '../lib/hgab-districts';
+import { REGION_ORDER, formatPct, pctChange, regionKeyOf, type RegionKey } from '../lib/hgab';
+import { districtAnchor, regionNames } from '../lib/hgab-districts';
 import { DEO_MEANING } from '../lib/hgab-leaderboard';
 import {
-  SENATE_DISTRICTS_ROOT, SENATE_DISTRICT_VIEWS, districtOffices, loadSenateDistricts, senateDistrictPath, senateDistrictsHref, sumOffices,
+  SENATE_DISTRICTS_ROOT, SENATE_DISTRICT_VIEWS, loadSenateDistricts, senateDistrictPath, senateDistrictsHref,
   type SenateDistrictView, type SenateDistrictsData, type SenateTally,
 } from '../lib/senate-districts';
 import '../nep2027.css';
@@ -31,7 +32,7 @@ import '../senate-districts.css';
 const n = (v: number) => v.toLocaleString('en-US');
 
 export default function SenateDistricts() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const view = (SENATE_DISTRICT_VIEWS.find((v) => v.key === params.get('view'))?.key ?? 'overview') as SenateDistrictView;
   const [data, setData] = useState<SenateDistrictsData | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -43,6 +44,8 @@ export default function SenateDistricts() {
   useEffect(() => { document.title = pageMeta(SENATE_DISTRICTS_ROOT).title; }, []);
   if (err) return <SenateError message={err} />;
   if (!data) return <SenateLoading what="the Senate committee report by district" />;
+  // The cards: the House bill's list, with the Senate's figures (Jason, 2026-11-23: "where are the cards??").
+  if (view === 'list') return <SenateDistrictsProvider data={data}><DistrictsCardsList index={data.house} /></SenateDistrictsProvider>;
   const label = SENATE_DISTRICT_VIEWS.find((v) => v.key === view)!.label;
   return (
     <>
@@ -58,8 +61,6 @@ export default function SenateDistricts() {
       <main className="nep-main sdx-main">
         <SenateReviewBanner compact />
         {view === 'overview' && <Overview data={data} />}
-        {view === 'list' && <DistrictList data={data} region={params.get('region')} q={params.get('q') ?? ''} sort={params.get('sort')}
-          set={(k, v) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); }} />}
         {view === 'list-legislative' && <PlacedList data={data} />}
         <p className="sdx-note">
           Amounts belong to DPWH offices, not to people. The representative shown holds the district’s seat in the 20th Congress.
@@ -199,85 +200,6 @@ function RegionTable({ data }: { data: SenateDistrictsData }) {
   );
 }
 
-type SortKey = 'region' | 'house' | 'senate' | 'change' | 'cut';
-const SORTS: Array<{ key: SortKey; label: string }> = [
-  { key: 'region', label: 'Region, then district' }, { key: 'cut', label: 'Most cut' }, { key: 'change', label: 'Largest change' },
-  { key: 'senate', label: 'Largest in the Senate report' }, { key: 'house', label: 'Largest in the House bill' },
-];
-
-/** Every legislative district with its offices' figures (an office serving several districts appears on each, whole). */
-function DistrictList({ data, region, q, sort, set }: {
-  data: SenateDistrictsData; region: string | null; q: string; sort: string | null; set: (k: string, v: string) => void;
-}) {
-  const sortKey = (SORTS.find((s) => s.key === sort)?.key ?? 'region') as SortKey;
-  const rows = useMemo(() => data.house.districts.map((d) => {
-    const offices = districtOffices(data, d.office_ids);
-    return { d, key: regionKeyOf(d.region), offices, t: sumOffices(offices) };
-  }), [data]);
-  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = rows
-    .filter((r) => (!region || r.key === region || r.d.region === region)
-      && words.every((w) => `${r.d.label} ${r.d.representative?.name ?? ''} ${r.offices.map((o) => o.house.name).join(' ')}`.toLowerCase().includes(w)))
-    .sort((a, b) => sortKey === 'region'
-      ? ((a.key ? REGION_ORDER.indexOf(a.key) : 99) - (b.key ? REGION_ORDER.indexOf(b.key) : 99)) || a.d.label.localeCompare(b.d.label)
-      : sortKey === 'cut' ? b.t.cut_php - a.t.cut_php
-        : sortKey === 'change' ? (a.t.senate_php - a.t.house_php) - (b.t.senate_php - b.t.house_php)
-          : sortKey === 'senate' ? b.t.senate_php - a.t.senate_php : b.t.house_php - a.t.house_php);
-  const regionKeys = REGION_ORDER.filter((k) => rows.some((r) => r.key === k));
-  return (
-    <section className="nep-section" aria-labelledby="sdx-list">
-      <SectionHead
-        eyebrow="Every legislative district"
-        headline={<span id="sdx-list">{n(shown.length)} districts and the DPWH offices that serve them</span>}
-        dek="A shared office’s figure is the whole office’s, shown on every district it serves, so the rows do not add up."
-      />
-      <div className="sdx-filters">
-        <label><span>Region</span>
-          <select value={region ?? ''} onChange={(e) => set('region', e.target.value)}>
-            <option value="">All regions</option>
-            {regionKeys.map((k) => <option key={k} value={k}>{regionNames(k).full}</option>)}
-          </select>
-        </label>
-        <label className="sdx-search"><span>Search</span>
-          <input type="search" value={q} placeholder="A district, province, office or representative" onChange={(e) => set('q', e.target.value)} />
-        </label>
-        <label><span>Sort</span>
-          <select value={sortKey} onChange={(e) => set('sort', e.target.value === 'region' ? '' : e.target.value)}>
-            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-        </label>
-      </div>
-      <div className="nep-table-wrap">
-        <table className="nep-table sdx-table">
-          <thead>
-            <tr>
-              <th scope="col">District</th><th scope="col">Office</th><th scope="col" className="num">House bill</th>
-              <th scope="col" className="num">Senate committee report</th><th scope="col" className="num">Change</th><th scope="col" className="num">Cut to ₱0</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map(({ d, offices, t }) => (
-              <tr key={d.id}>
-                <th scope="row">
-                  <Link to={senateDistrictPath(d.id)}>{d.label}</Link>
-                  <small>{[d.representative?.name, d.region].filter(Boolean).join(' · ')}</small>
-                </th>
-                <td>
-                  {offices.length ? offices.map((o) => <span key={o.id} className="sdx-office">{o.house.name}</span>) : <span className="hgab-ds-null">No office found</span>}
-                  <AttributionBadge attribution={d.attribution as DistrictCard['attribution']} />
-                </td>
-                {offices.length ? <><Money v={t.house_php} /><Money v={t.senate_php} /><Change to={t.senate_php} from={t.house_php} />
-                  <td className="num" title={fmt.php(t.cut_php, { unit: 'full' })}>{n(t.cut_rows)}<small>{fmt.php(t.cut_php)}</small></td></>
-                  : <td colSpan={4} className="hgab-ds-null">—</td>}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
 /** Projects placed in each legislative district (where their titles or their one-district office put them). */
 function PlacedList({ data }: { data: SenateDistrictsData }) {
   const rows = data.house.districts
@@ -298,7 +220,7 @@ function PlacedList({ data }: { data: SenateDistrictsData }) {
           </thead>
           <tbody>
             {rows.map(({ d, p }) => (
-              <tr key={d.id}>
+              <tr key={d.id} id={districtAnchor(d.id)}>
                 <th scope="row"><Link to={senateDistrictPath(d.id)}>{d.label}</Link><small>{[d.representative?.name, d.region].filter(Boolean).join(' · ')}</small></th>
                 {p ? <><td className="num">{n(p.rows)}</td><Money v={p.house_php} /><Money v={p.senate_php} /><Change to={p.senate_php} from={p.house_php} />
                   <td className="num" title={fmt.php(p.cut_php, { unit: 'full' })}>{n(p.cut_rows)}<small>{fmt.php(p.cut_php)}</small></td></>

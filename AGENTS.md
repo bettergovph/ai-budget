@@ -257,7 +257,7 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
   `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 38 checks (26 on the report's
   printed totals and arithmetic, where a failure stops the build; 12 on page links, reported). Sub-nav: Overview, Line by line, the four programs, Provisions, About.
-  Districts `/senate/2027/districts` and `/districts/:id` (2026-11-23, branch `senate-districts`): the House district pages' design over the House index plus `senate/2027/districts.json` (`build_districts.py`, last step of `build:senate-cr`; every office's House figure checked against `districts.json`); the leaderboards now link places to them. Docs: `docs/senate-cr-2027.md`, "Districts".
+  Districts `/senate/2027/districts` and `/districts/:id` (2026-11-23, branch `senate-districts`): the House district cards, list, sidebar and district-page layout themselves (`DistrictSiteContext` in `src/lib/district-site.ts`; `SenateDistrictsProvider` sets the Senate's addresses, 2027 tab and figures; no provider = the House bill's, unchanged) over the House index plus `senate/2027/districts.json` (`build_districts.py`, last step of `build:senate-cr`; every office's House figure checked against `districts.json`); the leaderboards now link places to them. Docs: `docs/senate-cr-2027.md`, "Districts".
   Leaderboards `/senate/2027/leaderboard` (2026-11-21): 18 boards on the House leaderboards' office groups and people
   (`build_leaderboard.py`, `SenateLeaderboard.tsx`, `src/lib/senate-leaderboard.ts`); the House board pieces take
   their boards and address from `LeaderboardSiteContext`. No share images yet.

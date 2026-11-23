@@ -44,6 +44,7 @@ import {
   NO_OFFICE_GROUP_NAME, districtListHref, districtPageHref, dpwhOfficeName, officeGroupTierShort, officeListHref, regionNames,
   type DistrictBrowse, type RegionSectionKey, type SidebarDistrict, type SidebarOffice, type SidebarRegion,
 } from '../lib/hgab-districts';
+import { useDistrictSite } from '../lib/district-site';
 import { DeoBadges } from './HgabBits';
 import '../hgab-districts.css';
 
@@ -110,6 +111,7 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
     by = 'district', onBy, activeOffice = null, onOffice, figure = 'office',
   } = props;
   const wide = useWide();
+  const site = useDistrictSite();
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
 
   // The sticky column sits under the site masthead (with the section
@@ -370,11 +372,11 @@ export default function DistrictSidebar(props: DistrictSidebarProps) {
       ) : byOffice ? (
         <p className="hgab-dsb-key">
           Each region lists its DPWH district engineering offices (DEOs) and the legislative districts each serves.
-          Amounts are the office’s 2027 House bill total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
+          Amounts are the office’s {site.amountLabel ?? '2027 House bill'} total, <span className="hgab-dsb-shared" title={OFFICE_AMOUNT_TITLE}>not split</span>.
         </p>
       ) : (
         <p className="hgab-dsb-key">
-          Beside each legislative district: its DPWH office’s 2027 House bill amount.{' '}
+          Beside each legislative district: its DPWH office’s {site.amountLabel ?? '2027 House bill'} amount.{' '}
           <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span> means the office serves other districts too.
         </p>
       )}
@@ -490,6 +492,7 @@ const Tree = memo(function Tree({
   /** In the dialog: a link that leaves the page closes it first. */
   onLeave?: (refocus?: boolean) => void;
 }) {
+  const site = useDistrictSite();
   return (
     <ul className="hgab-dsb-regions">
       {regions.map((r) => {
@@ -548,7 +551,7 @@ const Tree = memo(function Tree({
                 ))}
               {open && mode === 'page' && (
                 <li className="hgab-dsb-d is-go">
-                  <Link to={districtListHref(r.anchor, by)} onClick={() => onLeave?.(false)}>
+                  <Link to={districtListHref(r.anchor, by, site.root)} onClick={() => onLeave?.(false)}>
                     All {size.toLocaleString()} in {names.name}, as cards →
                   </Link>
                 </li>
@@ -562,6 +565,18 @@ const Tree = memo(function Tree({
 });
 
 function Amount({ d }: { d: SidebarDistrict }) {
+  const site = useDistrictSite();
+  // A site's own figure for the district (the Senate's), with the same "shared" and office badges.
+  const own = !d.placed && !d.none ? site.sidebarAmount?.(d.id) : undefined;
+  if (own) {
+    return (
+      <span className="hgab-dsb-amt">
+        <span title={own.title}>{own.php == null ? '—' : fmt.php(own.php)}</span>
+        {d.shared && <span className="hgab-dsb-shared" title={SHARED_TITLE}>shared</span>}
+        {d.offices && <DeoBadges offices={d.offices} jurisdiction={d.jurisdiction} />}
+      </span>
+    );
+  }
   if (d.placed) {
     return (
       <span className="hgab-dsb-amt">
@@ -600,10 +615,14 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
   onPickDistrict: (d: SidebarDistrict, region: RegionSectionKey) => void;
   onLeave?: (refocus?: boolean) => void;
 }) {
+  const site = useDistrictSite();
   const current = selectedId != null && o.districts.some((d) => d.id === selectedId);
   const cls = `hgab-dsb-o is-${o.tier ?? 'none'} ${filtered ? 'is-filter' : ''} ${current ? 'is-current' : ''}`.replace(/\s+/g, ' ').trim();
   const n = o.size;
-  const amount = o.hgab3_php == null ? 'no House bill figure' : `2027 House bill ${fmt.php(o.hgab3_php)}, whole office${o.tier === 'B' ? ', not split' : ''}`;
+  // A site's own figure for the office (the Senate's), else the House bill's.
+  const php = site.officeAmount ? site.officeAmount(o.id.split('+')) : o.hgab3_php;
+  const figWords = site.amountLabel ?? '2027 House bill';
+  const amount = php == null ? `no ${figWords} figure` : `${figWords} ${fmt.php(php)}, whole office${o.tier === 'B' ? ', not split' : ''}`;
   const shown = o.districts.length < n ? `, ${o.districts.length} of ${n} shown` : '';
   const name = dpwhOfficeName(o.name);
   const body = (
@@ -611,8 +630,8 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
       <span className="hgab-dsb-o-name" title={o.title}>{name}</span>
       <span className="hgab-dsb-o-meta">
         {o.tier && (
-          <span className="hgab-dsb-o-amt" title={o.hgab3_php == null ? 'No House bill figure' : `${OFFICE_AMOUNT_TITLE} ${fmt.php(o.hgab3_php, { unit: 'full' })}.`}>
-            {o.hgab3_php == null ? '—' : fmt.php(o.hgab3_php)}
+          <span className="hgab-dsb-o-amt" title={php == null ? `No ${figWords} figure` : site.officeAmount ? `The office’s ${figWords} amount, whole, not split between its districts: ${fmt.php(php, { unit: 'full' })}.` : `${OFFICE_AMOUNT_TITLE} ${fmt.php(php, { unit: 'full' })}.`}>
+            {php == null ? '—' : fmt.php(php)}
             <small>whole office</small>
           </span>
         )}
@@ -644,13 +663,13 @@ function OfficeRow({ o, region, mode, selectedId, filtered, onPick, onPickDistri
   return (
     <li className={cls} data-office={o.id}>
       {mode === 'page' ? (
-        <Link className="hgab-dsb-o-go" to={officeListHref(o.param)} aria-label={label} onClick={() => onLeave?.(false)}>
+        <Link className="hgab-dsb-o-go" to={officeListHref(o.param, site.root)} aria-label={label} onClick={() => onLeave?.(false)}>
           {body}
         </Link>
       ) : (
         <a
           className="hgab-dsb-o-go"
-          href={officeListHref(o.param)}
+          href={officeListHref(o.param, site.root)}
           aria-label={label}
           aria-current={filtered ? 'true' : undefined}
           onClick={(e) => { if (!plainClick(e) || !onPick) return; e.preventDefault(); onPick(o, region); }}
@@ -674,11 +693,12 @@ function DistrictRow({ d, region, mode, by, bare = false, current, onPick, onLea
   onPick: (d: SidebarDistrict, region: RegionSectionKey) => void;
   onLeave?: (refocus?: boolean) => void;
 }) {
+  const site = useDistrictSite();
   const cls = `hgab-dsb-d ${current ? 'is-current' : ''}`.trim();
   if (mode === 'page') {
     return (
       <li className={cls} data-district={d.id}>
-        <Link className="hgab-dsb-d-go" to={districtPageHref(d.id, by)} aria-current={current ? 'page' : undefined} onClick={() => onLeave?.(false)}>
+        <Link className="hgab-dsb-d-go" to={districtPageHref(d.id, by, site.root)} aria-current={current ? 'page' : undefined} onClick={() => onLeave?.(false)}>
           <span className="hgab-dsb-d-name">{d.label}</span>
           {!bare && <Amount d={d} />}
         </Link>
@@ -698,7 +718,7 @@ function DistrictRow({ d, region, mode, by, bare = false, current, onPick, onLea
       </a>
       <Link
         className="hgab-dsb-d-open"
-        to={districtPageHref(d.id, by)}
+        to={districtPageHref(d.id, by, site.root)}
         aria-label={`Open the page for ${d.label}`}
         title="Open the district’s page"
         onClick={() => onLeave?.(false)}
