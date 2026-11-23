@@ -158,6 +158,26 @@ validator, target ≥ 8): blue 25, grey 10, ink 9.3 (with a white edge). Colours
 district or place picked on the map narrows the list only. Every control is in the URL (`years`, `stage`, `q`,
 `region`, `placed`, `rule`, `district`, `place`, `sort`).
 
+## The Senate committee report (2026-11-23)
+
+The third 2027 stage (Jason: "we need to add the senate committee report across pages"). The map's build is unchanged;
+`loadMpbYears` also loads the sidecar `senate.json` (`npm run build:mpb-senate`, see `docs/hgab-mpb-compare.md`),
+applies it to the lines (`applyMpbSenate`) and adds a Senate budget counted from them (`senateBudgetStat`: the lines the
+report keeps, at its amounts, placed as they are; the 1,800 it cuts are its "listed at ₱0"). Without the file the page
+shows the House bill and the NEP only.
+
+- **2027 stage:** House bill · NEP · Senate (`?stage=senate`; `Stage2027`, `lineAmount`). The Senate bar is
+  `--hgab-hy-senate`; picking it shows the compact "Under citizen review" banner.
+- **On the House bill and NEP views,** a 2027 line the report cuts carries a "Cut by the Senate" tag in the list and in the
+  map's panel.
+- **The placement table** gains a "2027 Senate committee report" row; the build's own totals (lines placed by name, the
+  ₱0 items, the Maguindanao flag) leave it out.
+- **The CSV of the lines on screen** gains `senate_php` and `senate_status` after `house_bill_php` (the build's lines.csv
+  does not; the Senate CSV is `senate.csv`).
+- **The hero:** "…and 5,807 in the 2027 House bill; the Senate committee report keeps 4,007".
+
+verify:hgab checks the Senate bar and placement row against the sidecar (`verifyMpbSenate`).
+
 ## Repeats
 
 Jason (2026-11-02): group repeat projects per title and per barangay. Computed in the browser over the lines the

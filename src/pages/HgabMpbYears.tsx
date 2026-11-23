@@ -26,6 +26,7 @@ import {
   lineContractCells, lineContractorName, type LineContract,
 } from '../lib/hgab-contractors';
 import MpbContractors from '../components/MpbContractors';
+import { SenateReviewBanner } from '../components/SenateBits';
 import DpwhContractLink from '../components/DpwhContractLink';
 import {
   CLASS_LABELS, FLAG_TEXT, LEVEL_LABELS, LEVEL_SHORT, MPB_CSV_NAME, MPB_MAP_TITLE, MPB_YEARS, NO_FILTERS, PAP_RULE_FROM,
@@ -73,7 +74,12 @@ const PAGE = 100;
 const GAA_YEARS = MPB_YEARS.filter((y) => y < 2027);
 const FIRST = GAA_YEARS[0];
 const LAST_GAA = GAA_YEARS[GAA_YEARS.length - 1];
-const yearLabel = (fy: number, stage: Stage2027) => (fy < 2027 ? String(fy) : stage === 'house' ? '2027 House bill' : '2027 NEP');
+const STAGE_NAME: Record<Stage2027, string> = { house: 'House bill', nep: 'NEP', senate: 'Senate' };
+const yearLabel = (fy: number, stage: Stage2027) => (fy < 2027 ? String(fy) : `2027 ${STAGE_NAME[stage]}`);
+/** "2027 House", "2027 NEP", "2027 Senate": short, for bars and chips. */
+const yearShort = (fy: number, stage: Stage2027) => (fy < 2027 ? String(fy) : `2027 ${stage === 'house' ? 'House' : STAGE_NAME[stage]}`);
+/** A 2027 House bill line the Senate committee report cuts to ₱0. */
+const senateCut = (l: MpbLine) => l.fy === 2027 && l.senateStatus === 'cut';
 
 // ---------------------------------------------------------------------------
 // URL state
@@ -101,7 +107,7 @@ function readView(p: URLSearchParams, data: MpbData | null): View {
   const sort = p.get('sort') as MpbSort | null;
   return {
     years: new Set(ys.length ? ys : MPB_YEARS),
-    stage: p.get('stage') === 'nep' ? 'nep' : 'house',
+    stage: p.get('stage') === 'nep' ? 'nep' : p.get('stage') === 'senate' ? 'senate' : 'house',
     f: {
       q: p.get('q') ?? '',
       region: region && REGION_ORDER.includes(region) ? region : '',
@@ -119,7 +125,7 @@ function readView(p: URLSearchParams, data: MpbData | null): View {
 function writeView(v: View, data: MpbData): URLSearchParams {
   const p = new URLSearchParams();
   if (v.years.size !== MPB_YEARS.length) p.set('years', [...v.years].sort().join(','));
-  if (v.stage === 'nep') p.set('stage', 'nep');
+  if (v.stage !== 'house') p.set('stage', v.stage);
   if (v.f.q) p.set('q', v.f.q);
   if (v.f.region) p.set('region', v.f.region);
   if (v.f.placed) p.set('placed', v.f.placed);
@@ -229,8 +235,11 @@ function Loaded({ data, summary, districts, contracts }: {
   const gaa = GAA_YEARS.map((y) => b(`gaa-${y}`));
   const gaaLines = gaa.reduce((a, x) => a + x.lines, 0);
   const house = b('house-2027');
-  const placedByName = summary.budgets.reduce((a, x) => a + x.levels.barangay + x.levels.municipality + x.levels.city + x.levels.province, 0);
-  const allLines = summary.budgets.reduce((a, x) => a + x.lines, 0);
+  // The Senate committee report, when its sidecar loaded (loadMpbYears adds it last); the build's own figures leave it out.
+  const senateStat = summary.budgets.find((x) => x.key === 'senate-2027') ?? null;
+  const built = summary.budgets.filter((x) => x.stage !== 'senate');
+  const placedByName = built.reduce((a, x) => a + x.levels.barangay + x.levels.municipality + x.levels.city + x.levels.province, 0);
+  const allLines = built.reduce((a, x) => a + x.lines, 0);
 
   const showOnMap = (l: MpbLine) => {
     const at = l.pts?.[0] ?? (l.place >= 0 ? [data.places[l.place].lng, data.places[l.place].lat] : null);
@@ -247,7 +256,7 @@ function Loaded({ data, summary, districts, contracts }: {
         section="gaa"
         compact
         crumb={<><Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link><span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">Map</span></>}
-        title={<>{count(gaaLines)} multi-purpose building lines in the {FIRST} to {LAST_GAA} enacted budgets, and {count(house.lines)} in the 2027 House bill</>}
+        title={<>{count(gaaLines)} multi-purpose building lines in the {FIRST} to {LAST_GAA} enacted budgets, and {count(house.lines)} in the 2027 House bill{senateStat ? <>; the Senate committee report keeps {count(senateStat.lines)}</> : null}</>}
         dek={<>Every line from {FIRST} to 2027 on one map. A blue dot is GPS published in the title; a ring is the barangay, town or province the title names.</>}
         note={
           <>
@@ -258,6 +267,7 @@ function Loaded({ data, summary, districts, contracts }: {
         }
       />
       <main className="nep-main hgab-mpbm-main">
+        {view.stage === 'senate' && <SenateReviewBanner compact />}
         <div className="hgab-mpbm-controls" role="group" aria-label="Choose what the map and the list show">
           <YearBars summary={summary} view={view} setView={setView} />
           <div className="hgab-mpbm-filters">
@@ -352,7 +362,7 @@ function Loaded({ data, summary, districts, contracts }: {
             items={[
               `Budgets before ${FIRST} do not list multi-purpose buildings by name, so the map starts there.`,
               `${FIRST} to ${PAP_RULE_FROM - 1} have no budget line for multi-purpose buildings; their lines are those whose titles name one.`,
-              ...summary.budgets.filter((x) => x.listed_at_zero > 0).map((x) =>
+              ...built.filter((x) => x.listed_at_zero > 0).map((x) =>
                 `In ${x.fy}, the budget file lists ${count(x.listed_at_zero)} more items named for multi-purpose buildings at ₱0; they are left out.`),
               'The 2019 lines are read line by line from DBM’s detailed GAA for DPWH. They add up to the total it publishes.',
               'A ring is the centre of the barangay, town, city or province a title names, not the building. GPS points are as published, and some are wrong.',
@@ -361,7 +371,8 @@ function Loaded({ data, summary, districts, contracts }: {
                 'A contract ID opens DPWH’s own record of it on DPWH’s transparency portal.',
               ] : []),
               'A line placed by its DPWH office shows the office’s area, not the building. Lines with no place in the title and no office area are listed, not mapped.',
-              'The 2027 NEP and House bill are two stages of one budget: pick one, never both added together.',
+              'The 2027 NEP, House bill and Senate committee report are stages of one budget: pick one, never add them together.',
+              ...(senateStat ? ['The Senate committee report is the Senate Committee on Finance’s amendments to the House bill; the Senate still votes on it. It keeps House bill lines or cuts them to ₱0, and adds none.'] : []),
               'District shading counts lines with a legislative district only. A district is where a title places a building; the documents do not say who asked for it.',
               'From 2020, the multi-purpose building lines alone equal the multi-purpose page’s chart. Buildings named “multi-purpose” on other lines make the totals here larger.',
             ]}
@@ -403,6 +414,9 @@ function YearBars({ summary, view, setView }: { summary: MpbSummary; view: View;
           <span>2027:</span>
           <button type="button" aria-pressed={view.stage === 'house'} onClick={() => setView({ stage: 'house' })}>House bill</button>
           <button type="button" aria-pressed={view.stage === 'nep'} onClick={() => setView({ stage: 'nep' })}>NEP</button>
+          {summary.budgets.some((b) => b.key === 'senate-2027') && (
+            <button type="button" aria-pressed={view.stage === 'senate'} onClick={() => setView({ stage: 'senate' })} title="The Senate committee report">Senate</button>
+          )}
         </div>
       </div>
       <ol className="hgab-mpbm-bars">
@@ -410,7 +424,7 @@ function YearBars({ summary, view, setView }: { summary: MpbSummary; view: View;
           const s = stat(fy);
           const on = view.years.has(fy);
           const h = Math.max(2, Math.round((s.php / max) * 64));
-          const stageCls = fy < 2027 ? 'is-gaa' : view.stage === 'house' ? 'is-house' : 'is-nep';
+          const stageCls = fy < 2027 ? 'is-gaa' : `is-${view.stage}`;
           return (
             <li key={fy}>
               <button
@@ -421,7 +435,7 @@ function YearBars({ summary, view, setView }: { summary: MpbSummary; view: View;
                 onClick={() => toggle(fy)}
               >
                 <span className="hgab-mpbm-bar" style={{ height: h }} aria-hidden="true" />
-                <strong>{fy < 2027 ? fy : view.stage === 'house' ? '2027 House' : '2027 NEP'}</strong>
+                <strong>{yearShort(fy, view.stage)}</strong>
                 <span>{bn(s.php)}</span>
                 <span>{count(s.lines)} lines</span>
               </button>
@@ -563,6 +577,7 @@ function PanelLine({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stag
         <strong>{fullPeso(lineAmount(l, stage))}</strong>
         {l.office && <> · {officeShort(l.office)}</>}
         {l.cls && l.cls !== 'paired' && <> · {CLASS_LABELS[l.cls]}</>}
+        {stage !== 'senate' && senateCut(l) && <> · Cut by the Senate</>}
         {l.pts && <> · <button type="button" className="hgab-mpbm-linkbtn" onClick={() => onShow(l)}>{l.pts[0][1].toFixed(5)}, {l.pts[0][0].toFixed(5)}</button></>}
       </p>
       {flags.length > 0 && <p className="hgab-mpbm-flag">{flags.map((f) => FLAG_TEXT[f]).join(' ')}</p>}
@@ -640,7 +655,7 @@ function RepeatsSection({ data, lines, view, setView, onShow }: {
       {!groups.length && <p className="hgab-mpbm-more">No repeats among the lines chosen.</p>}
       <p className="hgab-mpbm-more">
         Same title: the words of the title, setting aside spelling, “MPB”, “Bldg.”, “Brgy.”, phase numbers and GPS, at the same
-        place. Same barangay: lines whose title names that barangay. Amounts add up across years, never the NEP and the House bill.
+        place. Same barangay: lines whose title names that barangay. Amounts add up across years, never two 2027 stages.
       </p>
       <p className="hgab-mpbm-more">
         Each title opens where it is printed: its record for 2027, the GAA browser for 2020–2026, the GAA records for
@@ -681,7 +696,7 @@ function GroupRow({ data, g, stage, onShow, onList }: {
         </span>
         <span className="hgab-mpbm-chips" aria-label="Budgets">
           {perYear.map(([fy, n]) => (
-            <i key={fy}>{fy < 2027 ? fy : stage === 'house' ? '2027 House' : '2027 NEP'}{n > 1 ? ` ×${n}` : ''}</i>
+            <i key={fy}>{yearShort(fy, stage)}{n > 1 ? ` ×${n}` : ''}</i>
           ))}
         </span>
       </button>
@@ -831,7 +846,10 @@ function ListRow({ data, l, stage, onShow }: { data: MpbData; l: MpbLine; stage:
   const flags = lineFlags(l, data.flagBits);
   return (
     <tr>
-      <td className="hgab-mpbm-yr">{yearLabel(l.fy, stage)}{l.cls === 'house_only' && stage === 'house' && <span className="hgab-mpbm-tag">House bill only</span>}</td>
+      <td className="hgab-mpbm-yr">
+        {yearLabel(l.fy, stage)}{l.cls === 'house_only' && stage !== 'nep' && <span className="hgab-mpbm-tag">House bill only</span>}
+        {stage !== 'senate' && senateCut(l) && <span className="hgab-mpbm-tag is-senate-cut" title="The Senate committee report cuts this line to ₱0">Cut by the Senate</span>}
+      </td>
       <td>
         <span className="hgab-mpbm-title"><LineTitle l={l} /></span>
         {(l.rule === 'title' || flags.length > 0) && (
@@ -883,7 +901,7 @@ function PlacementTable({ summary }: { summary: MpbSummary }) {
         <tbody>
           {summary.budgets.map((b) => (
             <tr key={b.key}>
-              <th scope="row">{b.fy < 2027 ? `${b.fy} enacted` : b.stage === 'house' ? '2027 House bill' : '2027 NEP'}</th>
+              <th scope="row">{b.fy < 2027 ? `${b.fy} enacted` : b.stage === 'senate' ? '2027 Senate committee report' : b.stage === 'house' ? '2027 House bill' : '2027 NEP'}</th>
               <td className="is-num">{count(b.lines)}</td>
               {CENSUS_COLS.map((c) => {
                 const n = c.levels.reduce((a, k) => a + b.levels[k], 0);
@@ -926,7 +944,7 @@ function MethodDetails({ summary, data }: { summary: MpbSummary; data: MpbData }
       <p>
         <strong>Repairs.</strong> The enacted-budget text has garbled characters (“Las Pi±as”); exact character repairs fixed{' '}
         {count(Object.values(summary.text_repairs).reduce((a, n) => a + n, 0))} of them, never a place name. Titles from before 2023 that
-        say “Maguindanao” are read as the province that holds the named town today ({count(summary.budgets.reduce((a, b) => a + b.flags.maguindanao_successor, 0))} lines).
+        say “Maguindanao” are read as the province that holds the named town today ({count(summary.budgets.filter((b) => b.stage !== 'senate').reduce((a, b) => a + b.flags.maguindanao_successor, 0))} lines).
       </p>
       <p>
         Source: <a href={`${summary.source.repo}/tree/${summary.source.commit}`} target="_blank" rel="noopener noreferrer">{summary.source.repo.replace('https://github.com/', '')} at {short}</a>.

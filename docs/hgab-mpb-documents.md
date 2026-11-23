@@ -102,6 +102,24 @@ documents describing a different facility from their title: hospitals, a public 
   2,035 called the sample throughout (and, in the fine print, not a random one: those read of the 2,212 with documents);
   the call to action "Ikaw, ano sa tingin mo?"; the starred note and fine print in Taglish. Same figures, same files.
 
+## The Senate committee report (2026-11-23)
+
+Jason: "As we're moving to other stages, we need to add the senate committee report across pages". `build:mpb-documents`
+reads the Senate sidecar (`mpb-years/senate.json`, `npm run build:mpb-senate`) and gives each project read its Senate
+committee report amount and status (`senate_report_php`, `senate_report_status` in projects.json and the CSV), and the
+summary a `senate` block: kept (at the report's amounts) and cut to ₱0 (at House bill amounts), in all, by kind and for
+the classrooms. The reading itself did not change (same `records.jsonl` checksum), so every other figure is the same.
+
+- Of the 2,035 read, the report keeps 1,145 (₱15.15B) and cuts 890 (₱14.09B in the House bill).
+- Of the 21 classrooms it keeps 16 (₱193M) and cuts 5 (₱231.5M), among them Mina National High School (₱51.5M).
+- Halls 758 kept, 549 cut; covered courts and gyms 259 kept, 215 cut.
+
+The page: the compact "Under citizen review" banner, a sentence in the hero note, "kept" and "cut" rows under "read" in
+the Which table, Senate keeps / cuts columns in the breakdown, a sentence on the classrooms, a "Cut by the Senate" tag on
+each project it cuts, a Senate filter in the project list (`?senate=kept|cut`) and a caveat that the report is not the
+"Senate's copies" of the documents. verify:hgab recomputes the kept and cut tallies from projects.json and checks each
+project against the sidecar.
+
 ## Refresh
 
 Re-run `extract_projects.py all` after more Senate copies are redacted, then `npm run build:mpb-documents`, the poster,

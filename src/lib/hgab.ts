@@ -42,7 +42,8 @@ import {
   type LineContract, type MpbContractsFile,
 } from './hgab-contractors';
 import {
-  MPB_CSV_FIELDS, MPB_CSV_NAME, MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SUMMARY_PATH, decodeMpbLines, mpbCsvPath,
+  MPB_CSV_FIELDS, MPB_CSV_NAME, MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SENATE_CSV_NAME, MPB_SENATE_PATH, MPB_SUMMARY_PATH,
+  applyMpbSenate, decodeMpbLines, mpbCsvPath, mpbSenateCsvPath, senateBudgetStat, type MpbSenateFile,
   type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
@@ -776,22 +777,34 @@ export function loadCongressSeats(): Promise<CongressSeatsFile> {
   return cached('congress-seats', () => getJson<CongressSeatsFile>(dataUrl(CONGRESS_SEATS_PATH), 'Failed to load the representatives by Congress'));
 }
 
-/** The 2027 multi-purpose building lines at both stages, and the province outlines, for the NEP vs House bill page. */
+/**
+ * The 2027 multi-purpose building lines at every stage (NEP, House bill, and the Senate committee report from the
+ * sidecar senate.json, `npm run build:mpb-senate`), and the province outlines, for the NEP vs House bill page.
+ */
 export function loadMpbCompare(): Promise<CompareInput> {
   return cached('mpb-compare', async () => {
-    const [lines, summary, geo, seats] = await Promise.all([
+    const [lines, summary, senate, geo, seats] = await Promise.all([
       getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
       getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
+      getJson<MpbSenateFile>(dataUrl(MPB_SENATE_PATH), 'Failed to load the Senate committee report’s multi-purpose building lines'),
       loadHgabGeo(),
       loadCongressSeats(),
     ]);
     const data = decodeMpbLines(lines);
-    const budgets = summary.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: 'title_only' as const }) }));
+    applyMpbSenate(data, senate);
+    const budgets = [
+      ...summary.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: 'title_only' as const }) })),
+      { key: 'senate-2027', fy: 2027, stage: 'senate' as const },
+    ];
     return {
-      data, builtAt: summary.built_at, geo, foreignOnly: [], matrix: linesMatrix(data, budgets),
+      data, builtAt: senate.built_at > summary.built_at ? senate.built_at : summary.built_at, geo, foreignOnly: [], matrix: linesMatrix(data, budgets),
       about: {
-        scope: mpbScope(data, summary), leftOutLabel: 'Listed at ₱0 (left out)', fields: MPB_CSV_FIELDS,
+        scope: mpbScope(data, summary, senate), leftOutLabel: 'Listed at ₱0 (left out)', fields: MPB_CSV_FIELDS,
         csvUrl: dataUrl(mpbCsvPath(summary)), csvBytes: summary.outputs['lines.csv'].bytes, csvName: MPB_CSV_NAME, floodWords: null,
+        senate: {
+          csvUrl: dataUrl(mpbSenateCsvPath(senate)), csvBytes: senate.outputs['senate.csv'].bytes, csvName: MPB_SENATE_CSV_NAME,
+          totals: senate.totals,
+        },
       },
       parties: partyMatrix(linesDistrictMatrix(data, budgets), seats),
     };
@@ -835,13 +848,20 @@ export function loadMpbYears(): Promise<{
   data: MpbData; summary: MpbSummary; districts: FeatureCollection; contracts: Map<string, LineContract> | null;
 }> {
   return cached('mpb-years', async () => {
-    const [lines, summary, districts, contractsFile] = await Promise.all([
+    const [lines, summary, districts, contractsFile, senate] = await Promise.all([
       getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
       getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
       getJson<FeatureCollection>(dataUrl(MPB_DISTRICTS_PATH), 'Failed to load the legislative district outlines'),
       getJson<MpbContractsFile>(dataUrl(CONTRACTORS_MPB_PATH), 'Failed to load the contracts').catch(() => null),
+      // The Senate committee report (2026-11-23): the third 2027 stage, when its sidecar is there.
+      getJson<MpbSenateFile>(dataUrl(MPB_SENATE_PATH), 'Failed to load the Senate committee report’s lines').catch(() => null),
     ]);
     const data = decodeMpbLines(lines);
+    if (senate) {
+      applyMpbSenate(data, senate);
+      const house = summary.budgets.find((b) => b.key === 'house-2027');
+      if (house) summary.budgets = [...summary.budgets, senateBudgetStat(data, house, senate)];
+    }
     const contracts = contractsFile ? decodeMpbContracts(contractsFile) : null;
     if (contracts) {
       for (const l of data.lines) {

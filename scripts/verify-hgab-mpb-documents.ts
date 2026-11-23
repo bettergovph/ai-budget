@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { decodeMpbLines, type MpbLinesFile } from "../src/lib/hgab-mpb-years";
+import { decodeMpbLines, type MpbLinesFile, type MpbSenateFile } from "../src/lib/hgab-mpb-years";
 import { MPB_DOCS_TITLE, decodeMpbDocProjects, type MpbDocsProjectsFile, type MpbDocsSummary } from "../src/lib/mpb-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -58,6 +58,25 @@ export function verifyMpbDocuments(check: Check, o: Opts): void {
   const badMm = S.mismatch.filter((m) => !same(m, tally((p) => p.mismatch === m.key))).map((m) => m.key);
   check("classrooms, at a school and documents that differ recompute from projects.json", badYn.length === 0 && badMm.length === 0,
     [...badYn, ...badMm].join(", "));
+  // The Senate committee report on the projects read (2026-11-23): each project's amount is the sidecar's, and the
+  // kept / cut tallies (in all, by kind, the classrooms) recompute from the projects.
+  const sidecarPath = resolve(o.out, "mpb-years/senate.json");
+  if (existsSync(sidecarPath)) {
+    const SN = JSON.parse(readFileSync(sidecarPath, "utf8")) as MpbSenateFile;
+    const of = new Map(SN.rows.map((r) => [r[0], { php: r[1], status: SN.statuses[r[2]] }]));
+    const offS = P.filter((p) => { const x = of.get(p.id); return !x || x.php !== p.senateReportPhp || x.status !== p.senateReportStatus; }).map((p) => p.id);
+    const kept = (f: (p: (typeof P)[number]) => boolean) => tally((p) => f(p) && (p.senateReportPhp ?? 0) > 0);
+    const keptAt = (f: (p: (typeof P)[number]) => boolean) => P.filter((p) => f(p) && (p.senateReportPhp ?? 0) > 0).reduce((a, p) => a + p.senateReportPhp!, 0);
+    const cut = (f: (p: (typeof P)[number]) => boolean) => tally((p) => f(p) && p.senateReportPhp === 0);
+    const all = () => true, cls = (p: (typeof P)[number]) => p.classroom === "yes";
+    const badCat = S.senate.by_category.filter((c) => kept((p) => p.category === c.key).lines !== c.kept.lines
+      || keptAt((p) => p.category === c.key) !== c.kept.php || !same(cut((p) => p.category === c.key), c.cut)).map((c) => c.key);
+    check(`the Senate committee report: every project's amount and status are senate.json's; kept ${S.senate.kept.lines} and cut ${S.senate.cut.lines} recompute, by kind and for the classrooms`,
+      offS.length === 0 && kept(all).lines === S.senate.kept.lines && keptAt(all) === S.senate.kept.php && same(cut(all), S.senate.cut)
+        && kept(cls).lines === S.senate.classroom.kept.lines && same(cut(cls), S.senate.classroom.cut) && badCat.length === 0
+        && S.senate.source.sha256 === sha(sidecarPath),
+      [...offS.slice(0, 3), ...badCat].join(", "));
+  } else check("mpb-years/senate.json present (npm run build:mpb-senate)", false, sidecarPath);
   check("every check the build ran passed", S.checks.length > 0 && S.checks.every((c) => c.ok), S.checks.filter((c) => !c.ok).map((c) => c.key).join(", "));
   const outOff = (["projects.json", "projects.csv"] as const).filter((f) => S.outputs[f]?.sha256 !== sha(resolve(dir, f)));
   check("summary.json records the SHA-256 of projects.json and projects.csv (the CSV link's ?v=)", outOff.length === 0, outOff.join(", "));

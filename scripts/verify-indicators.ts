@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { INDICATORS, INDICATORS_CSV_PATH, INDICATORS_DATA_PATH, THEMES, type IndicatorsFile } from '../src/lib/indicators';
-import { ALL_HOUSE_KEY, ALL_NEP_KEY, COMBINED_KEY, peopleIn, popInYear, type MpbPopulationFile } from '../src/lib/mpb-population';
+import { ALL_HOUSE_KEY, ALL_NEP_KEY, ALL_SENATE_KEY, COMBINED_KEY, SENATE_KEY, peopleIn, popInYear, type MpbPopulationFile } from '../src/lib/mpb-population';
 import { BUDGET_YEARS, REGION_BUDGET_CSV_PATH, REGION_BUDGET_PATH, REGION_BY_CODE, REGION_ORDER, type RegionBudgetFile } from '../src/lib/budget-regions';
 import { DuckDBInstance } from '@duckdb/node-api';
 
@@ -207,6 +207,20 @@ check(near(cebuU15.values['under-15'], (100 * cebuU15.needs.age_under15_2024!) /
   const yearsOf = (k: string) => mp.budgets.find((b) => b.key === k)!.years.join();
   check(yearsOf('house-2027') === '2027' && yearsOf('gaa-2015') === '2015' && yearsOf(COMBINED_KEY) === '2020,2021,2022,2023,2024,2025,2026'
     && yearsOf(ALL_HOUSE_KEY) === Array.from({ length: 13 }, (_, i) => 2015 + i).join() && yearsOf(ALL_NEP_KEY) === yearsOf(ALL_HOUSE_KEY), 'MPB per person: every budget lists its years');
+  // The Senate committee report (2026-11-23): its totals are the sidecar's, its regions add up, it lists 2027 (all years
+  // 2015–2027), and no place holds more of it than of the House bill (it only keeps or cuts House bill lines).
+  {
+    const sn = JSON.parse(readFileSync(`${DATA}/hgab/2027/mpb-years/senate.json`, 'utf8')) as { totals: { senate: { lines: number; php: number } } };
+    const b = mp.budgets.find((x) => x.key === SENATE_KEY);
+    const allS = mp.budgets.find((x) => x.key === ALL_SENATE_KEY);
+    const gaaAll = ms.budgets.filter((x) => x.key.startsWith('gaa-'));
+    check(!!b && b.lines === sn.totals.senate.lines && b.php === sn.totals.senate.php && b.years.join() === '2027', 'MPB per person: the Senate committee report = senate.json, in 2027');
+    check(!!b && Object.values(mp.by[SENATE_KEY].region).reduce((a, t) => a + t[1], 0) === b.placed.region[1], 'MPB per person: the Senate committee report’s regions add up to what is placed');
+    check(!!allS && !!b && allS.php === gaaAll.reduce((a, x) => a + x.php, 0) + b.php && allS.years.join() === yearsOf(ALL_HOUSE_KEY), 'MPB per person: all years with the Senate = FY2015–2026 GAA + the Senate committee report');
+    const levels = ['region', 'area', 'town'] as const;
+    check(levels.every((lv) => Object.entries(mp.by[SENATE_KEY][lv]).every(([u, t]) => t[0] <= (mp.by['house-2027'][lv][u]?.[0] ?? 0) && t[1] <= (mp.by['house-2027'][lv][u]?.[1] ?? 0))),
+      'MPB per person: no region, province or town holds more in the Senate committee report than in the House bill');
+  }
   // All years as a yearly average equals the thirteen budgets' lines over the thirteen years' people.
   const all = mp.budgets.find((b) => b.key === ALL_HOUSE_KEY)!;
   const ph = mp.regions.reduce((s, r) => s + peopleIn(r.census, all.years), 0);

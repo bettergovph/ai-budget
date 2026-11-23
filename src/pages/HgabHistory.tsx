@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
+import { SenateReviewBanner } from '../components/SenateBits';
 import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHero, HgabLoading, WhatThisMeans } from '../components/HgabBits';
 import { GaaHeader } from '../components/GaaBits';
 import { HistoryBars, HistoryKey } from '../components/HgabHistoryChart';
@@ -33,6 +34,7 @@ const I = {
   gaa2026: columnIndex('gaa-2026'),
   nep2027: columnIndex('nep-2027'),
   house2027: columnIndex('house-2027'),
+  senate2027: columnIndex('senate-2027'),
 };
 /** Volume I-B of the House bill (third reading), where BIP's special provision is published. */
 const VOL_IB_PATH = 'hgab/2027/pdf/hb10858-3r-vol-ib.pdf';
@@ -54,11 +56,11 @@ function deltaText(a: number | null, b: number | null): string | null {
   return d === 0 ? '0%' : `${d > 0 ? '+' : '−'}${Math.abs(d)}%`;
 }
 
-/** Columns that get a value on the cap: the largest, the FY2026 NEP and enacted budget, and both FY2027 stages. */
+/** Columns that get a value on the cap: the largest, the FY2026 NEP and enacted budget, and the three FY2027 stages. */
 function labelledCols(cells: ReadonlyArray<number | null>): number[] {
   let top = -1;
   cells.forEach((v, i) => { if (v != null && (top < 0 || v > (cells[top] ?? 0))) top = i; });
-  return [...new Set([top, I.nep2026, I.gaa2026, I.nep2027, I.house2027])].filter((i) => i >= 0 && (cells[i] ?? 0) > 0);
+  return [...new Set([top, I.nep2026, I.gaa2026, I.nep2027, I.house2027, I.senate2027])].filter((i) => i >= 0 && (cells[i] ?? 0) > 0);
 }
 
 /** The figure line under a card's name: the 2027 House bill against the NEP, else the last budget the line is in. */
@@ -68,12 +70,21 @@ function figureLine(s: HistorySeries, mode: HistoryMode): ReactNode {
   const fmt = mode === 'php' ? bn : (v: number | null) => `${count(v)} lines`;
   const h = cells[I.house2027];
   const n = cells[I.nep2027];
+  const sn = cells[I.senate2027];
   if (h != null) {
     const d = deltaText(h, n);
+    // The Senate committee report against the House bill it amends.
+    const ds = deltaText(sn, h);
     return (
       <>
         <strong>{fmt(h)}</strong> in the 2027 House bill · {fmt(n)} in the NEP
         {d && <span className={`hgab-hy-delta ${h > (n ?? 0) ? 'is-up' : 'is-down'}`}>{d}</span>}
+        {sn != null && (
+          <>
+            {' '}· {fmt(sn)} in the Senate committee report
+            {ds && <span className={`hgab-hy-delta ${sn > h ? 'is-up' : 'is-down'}`} title="Against the House bill">{ds}</span>}
+          </>
+        )}
       </>
     );
   }
@@ -106,6 +117,7 @@ function DepedLines({ s, printed, extras }: { s: HistorySeries; printed?: Histor
   if (!printed && !mine.length) return null;
   const house = (printed?.total_php ?? 0) + mine.reduce((a, x) => a + (x.house_php ?? 0), 0);
   const nep = (s.php[I.nep2027] ?? 0) + mine.reduce((a, x) => a + (x.nep_php ?? 0), 0);
+  const senate = s.php[I.senate2027] != null ? (s.php[I.senate2027] ?? 0) + mine.reduce((a, x) => a + (x.senate_php ?? 0), 0) : null;
   return (
     <div className="hgab-hy-extra">
       {printed && (
@@ -123,11 +135,15 @@ function DepedLines({ s, printed, extras }: { s: HistorySeries; printed?: Histor
                 {i > 0 && ' · '}
                 {x.plain} <strong>{bShort(x.house_php)}</strong>
                 {x.nep_php != null && x.house_php != null && x.nep_php !== x.house_php && <> ({bShort(x.nep_php)} in the NEP)</>}
+                {x.senate_php != null && x.house_php != null && x.senate_php !== x.house_php && <> ({bShort(x.senate_php)} in the Senate committee report)</>}
               </span>
             ))}
             .
           </p>
-          <p>All four lines: <strong>{billions(house)}</strong>, {house < nep ? 'down' : 'up'} from {billions(nep)} in the NEP.</p>
+          <p>
+            All four lines: <strong>{billions(house)}</strong>, {house < nep ? 'down' : 'up'} from {billions(nep)} in the NEP.
+            {senate != null && <> The Senate committee report gives them {billions(senate)}.</>}
+          </p>
         </>
       )}
     </div>
@@ -325,19 +341,23 @@ export default function HgabHistory() {
             School facilities get {billions(v(deped, I.house2027))} and health facilities {billions(v(hfep, I.house2027))}
             {change(deped) < 0 && change(hfep) < 0 ? ', both less than in the NEP' : ''}. Flood control gets{' '}
             {billions(v(flood, I.house2027))}, {v(flood, I.house2027) < v(flood, I.nep2027) ? 'down' : 'up'} from{' '}
-            {billions(v(flood, I.nep2027))}. In the FY2026 enacted budget, flood control had {billions(v(flood, I.gaa2026))}
+            {billions(v(flood, I.nep2027))}. The Senate committee report gives multi-purpose buildings {billions(v(mpb, I.senate2027))},
+            school facilities {billions(v(deped, I.senate2027))}, health facilities {billions(v(hfep, I.senate2027))} and flood control{' '}
+            {billions(v(flood, I.senate2027))}. In the FY2026 enacted budget, flood control had {billions(v(flood, I.gaa2026))}
             {floodAllForeign26 ? ', all foreign-assisted,' : ''} against {billions(v(mpb, I.gaa2026))} for multi-purpose buildings.
           </>
         }
         note={
           <>
-            Each bar is one budget at one stage: the NEP, the House and Senate bills, or the enacted budget (GAA). The NEP is
+            Each bar is one budget at one stage: the NEP, the House and Senate bills (for 2027, the Senate committee report), or the
+            enacted budget (GAA). The NEP is
             the budget the President submits to Congress each August. Amounts are published allocations, not spending.{' '}
             {asOfText(data)}.
           </>
         }
       />
       <main className="nep-main hgab-hy-main">
+        <SenateReviewBanner compact />
         <div className="hgab-hy-controls">
           <div className="hgab-ds-dims hgab-hy-mode" role="group" aria-label="Show">
             <button type="button" aria-pressed={mode === 'php'} onClick={() => setMode('php')}>Amounts</button>
@@ -408,6 +428,8 @@ export default function HgabHistory() {
           <div className="hgab-hy-grid">{card('deped')}{card('hfep')}</div>
           <WhatThisMeans>
             Against the NEP, the House bill {changeText(mpb, 'multi-purpose buildings')}. It {pairText(deped, 'school facilities', hfep, 'health facilities')}.
+            {' '}The Senate committee report gives school facilities {billions(v(deped, I.senate2027))} and health facilities{' '}
+            {billions(v(hfep, I.senate2027))}.
           </WhatThisMeans>
         </section>
 
@@ -419,6 +441,7 @@ export default function HgabHistory() {
           <div className="hgab-hy-grid">{card('fap')}{card('local_roads')}</div>
           <WhatThisMeans>
             Against the NEP, the House bill has {moreLess(change(fap))} for foreign-assisted projects and {moreLess(change(bip))} for BIP.
+            {' '}The Senate committee report gives foreign-assisted projects {billions(v(fap, I.senate2027))} and BIP {billions(v(bip, I.senate2027))}.
           </WhatThisMeans>
         </section>
 
@@ -437,6 +460,8 @@ export default function HgabHistory() {
               'Some lines overlap. BIP and SIPAG include their own multi-purpose and flood lines; foreign-assisted projects sit inside flood control and roads.',
               'Amounts are what each budget allocates for that year, not what was spent.',
               'The FY2026 NEP, House bill and Senate bill figures were compiled by the People’s Budget Coalition.',
+              'The FY2027 Senate figures are the Senate Committee on Finance’s report on House Bill 10858; the Senate still votes on it.',
+              'For FY2027, the Senate’s DPWH lines are the House bill’s at the report’s amounts; lines it cuts are out. DepEd and DOH lines come from its Annex A.',
               'The DepEd and DOH figures are whole program lines. The Health Facilities page counts only facility projects, so its totals are a little smaller.',
             ]}
           />

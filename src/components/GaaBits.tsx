@@ -38,7 +38,7 @@ const GAA_TOPICS: ReadonlyArray<{ key: string; label: string; items: ReadonlyArr
     items: [
       { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
       { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
-      { key: 'compare', label: 'NEP vs House bill', to: MPB_COMPARE_ROOT },
+      { key: 'compare', label: 'NEP, House bill and Senate', to: MPB_COMPARE_ROOT },
       { key: 'per-person', label: 'Per person', to: MPB_POPULATION_ROOT },
       { key: 'documents', label: 'What the documents say', to: MPB_DOCS_ROOT },
     ],

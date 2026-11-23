@@ -87,6 +87,7 @@
   background: var(--hgab-hy-gaa);
 }
 .hgab-mpbm-bars .is-house .hgab-mpbm-bar { background: var(--hgab-hy-house); }
+.hgab-mpbm-bars .is-senate .hgab-mpbm-bar { background: var(--hgab-hy-senate, #c2741b); }
 .hgab-mpbm-bars .is-nep .hgab-mpbm-bar {
   background: repeating-linear-gradient(135deg, var(--hgab-hy-nep) 0 1px, transparent 1px 3px);
   box-shadow: inset 0 0 0 1px var(--hgab-hy-nep);
@@ -394,3 +395,5 @@
 .hgab-mpbm-contractors td:last-child { white-space: nowrap; }
 .hgab-mpbm-contractors tr.is-picked { background: var(--accent-soft); }
 .hgab-mpbm-contractors tr.is-picked:hover { background: var(--accent-soft); }
+/* A 2027 line the Senate committee report cuts to ₱0 (on the House bill and NEP views). */
+.hgab-mpbm-tag.is-senate-cut { background: var(--ink, #141414); color: #fff; }

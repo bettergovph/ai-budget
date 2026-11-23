@@ -15,7 +15,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
-import { decodeMpbLines, type MpbLinesFile } from "../src/lib/hgab-mpb-years";
+import { decodeMpbLines, type MpbLinesFile, type MpbSenateFile } from "../src/lib/hgab-mpb-years";
 import {
   MPB_DOCS_COLS, MPB_DOC_CATEGORIES, type MismatchKind, type MpbDocCategory, type MpbDocsSummary, type Tally, type YesNo,
 } from "../src/lib/mpb-documents";
@@ -98,9 +98,22 @@ async function main() {
   const csv: string[][] = [];
   const merged: string[] = [];
   const amountOff: string[] = [];
+  // The Senate committee report on each project read (mpb-years/senate.json, npm run build:mpb-senate).
+  const SENATE = join(DATA, "mpb-years/senate.json");
+  ensure(existsSync(SENATE), `${SENATE} missing (npm run build:mpb-senate)`);
+  const senateFile = JSON.parse(readFileSync(SENATE, "utf8")) as MpbSenateFile;
+  const senateOf = new Map(senateFile.rows.map((x) => [x[0], { php: x[1], status: senateFile.statuses[x[2]] }]));
+  const senate: MpbDocsSummary["senate"] = {
+    source: { file: "hgab/2027/mpb-years/senate.json", sha256: sha(SENATE), built_at: senateFile.built_at },
+    kept: t(), cut: t(), by_category: [], classroom: { kept: t(), cut: t() },
+  };
+  const senateCats = new Map<MpbDocCategory, { kept: Tally; cut: Tally }>();
+  const noSenate: string[] = [];
   for (const r of mine) {
     const l = house.get(r.project_id)!;
     const php = l.house!;
+    const sr = senateOf.get(r.project_id);
+    if (!sr) noSenate.push(r.project_id);
     // A line the comparison merged from rows the bill prints twice: the record reads one of them; the tally uses the line.
     if (r.house_amount_php !== php) (r.house_amount_php > 0 && php % r.house_amount_php === 0 ? merged : amountOff).push(r.project_id);
     const cat = (MPB_DOC_CATEGORIES as readonly string[]).includes(r.category) ? (r.category as MpbDocCategory) : "unclear";
@@ -117,12 +130,20 @@ async function main() {
     const mk = r.mismatch_kind as MismatchKind | null;
     if (mk) add(mismatch.get(mk) ?? (mismatch.set(mk, t()), mismatch.get(mk)!), php);
     if (r.confidence === "high" || r.confidence === "medium" || r.confidence === "low") confidence[r.confidence]++;
+    if (sr) {
+      const sc = senateCats.get(cat) ?? { kept: t(), cut: t() };
+      senateCats.set(cat, sc);
+      for (const x of [senate, sc, ...(yes(r.classroom) === "yes" ? [senate.classroom] : [])]) {
+        if (sr.php > 0) add(x.kept, sr.php); else add(x.cut, php);
+      }
+    }
     const loc = r.location ?? { barangay: null, municipality: null, province: null, site_name: null };
     const row: unknown[] = [
       r.project_id, l.title, php, l.office, l.region, cat, r.facility, yes(r.at_school), yes(r.classroom), mk, mk ? r.title_mismatch : null,
       r.size?.storeys ?? null, r.size?.classrooms ?? null, r.size?.floor_area_sqm ?? null, r.purpose, r.description,
       r.cost?.total_project_cost_php ?? null, r.documents_read ?? [], r.confidence, r.quotes?.facility ?? null, r.quotes?.purpose ?? null,
       loc.barangay, loc.municipality, loc.province, loc.site_name, l.cls === "house_only" ? 1 : 0, filesOf.get(r.project_id) ?? 0,
+      sr?.php ?? null, sr?.status ?? null,
     ];
     while (row.length && row[row.length - 1] == null) row.pop();
     rows.push(row);
@@ -133,6 +154,7 @@ async function main() {
       (r.documents_read ?? []).join("; "), r.confidence ?? "", r.quotes?.facility ?? "", r.quotes?.purpose ?? "",
       loc.barangay ?? "", loc.municipality ?? "", loc.province ?? "", loc.site_name ?? "",
       l.cls === "house_only" ? "yes" : "no", String(filesOf.get(r.project_id) ?? 0),
+      sr ? String(sr.php) : "", sr?.status ?? "",
       `https://budget.bettergov.ph/hgab/2027/dpwh/p/${encodeURIComponent(r.project_id)}`,
       `https://budget.bettergov.ph/hgab/2027/review?p=${encodeURIComponent(r.project_id)}`,
     ]);
@@ -159,6 +181,12 @@ async function main() {
     `each record's House bill amount equals the map's line, or is one of the rows it merges (${merged.length}: ${merged.join(", ") || "none"}); the tally uses the line`);
   check("listed:mpb", listed.line_and_title + listed.line_only + listed.title_only === cov.read.lines,
     `every project read is listed as a multi-purpose building: ${listed.line_and_title} on the line with an MPB title, ${listed.line_only} on the line, ${listed.title_only} by title`);
+  senate.by_category = MPB_DOC_CATEGORIES.filter((k) => senateCats.has(k)).map((k) => ({ key: k, ...senateCats.get(k)! }));
+  check("senate:every-project", noSenate.length === 0, `every project read has the Senate committee report's amount: ${noSenate.slice(0, 4).join(", ") || "yes"}`);
+  check("senate:adds-up", senate.kept.lines + senate.cut.lines === cov.read.lines
+    && senate.by_category.reduce((a, c) => a + c.kept.lines + c.cut.lines, 0) === cov.read.lines
+    && senate.classroom.kept.lines + senate.classroom.cut.lines === classroom.yes.lines,
+    `kept ${senate.kept.lines} + cut ${senate.cut.lines} = ${cov.read.lines} read; by kind and the classrooms add up`);
   check("errors", recs.filter((r) => house.get(r.project_id)?.cls === "house_only" && r.error).length === 0, "no insertion's reading failed");
 
   mkdirSync(OUT, { recursive: true });
@@ -168,7 +196,7 @@ async function main() {
   const header = ["project_id", "house_bill_row", "title", "house_bill_php", "dpwh_office", "region", "category", "facility", "at_school",
     "classroom", "documents_differ", "documents_differ_note", "storeys", "classrooms", "floor_area_sqm", "purpose", "description",
     "documents_total_cost_php", "documents_read", "confidence", "quote_facility", "quote_purpose", "barangay", "municipality", "province",
-    "site_name", "house_insertion", "senate_files", "record_url", "documents_url"];
+    "site_name", "house_insertion", "senate_files", "senate_report_php", "senate_report_status", "record_url", "documents_url"];
   writeFileSync(join(OUT, "projects.csv"), "\uFEFF" + [header, ...csv].map((r) => r.map(q).join(",")).join("\n") + "\n");
   const out = (f: "projects.json" | "projects.csv") => ({ sha256: sha(join(OUT, f)), bytes: statSync(join(OUT, f)).size });
   const summary: MpbDocsSummary = {
@@ -184,6 +212,7 @@ async function main() {
     mismatch: [...mismatch].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.php - a.php),
     confidence, checks,
     outputs: { "projects.json": out("projects.json"), "projects.csv": out("projects.csv") },
+    senate,
   };
   writeFileSync(join(OUT, "summary.json"), JSON.stringify(summary, null, 1) + "\n");
   const pct = (a: number, b: number) => `${((100 * a) / b).toFixed(1)}%`;

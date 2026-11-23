@@ -38,6 +38,80 @@ export const MPB_SUMMARY_PATH = `${BASE}/summary.json`;
 export const MPB_DISTRICTS_PATH = `${BASE}/districts.geojson`;
 export const MPB_CSV_PATH = `${BASE}/lines.csv`;
 export const MPB_CSV_NAME = 'bettergov-multi-purpose-buildings-2015-2027.csv';
+
+/**
+ * The Senate committee report on HB 10858 for the 2027 House bill lines (Jason, 2026-11-23: "We need to add the Senate
+ * CR on the MPB pages"): a sidecar to lines.json, from the Senate report pipeline's DPWH mapping
+ * (data/senate-cr/2027/dpwh_senate.csv, `npm run build:senate-cr`), by `npm run build:mpb-senate`. One row per House bill
+ * line: its Senate amount, status and report page. The report adds no DPWH project, so there are no other lines.
+ */
+export const MPB_SENATE_PATH = `${BASE}/senate.json`;
+export const MPB_SENATE_CSV_PATH = `${BASE}/senate.csv`;
+export const MPB_SENATE_CSV_NAME = 'bettergov-multi-purpose-buildings-2027-senate-committee-report.csv';
+/** The Senate report pipeline's statuses for a House bill project (renamed: same amount, the Senate's own name). */
+export const MPB_SENATE_STATUSES = ['unchanged', 'renamed', 'cut', 'reduced', 'raised'] as const;
+export type MpbSenateStatus = (typeof MPB_SENATE_STATUSES)[number];
+export interface MpbSenateTally { lines: number; php: number }
+export interface MpbSenateFile {
+  schema: 1;
+  built_at: string;
+  /** The mapping read, and the lines it was joined to. */
+  source: { file: string; sha256: string; lines_built_at: string };
+  statuses: typeof MPB_SENATE_STATUSES;
+  /** [line id, Senate amount (pesos; 0 when cut), status index, the report's page or null], one per House bill line. */
+  rows: Array<[string, number, number, number | null]>;
+  totals: {
+    house: MpbSenateTally;
+    senate: MpbSenateTally;
+    /** House bill lines the report cuts to zero, at their House bill amounts; and those the House inserted. */
+    cut: MpbSenateTally;
+    cut_inserted: MpbSenateTally;
+    /** House insertions the report keeps, at their Senate amounts. */
+    kept_inserted: MpbSenateTally;
+    by_status: Record<MpbSenateStatus, MpbSenateTally>;
+  };
+  checks: Array<{ key: string; ok: boolean; detail: string }>;
+  outputs: Record<'senate.csv', { sha256: string; bytes: number }>;
+}
+export const mpbSenateCsvPath = (f: Pick<MpbSenateFile, 'outputs'>) => `${MPB_SENATE_CSV_PATH}?v=${f.outputs['senate.csv'].sha256.slice(0, 12)}`;
+
+/**
+ * The Senate committee report as one more budget for the map's year bars and placement table, counted from the lines
+ * once `applyMpbSenate` has run: the House bill lines it keeps, at its amounts, placed as they are; the ones it cuts are
+ * the "listed at ₱0" (the report prints them at ₱0). Offices split across codes are the House bill's (`house`).
+ */
+export function senateBudgetStat(data: MpbData, house: MpbBudgetStat, f: Pick<MpbSenateFile, 'totals'>): MpbBudgetStat {
+  const kept = data.lines.filter((l) => l.fy === 2027 && l.senate != null);
+  const sum = (xs: MpbLine[]) => xs.reduce((a, l) => a + (l.senate ?? 0), 0);
+  const pap = kept.filter((l) => l.rule !== 'title'), title = kept.filter((l) => l.rule === 'title');
+  const levels = Object.fromEntries(Object.keys(house.levels).map((k) => [k, 0])) as Record<MpbLevel, number>;
+  const flags = Object.fromEntries(Object.keys(data.flagBits).map((k) => [k, 0])) as Record<MpbFlag, number>;
+  for (const l of kept) {
+    levels[l.level]++;
+    for (const [k, bit] of Object.entries(data.flagBits) as Array<[MpbFlag, number]>) if (l.flags & bit) flags[k]++;
+  }
+  return {
+    key: 'senate-2027', fy: 2027, stage: 'senate', lines: kept.length, php: sum(kept),
+    pap_lines: pap.length, pap_php: sum(pap), title_only_lines: title.length, title_only_php: sum(title), history_php: null,
+    source: 'The Senate committee report on House Bill 10858 (Annex A-4)', pap_rule: true, listed_at_zero: f.totals.cut.lines,
+    multi_office_lines: house.multi_office_lines, levels,
+    with_district: kept.filter((l) => l.district >= 0).length,
+    districts: new Set(kept.filter((l) => l.district >= 0).map((l) => l.district)).size, flags,
+  };
+}
+
+/** Put the Senate's amount, status and page on each FY2027 House bill line (a cut line's amount is null). */
+export function applyMpbSenate(data: MpbData, f: MpbSenateFile): void {
+  const byId = new Map(f.rows.map((r) => [r[0], r]));
+  for (const l of data.lines) {
+    if (l.fy !== 2027 || l.house == null) continue;
+    const r = byId.get(l.id);
+    if (!r) continue;
+    l.senate = r[1] > 0 ? r[1] : null;
+    l.senateStatus = f.statuses[r[2]];
+    l.senatePage = r[3];
+  }
+}
 /** lines.csv, column by column (the build's CSV_COLUMNS, in order; verify:hgab checks the header). */
 export const MPB_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = [
   { name: 'fiscal_year', about: 'The budget year.' },
@@ -74,8 +148,11 @@ export const MPB_YEARS = [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 
 export type MpbYear = (typeof MPB_YEARS)[number];
 /** The first budget with a multi-purpose building line (FY2018, the Local Program); FY2015–FY2017 are in by title only. */
 export const PAP_RULE_FROM = 2018;
-/** FY2027 is shown at one stage at a time; the NEP and the House bill are compared, never added. */
-export type Stage2027 = 'house' | 'nep';
+/**
+ * FY2027 is shown at one stage at a time; the NEP, the House bill and the Senate committee report are compared, never
+ * added. The Senate needs the sidecar applied (`applyMpbSenate`); without it the stage holds no line.
+ */
+export type Stage2027 = 'house' | 'nep' | 'senate';
 
 export type MpbLevel = 'gps' | 'barangay' | 'municipality' | 'city' | 'province' | 'deo' | 'region' | 'none';
 export type MpbBasis = 'title' | 'gps' | 'deo' | null;
@@ -115,7 +192,7 @@ export type MpbFlag =
 export interface MpbBudgetStat {
   key: string;
   fy: number;
-  stage: 'gaa' | 'nep' | 'house';
+  stage: 'gaa' | 'nep' | 'house' | 'senate';
   lines: number;
   php: number;
   pap_lines: number;
@@ -208,6 +285,13 @@ export interface MpbLine {
   housePage: number | null;
   /** FY2019: the page of DBM's technical GAA for DPWH its code is printed on (GAA_2019_DOCUMENT). */
   gaaPage: number | null;
+  /**
+   * FY2027 House bill lines, once `applyMpbSenate` has run: the Senate committee report's amount (null when the report
+   * cuts the line to zero), its status there and the report's page. Undefined until then, and on every other line.
+   */
+  senate?: number | null;
+  senateStatus?: MpbSenateStatus;
+  senatePage?: number | null;
   /** Lower-case title, place and office, for the search box. */
   search: string;
   /** The same-title key (titleKey) with the place, or the office when the title names none. */
@@ -290,7 +374,7 @@ export interface MpbSelection {
 /** The line's amount in its year: the enacted amount, or the chosen FY2027 stage's (null when not in it). */
 export function lineAmount(l: MpbLine, stage: Stage2027): number | null {
   if (l.fy < 2027) return l.gaa;
-  return stage === 'house' ? l.house : l.nep;
+  return stage === 'house' ? l.house : stage === 'senate' ? l.senate ?? null : l.nep;
 }
 
 export const inSelection = (l: MpbLine, s: MpbSelection) => s.years.has(l.fy) && lineAmount(l, s.stage) != null;
@@ -588,7 +672,7 @@ const cell = (v: unknown): string => {
 };
 
 export const MPB_CSV_COLUMNS = [
-  'fiscal_year', 'line_id', 'title', 'gaa_php', 'nep_php', 'house_bill_php', 'fy2027_comparison', 'uacs_code', 'pap',
+  'fiscal_year', 'line_id', 'title', 'gaa_php', 'nep_php', 'house_bill_php', 'senate_php', 'senate_status', 'fy2027_comparison', 'uacs_code', 'pap',
   'scope_rule', 'dpwh_office', 'region', 'placed_by', 'place', 'longitude', 'latitude', 'gps_points',
   'legislative_district', 'legislative_district_id', 'district_from', 'flags',
   'same_title_lines', 'same_barangay_lines', 'same_title_key',
@@ -614,7 +698,7 @@ export function linesCsv(
     const d = l.district >= 0 ? data.districts[l.district] : null;
     const at = l.pts?.[0] ?? (p && l.level !== 'none' ? [p.lng, p.lat] : null);
     return [
-      l.fy, l.id, l.title, l.gaa, l.nep, l.house,
+      l.fy, l.id, l.title, l.gaa, l.nep, l.house, l.senate ?? null, l.senateStatus ?? null,
       l.cls === 'house_only' ? 'house_bill_only' : l.cls === 'nep_only' ? 'nep_only' : l.cls === 'paired' ? 'in_both' : null,
       l.code, l.pap, l.rule, l.office, l.region, LEVEL_LABELS[l.level], p?.label ?? null, at?.[0] ?? null, at?.[1] ?? null,
       l.pts ? l.pts.map(([a, b]) => `${a},${b}`).join(';') : null,

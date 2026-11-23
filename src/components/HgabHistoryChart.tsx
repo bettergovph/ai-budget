@@ -120,7 +120,7 @@ export function HistoryBars({ series, mode, max, labelled }: {
 /** The key: the four bar styles and the empty slot, on one line. */
 export function HistoryKey() {
   const stages: HistoryStage[] = ['gaa', 'nep', 'house', 'senate'];
-  const text: Record<HistoryStage, string> = { gaa: 'enacted budget (GAA)', nep: 'NEP', house: 'House bill', senate: 'Senate bill' };
+  const text: Record<HistoryStage, string> = { gaa: 'enacted budget (GAA)', nep: 'NEP', house: 'House bill', senate: 'Senate (2026 bill, 2027 committee report)' };
   return (
     <ul className="hgab-hy-key" aria-label="Bar styles">
       {stages.map((s) => (

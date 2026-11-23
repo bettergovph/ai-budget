@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
+import { SenateReviewBanner } from '../components/SenateBits';
 import { DisclaimerNotice, HgabError, HgabHero, HgabLoading } from '../components/HgabBits';
 import { GaaHeader } from '../components/GaaBits';
 import { cached, getJson, loadHgabGeo, type HgabGeo } from '../lib/hgab';
@@ -19,7 +20,7 @@ import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { MPB_CARD_DISCLAIMER } from '../lib/hgab-disclaimers';
 import {
-  ALL_HOUSE_KEY, ALL_NEP_KEY, COMBINED_KEY, MPB_POPULATION_CSV_NAME, MPB_POPULATION_PATH, MPB_POPULATION_ROOT,
+  ALL_HOUSE_KEY, ALL_SENATE_KEY, SENATE_KEY, ALL_NEP_KEY, COMBINED_KEY, MPB_POPULATION_CSV_NAME, MPB_POPULATION_PATH, MPB_POPULATION_ROOT,
   peopleIn, populationBasis, type MpbPopBudget, type MpbPopulationFile, type PopLevel, type Tally,
 } from '../lib/mpb-population';
 import { INDICATORS_ROOT, areaPath } from '../lib/indicators';
@@ -203,7 +204,8 @@ export default function HgabMpbPopulation() {
   const q = params.get('q') ?? '';
   const set = (k: string, v: string) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); };
   const b = f.budgets.find((x) => x.key === budget)!;
-  const allYears = budget === ALL_NEP_KEY || budget === ALL_HOUSE_KEY;
+  const allYears = budget === ALL_NEP_KEY || budget === ALL_HOUSE_KEY || budget === ALL_SENATE_KEY;
+  const senate = budget === SENATE_KEY || budget === ALL_SENATE_KEY;
   const yrs = b.years.length;
   const units = unitsOf(f, b, level);
   const popAll = f.regions.reduce((s, r) => s + peopleIn(r.census, b.years), 0);
@@ -228,6 +230,7 @@ export default function HgabMpbPopulation() {
         dek={<>Every multi-purpose building line set against the population of its region, province, or city and municipality in the budget’s year ({basis}). The country’s average is {peso(b.php / yrs / popAll)} per person{aYear(yrs)}.</>}
       />
       <main className="nep-main mpbp-main">
+        {senate && <SenateReviewBanner compact />}
         <div className="bpr-controls">
           <label className="ind-select">
             <span>Budget</span>
@@ -250,7 +253,7 @@ export default function HgabMpbPopulation() {
         </div>
         {allYears && (
           <p className="bpr-warn">
-            All years adds the twelve enacted budgets (FY2015–2026) and the {budget === ALL_NEP_KEY ? '2027 NEP' : '2027 House bill'}, a proposal that is
+            All years adds the twelve enacted budgets (FY2015–2026) and the {budget === ALL_NEP_KEY ? '2027 NEP' : budget === ALL_SENATE_KEY ? '2027 Senate committee report' : '2027 House bill'}, a proposal that is
             not yet law, and shows them as a yearly average: the projects and budget of the thirteen years, divided by thirteen
             and by the average population over those years. A building funded over several years is a project in each of
             those years.
@@ -304,7 +307,7 @@ export default function HgabMpbPopulation() {
         </section>
         <DisclaimerNotice mpb />
       </main>
-      <SiteFooter source="SOURCES: GAA FY2015–2026, FY2027 NEP AND HOUSE BILL 10858 (MULTI-PURPOSE BUILDING LINES); PSA 2015, 2020 AND 2024 CENSUSES OF POPULATION" />
+      <SiteFooter source="SOURCES: GAA FY2015–2026, FY2027 NEP, HOUSE BILL 10858 AND THE SENATE COMMITTEE REPORT ON IT (MULTI-PURPOSE BUILDING LINES); PSA 2015, 2020 AND 2024 CENSUSES OF POPULATION" />
     </>
   );
 }

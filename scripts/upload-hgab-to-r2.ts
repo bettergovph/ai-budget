@@ -30,7 +30,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 import { letterDownloadName } from "../src/lib/hgab-letter";
-import { MPB_CSV_NAME } from "../src/lib/hgab-mpb-years";
+import { MPB_CSV_NAME, MPB_SENATE_CSV_NAME } from "../src/lib/hgab-mpb-years";
 import { CONTRACTORS_CSV_NAME } from "../src/lib/hgab-contractors";
 import { FAP_CSV_NAME } from "../src/lib/hgab-fap";
 import { MPB_DOCS_CSV_NAME } from "../src/lib/mpb-documents";
@@ -123,6 +123,8 @@ function contentDispositionFor(path: string): string | undefined {
   if (/[\\/]fap\.csv$/.test(path)) return `attachment; filename="${FAP_CSV_NAME}"`;
   // mpb-documents/projects.csv: every House MPB insertion read, with what its documents say (the page links it by that name).
   if (/[\\/]mpb-documents[\\/]projects\.csv$/.test(path)) return `attachment; filename="${MPB_DOCS_CSV_NAME}"`;
+  // mpb-years/senate.csv: the Senate committee report's amount for each 2027 House-bill multi-purpose building line.
+  if (/[\\/]mpb-years[\\/]senate\.csv$/.test(path)) return `attachment; filename="${MPB_SENATE_CSV_NAME}"`;
   return `attachment; filename="bettergov-house-bill-2027-${name}"`;
 }
 function fmtBytes(n: number): string {
