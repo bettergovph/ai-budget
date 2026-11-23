@@ -7,6 +7,12 @@ import { REVIEW_ROOT } from './lib/hgab-review';
 import { REPORT_ROOT } from './lib/hgab-review-report';
 import { HOWTO_ROOT } from './lib/hgab-review-howto';
 import { SHORT_PATHS, shortLinkTarget } from './lib/short-links';
+import { MOVED_PAGES, movedTarget } from './lib/moved-pages';
+import { HISTORY_ROOT } from './lib/hgab-history';
+import { MPB_MAP_ROOT } from './lib/hgab-mpb-years';
+import { MPB_POPULATION_ROOT } from './lib/mpb-population';
+import { MPB_DOCS_ROOT } from './lib/mpb-documents';
+import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from './lib/mpb-compare';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
 import TermsGate from './components/TermsGate';
 
@@ -57,6 +63,8 @@ const HgabLetters = lazy(() => import('./pages/HgabLetters'));
 const HgabLetter = lazy(() => import('./pages/HgabLetter'));
 const HgabHistory = lazy(() => import('./pages/HgabHistory'));
 const HgabMpbYears = lazy(() => import('./pages/HgabMpbYears'));
+const GaaRoads = lazy(() => import('./pages/GaaRoads'));
+const GaaRoadsBoards = lazy(() => import('./pages/GaaRoadsBoards'));
 const HgabMpbCompare = lazy(() => import('./pages/HgabMpbCompare'));
 const HgabContractors = lazy(() => import('./pages/HgabContractors'));
 const HgabParties = lazy(() => import('./pages/HgabParties'));
@@ -102,6 +110,12 @@ function ServerPage() {
   return null;
 }
 
+/** A page that moved (lib/moved-pages.ts), followed inside the app: on to its new address, query and fragment kept. */
+function MovedPage() {
+  const { pathname, search, hash } = useLocation();
+  return <Navigate to={`${movedTarget(pathname, search) ?? '/'}${hash}`} replace />;
+}
+
 /** A short address (lib/short-links.ts) followed inside the app: on to where it points, query kept. */
 function ShortLink() {
   const { pathname, search } = useLocation();
@@ -119,6 +133,17 @@ export default function App() {
           {SHORT_PATHS.map((p) => <Route key={p} path={p} element={<ShortLink />} />)}
           <Route path="/review/:id" element={<ShortLink />} />
           <Route path="/gaa" element={<National />} />
+          {/* Roads and bridges, FY2015 GAA to the 2027 House bill, and its leaderboards (src/lib/gaa-roads.ts). */}
+          <Route path="/gaa/roads" element={<GaaRoads />} />
+          <Route path="/gaa/roads/leaderboards" element={<GaaRoadsBoards />} />
+          {/* Multi-purpose buildings (GAA dropdown): the budget by year, with flood control, BIP, SIPAG, school and health facilities; every line on a map. */}
+          <Route path={HISTORY_ROOT} element={<HgabHistory />} />
+          <Route path={MPB_MAP_ROOT} element={<HgabMpbYears />} />
+          <Route path={MPB_POPULATION_ROOT} element={<HgabMpbPopulation />} />
+          <Route path={MPB_DOCS_ROOT} element={<HgabMpbDocuments />} />
+          <Route path={MPB_COMPARE_ROOT} element={<HgabMpbCompare key="mpb" />} />
+          {/* Flood control in 2025, 2026 and 2027, side by side ("Flood control projects are back"). */}
+          <Route path={FLOOD_COMPARE_ROOT} element={<HgabMpbCompare key="flood" topic="flood" />} />
           {/* Per-year exclusive browser: same hierarchy, one fiscal year.
               The splat carries the drill path as entity ids, so every level
               is a shareable URL: /gaa/:year/:group/:bureau/:program/… */}
@@ -180,14 +205,8 @@ export default function App() {
           {/* Write to your representative: the district picker, and one district's letter. */}
           <Route path="/hgab/2027/letter" element={<HgabLetters />} />
           <Route path="/hgab/2027/letter/:slug" element={<HgabLetter />} />
-          {/* Multi-purpose buildings (its own menu): the budget by year, with flood control, BIP, SIPAG, school and health facilities; and every line on a map. */}
-          <Route path="/hgab/2027/multi-purpose" element={<HgabHistory />} />
-          <Route path="/hgab/2027/multi-purpose/map" element={<HgabMpbYears />} />
-          <Route path="/hgab/2027/multi-purpose/per-person" element={<HgabMpbPopulation />} />
-          <Route path="/hgab/2027/multi-purpose/documents" element={<HgabMpbDocuments />} />
-          <Route path="/hgab/2027/multi-purpose/nep-vs-house-bill" element={<HgabMpbCompare key="mpb" />} />
-          {/* Flood control in 2025, 2026 and 2027, side by side ("Flood control projects are back"); no menu entry yet. */}
-          <Route path="/hgab/2027/flood-control" element={<HgabMpbCompare key="flood" topic="flood" />} />
+          {/* Pages that moved to the GAA (lib/moved-pages.ts; the Worker redirects them too). */}
+          {Object.keys(MOVED_PAGES).map((p) => <Route key={p} path={p} element={<MovedPage />} />)}
           <Route path="/hgab/2027/contractors" element={<HgabContractors />} />
           <Route path="/hgab/2027/contractors/:key" element={<HgabContractors />} />
           {/* ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page. */}

@@ -1,6 +1,6 @@
 /**
- * A comparison figure as one PNG ("Download image" on /hgab/2027/multi-purpose/nep-vs-house-bill and
- * /hgab/2027/flood-control).
+ * A comparison figure as one PNG ("Download image" on /gaa/multi-purpose/nep-vs-house-bill and
+ * /gaa/flood-control).
  *
  * Jason (2026-11-05): "Give me a downloadable version!" The same figure as the page: the words come from
  * `compareCopy` and the maps from `drawCompareMap`, laid out on a 1200-unit-wide canvas drawn at `scale` (2 by

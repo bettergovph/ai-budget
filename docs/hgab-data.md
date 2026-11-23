@@ -88,7 +88,7 @@ builder emit for readers:
 | `npm run upload:hgab` | `scripts/upload-hgab-to-r2.ts` | Runs the verifier, then PUTs everything under the tree except `d1-import*.sql` to R2 `budget` at prefix `hgab/2027/` (size + ETag/MD5 skip). Flags: `--dry-run`, `--force`, `--skip-verify`, `--concurrency=N` |
 | `npm run build:hgab-letters` | `scripts/build-hgab-letters.ts` | Writes `letters/`: one letter to the representative(s) per legislative district as JSON, text and PDF (see "Letters to representatives"). Flags: `--out`, `--only=<slug,…>`, `--no-pdf` |
 | `npm run build:hgab-history` | `scripts/build-hgab-history.ts` | Writes `history.json` and `history.csv`: multi-purpose buildings, flood control, BIP, SIPAG and four other lines from the FY2020 GAA to the FY2027 House bill (see "Budget history"). Flags: `--out`, `--data=data`, `--pbc=<dir>` (or `PBC_2026_DIR`), `--vol-ia=<pdf>` |
-| `npm run build:hgab-mpb-years` | `scripts/hgab-mpb-years/run.sh` | Writes `mpb-years/`: every multi-purpose building line, FY2015 GAA to the FY2027 House bill, placed for the map at `/hgab/2027/multi-purpose/map` (see `docs/hgab-mpb-years.md`). Env: `UPSTREAM_GIT`, `UPSTREAM_DIR`, `SHAPES_DIR`, `HISTORY_DIR`, `OUT` |
+| `npm run build:hgab-mpb-years` | `scripts/hgab-mpb-years/run.sh` | Writes `mpb-years/`: every multi-purpose building line, FY2015 GAA to the FY2027 House bill, placed for the map at `/gaa/multi-purpose/map` (see `docs/hgab-mpb-years.md`). Env: `UPSTREAM_GIT`, `UPSTREAM_DIR`, `SHAPES_DIR`, `HISTORY_DIR`, `OUT` |
 | `npm run build:hgab-locations` | `scripts/build-hgab-locations.ts` | Writes `locations.json`: where the source workbench's location lens places every DPWH line (see "Project placements"). Flags: `--src=<upstream checkout with the lens built>` (required), `--out`, `--contract` |
 | `npm run build:hgab-d1` | `scripts/build-hgab-d1.ts` | Writes `d1-import.sql`, the `hgab_*` D1 tables for the public API and MCP server (see "D1 layer"). Flags: `--out`, `--file`, `--split-mb=N` |
 
@@ -910,7 +910,7 @@ the plain disclaimers with their link.
 ## Budget history
 
 `npm run build:hgab-history` writes `data/hgab/2027/history.json` (`HistoryData`, contract
-`src/lib/hgab-history.ts`) and `history.csv` for the page `/hgab/2027/multi-purpose` ("Budget by year" in the Multi-purpose buildings menu). R2 key
+`src/lib/hgab-history.ts`) and `history.csv` for the page `/gaa/multi-purpose` ("Budget by year" in the Multi-purpose buildings menu). R2 key
 `hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
 Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 checks; a missing file fails).
 

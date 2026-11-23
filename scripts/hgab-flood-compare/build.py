@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Every flood control line in the FY2015 to FY2026 GAA, the 2027 NEP and the House bill, placed for
-/hgab/2027/flood-control. The maps draw FY2025, FY2026 and 2027 (Jason, 2026-11-05: "the proper comparison is 2025,
+/gaa/flood-control. The maps draw FY2025, FY2026 and 2027 (Jason, 2026-11-05: "the proper comparison is 2025,
 2026, and 2027"); every year feeds the region-by-year matrix and the CSV (Jason, 2026-11-06: "I want a matrix of the
 MPBs per region and per year. I want the same for flood control", "For flood control we need it for multiple years that
 we have", "we need a description how we grouped them, what fields and caveats as well").

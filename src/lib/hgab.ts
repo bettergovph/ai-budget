@@ -51,6 +51,12 @@ import {
   FLOOD_CSV_FIELDS, FLOOD_CSV_NAME, FLOOD_CSV_PATH, FLOOD_LINES_PATH, FLOOD_SUMMARY_PATH, floodDistrictMatrix, floodMatrix,
   linesDistrictMatrix, mpbScope, partyMatrix, foreignOnlyBudgets, linesMatrix, type CompareInput, type FloodCompareSummary,
 } from './mpb-compare';
+import {
+  ROADS_BOARDS_PATH, ROADS_DRAW_SUMMARY_PATH, ROADS_REGIONS_PATH, ROADS_REPEATS_PATH, ROADS_SUMMARY_PATH, applyRegionReads,
+  decodeRoadGeom, decodeRoadLines, placeByStations, roadsGeomPath, roadsLinesPath,
+  type RoadsBoardsFile, type RoadsData, type RoadsDrawSummary, type RoadsGeomFile, type RoadsLinesFile, type RoadsRegionsFile,
+  type RoadsRepeatsFile, type RoadsSummary,
+} from './gaa-roads';
 
 export const HGAB_YEAR = 2027;
 export const HGAB_BASE = `hgab/${HGAB_YEAR}`;
@@ -844,6 +850,49 @@ export function loadMpbYears(): Promise<{
       }
     }
     return { data, summary, districts, contracts };
+  });
+}
+
+/** The roads page's totals, and the drawing step's (null before `npm run draw:gaa-roads` has run). */
+export function loadRoadsSummary(): Promise<{ summary: RoadsSummary; draw: RoadsDrawSummary | null }> {
+  return cached('roads-summary', async () => {
+    const [summary, draw] = await Promise.all([
+      getJson<RoadsSummary>(dataUrl(ROADS_SUMMARY_PATH), 'Failed to load the roads summary'),
+      getJson<RoadsDrawSummary>(dataUrl(ROADS_DRAW_SUMMARY_PATH), 'Failed to load the roads drawing summary').catch(() => null),
+    ]);
+    return { summary, draw };
+  });
+}
+
+/**
+ * One budget's road and bridge lines, and those drawn along OpenStreetMap roads (empty when there are none). The
+ * head-office lines DBM's code put in NCR take the boards' regions (regions.json; none before
+ * `npm run build:gaa-roads-boards` has run).
+ */
+export function loadRoadsBudget(key: string): Promise<{ data: RoadsData; geom: ReturnType<typeof decodeRoadGeom> }> {
+  return cached(`roads:${key}`, async () => {
+    const [lines, geom, regions] = await Promise.all([
+      getJson<RoadsLinesFile>(dataUrl(roadsLinesPath(key)), `Failed to load the ${key} road lines`),
+      getJson<RoadsGeomFile>(dataUrl(roadsGeomPath(key)), `Failed to load the ${key} drawn roads`).catch(() => null),
+      cached('roads-regions', () => getJson<RoadsRegionsFile>(dataUrl(ROADS_REGIONS_PATH), 'Failed to load the roads regions')
+        .catch(() => null)),
+    ]);
+    const data = decodeRoadLines(lines);
+    const drawn = geom ? decodeRoadGeom(geom) : new Map();
+    placeByStations(data, drawn);
+    applyRegionReads(data, regions);
+    return { data, geom: drawn };
+  });
+}
+
+/** The road and bridge leaderboards, and the projects funded in three budgets or more (`npm run build:gaa-roads-boards`). */
+export function loadRoadsBoards(): Promise<{ boards: RoadsBoardsFile; repeats: RoadsRepeatsFile }> {
+  return cached('roads-boards', async () => {
+    const [boards, repeats] = await Promise.all([
+      getJson<RoadsBoardsFile>(dataUrl(ROADS_BOARDS_PATH), 'Failed to load the road leaderboards'),
+      getJson<RoadsRepeatsFile>(dataUrl(ROADS_REPEATS_PATH), 'Failed to load the projects funded again'),
+    ]);
+    return { boards, repeats };
   });
 }
 

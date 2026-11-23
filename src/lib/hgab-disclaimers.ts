@@ -137,7 +137,7 @@ export const DISCLAIMER_RED_FLAGS: Disclaimer = {
 };
 
 /**
- * Flood control, 2025 to 2027 (`/hgab/2027/flood-control`): enacted budgets beside the 2027 proposals, how lines are
+ * Flood control, 2025 to 2027 (`/gaa/flood-control`): enacted budgets beside the 2027 proposals, how lines are
  * placed, what red and yellow mean, and what a line does not say.
  */
 export const DISCLAIMER_FLOOD: Disclaimer = {

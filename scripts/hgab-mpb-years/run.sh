@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Every multi-purpose building line, FY2015 GAA to the FY2027 House bill, placed for the map at
-# /hgab/2027/multi-purpose/map. See docs/hgab-mpb-years.md.
+# /gaa/multi-purpose/map. See docs/hgab-mpb-years.md.
 #   UPSTREAM_DIR  where the pinned workbench files are fetched (default: /tmp/hgab-mpb-years-upstream)
 #   UPSTREAM_GIT  a local clone of the workbench holding the pinned commit (default: download raw files)
 #   SHAPES_DIR    the 2023 PSA shapefiles, laid out as the workbench has them (Municities/, BgySubMuns/, Provdists/;

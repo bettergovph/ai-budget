@@ -1,8 +1,8 @@
 /**
  * Budgets side by side: the figures, and every line as a dot on maps drawn the same way. One page per topic
  * (`CompareTopic`):
- *   - multi-purpose buildings (`/hgab/2027/multi-purpose/nep-vs-house-bill`): the 2027 NEP and the House bill, two maps;
- *   - flood control (`/hgab/2027/flood-control`, "Flood control projects are back"): the 2025 and 2026 budgets and 2027,
+ *   - multi-purpose buildings (`/gaa/multi-purpose/nep-vs-house-bill`): the 2027 NEP and the House bill, two maps;
+ *   - flood control (`/gaa/flood-control`, "Flood control projects are back"): the 2025 and 2026 budgets and 2027,
  *     three maps; the 2027 map holds the NEP and the House bill together, told apart by colour.
  *
  * Jason (2026-11-05): "a different page side by side comparison of 2027's NEP vs HGAB for multi-purpose buildings …
@@ -33,9 +33,9 @@ import { partyName } from './hgab-parties';
 import type { MpbClass, MpbData, MpbLine, MpbSummary } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
 
-export const MPB_COMPARE_ROOT = '/hgab/2027/multi-purpose/nep-vs-house-bill';
+export const MPB_COMPARE_ROOT = '/gaa/multi-purpose/nep-vs-house-bill';
 export const MPB_COMPARE_TITLE = 'Multi-purpose buildings: NEP vs House bill';
-export const FLOOD_COMPARE_ROOT = '/hgab/2027/flood-control';
+export const FLOOD_COMPARE_ROOT = '/gaa/flood-control';
 export const FLOOD_COMPARE_TITLE = 'Flood control, 2025 to 2027';
 
 export type CompareClass = Exclude<MpbClass, null>;
@@ -86,7 +86,7 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     key: 'mpb', root: MPB_COMPARE_ROOT, title: MPB_COMPARE_TITLE, subject: 'Multi-purpose buildings',
     lineWords: 'multi-purpose building lines', panels: ['nep', 'house'], budgets: ['nep-2027', 'house-2027'],
     source: 'Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines', scope: '',
-    url: 'budget.bettergov.ph/hgab/2027/multi-purpose/nep-vs-house-bill',
+    url: 'budget.bettergov.ph/gaa/multi-purpose/nep-vs-house-bill',
     imageName: 'bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png', sizes: [5e6, 25e6, 100e6],
     matrixTitle: 'Multi-purpose buildings by region and year',
     matrixImageName: 'bettergov-multi-purpose-buildings-by-region-2015-2027.png',
@@ -99,7 +99,7 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
     lineWords: 'flood control lines', panels: ['gaa-2025', 'gaa-2026', 'fy2027'], budgets: [...BUDGET_KEYS],
     source: 'Source: GAA 2025 and 2026, NEP 2027 (DBM), House Bill 10858, third reading; DPWH flood control lines',
     scope: 'Flood control here is the DPWH Flood Management Program, with BIP and SIPAG flood mitigation in 2025, as on our budget-by-year chart.',
-    url: 'budget.bettergov.ph/hgab/2027/flood-control',
+    url: 'budget.bettergov.ph/gaa/flood-control',
     imageName: 'bettergov-flood-control-2025-2027.png', sizes: [10e6, 50e6, 250e6],
     matrixTitle: 'Flood control by region and year',
     matrixImageName: 'bettergov-flood-control-by-region-2015-2027.png',

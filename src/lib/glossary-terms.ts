@@ -196,7 +196,7 @@ export const TERMS: Term[] = [
     cat: 'appropriations',
     def: 'A set of DPWH budget lines for local projects (access roads and bridges, multi-purpose buildings, flood mitigation, water systems, evacuation centres) that DPWH builds and then turns over to the local government, which pays for their upkeep.',
     detail: 'Defined by a DPWH special provision (No. 5 of the FY2026 GAA, No. 3 of the FY2027 House bill): engineering and administrative overhead is capped at 1% of project cost, and ownership passes to the LGU on completion. Its lines first appear in the FY2022 GAA.',
-    see: { to: '/hgab/2027/multi-purpose#what-is-bip', label: 'BIP, FY2022–2027' },
+    see: { to: '/gaa/multi-purpose#what-is-bip', label: 'BIP, FY2022–2027' },
   },
   {
     term: 'Sustainable Infrastructure Projects Alleviating Gaps',
@@ -204,7 +204,7 @@ export const TERMS: Term[] = [
     cat: 'appropriations',
     def: 'A second set of DPWH budget lines for the same kinds of local projects as BIP: access roads, flood mitigation, multi-purpose buildings, public buildings and evacuation centres.',
     detail: 'Listed in the GAAs from FY2022 to FY2026. The FY2026 GAA has no special provision for it, and the FY2027 NEP and House bill have no SIPAG lines.',
-    see: { to: '/hgab/2027/multi-purpose#what-is-sipag', label: 'SIPAG, FY2022–2026' },
+    see: { to: '/gaa/multi-purpose#what-is-sipag', label: 'SIPAG, FY2022–2026' },
   },
   {
     term: 'Continuing appropriations',

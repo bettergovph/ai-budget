@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Every flood control line in the FY2015 to FY2026 GAA and the 2027 NEP and House bill, placed for /hgab/2027/flood-control.
+# Every flood control line in the FY2015 to FY2026 GAA and the 2027 NEP and House bill, placed for /gaa/flood-control.
 # See docs/hgab-mpb-compare.md. Reuses the multi-purpose map's environment (scripts/hgab-mpb-years/run.sh): its venv,
 # pinned workbench files and centroid cache; run `npm run build:hgab-mpb-years` once first.
 #   LENS_DIR    a workbench checkout holding the built location lens, at the commit data/hgab/2027/locations.json
