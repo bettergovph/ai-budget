@@ -1,5 +1,5 @@
 /**
- * Multi-purpose buildings map (`/hgab/2027/multi-purpose/map`, "Map of every line" in the Multi-purpose buildings
+ * Multi-purpose buildings map (`/gaa/multi-purpose/map`, "Map of every line" in the Multi-purpose buildings
  * menu): every multi-purpose building line in
  * every budget we hold, the FY2015 to FY2026 enacted budgets (GAA), the FY2027 NEP and the House bill, on one map.
  * Earlier budgets do not list multi-purpose buildings by name (docs/hgab-mpb-years.md).
@@ -30,7 +30,7 @@ export type RegionKey =
   | 'NCR' | 'CAR' | 'I' | 'II' | 'III' | 'IV-A' | 'MIMAROPA' | 'V' | 'VI' | 'VII' | 'VIII'
   | 'IX' | 'X' | 'XI' | 'XII' | 'XIII' | 'BARMM' | 'NIR';
 
-export const MPB_MAP_ROOT = '/hgab/2027/multi-purpose/map';
+export const MPB_MAP_ROOT = '/gaa/multi-purpose/map';
 export const MPB_MAP_TITLE = 'Multi-purpose buildings map';
 const BASE = 'hgab/2027/mpb-years';
 export const MPB_LINES_PATH = `${BASE}/lines.json`;

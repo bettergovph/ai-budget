@@ -1,4 +1,4 @@
-/* Multi-purpose buildings map (/hgab/2027/multi-purpose/map): .hgab-mpbm-* only.
+/* Multi-purpose buildings map (/gaa/multi-purpose/map): .hgab-mpbm-* only.
    One control row (year bars, the 2027 stage, search and three selects) scopes the map and the list under it.
    The year bars use the multi-purpose page's stage styles (enacted ink, NEP hatched, House accent; loaded from
    hgab-history.css). The map's own colours (red district shading, blue GPS and picks) live in components/mpb-map-style.ts. */

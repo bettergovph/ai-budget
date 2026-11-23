@@ -1,6 +1,6 @@
 /**
  * "₱83.7 billion for multi-purpose buildings. ₱27.5 billion for school facilities.
- * ₱10.1 billion for health facilities." — the campaign poster for /hgab/2027/multi-purpose.
+ * ₱10.1 billion for health facilities." — the campaign poster for /gaa/multi-purpose.
  * Always "facilities": these are DepEd's and DOH's facility lines, not all of education or healthcare.
  *
  * The figures are the 2027 House bill's, read from data/hgab/2027/history.json
@@ -48,7 +48,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const DATA = join(ROOT, "data/hgab/2027");
 const OUT = resolve(args.out ?? join(DATA, "campaign"));
 const ONLY = (args.only as string | undefined)?.split(",");
-const URL_TEXT = "budget.bettergov.ph/hgab/2027/multi-purpose";
+const URL_TEXT = "budget.bettergov.ph/gaa/multi-purpose";
 
 // ---------------------------------------------------------------------------
 // The figures, from history.json

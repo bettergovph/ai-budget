@@ -1,6 +1,6 @@
 /**
  * "Multi-purpose building o classroom?": the Taglish street-poster cut of the campaign poster for
- * /hgab/2027/multi-purpose/documents. Jason (2026-11-15): "Can we try a different style? More taglish and more impact?
+ * /gaa/multi-purpose/documents. Jason (2026-11-15): "Can we try a different style? More taglish and more impact?
  * Revolutionary, grunge style". The paper poster (build-hgab-poster-mpb-classrooms.ts) stays; this one is added beside it.
  *
  * A protest print: newsprint in red, black and cream; screen-printed headline type worn by an SVG filter (rough edges, ink

@@ -1,9 +1,9 @@
 # Budgets side by side on maps: multi-purpose buildings and flood control
 
 Two pages, one design (`CompareTopic` in `src/lib/mpb-compare.ts`):
-- `/hgab/2027/multi-purpose/nep-vs-house-bill`: the 2027 NEP vs the House bill, two maps. It's in the Multi-purpose
+- `/gaa/multi-purpose/nep-vs-house-bill`: the 2027 NEP vs the House bill, two maps. It's in the Multi-purpose
   buildings menu → NEP vs House bill, which is hidden in the nav for now (see `NAV_HIDDEN`).
-- `/hgab/2027/flood-control`, "Flood control projects are back": 2025, 2026 and 2027, three maps. No menu entry yet;
+- `/gaa/flood-control`, "Flood control projects are back": 2025, 2026 and 2027, three maps. No menu entry yet;
   see [Flood control](#flood-control) below.
 
 Jason (2026-11-05): "a different page side by side comparison of 2027's NEP vs HGAB for multi-purpose buildings … more

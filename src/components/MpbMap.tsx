@@ -1,5 +1,5 @@
 /**
- * The multi-purpose buildings map (`/hgab/2027/multi-purpose/map`). MapLibre GL over CARTO's Positron basemap,
+ * The multi-purpose buildings map (`/gaa/multi-purpose/map`). MapLibre GL over CARTO's Positron basemap,
  * ported from the source workbench's Congress map (analysis/web/src/CongressMap.jsx at the pinned commit): its
  * legislative district outlines (PSGC2LEG), GPS published in titles as solid dots, and the places titles name as
  * rings at the centre of that place, never at a site. Ours adds groups (about 80,000 lines over fourteen budgets)

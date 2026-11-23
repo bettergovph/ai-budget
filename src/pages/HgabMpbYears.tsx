@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose/map` (Multi-purpose buildings menu): every multi-purpose building line in every budget we hold, the
+ * `/gaa/multi-purpose/map` (Multi-purpose buildings menu): every multi-purpose building line in every budget we hold, the
  * FY2020 to FY2026 enacted budgets and the FY2027 NEP and House bill, on one map and in one list.
  *
  * Data: `mpb-years/` (npm run build:hgab-mpb-years; contract in src/lib/hgab-mpb-years.ts). Every figure in the
@@ -12,7 +12,8 @@
 import { createContext, Fragment, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
-import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHero, HgabLoading } from '../components/HgabBits';
+import { GaaHeader } from '../components/GaaBits';
 import type { MapFit, MapFocus, MapPick } from '../components/MpbMap';
 import { SHADE_COLORS, MARK_COLORS } from '../components/mpb-map-style';
 import { loadMpbYears, REGION_LABELS, REGION_ORDER, type RegionKey } from '../lib/hgab';
@@ -241,8 +242,9 @@ function Loaded({ data, summary, districts, contracts }: {
 
   return (
     <>
-      <HgabHeader crumb={MPB_MAP_TITLE} />
+      <GaaHeader crumb={MPB_MAP_TITLE} />
       <HgabHero
+        section="gaa"
         compact
         crumb={<><Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link><span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">Map</span></>}
         title={<>{count(gaaLines)} multi-purpose building lines in the {FIRST} to {LAST_GAA} enacted budgets, and {count(house.lines)} in the 2027 House bill</>}

@@ -231,7 +231,7 @@ tr.is-missing th { color: var(--ink-3) !important; }
 .bpr-row.is-outside { grid-template-columns: minmax(0, 420px) 82px minmax(0, 1fr) 150px; }
 @media (max-width: 760px) { .bpr-row.is-outside { grid-template-columns: minmax(0, 1fr) auto; } }
 
-/* ---- multi-purpose buildings per person (/hgab/2027/multi-purpose/per-person) ---- */
+/* ---- multi-purpose buildings per person (/gaa/multi-purpose/per-person) ---- */
 .mpbp-main { max-width: 1320px; }
 .bpr-row.mpbp-row { grid-template-columns: 260px minmax(0, 1fr) 330px; }
 .mpbp-row .bpr-name a { color: inherit; text-decoration: none; }

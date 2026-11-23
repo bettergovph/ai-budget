@@ -1,5 +1,5 @@
 /**
- * "Multi-purpose buildings or classrooms?": the campaign poster for /hgab/2027/multi-purpose/documents. Jason
+ * "Multi-purpose buildings or classrooms?": the campaign poster for /gaa/multi-purpose/documents. Jason
  * (2026-11-15): "I want a poster too", then "use our paper themed poster instead of the dark ones" and "Be clear of the
  * 2066. Are they MPBs? Also include the total number of insertions, documents.", "add a disclaimer with available
  * documents … include the total house insertions. Then add more building types in the poster", "Our other data says
