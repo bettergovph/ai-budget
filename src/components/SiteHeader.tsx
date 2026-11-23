@@ -225,6 +225,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             >
               Learn
             </Link>
+            <Link
+              to="/review"
+              className={`primary-nav-link`}
+            >
+              Review
+            </Link>
             <a
               href="https://2026-budget.bettergov.ph"
               target="_blank"
