@@ -43,7 +43,7 @@ import {
 } from './hgab-contractors';
 import {
   MPB_CSV_FIELDS, MPB_CSV_NAME, MPB_DISTRICTS_PATH, MPB_LINES_PATH, MPB_SENATE_CSV_NAME, MPB_SENATE_PATH, MPB_SUMMARY_PATH,
-  applyMpbSenate, decodeMpbLines, mpbCsvPath, mpbSenateCsvPath, type MpbSenateFile,
+  applyMpbSenate, decodeMpbLines, mpbCsvPath, mpbSenateCsvPath, senateBudgetStat, type MpbSenateFile,
   type MpbData, type MpbLinesFile, type MpbSummary,
 } from './hgab-mpb-years';
 import { LOCATIONS_DATA_PATH, type LocationsData } from './hgab-locations';
@@ -842,13 +842,20 @@ export function loadMpbYears(): Promise<{
   data: MpbData; summary: MpbSummary; districts: FeatureCollection; contracts: Map<string, LineContract> | null;
 }> {
   return cached('mpb-years', async () => {
-    const [lines, summary, districts, contractsFile] = await Promise.all([
+    const [lines, summary, districts, contractsFile, senate] = await Promise.all([
       getJson<MpbLinesFile>(dataUrl(MPB_LINES_PATH), 'Failed to load the multi-purpose building lines'),
       getJson<MpbSummary>(dataUrl(MPB_SUMMARY_PATH), 'Failed to load the multi-purpose building summary'),
       getJson<FeatureCollection>(dataUrl(MPB_DISTRICTS_PATH), 'Failed to load the legislative district outlines'),
       getJson<MpbContractsFile>(dataUrl(CONTRACTORS_MPB_PATH), 'Failed to load the contracts').catch(() => null),
+      // The Senate committee report (2026-11-23): the third 2027 stage, when its sidecar is there.
+      getJson<MpbSenateFile>(dataUrl(MPB_SENATE_PATH), 'Failed to load the Senate committee report’s lines').catch(() => null),
     ]);
     const data = decodeMpbLines(lines);
+    if (senate) {
+      applyMpbSenate(data, senate);
+      const house = summary.budgets.find((b) => b.key === 'house-2027');
+      if (house) summary.budgets = [...summary.budgets, senateBudgetStat(data, house, senate)];
+    }
     const contracts = contractsFile ? decodeMpbContracts(contractsFile) : null;
     if (contracts) {
       for (const l of data.lines) {

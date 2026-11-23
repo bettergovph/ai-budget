@@ -18,7 +18,7 @@ import {
 import type { PartiesData } from "../src/lib/hgab-parties";
 import type { HistoryData } from "../src/lib/hgab-history";
 import {
-  MPB_CSV_FIELDS, MPB_SENATE_STATUSES, applyMpbSenate, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSenateFile, type MpbSummary,
+  MPB_CSV_FIELDS, MPB_SENATE_STATUSES, applyMpbSenate, decodeMpbLines, lineAmount, senateBudgetStat, type MpbData, type MpbLinesFile, type MpbSenateFile, type MpbSummary,
 } from "../src/lib/hgab-mpb-years";
 import {
   COMPARE_TOPICS, COMPARE_VIEW, FLOOD_CSV_FIELDS, GAA_PANEL_COLOR, budgetSource, floodDistrictMatrix, linesDistrictMatrix,
@@ -287,7 +287,7 @@ function verifyTopic(
  * pages"): senate.json has one row per House bill line, its checks passed, its totals recompute from the rows, the
  * lines take its amounts (cut lines none), and senate.csv is the JSON's, row by row. Returns the file, applied to `data`.
  */
-function verifyMpbSenate(check: Check, data: MpbData, dir: string): MpbSenateFile | null {
+function verifyMpbSenate(check: Check, data: MpbData, dir: string, S: MpbSummary): MpbSenateFile | null {
   const path = resolve(dir, "senate.json");
   check("senate.json present (npm run build:mpb-senate)", existsSync(path), path);
   if (!existsSync(path)) return null;
@@ -308,6 +308,14 @@ function verifyMpbSenate(check: Check, data: MpbData, dir: string): MpbSenateFil
       && cut.every((l) => l.senateStatus === "cut") && kept.every((l) => l.senateStatus !== "cut")
       && cut.filter((l) => l.cls === "house_only").length === SN.totals.cut_inserted.lines
       && SN.totals.house.lines === house.length && SN.totals.house.php === sum(house, (l) => l.house!));
+  // The map's third 2027 stage (/multi-purpose/map): its year bar and placement row, counted from the lines.
+  const house27 = S.budgets.find((b) => b.key === "house-2027")!;
+  const st = senateBudgetStat(data, house27, SN);
+  const levelSum = Object.values(st.levels).reduce((a, v) => a + v, 0);
+  check(`map: the Senate stage's bar and placement row are the sidecar's (${n(st.lines)} lines, every one placed once; ${n(st.pap_lines)} on the line, ${n(st.title_only_lines)} by title)`,
+    st.lines === SN.totals.senate.lines && st.php === SN.totals.senate.php && levelSum === st.lines
+      && st.pap_lines + st.title_only_lines === st.lines && st.pap_php + st.title_only_php === st.php && st.listed_at_zero === SN.totals.cut.lines
+      && data.lines.filter((l) => l.fy === 2027 && lineAmount(l, "senate") != null).length === st.lines);
   check("senate.json: the report raises no multi-purpose building line, and reduces one at most (the House row printed as two)",
     kept.filter((l) => l.senate! > l.house!).length === 0 && kept.filter((l) => l.senate! < l.house!).length <= 1);
   const csvPath = resolve(dir, "senate.csv");
@@ -338,7 +346,7 @@ export function verifyMpbCompare(check: Check, o: Opts): void {
   if (files.every((f) => existsSync(f))) {
     const data = decodeMpbLines(JSON.parse(readFileSync(files[0], "utf8")) as MpbLinesFile);
     const S = JSON.parse(readFileSync(files[1], "utf8")) as MpbSummary;
-    const SN = verifyMpbSenate(check, data, dir);
+    const SN = verifyMpbSenate(check, data, dir, S);
     if (!SN) return;
     const total = (key: string) => (key === "senate-2027" ? SN.totals.senate : S.budgets.find((x) => x.key === key));
     verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => total(key)!, []);
