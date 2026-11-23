@@ -1,19 +1,21 @@
 /**
- * `/hgab/2027/roads` (DPWH menu): every road and bridge line in every budget we hold, the FY2015 to FY2026 enacted
- * budgets and the 2027 NEP and House bill, on a map and in a list. Jason (2026-11-07): "We need a roads page to browse
- * the road projects", then "We need to support multi year".
+ * `/gaa/roads` (GAA section; Jason, 2026-11-23: "These are no longer hgab but rather should be in the GAA"): every road
+ * and bridge line in every budget we hold, the FY2015 to FY2026 enacted budgets and the 2027 NEP and House bill, on a
+ * map and in a list. Jason (2026-11-07): "We need a roads page to browse the road projects", then "We need to support
+ * multi year". Its leaderboards: GaaRoadsBoards (`/gaa/roads/leaderboards`).
  *
  * Any set of years, as the multi-purpose map picks them (its year bars): 2027 at one stage, the NEP or the House bill,
  * never both added. Each year's file loads when it is picked.
  *
- * Data: `roads/` (npm run build:hgab-roads, npm run draw:hgab-roads; contract in src/lib/hgab-roads.ts; docs/hgab-roads.md).
+ * Data: `roads/` (npm run build:gaa-roads, npm run draw:gaa-roads; contract in src/lib/gaa-roads.ts; docs/gaa-roads.md).
  * Every figure in the copy is computed from it. The URL holds the years, the 2027 stage, the filters and the sort.
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import type { Feature, FeatureCollection } from 'geojson';
 import SiteFooter from '../components/SiteFooter';
-import { Caveats, DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { Caveats, DisclaimerNotice, HgabError, HgabLoading } from '../components/HgabBits';
+import { GaaHeader, GaaPageHead } from '../components/GaaBits';
 import DpwhContractLink from '../components/DpwhContractLink';
 import type { RoadsMapFocus } from '../components/RoadsMap';
 import { loadRoadsBudget, loadRoadsSummary, REGION_LABELS, REGION_ORDER, type RegionKey } from '../lib/hgab';
@@ -22,14 +24,14 @@ import { billions, bn, count, fullPeso } from '../lib/hgab-history-view';
 import { asOfText } from '../lib/hgab-leaderboard';
 import { DPWH_LINK_NOTE, MATCH_NOTE } from '../lib/hgab-contractors';
 import {
-  FLAG_TEXT, LEVEL_TEXT, PART_SHORT, ROADS_CSV_NAME, ROADS_TITLE, ROADS_YEARS, budgetLabel, filterRoads, lengthText,
+  FLAG_TEXT, LEVEL_TEXT, PART_SHORT, ROADS_BOARDS_ROOT, ROADS_CSV_NAME, ROADS_TITLE, ROADS_YEARS, budgetLabel, filterRoads, lengthText,
   roadSource, roadsBudgetKey, roadsCsvPath, sortRoads, stationText, type RoadFilters, type RoadLine, type RoadPart,
   type RoadSort, type RoadsBudget, type RoadsDrawSummary, type RoadsSummary, type Stage2027,
-} from '../lib/hgab-roads';
+} from '../lib/gaa-roads';
 import '../nep2027.css';
 import '../hgab-history.css';
 import '../hgab-mpb-years.css';
-import '../hgab-roads.css';
+import '../gaa-roads.css';
 
 const RoadsMap = lazy(() => import('../components/RoadsMap'));
 
@@ -89,7 +91,7 @@ function writeView(v: View): URLSearchParams {
   return p;
 }
 
-export default function HgabRoads() {
+export default function GaaRoads() {
   const [state, setState] = useState<{ summary: RoadsSummary; draw: RoadsDrawSummary | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -188,15 +190,15 @@ function Roads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawSummar
 
   return (
     <>
-      <HgabHeader crumb={ROADS_TITLE} />
-      <HgabHero
-        compact
-        crumb={ROADS_TITLE}
+      <GaaHeader crumb={ROADS_TITLE} />
+      <GaaPageHead
+        trail={[{ label: ROADS_TITLE }]}
         title={<>Roads and bridges in every budget, {first} to the 2027 House bill</>}
         dek={
           <>
             Every DPWH road and bridge line: national roads, bridges, access roads, and the district roads under BIP, SIPAG and
-            the Local Program. Pick the years to see their lines on the map and in the list.
+            the Local Program. Pick the years to see their lines on the map and in the list, or see them ranked on
+            the <Link to={ROADS_BOARDS_ROOT}>leaderboards</Link>.
           </>
         }
         note={
@@ -542,6 +544,7 @@ function AboutRoads({ summary, draw }: { summary: RoadsSummary; draw: RoadsDrawS
       <Caveats items={[
         'Which lines: DPWH capital outlays under each budget’s road and bridge codes, in the parts above. 2015 to 2017 use an older set of codes, read as one program. 2027 counts the Asset Preservation, Network Development and Bridge programs, and BIP access and coastal roads.',
         'Where a line sits, first that works: the point of the DPWH contract we matched to it (2020 to 2026); its stations, placed by DPWH contracts on the same road; GPS in its title; the place its title names; its DPWH office’s area; its region.',
+        'DBM’s budget extract gives every DPWH Central Office line the head office’s own region code, NCR. A head-office line whose title names no place takes the region of the same road’s other lines (by station where the road crosses regions). Where no other line places its road, it has no region.',
         'Contracts are matched by title, office and amount, so check the contract. Their points come from DPWH’s own list.',
         'Length comes from the stations a title prints, such as K0029+690 to K0031+087. A title without stations has no length.',
         'Red lines follow the road on OpenStreetMap. Most are placed at their own stations: DPWH contracts on the same road, each printing its stations and carrying a point, serve as kilometre posts. The rest are their length centred on the line’s own point, so where along the road is approximate.',

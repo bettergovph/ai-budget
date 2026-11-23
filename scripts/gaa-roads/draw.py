@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Road and bridge lines drawn along OpenStreetMap roads, for the roads map (docs/hgab-roads.md). Jason (2026-11-07):
+"""Road and bridge lines drawn along OpenStreetMap roads, for the roads map (docs/gaa-roads.md). Jason (2026-11-07):
 "We have projects that use openstreetmap already", then "you can do as recommended dpwh's own contracts as km posts".
 
 Which lines: every line whose title prints stations (K0029+690 - K0031+087), in any budget.

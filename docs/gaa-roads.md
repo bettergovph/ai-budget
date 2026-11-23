@@ -6,6 +6,11 @@ did for MPBs". The multi-purpose building order is the plan: every line in every
 and links to where each line is printed. This file records the decisions and what the data allows; it grows with the
 build.
 
+**Under the GAA since 2026-11-23** (Jason: "These are no longer hgab but rather should be in the GAA"): the page is
+`/gaa/roads`, its leaderboards `/gaa/roads/leaderboards`, both under a "Roads and bridges" dropdown in the GAA tabs
+(`GAA_TOPICS` in src/components/GaaBits.tsx). The data moved from `data/hgab/2027/roads/` to `data/gaa/roads/` (R2
+prefix `gaa/roads/`); the build still reads its inputs from `data/hgab/2027/`.
+
 ## Decisions (Jason, 2026-11-07)
 
 - **Scope: all roads and bridges.** DPWH capital outlays (UACS expense class 6) under these program codes, shown as
@@ -41,7 +46,7 @@ build.
 
 ## OpenStreetMap drawing test (2026-11-07)
 
-`scripts/hgab-roads/osm_extract.py` reads the Geofabrik Philippines extract (613 MB; about 20 minutes) into
+`scripts/gaa-roads/osm_extract.py` reads the Geofabrik Philippines extract (613 MB; about 20 minutes) into
 `roads.parquet` (1,414,650 road ways, WKB) and `posts.parquet` (every `highway=milestone`). `osm_draw_test.py` tries
 300 FY2023–FY2025 national road lines with stations and a contract point:
 
@@ -64,9 +69,9 @@ build.
 - Licence: OpenStreetMap is ODbL. The map credits "© OpenStreetMap contributors"; any published file holding the drawn
   geometry is a derivative database, offered under ODbL.
 
-## The build (`npm run build:hgab-roads`)
+## The build (`npm run build:gaa-roads`)
 
-`scripts/hgab-roads/run.sh` → `build.py`, on the flood control build's frame (scripts/hgab-flood-compare) and the
+`scripts/gaa-roads/run.sh` → `build.py`, on the flood control build's frame (scripts/hgab-flood-compare) and the
 multi-purpose map's readers (scripts/hgab-mpb-years: GPS screens, the title matcher, FY2019's text, centroids). It
 needs the same environment: run `npm run build:hgab-mpb-years` once.
 
@@ -130,12 +135,12 @@ every budget it covers; FY2020–FY2026, every part equals the extract's capital
 FY2019, each heading equals the lines under it; every line placed once; every linked line whose contract has a usable
 point is placed by it; the region matrix adds up to each budget.
 
-**Outputs** (`data/hgab/2027/roads/`): `lines-<budget>.json` (one per budget, the multi-purpose map's format with
+**Outputs** (`data/gaa/roads/`): `lines-<budget>.json` (one per budget, the multi-purpose map's format with
 road columns: part, contract, stations, length_m, sections), `lines.csv` (every budget, 60 MB), `summary.json`.
 
-## Drawing along OpenStreetMap (`npm run draw:hgab-roads`)
+## Drawing along OpenStreetMap (`npm run draw:gaa-roads`)
 
-`scripts/hgab-roads/draw.sh` → `draw.py`, after the build. It downloads the Geofabrik Philippines extract once
+`scripts/gaa-roads/draw.sh` → `draw.py`, after the build. It downloads the Geofabrik Philippines extract once
 (checksum checked), reads its roads and kilometre posts once (`osm_extract.py`, about 20 minutes), then draws in under a
 minute. It draws a line placed at a point (its contract's, or GPS in its title) whose title prints stations:
 
@@ -230,3 +235,40 @@ api.dpwh.bettergov.ph) has one point per component, but components are kinds of 
 pavement), not stretches: each lists every stretch. In 40 random multi-stretch contracts, all 40 had one point listing all
 their stretches, as the list does; none would anchor. So the ~28,500 details were not fetched; the candidates above use
 those contracts instead.
+
+## Leaderboards (`npm run build:gaa-roads-boards`, 2026-11-23)
+
+Jason: "Create me leaderboard for our roads": by type, by region, by contractor, and ranked by how many times a project
+has been funded. `scripts/build-gaa-roads-boards.ts` reads the lines and drawings of the twelve enacted budgets
+(FY2015–FY2026; the 2027 bill funds nothing yet) and writes, beside them:
+
+- `boards.json`: totals, types (the parts and the programs under each), regions, contractors and the funded-again
+  counts, each by budget, so the page picks a year without reloading.
+- `repeats.json`: the projects funded in three budgets or more, with their lines; `repeats.csv`: every project funded in
+  two or more, a row per line.
+- `regions.json`: the region the boards read for each head-office line (below); the roads page applies it
+  (`applyRegionReads`), so its region filter and the region board agree.
+
+**Head-office lines sat in NCR.** DBM's extract gives every Central Office line the head office's own region code (13,
+NCR; every FY2024 capital line of the Central Office has it), and the build fell back on that code for a head-office line
+whose title names no place. That put about ₱776B in 9,533 lines (mostly national roads printed as "<road> - K0343+818")
+in NCR. Each now takes the region of the same road's other lines (placed by a contract point, GPS, a place in the title
+or a district office): the one region they share, else the region of the nearest station on that road within 15 km.
+7,792 lines (₱567B) are placed so; the rest have no region. NCR's roads went from ₱967B to ₱158B over the twelve
+budgets. The proper fix is in build.py's `listed` region (ignore UACS 13 for the Central Office), at the next full
+build.
+
+**Funded again**: the same title in the same region, in two budgets or more. Case, accents, punctuation, GPS and the
+spellings Rd/Road, Br/Bridge, Sn/San, Sta/Santa, Sto/Santo, Jct/Junction, Natl/National, Hwy/Highway and Brgy/Barangay
+are set aside; phases and station ranges stay, so another phase or stretch is another project. 9,577 projects, ₱984B
+in 24,975 lines; the most is the CLLEX Phase I loan line, in 11 budgets.
+
+**Contractors**: lines linked to a DPWH contract, FY2020–FY2026 (44,048 lines, ₱1.59T, 51% of those years' roads). A
+joint venture's line counts in full for each partner, as on the contractor pages; amounts are the budget lines', not the
+contracts'. The kept rows are the top 500 over all years and the top 300 of each year (766 of 4,332), and 756 of them
+link to a contractor page.
+
+**Checks** (the build stops on any): every budget's lines and amount equal summary.json; the types, their programs and
+the regions each add up to the budget, year by year; the linked lines equal the summary's; every linked line has a
+contractor; each funded-again project has one region and two budgets or more.
+

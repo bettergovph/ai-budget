@@ -32,7 +32,6 @@ import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
 import { MPB_DOCS_ROOT } from '../lib/mpb-documents';
 import { INDICATORS_ROOT } from '../lib/indicators';
-import { ROADS_ROOT } from '../lib/hgab-roads';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
 import { PARTY_DATA_ROOT } from '../lib/hgab-congress-seats';
@@ -100,13 +99,11 @@ const MPB_MENU: NavMenu = {
 };
 /**
  * Pages a program's menu opens after its own views: DPWH's flood control (FY2015 to the 2027 House bill, "Flood control
- * projects are back"), roads and bridges (every budget, FY2015 to the 2027 House bill) and contractors (FY2016 to
- * FY2026, from DPWH's contract list).
+ * projects are back") and contractors (FY2016 to FY2026, from DPWH's contract list).
  */
 const PROGRAM_EXTRAS: Partial<Record<DatasetKey, NavMenu['items']>> = {
   dpwh: [
     { key: 'flood-control', label: 'Flood control', to: FLOOD_COMPARE_ROOT },
-    { key: 'roads', label: 'Roads and bridges', to: ROADS_ROOT },
     { key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT },
   ],
 };

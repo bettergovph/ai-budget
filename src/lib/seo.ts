@@ -24,7 +24,7 @@ import { REPORT_ROOT, REPORT_TITLE } from "./hgab-review-report";
 import { HOWTO_ROOT, HOWTO_SHOT_HEIGHT, HOWTO_SHOT_WIDTH, HOWTO_STEPS, HOWTO_TITLE, howtoShot } from "./hgab-review-howto";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
-import { ROADS_ROOT } from "./hgab-roads";
+import { ROADS_BOARDS_ROOT, ROADS_ROOT } from "./gaa-roads";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { PARTY_DATA_ROOT } from "./hgab-congress-seats";
@@ -495,7 +495,15 @@ export function pageMeta(pathname: string): PageMeta {
         "House bill on one map, with the lines the House bill added and the NEP lines it left out, by region.",
     };
   }
-  // Roads and bridges: every line, FY2015 GAA to the FY2027 House bill.
+  // Roads and bridges (GAA section): every line, FY2015 GAA to the FY2027 House bill, and its leaderboards.
+  if (p === ROADS_BOARDS_ROOT) {
+    return {
+      title: `Road and Bridge Leaderboards, FY 2015–2026 GAA: By Type, Region, Contractor and Repeat Funding · ${SITE}`,
+      description:
+        "Every DPWH road and bridge line in the FY 2015 to FY 2026 General Appropriations Acts, ranked by type of work, by " +
+        "region, by contractor (FY 2020–2026, from DPWH's contract list) and by how many budgets funded the same project.",
+    };
+  }
   if (p === ROADS_ROOT) {
     return {
       title: `Roads and Bridges in Every Budget, FY 2015–2027: Every DPWH Road and Bridge Line · ${SITE}`,

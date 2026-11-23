@@ -1,8 +1,9 @@
 /**
- * Roads and bridges, every budget (`/hgab/2027/roads`, DPWH menu). Jason (2026-11-07): "how do we do the same for road,
- * highway, and similar projects", then "We need a roads page to browse the road projects".
+ * Roads and bridges, every budget (`/gaa/roads`, under the GAA; Jason, 2026-11-23: "These are no longer hgab but rather
+ * should be in the GAA"). Jason (2026-11-07): "how do we do the same for road, highway, and similar projects", then "We
+ * need a roads page to browse the road projects".
  *
- * Data: `roads/` (npm run build:hgab-roads, then npm run draw:hgab-roads; docs/hgab-roads.md). One file of lines per
+ * Data: `roads/` (npm run build:gaa-roads, then npm run draw:gaa-roads; docs/gaa-roads.md). One file of lines per
  * budget (`lines-<key>.json`, the multi-purpose map's format with road columns) and one of lines drawn along
  * OpenStreetMap roads (`geom-<key>.json`, ODbL), loaded when the budget is picked; `summary.json` holds the totals.
  * Pure: no runtime imports beyond types and the shared source-link helper.
@@ -10,9 +11,9 @@
 import type { RegionKey } from './hgab';
 import { lineSource, type LineSource } from './hgab-mpb-years';
 
-export const ROADS_ROOT = '/hgab/2027/roads';
+export const ROADS_ROOT = '/gaa/roads';
 export const ROADS_TITLE = 'Roads and bridges';
-const BASE = 'hgab/2027/roads';
+const BASE = 'gaa/roads';
 export const ROADS_SUMMARY_PATH = `${BASE}/summary.json`;
 export const ROADS_DRAW_SUMMARY_PATH = `${BASE}/draw-summary.json`;
 export const roadsLinesPath = (key: string) => `${BASE}/lines-${key}.json`;
@@ -28,7 +29,9 @@ export type RoadPart = 'drainage' | 'national' | 'bridges' | 'access' | 'road_fu
 export type RoadLevel = 'contract' | 'stations' | 'gps' | 'barangay' | 'municipality' | 'city' | 'province' | 'deo' | 'region' | 'none';
 export type RoadFlag =
   | 'gps_not_drawn' | 'gps_district_differs' | 'office_elsewhere' | 'maguindanao_successor' | 'text_repaired'
-  | 'gps_wider_reader' | 'contract_region_differs' | 'stations_review' | 'several_offices' | 'stretch_differs';
+  | 'gps_wider_reader' | 'contract_region_differs' | 'stations_review' | 'several_offices' | 'stretch_differs'
+  /** The page's own (applyRegionReads): a head-office line's region, read from the same road's other lines. */
+  | 'region_from_road';
 
 /** Short names for the parts, for chips and the list (summary.json `parts` has the full ones). */
 export const PART_SHORT: Record<RoadPart, string> = {
@@ -64,6 +67,7 @@ export const FLAG_TEXT: Partial<Record<RoadFlag, string>> = {
   stretch_differs: 'In both documents at the same amount, but the House bill lists another stretch of the road.',
   office_elsewhere: 'The place the title names lies outside the DPWH office’s area.',
   gps_district_differs: 'The point lies in another legislative district than the place the title names.',
+  region_from_road: 'A head-office line whose title names no place: its region is that of the same road’s other lines.',
 };
 
 export interface RoadsBudget {
@@ -105,7 +109,7 @@ export interface RoadsLinesFile {
   bases: Array<string | null>;
   parts: RoadPart[];
   classes: Array<string | null>;
-  flag_bits: Record<RoadFlag, number>;
+  flag_bits: Partial<Record<RoadFlag, number>>;
   regions: RegionKey[];
   districts: Array<[string, string, number]>;
   offices: string[];
@@ -202,7 +206,7 @@ export function decodeRoadLines(f: RoadsLinesFile): RoadsData {
       place: p,
       district: d ? { id: d[0], label: d[1] } : null,
       region: region != null && region >= 0 ? f.regions[region] : null,
-      flags: (Object.keys(f.flag_bits) as RoadFlag[]).filter((k) => bits & f.flag_bits[k]),
+      flags: (Object.entries(f.flag_bits) as Array<[RoadFlag, number]>).filter(([, bit]) => bits & bit).map(([k]) => k),
       amount: ((stage === 'gaa' ? at(row, 'gaa_php') : stage === 'nep' ? at(row, 'nep_php') : at(row, 'house_php')) as number | null) ?? 0,
       pts,
       contract,
@@ -293,4 +297,96 @@ export function sortRoads(lines: RoadLine[], sort: RoadSort): RoadLine[] {
     : sort === 'length' ? (a: RoadLine, b: RoadLine) => (b.lengthM ?? -1) - (a.lengthM ?? -1) || b.amount - a.amount
       : (a: RoadLine, b: RoadLine) => b.amount - a.amount || a.title.localeCompare(b.title);
   return [...lines].sort(by);
+}
+
+// ---------------------------------------------------------------------------
+// Leaderboards (`/gaa/roads/leaderboards`; npm run build:gaa-roads-boards). Jason (2026-11-23): "Create me leaderboard
+// for our roads": by type, by region, by contractor, and by how many times a project has been funded.
+// ---------------------------------------------------------------------------
+
+export const ROADS_BOARDS_ROOT = `${ROADS_ROOT}/leaderboards`;
+export const ROADS_BOARDS_TITLE = 'Road and bridge leaderboards';
+export const ROADS_BOARDS_PATH = `${BASE}/boards.json`;
+export const ROADS_REPEATS_PATH = `${BASE}/repeats.json`;
+export const ROADS_REGIONS_PATH = `${BASE}/regions.json`;
+export const ROADS_REPEATS_CSV_PATH = `${BASE}/repeats.csv`;
+export const ROADS_REPEATS_CSV_NAME = 'bettergov-dpwh-roads-funded-again-2015-2026.csv';
+export const roadsRepeatsCsvPath = (b: Pick<RoadsBoardsFile, 'outputs'>) =>
+  `${ROADS_REPEATS_CSV_PATH}?v=${b.outputs['repeats.csv'].sha256.slice(0, 12)}`;
+
+/** A figure by budget, one entry per `years` (or, for contractors, `contract_years`) entry, in order. */
+export type ByYear = number[];
+
+export interface RoadsBoardsFile {
+  schema: 1;
+  built_at: string;
+  /** The enacted budgets the boards count, FY2015–FY2026. 2027 is still a bill: nothing in it is funded yet. */
+  years: number[];
+  /** The years whose lines are linked to DPWH contracts, FY2020–FY2026. */
+  contract_years: number[];
+  totals: { php: ByYear; lines: ByYear };
+  /** Each part, and the programs (PAPs) the budget lists under it, by budget. */
+  types: Array<{ part: RoadPart; php: ByYear; lines: ByYear; programs: Array<{ label: string; php: ByYear; lines: ByYear }> }>;
+  /**
+   * Each region by budget. `region` null: no region could be read (a head-office line whose title names no place and
+   * whose road no other line places). `road_*`: the part of the figure read from the same road's other lines.
+   */
+  regions: Array<{ region: RegionKey | null; php: ByYear; lines: ByYear; road_php: ByYear; road_lines: ByYear }>;
+  /**
+   * DBM's extract gives every Central Office line the head office's own region code (13, NCR), so a head-office line
+   * whose title names no place sat in NCR. Those lines take the region of the same road's other lines (by station where
+   * the road crosses regions), else none.
+   */
+  region_fix: { lines: number; php: number; road_lines: number; road_php: number };
+  contractors: {
+    /** Lines linked to a DPWH contract, each once, by contract year. */
+    linked: { php: ByYear; lines: ByYear };
+    /** Every contractor, by contract year (a contractor with no linked line that year has 0). */
+    count: ByYear;
+    count_all: number;
+    /** How many rows are kept: the top `all` over every contract year, and the top `year` of each, so ranks are exact that far. */
+    kept: { all: number; year: number };
+    /**
+     * The contractors kept (the top by all years and by each year). A joint venture's line counts in full for each
+     * partner; `jv_*` is that part. `key`: the contractor's page (/hgab/2027/contractors/:key), when the name matches.
+     */
+    rows: Array<{ name: string; key: string | null; php: ByYear; lines: ByYear; jv_php: ByYear; jv_lines: ByYear }>;
+  };
+  /** Projects funded in two budgets or more (the same title in the same region): how many, by budgets. */
+  repeats: { groups: number; lines: number; php: number; by_budgets: Array<{ budgets: number; groups: number; lines: number; php: number }> };
+  checks: Array<{ key: string; ok: boolean; detail: string }>;
+  outputs: Record<string, { sha256: string; bytes: number }>;
+}
+
+/** One line of a project funded again: [fiscal year, UACS code, amount, office index, page in the FY2019 GAA]. */
+export type RoadRepeatLine = [number, string, number, number, number | null];
+
+export interface RoadsRepeatsFile {
+  schema: 1;
+  built_at: string;
+  offices: string[];
+  /** The groups kept here: funded in at least this many budgets. The CSV has every group funded twice or more. */
+  min_budgets: number;
+  groups: Array<{ title: string; region: RegionKey | null; part: RoadPart; php: number; lines: RoadRepeatLine[] }>;
+}
+
+/**
+ * The boards' region for each head-office line it re-read, by budget and UACS code: the same road's region, or null
+ * when none could be read.
+ */
+export interface RoadsRegionsFile {
+  schema: 1;
+  built_at: string;
+  lines: Record<string, Record<string, RegionKey | null>>;
+}
+
+/** Apply the boards' regions to a budget's lines (the head-office lines DBM's code put in NCR). */
+export function applyRegionReads(data: RoadsData, reads: RoadsRegionsFile | null): void {
+  const mine = reads?.lines[data.budget.key];
+  if (!mine) return;
+  for (const l of data.lines) {
+    if (!l.code || !(l.code in mine)) continue;
+    l.region = mine[l.code];
+    if (l.region) l.flags = [...l.flags, 'region_from_road'];
+  }
 }

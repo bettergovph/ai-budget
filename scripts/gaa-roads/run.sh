@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Every road and bridge line in the FY2015 to FY2026 GAA and the 2027 NEP and House bill, placed for the roads map.
-# See docs/hgab-roads.md. Reuses the multi-purpose map's environment (scripts/hgab-mpb-years/run.sh): its venv,
+# See docs/gaa-roads.md. Reuses the multi-purpose map's environment (scripts/hgab-mpb-years/run.sh): its venv,
 # pinned workbench files and centroid cache; run `npm run build:hgab-mpb-years` once first.
 #   LENS_DIR      a workbench checkout holding the built location lens, at the commit data/hgab/2027/locations.json
 #                 records (default: /tmp/dpwh-nep-head; docs/hgab-data.md, "Project locations")
 #   SHAPES_DIR    the 2023 PSA shapefiles (default: the lens checkout's dpwh_coor2psgc_geomapping copy)
 #   HISTORY_DIR   the GAA history release, FY2015–FY2019 (default: data/gaa-history)
 #   CONTRACTS_DIR DPWH's contract list and the FY2020–FY2026 line links (default: data/dpwh-contracts; docs/dpwh-contracts.md)
-#   OUT           outputs (default: data/hgab/2027/roads)
+#   OUT           outputs (default: data/gaa/roads)
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
-OUT="${OUT:-$root/data/hgab/2027/roads}"
+OUT="${OUT:-$root/data/gaa/roads}"
 HISTORY_DIR="${HISTORY_DIR:-$root/data/gaa-history}"
 CONTRACTS_DIR="${CONTRACTS_DIR:-$root/data/dpwh-contracts}"
 LENS_DIR="${LENS_DIR:-/tmp/dpwh-nep-head}"

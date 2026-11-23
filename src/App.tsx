@@ -57,7 +57,8 @@ const HgabLetters = lazy(() => import('./pages/HgabLetters'));
 const HgabLetter = lazy(() => import('./pages/HgabLetter'));
 const HgabHistory = lazy(() => import('./pages/HgabHistory'));
 const HgabMpbYears = lazy(() => import('./pages/HgabMpbYears'));
-const HgabRoads = lazy(() => import('./pages/HgabRoads'));
+const GaaRoads = lazy(() => import('./pages/GaaRoads'));
+const GaaRoadsBoards = lazy(() => import('./pages/GaaRoadsBoards'));
 const HgabMpbCompare = lazy(() => import('./pages/HgabMpbCompare'));
 const HgabContractors = lazy(() => import('./pages/HgabContractors'));
 const HgabParties = lazy(() => import('./pages/HgabParties'));
@@ -120,6 +121,9 @@ export default function App() {
           {SHORT_PATHS.map((p) => <Route key={p} path={p} element={<ShortLink />} />)}
           <Route path="/review/:id" element={<ShortLink />} />
           <Route path="/gaa" element={<National />} />
+          {/* Roads and bridges, FY2015 GAA to the 2027 House bill, and its leaderboards (src/lib/gaa-roads.ts). */}
+          <Route path="/gaa/roads" element={<GaaRoads />} />
+          <Route path="/gaa/roads/leaderboards" element={<GaaRoadsBoards />} />
           {/* Per-year exclusive browser: same hierarchy, one fiscal year.
               The splat carries the drill path as entity ids, so every level
               is a shareable URL: /gaa/:year/:group/:bureau/:program/… */}
@@ -189,7 +193,6 @@ export default function App() {
           <Route path="/hgab/2027/multi-purpose/nep-vs-house-bill" element={<HgabMpbCompare key="mpb" />} />
           {/* Flood control in 2025, 2026 and 2027, side by side ("Flood control projects are back"); no menu entry yet. */}
           <Route path="/hgab/2027/flood-control" element={<HgabMpbCompare key="flood" topic="flood" />} />
-          <Route path="/hgab/2027/roads" element={<HgabRoads />} />
           <Route path="/hgab/2027/contractors" element={<HgabContractors />} />
           <Route path="/hgab/2027/contractors/:key" element={<HgabContractors />} />
           {/* ₱1 trillion in red flags: the People's Budget Coalition's red-flag basket, the campaign poster's page. */}

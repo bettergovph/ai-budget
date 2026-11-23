@@ -139,6 +139,7 @@ Newest work is listed last within each area. PR numbers are on [bettergovph/ai-b
 
 - `/gaa`, `/gaa/:year` and record search: 27 years of GAA line items rebuilt from DBM originals (#44). Docs: `docs/gaa-explorer.md`. The yearly data release is described in `docs/gaa-history.md`, which is in PR #74.
 - National and per-department trend charts run FY2000–2026 from `gaa-explorer/series.json` (#56; `npm run build:gaa-series`). Rebuild and re-upload `series.json` whenever the Explorer manifest changes.
+- Roads and bridges (`/gaa/roads`) and its leaderboards (`/gaa/roads/leaderboards`), under a "Roads and bridges" dropdown in the GAA tabs (`GAA_TOPICS`, `src/components/GaaBits.tsx`). Every DPWH road and bridge line, FY2015 GAA to the 2027 House bill; the boards rank the enacted budgets by type, region, contractor and how many budgets funded the same project. Moved from `/hgab/2027/roads` on 2026-11-23. Data in `data/gaa/roads/` (`npm run build:gaa-roads`, `draw:gaa-roads`, `build:gaa-roads-boards`), not yet on R2. Docs: `docs/gaa-roads.md`. Branch `hgab-roads`, worktree `~/.paseo/worktrees/241ehmra/hgab-roads`, preview :5141; not pushed. Next (Jason, 2026-11-23): move the multi-purpose buildings and flood control pages under the GAA too.
 - Known quirk: the department extract files special purpose funds under department 01. So `/d/01` shows Congress at about ₱294B (FY2020), while the Explorer shows ₱27B. The chart carries a note; this is not fixed upstream.
 
 ### FY2027 NEP microsite (`/2027`)

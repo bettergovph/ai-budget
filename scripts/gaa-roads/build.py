@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Every road and bridge line in the FY2015 to FY2026 GAA, the 2027 NEP and the House bill, placed for the roads map
-(docs/hgab-roads.md). Jason (2026-11-07): "how do we do the same for road, highway, and similar projects … start work
+(docs/gaa-roads.md). Jason (2026-11-07): "how do we do the same for road, highway, and similar projects … start work
 the same way we did for MPBs"; scope "all roads and bridges"; placement "Contract coordinates first, then title then the
 others".
 
@@ -28,7 +28,7 @@ bridge section IDs (S01859LZ, B03085LZ) are kept. The map's lines along OpenStre
 (draw.py), which reads lines-<budget>.json.
 
 Usage: build.py --upstream=<dir> --lens=<checkout> --shapes=<dir> [--data=data] [--history=data/gaa-history]
-                [--contracts=data/dpwh-contracts] [--out=data/hgab/2027/roads]
+                [--contracts=data/dpwh-contracts] [--out=data/gaa/roads]
 
 Outputs:
   lines-<budget>.json  one per budget, the multi-purpose map's format (dictionaries + `cols`/`rows`), with the road
@@ -146,7 +146,7 @@ def part_of(fy: int, code: str) -> str | None:
 
 
 def fail(msg: str):
-    raise SystemExit(f'build-hgab-roads: {msg}')
+    raise SystemExit(f'build-gaa-roads: {msg}')
 
 
 def ensure(cond, msg: str):
@@ -160,7 +160,7 @@ def main():
     ap.add_argument('--lens', required=True)
     ap.add_argument('--shapes', required=True)
     ap.add_argument('--data', default='data')
-    ap.add_argument('--out', default='data/hgab/2027/roads')
+    ap.add_argument('--out', default='data/gaa/roads')
     ap.add_argument('--contracts', default='data/dpwh-contracts')
     ap.add_argument('--cache', default='/tmp/hgab-mpb-years-cache')
     ap.add_argument('--history', default='data/gaa-history')
