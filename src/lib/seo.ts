@@ -356,6 +356,18 @@ export function pageMeta(pathname: string): PageMeta {
       noindex: true,
     };
   }
+  if (p === "/senate/2027/districts") {
+    return {
+      title: `Senate committee report 2027 by district — the DPWH budget each office gets · ${SITE}`,
+      description: "The DPWH budget the FY 2027 Senate committee report gives each DPWH office, beside the House bill and the legislative districts it serves: what it keeps, raises and cuts, by region and district.",
+    };
+  }
+  if (p.startsWith("/senate/2027/districts/")) {
+    return {
+      title: `A legislative district in the Senate committee report 2027 · ${SITE}`,
+      description: "One legislative district's DPWH offices in the FY 2027 Senate committee report: the House bill projects the report keeps, raises and cuts, and the projects placed in the district.",
+    };
+  }
   if (p === "/senate/2027/leaderboard" || p.startsWith("/senate/2027/leaderboard/")) {
     return {
       title: `Senate leaderboards 2027 — what the Senate committee report changes, ranked · ${SITE}`,

@@ -1,0 +1,23 @@
+/* /senate/2027/districts and /senate/2027/districts/:id: the Senate committee report by DPWH office and district. */
+.sdx-main { padding-bottom: 32px; }
+.sdx-views { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 18px; }
+.sdx-views a { padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px; font-size: 13px; text-decoration: none; color: var(--ink); background: var(--paper); }
+.sdx-views a.is-on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sdx-table th[scope='row'] small, .sdx-table td small { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-3, #6b7385); }
+.sdx-table tr.is-strong th, .sdx-table tr.is-strong td { font-weight: 700; }
+.sdx-table tr.is-cut th, .sdx-table tr.is-cut td { color: var(--neg, #b42318); }
+.sdx-table .sdx-change small { text-align: right; }
+.sdx-office { display: block; font-size: 12.5px; }
+.sdx-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; margin: 6px 0 12px; }
+.sdx-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.sdx-filters .sdx-search { flex: 1 1 260px; }
+.sdx-filters input, .sdx-filters select { font: inherit; font-size: 13.5px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.sdx-rep { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px; margin: 8px 0 18px; }
+.sdx-bar { width: 30%; min-width: 120px; }
+.sdx-bar i { display: block; height: 10px; border-radius: 0 2px 2px 0; background: var(--ink-2, #3d4657); }
+.sdx-table tr.is-cut .sdx-bar i { background: var(--neg, #b42318); }
+.sdx-h3 { margin: 16px 0 6px; font-size: 15px; }
+.sdx-cuts { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.5; }
+.sdx-cuts span { color: var(--ink-3, #6b7385); font-size: 12.5px; white-space: nowrap; }
+.sdx-more, .sdx-note { margin: 10px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); max-width: 90ch; }
+.sdx-note { margin-top: 24px; }

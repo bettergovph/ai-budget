@@ -296,11 +296,47 @@ default). Its tables show the House bill and the Senate beside the ranked figure
 (`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
 (`hgab-share-render.ts`) is House-specific.
 
+## Districts
+
+`/senate/2027/districts` and `/senate/2027/districts/:id` (Jason, 2026-11-23: "Next is do the district, similar to HGAB's
+district pages"; "Districts" after "Leaderboards" in the Senate sub-nav). They mirror the House bill's district pages and
+read the House district index (`data/hgab/2027/districts.json`: districts, offices, tiers, representatives) beside the
+Senate layer `senate/2027/districts.json`.
+
+- **Data:** `build_districts.py` (in `build:senate-cr`, after the leaderboards) joins the Senate DPWH rows to each office
+  by the label the House bill lists for it (2027 hgab3 `matched_label`, as the leaderboards). It holds out the lines the
+  House pages hold out of every district (office changed between the NEP and the House bill: 67; no office: 3).
+  - Per office: House bill and Senate amounts, the report's status (unchanged, renamed, cut to ₱0, reduced, raised),
+    the House insertions (the comparison's house_only_candidate, fuzzy_candidate and ambiguous traces) cut and kept,
+    and its eight largest cuts.
+  - `residual`: the money on no district card, split as the House index splits it (Central Office, regional offices,
+    offices not placed, office change, no office); `regions` (each office once); `placed`: projects placed in each
+    legislative district (`data/hgab/2027/locations.json`).
+  - The build stops unless every office's House figure equals the House index's `fy2027.hgab3_php`, the money on no card
+    splits as the House index's 2027 House bill residual, offices plus residual equal the DPWH program in both
+    documents, and a cut row is at ₱0 and only those.
+- **Figures (2026-11-23):** on district cards ₱174.8B in the House bill → ₱137.3B in the report; 2,879 projects cut
+  (₱37.5B). On no card ₱412.2B → ₱383.6B (Central Office ₱408.2B → ₱381.0B). Placed in a district: 15,122 projects,
+  ₱466.7B → ₱388.9B.
+- **Pages** (`SenateDistricts.tsx`, `SenateDistrict.tsx`, `src/lib/senate-districts.ts`, `src/senate-districts.css`):
+  - the index has the House pages' three views: Overview (KPIs, where the DPWH budget sits, regions), District
+    Engineering Offices (`?view=list`: every district with its offices, region filter, search, sort) and Legislative
+    Districts (`?view=list-legislative`: projects placed in each district);
+  - a district page: the representative (portrait, or each member when the seat lists two), each office with its Lone
+    / Shared badge and the districts it shares, what the report does with its projects, its insertions cut and kept,
+    its largest cuts (to their Senate record pages), a link to the office's project list, and the projects placed in
+    the district; then a link to the House bill page with the budget history.
+  - Every page carries the compact "Under citizen review" banner. The House components reused as they are:
+    `TierBadge`, `AttributionBadge`, `Portrait`, `PortraitCredit`, `RepresentativeBlock`, `KpiStrip`, `SignedPhp`.
+- **The leaderboards** now link each place to its Senate district page (`senate_href` in `build_leaderboard.py`), not the
+  House bill's. Upload `leaderboard.json` after the merge that ships the routes.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
-- Districts, maps and leaderboards for the Senate version; MPB, flood control and foreign-assisted pages
-  don't have a Senate column yet.
+- Maps for the Senate version; flood control and foreign-assisted pages don't have a Senate column yet (the
+  multi-purpose buildings pages do: PR #112).
+- The Senate district pages have no budget-history chart or map of their own; they link to the House bill page's.
 - Unprogrammed Appropriations and DOE corporations: Annex A rows are parsed, but our House tables don't
   hold those sections.
 - Annex A-3B (the NIA watershed list) and Annex A-5 (TIEZA/TPB pages) are not parsed into rows.

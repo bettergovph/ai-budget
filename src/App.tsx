@@ -50,6 +50,8 @@ const SenateAbout = lazy(() => import('./pages/SenateAbout'));
 const SenateData = lazy(() => import('./pages/SenateData'));
 const SenateReport = lazy(() => import('./pages/SenateReport'));
 const SenateLeaderboard = lazy(() => import('./pages/SenateLeaderboard'));
+const SenateDistricts = lazy(() => import('./pages/SenateDistricts'));
+const SenateDistrict = lazy(() => import('./pages/SenateDistrict'));
 const HgabSources = lazy(() => import('./pages/HgabSources'));
 const HgabExplorer = lazy(() => import('./pages/HgabExplorer'));
 const HgabExplorerDept = lazy(() => import('./pages/HgabExplorerDept'));
@@ -238,6 +240,8 @@ export default function App() {
           <Route path="/senate/2027/data" element={<SenateData />} />
           <Route path="/senate/2027/leaderboard" element={<SenateLeaderboard />} />
           <Route path="/senate/2027/leaderboard/:board" element={<SenateLeaderboard />} />
+          <Route path="/senate/2027/districts" element={<SenateDistricts />} />
+          <Route path="/senate/2027/districts/:id" element={<SenateDistrict />} />
           {/* Unlinked for now: no menu, not in the sitemap, noindex (seo.ts). */}
           <Route path="/senate/2027/report/*" element={<SenateReport />} />
           <Route path="/senate/2027/:dataset" element={<SenateProgram />} />

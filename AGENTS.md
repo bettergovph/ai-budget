@@ -257,6 +257,7 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   Dataset: `/senate/2027/data` and `data/senate/2027/downloads/` (`build_downloads.py`, last step of
   `build:senate-cr`): CSV + Parquet, README, manifest, SHA256SUMS.txt, ZIP and 38 checks (26 on the report's
   printed totals and arithmetic, where a failure stops the build; 12 on page links, reported). Sub-nav: Overview, Line by line, the four programs, Provisions, About.
+  Districts `/senate/2027/districts` and `/districts/:id` (2026-11-23, branch `senate-districts`): the House district pages' design over the House index plus `senate/2027/districts.json` (`build_districts.py`, last step of `build:senate-cr`; every office's House figure checked against `districts.json`); the leaderboards now link places to them. Docs: `docs/senate-cr-2027.md`, "Districts".
   Leaderboards `/senate/2027/leaderboard` (2026-11-21): 18 boards on the House leaderboards' office groups and people
   (`build_leaderboard.py`, `SenateLeaderboard.tsx`, `src/lib/senate-leaderboard.ts`); the House board pieces take
   their boards and address from `LeaderboardSiteContext`. No share images yet.
@@ -331,6 +332,7 @@ Re-check before relying on any of this: `gh pr list`, plus `git worktree list` a
 | Documents per project + project reviewer (`build:hgab-documents`, `/hgab/2027/review`) | worktree `/tmp/wt-hgab-docs`, branch `hgab-review-docs`, preview :5144 | PR #82 open 2026-11-12; `documents/` on R2; Clerk sign-in + D1 submissions added 2026-11-13 (production secret, build variable and remote tables not set up yet); open: nav link |
 | "Multi-purpose buildings or classrooms?" page + poster (`/gaa/multi-purpose/documents`) | worktree `mpb-documents`, branch `hgab-mpb-documents`, preview :5147 | PR #95 MERGED 2026-11-15 (data, paper posters and og image on R2); Taglish street posters on R2 2026-11-15; reviewer either-id links + documents on DPWH project pages + Taglish poster script in branch `hgab-record-documents` |
 | Senate Committee Report: parse + map, then the `/senate/2027` section | worktree `senate-cr`, branch `senate-cr-2027`, PR #106, preview :5155 | Data in `data/senate-cr/2027/` and `data/senate/2027/` (not on R2 yet); source PDFs in `/data/senate-cr-2027/raw`; awaiting review before upload + merge |
+| Senate district pages (`/senate/2027/districts`) | worktree `senate-districts`, branch `senate-districts`, preview :5157 | Built 2026-11-23; `senate/2027/districts.json` to upload before the merge, `leaderboard.json` (new links) after |
 | GAA history scripts (`scripts/gaa-history/`, `docs/gaa-history.md`) | main checkout `~/projects/ai-reports`, untracked | Committed in PR #74 |
 
 **Open questions for the maintainer:**
