@@ -50,3 +50,6 @@
 .mpbd-star { display: block; margin-bottom: 6px; color: var(--ink); font-weight: 500; }
 .mpbd-table tr.is-next th, .mpbd-table tr.is-next td { border-top: 2px solid var(--ink-3, #6b7385); font-weight: 400; color: var(--ink-2); }
 .mpbd-table th.mpbd-indent.is-2 { padding-left: 44px; }
+.mpbd-table th.mpbd-indent.is-3 { padding-left: 64px; font-weight: 400; color: var(--ink-2); }
+/* The Senate committee report cuts the project to ₱0: ink, beside the red House insertion tag. */
+.mpbd-tag.is-senate-cut { margin-left: 4px; background: var(--ink, #141414); }

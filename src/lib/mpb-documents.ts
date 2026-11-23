@@ -102,6 +102,18 @@ export interface MpbDocsSummary {
   confidence: Record<'high' | 'medium' | 'low', number>;
   checks: Array<{ key: string; ok: boolean; detail: string }>;
   outputs: Record<'projects.json' | 'projects.csv', { sha256: string; bytes: number }>;
+  /**
+   * The Senate committee report on the projects read (Jason, 2026-11-23: "we need to add the senate committee report
+   * across pages"), from mpb-years/senate.json: those it keeps (at its amounts) and cuts to ₱0 (at their House bill
+   * amounts), in all, by kind and for the classrooms.
+   */
+  senate: {
+    source: { file: string; sha256: string; built_at: string };
+    kept: Tally;
+    cut: Tally;
+    by_category: Array<{ key: MpbDocCategory; kept: Tally; cut: Tally }>;
+    classroom: { kept: Tally; cut: Tally };
+  };
 }
 
 /** projects.json: one row per project read, in `cols` order (trailing nulls dropped). */
@@ -109,6 +121,7 @@ export const MPB_DOCS_COLS = [
   'id', 'title', 'php', 'office', 'region', 'category', 'facility', 'at_school', 'classroom', 'mismatch', 'mismatch_note',
   'storeys', 'classrooms', 'floor_area_sqm', 'purpose', 'description', 'cost_php', 'documents', 'confidence',
   'quote_facility', 'quote_purpose', 'barangay', 'municipality', 'province', 'site_name', 'inserted', 'files',
+  'senate_report_php', 'senate_report_status',
 ] as const;
 export interface MpbDocsProjectsFile { schema: 1; built_at: string; cols: typeof MPB_DOCS_COLS; rows: unknown[][] }
 
@@ -141,6 +154,9 @@ export interface MpbDocProject {
   inserted: boolean;
   /** The project's Senate files. */
   files: number;
+  /** The Senate committee report's amount (0 when it cuts the project) and status (unchanged, renamed, cut, reduced). */
+  senateReportPhp: number | null;
+  senateReportStatus: string | null;
   search: string;
 }
 
@@ -156,7 +172,7 @@ export function decodeMpbDocProjects(f: MpbDocsProjectsFile): MpbDocProject[] {
       floorAreaSqm: at(r, 'floor_area_sqm'), purpose: at(r, 'purpose'), description: at(r, 'description'), costPhp: at(r, 'cost_php'),
       documents: at<string[] | null>(r, 'documents') ?? [], confidence: at(r, 'confidence'), quoteFacility: at(r, 'quote_facility'),
       quotePurpose: at(r, 'quote_purpose'), place, siteName: at(r, 'site_name'), inserted: at(r, 'inserted') === 1,
-      files: at<number | null>(r, 'files') ?? 0, search: '',
+      files: at<number | null>(r, 'files') ?? 0, senateReportPhp: at(r, 'senate_report_php'), senateReportStatus: at(r, 'senate_report_status'), search: '',
     };
     p.search = [p.title, p.facility, p.office, p.region, place, p.siteName, CATEGORY_LABEL[p.category]].filter(Boolean).join(' ').toLowerCase();
     return p;

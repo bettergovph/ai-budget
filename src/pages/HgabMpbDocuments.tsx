@@ -16,6 +16,8 @@ import { dataUrl } from '../lib/data-url';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
 import { REVIEW_ROOT } from '../lib/hgab-review';
 import { MPB_CARD_DISCLAIMER } from '../lib/hgab-disclaimers';
+import { SenateReviewBanner } from '../components/SenateBits';
+import { MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import {
   CATEGORY_LABEL, MISMATCH_LABEL, MPB_DOCS_CSV_NAME, MPB_DOCS_PROJECTS_PATH, MPB_DOCS_SUMMARY_PATH, MPB_DOCS_TITLE, MPB_DOC_CATEGORIES,
   decodeMpbDocProjects, mpbDocsCsvPath, type MpbDocCategory, type MpbDocProject, type MpbDocsProjectsFile, type MpbDocsSummary,
@@ -33,6 +35,9 @@ const docsHref = (id: string) => `${REVIEW_ROOT}?p=${encodeURIComponent(id)}`;
 const PAGE = 60;
 
 type Only = '' | 'classrooms' | 'school' | 'different';
+/** The Senate committee report's word on a project: kept (any amount above ₱0) or cut to ₱0. */
+type SenateFilter = '' | 'kept' | 'cut';
+const senateCut = (p: MpbDocProject) => p.senateReportPhp === 0;
 type Sort = 'amount' | 'title';
 
 function load(): Promise<{ summary: MpbDocsSummary; projects: MpbDocProject[] }> {
@@ -91,10 +96,13 @@ function Page({ summary: s, projects }: { summary: MpbDocsSummary; projects: Mpb
             </span>{' '}
             Each project’s project profile (BP 202), program of work, plans and site photos say what will be built. A model read them and
             quoted them; every project below links to its documents. Amounts are allocations, not spending. Documents read as of {asOf}.
+            {' '}The Senate committee report keeps {n(s.senate.kept.lines)} of the {n(read.lines)} and cuts {n(s.senate.cut.lines)} to ₱0; it keeps
+            {' '}{n(s.senate.classroom.kept.lines)} of the {n(cls.lines)} classrooms.
           </>
         }
       />
       <main className="nep-main mpbd-main">
+        <SenateReviewBanner compact />
         <div className="mpbd-strip" role="list">
           <div role="listitem" className="is-red"><strong>{n(cls.lines)} of {n(read.lines)}</strong><span>inserted multi-purpose building projects read are classrooms or school buildings, {big(cls.php)} ({pct(cls.lines, read.lines)})</span></div>
           <div role="listitem"><strong>{n(halls.lines + courts.lines)}</strong><span>multi-purpose halls ({n(halls.lines)}) and covered courts or gyms ({n(courts.lines)}), {big(halls.php + courts.php)}</span></div>
@@ -116,6 +124,7 @@ function Page({ summary: s, projects }: { summary: MpbDocsSummary; projects: Mpb
             `How: a language model (${s.source.model}) filled one record per project from those pages and quoted them. It was told to describe what will be built, even when the title calls it something else.`,
             'A classroom here is a building the documents describe as classrooms or a school building. A hall or court on school grounds counts as at a school, not as a classroom.',
             `The reading can be wrong. Open a project’s documents to check; ${n(s.confidence.high)} of ${n(read.lines)} readings were marked high confidence.`,
+            `The Senate committee report is the Senate Committee on Finance’s amendments to the House bill; the Senate still votes on it. It keeps ${n(s.senate.kept.lines)} of the ${n(read.lines)} projects (${big(s.senate.kept.php)}) and cuts ${n(s.senate.cut.lines)} to ₱0 (${big(s.senate.cut.php)} in the House bill). “Senate’s copies” on this page are the documents DPWH gave the Senate, not the report.`,
             'No personal names were read. The documents do not say who asked for any project.',
           ]} />
           <p className="mpbd-more">
@@ -134,7 +143,7 @@ function Page({ summary: s, projects }: { summary: MpbDocsSummary; projects: Mpb
 function WhichProjects({ summary: s }: { summary: MpbDocsSummary }) {
   const c = s.coverage;
   // The chain the page's star note reads: all DPWH insertions, the multi-purpose buildings among them, those read.
-  const rows: Array<{ label: string; v: { lines: number; php: number; files?: number }; strong?: boolean; level?: 1 | 2; next?: boolean }> = [
+  const rows: Array<{ label: string; v: { lines: number; php: number; files?: number }; strong?: boolean; level?: 1 | 2 | 3; next?: boolean }> = [
     { label: 'DPWH projects inserted by the House (no matching line in the NEP), all kinds', v: { ...c.dpwh.insertions, files: c.dpwh.with_documents.files }, strong: true },
     { label: '… with documents in the Senate’s copies', v: c.dpwh.with_documents, level: 1 },
     { label: '… with no documents', v: c.dpwh.without_documents, level: 1 },
@@ -142,6 +151,8 @@ function WhichProjects({ summary: s }: { summary: MpbDocsSummary }) {
     { label: '… with documents in the Senate’s copies', v: c.with_documents, level: 2 },
     { label: '… with no documents', v: c.without_documents, level: 2 },
     { label: '… whose documents we have read so far', v: c.read, strong: true, level: 2 },
+    { label: '… kept by the Senate committee report (at its amounts)', v: s.senate.kept, level: 3 },
+    { label: '… cut by it to ₱0 (at their House bill amounts)', v: s.senate.cut, level: 3 },
     { label: 'For reference: all multi-purpose building projects in the House bill, inserted or in the NEP', v: c.house, next: true },
   ];
   const kinds = s.documents_read.by_kind;
@@ -166,7 +177,7 @@ function WhichProjects({ summary: s }: { summary: MpbDocsSummary }) {
           <tbody>
             {rows.map((r) => (
               <tr key={`${r.label}${r.v.lines}`} className={[r.strong && 'is-strong', r.next && 'is-next'].filter(Boolean).join(' ') || undefined}>
-                <th scope="row" className={r.level ? `mpbd-indent${r.level === 2 ? ' is-2' : ''}` : undefined}>{r.label}</th>
+                <th scope="row" className={r.level ? `mpbd-indent${r.level > 1 ? ` is-${r.level}` : ''}` : undefined}>{r.label}</th>
                 <td className="is-num">{n(r.v.lines)}</td>
                 <td className="is-num">{short(r.v.php)}</td>
                 <td className="is-num">{r.v.files ? n(r.v.files) : '—'}</td>
@@ -186,6 +197,7 @@ function WhichProjects({ summary: s }: { summary: MpbDocsSummary }) {
 
 function Breakdown({ summary: s }: { summary: MpbDocsSummary }) {
   const max = Math.max(...s.categories.map((c) => c.lines));
+  const senateOf = (k: MpbDocCategory) => s.senate.by_category.find((x) => x.key === k);
   return (
     <section className="nep-section mpbd-section" aria-labelledby="mpbd-what-h">
       <h2 id="mpbd-what-h" className="mpbd-h2">What the documents say they are</h2>
@@ -193,7 +205,10 @@ function Breakdown({ summary: s }: { summary: MpbDocsSummary }) {
       <div className="mpbd-tablewrap">
         <table className="mpbd-table mpbd-bars">
           <thead>
-            <tr><th scope="col">What will be built</th><th scope="col" className="is-num">Projects</th><th scope="col" aria-label="Share" /><th scope="col" className="is-num">Amount</th><th scope="col" className="is-num">At a school</th></tr>
+            <tr>
+              <th scope="col">What will be built</th><th scope="col" className="is-num">Projects</th><th scope="col" aria-label="Share" /><th scope="col" className="is-num">Amount</th><th scope="col" className="is-num">At a school</th>
+              <th scope="col" className="is-num" title="Projects the Senate committee report keeps">Senate keeps</th><th scope="col" className="is-num" title="Projects the Senate committee report cuts to ₱0">Senate cuts</th>
+            </tr>
           </thead>
           <tbody>
             {s.categories.map((c) => (
@@ -203,17 +218,20 @@ function Breakdown({ summary: s }: { summary: MpbDocsSummary }) {
                 <td className="mpbd-bar"><i style={{ width: `${Math.max(0.6, (80 * c.lines) / max)}%` }} /><span>{pct(c.lines, s.coverage.read.lines)}</span></td>
                 <td className="is-num">{short(c.php)}</td>
                 <td className="is-num">{c.at_school ? n(c.at_school) : '—'}</td>
+                <td className="is-num">{n(senateOf(c.key)?.kept.lines ?? 0)}</td>
+                <td className="is-num">{n(senateOf(c.key)?.cut.lines ?? 0)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr><th scope="row">Projects read</th><td className="is-num">{n(s.coverage.read.lines)}</td><td /><td className="is-num">{short(s.coverage.read.php)}</td><td className="is-num">{n(s.at_school.yes.lines)}</td></tr>
+            <tr><th scope="row">Projects read</th><td className="is-num">{n(s.coverage.read.lines)}</td><td /><td className="is-num">{short(s.coverage.read.php)}</td><td className="is-num">{n(s.at_school.yes.lines)}</td><td className="is-num">{n(s.senate.kept.lines)}</td><td className="is-num">{n(s.senate.cut.lines)}</td></tr>
           </tfoot>
         </table>
       </div>
       <p className="mpbd-more">
         A multi-purpose hall is a building the documents call a multi-purpose building or hall without naming another use.
         At a school: the documents put the site on school grounds ({n(s.at_school.unclear.lines)} more do not say).
+        Senate keeps and cuts: the Senate committee report’s word on each project, kept or cut to ₱0 (<Link to={MPB_COMPARE_ROOT}>every multi-purpose building line, NEP to Senate →</Link>).
       </p>
     </section>
   );
@@ -233,6 +251,7 @@ function ProjectRow({ p, quote }: { p: MpbDocProject; quote?: boolean }) {
         {quote && p.quoteFacility && <q className="mpbd-quote">{p.quoteFacility}</q>}
         {p.atSchool === 'yes' && p.classroom !== 'yes' && <span className="mpbd-sub">At a school{p.siteName ? `: ${p.siteName}` : ''}</span>}
         {p.inserted && <span className="mpbd-tag">House insertion</span>}
+        {senateCut(p) && <span className="mpbd-tag is-senate-cut" title="The Senate committee report cuts this project to ₱0">Cut by the Senate</span>}
       </td>
       <td className="is-num">{peso(p.php)}</td>
       <td><a href={docsHref(p.id)}>Documents</a></td>
@@ -243,12 +262,13 @@ function ProjectRow({ p, quote }: { p: MpbDocProject; quote?: boolean }) {
 function Classrooms({ rows }: { rows: MpbDocProject[] }) {
   const php = rows.reduce((a, p) => a + p.php, 0);
   const counted = rows.reduce((a, p) => a + (p.classrooms ?? 0), 0);
+  const cut = rows.filter(senateCut).length;
   return (
     <section className="nep-section mpbd-section" id="classrooms" aria-labelledby="mpbd-cls-h">
       <h2 id="mpbd-cls-h" className="mpbd-h2">The {n(rows.length)} that are classrooms</h2>
       <p className="mpbd-dek">
         {big(php)} in all. Their documents describe school buildings{counted ? `, ${n(counted)} classrooms where they give a count` : ''}, though
-        most titles say only “multi-purpose building”.
+        most titles say only “multi-purpose building”. The Senate committee report keeps {n(rows.length - cut)} of them and cuts {n(cut)} to ₱0.
       </p>
       <div className="mpbd-tablewrap">
         <table className="mpbd-table">
@@ -289,6 +309,7 @@ function Explorer({ projects, summary: s }: { projects: MpbDocProject[]; summary
   const cat = catParam && (MPB_DOC_CATEGORIES as readonly string[]).includes(catParam) ? (catParam as MpbDocCategory) : '';
   const only = (['classrooms', 'school', 'different'].includes(params.get('only') ?? '') ? params.get('only') : '') as Only;
   const sort: Sort = params.get('sort') === 'title' ? 'title' : 'amount';
+  const senate = (['kept', 'cut'].includes(params.get('senate') ?? '') ? params.get('senate') : '') as SenateFilter;
   const [q, setQ] = useState(params.get('q') ?? '');
   const [shown, setShown] = useState(PAGE);
   const set = (k: string, v: string) => {
@@ -303,10 +324,11 @@ function Explorer({ projects, summary: s }: { projects: MpbDocProject[]; summary
       && (only !== 'classrooms' || p.classroom === 'yes')
       && (only !== 'school' || p.atSchool === 'yes')
       && (only !== 'different' || p.mismatch === 'different facility')
+      && (!senate || (senate === 'cut') === senateCut(p))
       && words.every((w) => p.search.includes(w)))
     .sort(sort === 'title' ? (a, b) => a.title.localeCompare(b.title) : (a, b) => b.php - a.php),
   // eslint-disable-next-line react-hooks/exhaustive-deps -- words derive from q
-  [projects, cat, only, sort, q]);
+  [projects, cat, only, senate, sort, q]);
   const php = rows.reduce((a, p) => a + p.php, 0);
   return (
     <section className="nep-section mpbd-section" id="projects" aria-labelledby="mpbd-all-h">
@@ -331,6 +353,14 @@ function Explorer({ projects, summary: s }: { projects: MpbDocProject[]; summary
             <option value="classrooms">Classrooms</option>
             <option value="school">At a school</option>
             <option value="different">Documents describe something else</option>
+          </select>
+        </label>
+        <label>
+          <span>Senate committee report</span>
+          <select value={senate} onChange={(e) => set('senate', e.target.value)}>
+            <option value="">Kept or cut</option>
+            <option value="kept">Kept ({n(s.senate.kept.lines)})</option>
+            <option value="cut">Cut to ₱0 ({n(s.senate.cut.lines)})</option>
           </select>
         </label>
         <label>
