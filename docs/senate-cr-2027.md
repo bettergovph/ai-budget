@@ -299,7 +299,8 @@ default). Its tables show the House bill and the Senate beside the ranked figure
 ## Districts
 
 `/senate/2027/districts` and `/senate/2027/districts/:id` (Jason, 2026-11-23: "Next is do the district, similar to HGAB's
-district pages"; "Districts" after "Leaderboards" in the Senate sub-nav). They mirror the House bill's district pages and
+district pages"; a "Districts ▾" menu after "Leaderboards" in the Senate sub-nav, as the House bill's, with the three views;
+the phone drawer has the same group). They mirror the House bill's district pages and
 read the House district index (`data/hgab/2027/districts.json`: districts, offices, tiers, representatives) beside the
 Senate layer `senate/2027/districts.json`.
 

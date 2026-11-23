@@ -57,11 +57,6 @@ export default function SenateDistricts() {
       />
       <main className="nep-main sdx-main">
         <SenateReviewBanner compact />
-        <nav className="hgab-ds-dims sdx-views" aria-label="Views">
-          {SENATE_DISTRICT_VIEWS.map((v) => (
-            <Link key={v.key} to={senateDistrictsHref(v.key)} aria-current={v.key === view ? 'page' : undefined} className={v.key === view ? 'is-on' : undefined}>{v.label}</Link>
-          ))}
-        </nav>
         {view === 'overview' && <Overview data={data} />}
         {view === 'list' && <DistrictList data={data} region={params.get('region')} q={params.get('q') ?? ''} sort={params.get('sort')}
           set={(k, v) => { const p = new URLSearchParams(params); if (v) p.set(k, v); else p.delete(k); setParams(p, { replace: true }); }} />}
