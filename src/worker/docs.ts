@@ -937,6 +937,16 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>23 November 2026</h3>
+<ul>
+  <li><b>Multi-purpose buildings: the Senate committee report.</b> The
+      <a href="${SITE}/hgab/2027/multi-purpose/nep-vs-house-bill">NEP vs House bill</a> page now adds the Senate
+      Committee on Finance's report on House Bill 10858 as a third map and a column in every table: it keeps 4,007 of
+      the House bill's 5,807 multi-purpose building lines (₱57.1 billion of ₱86.3 billion) and cuts 1,800 to ₱0.
+      New data files: <code>hgab/2027/mpb-years/senate.json</code> and <code>senate.csv</code>, one row per House bill
+      line with its Senate amount and status. The API did not change.</li>
+</ul>
+
 <h3>9 November 2026</h3>
 <ul>
   <li><b>Where the 2027 budget is now.</b> The <a href="${SITE}/2027/overview">NEP overview</a>, where the site

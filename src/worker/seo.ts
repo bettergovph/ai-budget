@@ -207,7 +207,7 @@ const STATIC_SITEMAP_PATHS = [
   HISTORY_ROOT,
   // Every multi-purpose building line, FY2020 to the 2027 House bill, on a map.
   MPB_MAP_ROOT,
-  // The 2027 NEP and House bill side by side, for multi-purpose buildings.
+  // The 2027 NEP, House bill and Senate committee report side by side, for multi-purpose buildings.
   MPB_COMPARE_ROOT,
   // Flood control in 2025, 2026 and 2027, side by side.
   FLOOD_COMPARE_ROOT,

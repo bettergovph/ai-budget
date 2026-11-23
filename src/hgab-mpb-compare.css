@@ -150,6 +150,8 @@
 }
 .mpbc-matrix thead th:first-child { position: sticky; left: 0; z-index: 2; }
 .mpbc-matrix tfoot th, .mpbc-matrix tfoot td { border-top: 2px solid var(--rule); font-weight: 700; background: var(--paper-2); }
+/* Long row labels wrap, so a grid with the 2027 Senate column still fits the page ("Not in one district · shared offices …"). */
+.mpbc-matrix tbody th { white-space: normal; min-width: 16ch; max-width: 34ch; }
 @media (max-width: 760px) { .mpbc-matrix-name { display: none; } }
 /* The party grid: each Congress over its years; rows that carry no party plain. */
 .mpbc-matrix .mpbc-groups th { padding: 5px 8px 0; text-align: center; font-size: 11px; font-weight: 600; color: var(--ink-3);

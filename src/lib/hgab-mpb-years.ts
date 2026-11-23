@@ -38,6 +38,55 @@ export const MPB_SUMMARY_PATH = `${BASE}/summary.json`;
 export const MPB_DISTRICTS_PATH = `${BASE}/districts.geojson`;
 export const MPB_CSV_PATH = `${BASE}/lines.csv`;
 export const MPB_CSV_NAME = 'bettergov-multi-purpose-buildings-2015-2027.csv';
+
+/**
+ * The Senate committee report on HB 10858 for the 2027 House bill lines (Jason, 2026-11-23: "We need to add the Senate
+ * CR on the MPB pages"): a sidecar to lines.json, from the Senate report pipeline's DPWH mapping
+ * (data/senate-cr/2027/dpwh_senate.csv, `npm run build:senate-cr`), by `npm run build:mpb-senate`. One row per House bill
+ * line: its Senate amount, status and report page. The report adds no DPWH project, so there are no other lines.
+ */
+export const MPB_SENATE_PATH = `${BASE}/senate.json`;
+export const MPB_SENATE_CSV_PATH = `${BASE}/senate.csv`;
+export const MPB_SENATE_CSV_NAME = 'bettergov-multi-purpose-buildings-2027-senate-committee-report.csv';
+/** The Senate report pipeline's statuses for a House bill project (renamed: same amount, the Senate's own name). */
+export const MPB_SENATE_STATUSES = ['unchanged', 'renamed', 'cut', 'reduced', 'raised'] as const;
+export type MpbSenateStatus = (typeof MPB_SENATE_STATUSES)[number];
+export interface MpbSenateTally { lines: number; php: number }
+export interface MpbSenateFile {
+  schema: 1;
+  built_at: string;
+  /** The mapping read, and the lines it was joined to. */
+  source: { file: string; sha256: string; lines_built_at: string };
+  statuses: typeof MPB_SENATE_STATUSES;
+  /** [line id, Senate amount (pesos; 0 when cut), status index, the report's page or null], one per House bill line. */
+  rows: Array<[string, number, number, number | null]>;
+  totals: {
+    house: MpbSenateTally;
+    senate: MpbSenateTally;
+    /** House bill lines the report cuts to zero, at their House bill amounts; and those the House inserted. */
+    cut: MpbSenateTally;
+    cut_inserted: MpbSenateTally;
+    /** House insertions the report keeps, at their Senate amounts. */
+    kept_inserted: MpbSenateTally;
+    by_status: Record<MpbSenateStatus, MpbSenateTally>;
+  };
+  checks: Array<{ key: string; ok: boolean; detail: string }>;
+  outputs: Record<'senate.csv', { sha256: string; bytes: number }>;
+}
+export const mpbSenateCsvPath = (f: Pick<MpbSenateFile, 'outputs'>) => `${MPB_SENATE_CSV_PATH}?v=${f.outputs['senate.csv'].sha256.slice(0, 12)}`;
+
+/** Put the Senate's amount, status and page on each FY2027 House bill line (a cut line's amount is null). */
+export function applyMpbSenate(data: MpbData, f: MpbSenateFile): void {
+  const byId = new Map(f.rows.map((r) => [r[0], r]));
+  for (const l of data.lines) {
+    if (l.fy !== 2027 || l.house == null) continue;
+    const r = byId.get(l.id);
+    if (!r) continue;
+    l.senate = r[1] > 0 ? r[1] : null;
+    l.senateStatus = f.statuses[r[2]];
+    l.senatePage = r[3];
+  }
+}
 /** lines.csv, column by column (the build's CSV_COLUMNS, in order; verify:hgab checks the header). */
 export const MPB_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = [
   { name: 'fiscal_year', about: 'The budget year.' },
@@ -208,6 +257,13 @@ export interface MpbLine {
   housePage: number | null;
   /** FY2019: the page of DBM's technical GAA for DPWH its code is printed on (GAA_2019_DOCUMENT). */
   gaaPage: number | null;
+  /**
+   * FY2027 House bill lines, once `applyMpbSenate` has run: the Senate committee report's amount (null when the report
+   * cuts the line to zero), its status there and the report's page. Undefined until then, and on every other line.
+   */
+  senate?: number | null;
+  senateStatus?: MpbSenateStatus;
+  senatePage?: number | null;
   /** Lower-case title, place and office, for the search box. */
   search: string;
   /** The same-title key (titleKey) with the place, or the office when the title names none. */

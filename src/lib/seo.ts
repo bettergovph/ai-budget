@@ -474,14 +474,14 @@ export function pageMeta(pathname: string): PageMeta {
         "and a request for the documents behind them. Download as PDF to sign or as text to edit.",
     };
   }
-  // Multi-purpose buildings, the 2027 NEP and House bill side by side.
+  // Multi-purpose buildings, the 2027 NEP, House bill and Senate committee report side by side.
   if (p === MPB_COMPARE_ROOT) {
     return {
-      title: `Multi-Purpose Buildings in the 2027 Budget: the NEP vs the House Bill, Side by Side · ${SITE}`,
+      title: `Multi-Purpose Buildings in the 2027 Budget: the NEP, the House Bill and the Senate, Side by Side · ${SITE}`,
       description:
-        "Every DPWH multi-purpose building line in the FY 2027 NEP and in House Bill 10858 (third reading), side by side on " +
-        "two maps, one dot per line: the amounts, the lines only the House bill has, the lines only the NEP has, and the " +
-        "figures by region.",
+        "Every DPWH multi-purpose building line in the FY 2027 NEP, House Bill 10858 (third reading) and the Senate committee " +
+        "report on it, side by side on three maps, one dot per line: the amounts, the lines the House added, the lines the " +
+        "Senate cuts, and the figures by region.",
     };
   }
   // Flood control in 2025, 2026 and 2027, side by side.

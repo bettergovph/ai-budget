@@ -1,7 +1,7 @@
 /**
  * Budgets side by side on maps, one page per topic:
- *   - `/hgab/2027/multi-purpose/nep-vs-house-bill` (Multi-purpose buildings menu → NEP vs House bill): the 2027 NEP and
- *     the House bill, two maps;
+ *   - `/hgab/2027/multi-purpose/nep-vs-house-bill` (Multi-purpose buildings menu): the 2027 NEP, the House bill and the
+ *     Senate committee report, three maps (the Senate since 2026-11-23, with the "Under citizen review" banner);
  *   - `/hgab/2027/flood-control` ("Flood control projects are back"; linked from no menu yet): 2025, 2026 and 2027, three
  *     maps, the 2027 one holding the NEP and the House bill in different colours.
  * One figure, built to be screenshot and published: the headline amounts, the changes, and the maps with every line as
@@ -25,6 +25,8 @@ import {
   type RegionYearMatrix, type ScopeRow, type CompareFigures, type CompareInput, type CompareTopic, type CompareTopicKey,
 } from '../lib/mpb-compare';
 import { PARTY_DATA_ROOT, PARTY_DATA_TITLE } from '../lib/hgab-congress-seats';
+import { SenateReviewBanner } from '../components/SenateBits';
+import { senatePdfUrl, senateProgramPath } from '../lib/senate';
 import { pageMeta } from '../lib/seo';
 import '../nep2027.css';
 import '../hgab-mpb-compare.css';
@@ -67,15 +69,16 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
       <HgabHeader crumb={topic.title} />
       <HgabHero
         compact
-        crumb={<>{crumbHome}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{key === 'flood' ? topic.title : 'NEP vs House bill'}</span></>}
+        crumb={<>{crumbHome}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{key === 'flood' ? topic.title : 'NEP, House bill and Senate'}</span></>}
         title={key === 'flood'
           ? <>Flood control: {n(figures.budgets['gaa-2025'].lines)} lines in 2025, {n(figures.budgets['gaa-2026'].lines)} in 2026, {n(figures.house.lines)} in the 2027 House bill</>
-          : <>The 2027 House bill carries {n(figures.house.lines)} {topic.lineWords}; the NEP carried {n(figures.nep.lines)}</>}
+          : <>The Senate committee report keeps {n(figures.senate.lines)} of the House bill’s {n(figures.house.lines)} {topic.lineWords}; the NEP carried {n(figures.nep.lines)}</>}
         dek={key === 'flood'
           ? <>The 2025 and 2026 budgets and 2027’s NEP and House bill, side by side, with every line on the map. <Link to="?shot=1">Open the figure alone</Link> for a clean screenshot.</>
-          : <>The President’s budget and the House bill, side by side, with every line on the map. <Link to="?shot=1">Open the figure alone</Link> for a clean screenshot.</>}
+          : <>The President’s budget, the House bill and the Senate committee report, side by side, with every line on the map. <Link to="?shot=1">Open the figure alone</Link> for a clean screenshot.</>}
       />
       <main className="nep-main mpbc-main">
+        {topic.panels.includes('senate') && <SenateReviewBanner compact />}
         <DownloadBar topic={topic} input={state} f={figures} />
         <CompareFigure topic={topic} input={state} f={figures} />
         {key === 'mpb' && <RegionTable topic={topic} data={state.data} />}
@@ -107,7 +110,8 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
 /** The figure's words for this data (the image uses the same). */
 function useCopy(topic: CompareTopic, input: CompareInput, f: CompareFigures): CompareCopy {
   const { data, builtAt, foreignOnly } = input;
-  const last = topic.panels[topic.panels.length - 1];
+  // The House bill's lines off the map's edge (the note names the House bill), else the last map's.
+  const last = topic.panels.includes('house') ? 'house' : topic.panels[topic.panels.length - 1];
   const offMap = useMemo(() => panelDots(data, last).filter((d) => d.color !== 'yellow' && !inView(d)).length, [data, last]);
   return useMemo(() => compareCopy(topic, f, builtAt, { offMap, foreignOnly }), [topic, f, builtAt, offMap, foreignOnly]);
 }
@@ -192,7 +196,7 @@ function CompareFigure({ topic, input, f }: FigureProps) {
               {gi > 0 && <li className="mpbc-legend-break" aria-hidden="true" />}
               {g.title && <li className="mpbc-legend-title">{g.title}</li>}
               {g.items.map((l) => (
-                <li key={l.color}><i style={{ background: COMPARE_COLORS.swatch[l.color] }} />{l.label}</li>
+                <li key={`${l.color}${l.label}`}><i style={{ background: COMPARE_COLORS.swatch[l.color] }} />{l.label}</li>
               ))}
             </Fragment>
           ))}
@@ -273,15 +277,24 @@ function CompareMap({ data, geo, panel, stacked }: { data: MpbData; geo: HgabGeo
 
 const regionLabel = (region: RegionRow['region']) => (region ? `${REGION_LABELS[region].short} · ${REGION_LABELS[region].name}` : 'No region');
 
-/** The NEP vs House bill totals by region, with the change (multi-purpose buildings). */
+/**
+ * The totals by region at each stage, with each change (multi-purpose buildings): the NEP and the House bill, then the
+ * Senate committee report against the House bill. Largest at the last stage first.
+ */
 function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
   const rows = useMemo(() => compareByRegion(data, topic.budgets), [data, topic.budgets]);
   const label = regionLabel;
-  const [nepKey, houseKey] = topic.budgets;
+  const [nepKey, houseKey, senateKey] = topic.budgets;
+  const change = (to: number, from: number) => {
+    const p = pct(to, from);
+    return <>{signed(to - from, phpWords)}{p != null && <span className="mpbc-sub">{p > 0 ? '+' : ''}{p}%</span>}</>;
+  };
   return (
     <section className="nep-section mpbc-section" aria-labelledby="mpbc-regions-h">
       <h2 id="mpbc-regions-h" className="mpbc-h2">By region</h2>
-      <p className="mpbc-dek">A line’s region is the one its title or office places it in. Largest House bill amount first.</p>
+      <p className="mpbc-dek">
+        A line’s region is the one its title or office places it in. Largest {senateKey ? 'Senate committee report' : 'House bill'} amount first.
+      </p>
       <div className="mpbc-tablewrap">
         <table className="mpbc-table">
           <thead>
@@ -291,13 +304,18 @@ function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
               <th scope="col" className="is-num">NEP</th>
               <th scope="col" className="is-num">House bill lines</th>
               <th scope="col" className="is-num">House bill</th>
-              <th scope="col" className="is-num">Change</th>
+              <th scope="col" className="is-num">{senateKey ? 'House vs NEP' : 'Change'}</th>
+              {senateKey && <>
+                <th scope="col" className="is-num">Senate lines</th>
+                <th scope="col" className="is-num">Senate</th>
+                <th scope="col" className="is-num">Senate vs House</th>
+              </>}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const [nep, house] = [r.by[nepKey], r.by[houseKey]];
-              const p = pct(house.php, nep.php);
+              const senate = senateKey ? r.by[senateKey] : null;
               return (
                 <tr key={r.region ?? 'none'}>
                   <td>{label(r.region)}</td>
@@ -305,7 +323,12 @@ function RegionTable({ topic, data }: { topic: CompareTopic; data: MpbData }) {
                   <td className="is-num">{phpWords(nep.php)}</td>
                   <td className="is-num">{n(house.lines)}</td>
                   <td className="is-num">{phpWords(house.php)}</td>
-                  <td className="is-num">{signed(house.php - nep.php, phpWords)}{p != null && <span className="mpbc-sub">{p > 0 ? '+' : ''}{p}%</span>}</td>
+                  <td className="is-num">{change(house.php, nep.php)}</td>
+                  {senate && <>
+                    <td className="is-num">{n(senate.lines)}</td>
+                    <td className="is-num">{phpWords(senate.php)}</td>
+                    <td className="is-num">{change(senate.php, house.php)}</td>
+                  </>}
                 </tr>
               );
             })}
@@ -458,10 +481,12 @@ function YearGrid({ id, heading, spec, copy, imageName, after }: {
  */
 function AboutThisData({ topic, about }: { topic: CompareTopic; about: AboutData }) {
   const flood = topic.key === 'flood';
-  const label = (r: ScopeRow) => (r.stage === 'gaa' ? `${r.fy} GAA` : `${r.fy} ${r.stage === 'nep' ? 'NEP' : 'House bill'}`);
+  const label = (r: ScopeRow) => (r.stage === 'gaa' ? `${r.fy} GAA` : r.stage === 'senate' ? `${r.fy} Senate committee report` : `${r.fy} ${r.stage === 'nep' ? 'NEP' : 'House bill'}`);
   const checked = (r: ScopeRow) => (r.check === 'chart' ? 'Our budget-by-year chart'
     : r.check === 'chart_budget_lines' ? `Our budget-by-year chart, for the budget lines (${phpWords(r.chart_php ?? 0)})`
-      : r.check === 'printed_headings' ? 'The headings the document prints' : 'No published total');
+      : r.check === 'printed_headings' ? 'The headings the document prints'
+        : r.check === 'senate_report' ? 'The report’s own totals: our reading of its DPWH projects matches them to the peso' : 'No published total');
+  const senate = about.senate;
   const leftOut = about.scope.some((r) => r.left_out?.lines);
   return (
     <section className="nep-section mpbc-section mpbc-about" id="about-data" aria-labelledby="mpbc-about-h">
@@ -519,6 +544,14 @@ function AboutThisData({ topic, about }: { topic: CompareTopic; about: AboutData
           <div key={f.name}><dt><code>{f.name}</code></dt><dd>{f.about}</dd></div>
         ))}
       </dl>
+      {senate && (
+        <p className="mpbc-dek">
+          <a href={senate.csvUrl} download={senate.csvName}>Download the Senate committee report’s amounts (CSV, {(senate.csvBytes / 1e6).toFixed(1)} MB)</a>.
+          One row per 2027 House bill line ({n(senate.totals.house.lines)}): <code>line_id</code> (as above), its title and the Senate’s,
+          region, office, whether the House inserted it, its NEP, House bill and Senate amounts (<code>senate_php</code>, 0 when cut),
+          its status in the report (unchanged, renamed, cut, reduced), the report’s page and links to both record pages.
+        </p>
+      )}
 
       <h3 className="mpbc-h3">Caveats</h3>
       {flood ? (
@@ -541,13 +574,29 @@ function AboutThisData({ topic, about }: { topic: CompareTopic; about: AboutData
           <li>2015 to 2017 have no multi-purpose building line, so every line there is in by its title.</li>
           <li>Lines in by title add to the totals, so this page and the map run higher than our budget-by-year chart, which counts the budget lines only.</li>
           <li>A title counts when it names a multi-purpose building or hall, the source workbench’s rule. A title that names neither is not counted.</li>
-          {about.scope.filter((r) => r.left_out?.lines).map((r) => (
+          {about.scope.filter((r) => r.left_out?.lines && r.stage !== 'senate').map((r) => (
             <li key={r.key}>The {r.fy} budget lists {n(r.left_out!.lines)} items named for multi-purpose buildings at ₱0; they are left out.</li>
           ))}
           <li>2019 is read from the technical GAA’s text. Its DPWH total differs from the summary volume’s (₱454.0 billion against ₱549.4 billion); we use the technical edition.</li>
           <li>A line’s region is where its title or office places it. Head-office lines that name no place are under No region.</li>
           <li>Offices before 2020 are matched to today’s DPWH offices by name, and legislative districts are today’s.</li>
           <li>2027’s matches between the NEP and the House bill are candidates from comparing documents, not confirmed changes.</li>
+          {senate && <>
+            <li>
+              The Senate column is the Senate Committee on Finance’s report on House Bill 10858, its amendments to the House bill.
+              The Senate still votes on it, and both chambers then settle one text. We have not finished checking our reading of it;
+              confirm a line on its page of <a href={senatePdfUrl('senate-cr-annex-a4')} target="_blank" rel="noopener noreferrer">Annex A-4</a>.
+            </li>
+            <li>
+              The report cuts {n(senate.totals.cut.lines)} of the House bill’s {n(senate.totals.house.lines)} multi-purpose building lines to ₱0 ({phpWords(senate.totals.cut.php)});
+              {' '}{n(senate.totals.cut_inserted.lines)} of them were House insertions. Cut lines are not in its total; its map shows them in yellow.
+            </li>
+            <li>The report adds no DPWH project, so every Senate line is a House bill line. Lines it renames keep their House bill title here; the CSV has the Senate’s.</li>
+            <li>
+              One House bill line, Poblacion West, Taysan, Batangas (₱25 million), is two printed lines in the bill. The report cuts one, so it shows ₱10 million.
+            </li>
+            <li>Every DPWH project in the report: <Link to={senateProgramPath('dpwh')}>the Senate committee report, DPWH →</Link></li>
+          </>}
           <li>Amounts are allocations in the budgets, not spending. A building funded over several years has a line in each year.</li>
         </ul>
       )}

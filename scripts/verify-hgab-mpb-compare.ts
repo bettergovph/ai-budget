@@ -1,7 +1,8 @@
 /**
  * The side-by-side pages, for verify-hgab.ts. Their figures come from src/lib/mpb-compare.ts over each topic's lines;
  * here they are checked against each build's own totals and recounted by class and colour:
- *   - multi-purpose buildings (/hgab/2027/multi-purpose/nep-vs-house-bill): the map's lines, against mpb-years/summary.json;
+ *   - multi-purpose buildings (/hgab/2027/multi-purpose/nep-vs-house-bill): the map's lines, against mpb-years/summary.json,
+ *     and the Senate committee report's amounts on them (mpb-years/senate.json, npm run build:mpb-senate);
  *   - flood control (/hgab/2027/flood-control): flood-compare/, against its summary and the flood control series on the
  *     chart by year (history.json), in all four budgets.
  */
@@ -16,7 +17,9 @@ import {
 } from "../src/lib/hgab-disclaimers";
 import type { PartiesData } from "../src/lib/hgab-parties";
 import type { HistoryData } from "../src/lib/hgab-history";
-import { MPB_CSV_FIELDS, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSummary } from "../src/lib/hgab-mpb-years";
+import {
+  MPB_CSV_FIELDS, MPB_SENATE_STATUSES, applyMpbSenate, decodeMpbLines, type MpbData, type MpbLinesFile, type MpbSenateFile, type MpbSummary,
+} from "../src/lib/hgab-mpb-years";
 import {
   COMPARE_TOPICS, COMPARE_VIEW, FLOOD_CSV_FIELDS, GAA_PANEL_COLOR, budgetSource, floodDistrictMatrix, linesDistrictMatrix,
   matrixCopy, mpbScope, partyCopy, partyGrid, partyMatrix, type DistrictYearMatrix, compareByRegion, compareCopy, compareFigures, floodMatrix, foreignOnlyBudgets,
@@ -230,6 +233,12 @@ function verifyTopic(
   const ok = counts.every((c) => {
     if (c.panel === "gaa-2025" || c.panel === "gaa-2026") return c[GAA_PANEL_COLOR[c.panel]] === drawn(c.panel) && c.blue + c.red + c.yellow === drawn(c.panel);
     if (c.panel === "nep") return c.blue === drawn("nep-2027") && c.red + c.yellow === 0;
+    if (c.panel === "senate") {
+      // The Senate map: the lines it keeps, blue and red by their House bill match; the House bill lines it cuts, yellow.
+      const placed = (f: (l: MpbData["lines"][number]) => boolean) => data.lines.filter((l) => l.fy === 2027 && l.level !== "none" && f(l)).length;
+      return c.blue === placed((l) => l.senate != null && l.cls !== "house_only") && c.red === placed((l) => l.senate != null && l.cls === "house_only")
+        && c.yellow === placed((l) => l.house != null && l.senateStatus != null && l.senate == null) && c.blue + c.red === drawn("senate-2027");
+    }
     return c.blue === drawnCls("paired", "house") && c.red === drawnCls("house_only", "house") && c.yellow === drawnCls("nep_only", "nep")
       && c.blue + c.red === drawn("house-2027");
   });
@@ -249,10 +258,15 @@ function verifyTopic(
   // 2025 is red"): a GAA year's colour beside its year, the House bill / 2027 map's three in their own group.
   const gaaPanels = topic.panels.filter((p): p is "gaa-2025" | "gaa-2026" => p === "gaa-2025" || p === "gaa-2026");
   const matchGroup = cp.legend[cp.legend.length - 1];
+  // With the Senate map: blue and red for every map, then yellow named for each map it means something on.
+  const senateLegend = topic.panels.includes("senate")
+    && cp.legend.map((g) => `${g.title ?? ""}:${g.items.map((l) => l.color).join("+")}`).join("|") === ":blue+red|On the House bill map::yellow|On the Senate map::yellow";
   check(`the legend names each map's colours (${cp.legend.map((g) => `${g.title ? `${g.title} ` : ""}${g.items.map((l) => `${l.color} ${l.label}`).join(", ")}`).join(" | ")})`,
-    gaaPanels.every((p) => cp.legend.some((g) => g.title == null && g.items.some((l) => l.color === GAA_PANEL_COLOR[p] && l.label.startsWith(p.slice(4)))))
+    senateLegend || (gaaPanels.every((p) => cp.legend.some((g) => g.title == null && g.items.some((l) => l.color === GAA_PANEL_COLOR[p] && l.label.startsWith(p.slice(4)))))
       && matchGroup.items.map((l) => l.color).join() === "blue,red,yellow"
-      && (gaaPanels.length === 0 ? cp.legend.length === 1 : cp.legend.length === 2 && /2027/.test(matchGroup.title ?? "")));
+      && (gaaPanels.length === 0 ? cp.legend.length === 1 : cp.legend.length === 2 && /2027/.test(matchGroup.title ?? ""))));
+  check("the figure's notes are sentences of at most 25 words", sentences(cp.notes).every((x) => o.words(x) <= 25),
+    sentences(cp.notes).filter((x) => o.words(x) > 25).join(" | "));
   check("the figure's numbers compare totals only: each map's lines and amount(s), and the changes; no count by match",
     !/\b(only|in both|not in the|added)\b/i.test(numbers.join(" "))
       && /yellow lines are not in the House bill’s total/i.test(cp.notes) && /candidates, not confirmed changes/.test(cp.notes));
@@ -268,21 +282,80 @@ function verifyTopic(
   process.stdout.write(`  ${topic.budgets.map((k) => `${k} ${f.budgets[k].lines} lines ₱${(f.budgets[k].php / 1e9).toFixed(2)}B`).join(" · ")} · House only ${f.houseOnly.lines} · NEP only ${f.nepOnly.lines}\n`);
 }
 
+/**
+ * The Senate committee report on the 2027 House bill lines (Jason, 2026-11-23: "We need to add the Senate CR on the MPB
+ * pages"): senate.json has one row per House bill line, its checks passed, its totals recompute from the rows, the
+ * lines take its amounts (cut lines none), and senate.csv is the JSON's, row by row. Returns the file, applied to `data`.
+ */
+function verifyMpbSenate(check: Check, data: MpbData, dir: string): MpbSenateFile | null {
+  const path = resolve(dir, "senate.json");
+  check("senate.json present (npm run build:mpb-senate)", existsSync(path), path);
+  if (!existsSync(path)) return null;
+  const SN = JSON.parse(readFileSync(path, "utf8")) as MpbSenateFile;
+  check("senate.json: every check the build ran passed", SN.checks.length > 0 && SN.checks.every((c) => c.ok), SN.checks.filter((c) => !c.ok).map((c) => c.key).join(", "));
+  const house = data.lines.filter((l) => l.fy === 2027 && l.house != null);
+  const ids = new Set(SN.rows.map((r) => r[0]));
+  check(`senate.json: one row per House bill line (${n(house.length)}), each status known`,
+    SN.rows.length === house.length && ids.size === house.length && house.every((l) => ids.has(l.id))
+      && SN.statuses.join() === MPB_SENATE_STATUSES.join() && SN.rows.every((r) => r[2] >= 0 && r[2] < SN.statuses.length));
+  applyMpbSenate(data, SN);
+  const kept = house.filter((l) => l.senate != null);
+  const cut = house.filter((l) => l.senate == null);
+  const sum = (xs: typeof house, f: (l: (typeof house)[number]) => number) => xs.reduce((a, l) => a + f(l), 0);
+  check(`senate.json: its totals are its rows: ${n(kept.length)} kept (₱${n(SN.totals.senate.php)}), ${n(cut.length)} cut (₱${n(SN.totals.cut.php)} in the House bill)`,
+    kept.length === SN.totals.senate.lines && sum(kept, (l) => l.senate!) === SN.totals.senate.php
+      && cut.length === SN.totals.cut.lines && sum(cut, (l) => l.house!) === SN.totals.cut.php
+      && cut.every((l) => l.senateStatus === "cut") && kept.every((l) => l.senateStatus !== "cut")
+      && cut.filter((l) => l.cls === "house_only").length === SN.totals.cut_inserted.lines
+      && SN.totals.house.lines === house.length && SN.totals.house.php === sum(house, (l) => l.house!));
+  check("senate.json: the report raises no multi-purpose building line, and reduces one at most (the House row printed as two)",
+    kept.filter((l) => l.senate! > l.house!).length === 0 && kept.filter((l) => l.senate! < l.house!).length <= 1);
+  const csvPath = resolve(dir, "senate.csv");
+  check("senate.csv present", existsSync(csvPath), csvPath);
+  if (existsSync(csvPath)) {
+    const buf = readFileSync(csvPath);
+    const rows = csvRows(buf.toString("utf8").replace(/^\uFEFF/, "")).filter((r) => r.length > 1);
+    const head = rows[0];
+    const col = (k: string) => head.indexOf(k);
+    const byId = new Map(SN.rows.map((r) => [r[0], r]));
+    const off = rows.slice(1).filter((r) => {
+      const j = byId.get(r[col("line_id")]);
+      return !j || Number(r[col("senate_php")]) !== j[1] || r[col("senate_status")] !== SN.statuses[j[2]];
+    });
+    check(`senate.csv: one row per House bill line, its Senate amount and status the JSON's; checksum the JSON's (${head.length} columns)`,
+      rows.length - 1 === SN.rows.length && off.length === 0 && createHash("sha256").update(buf).digest("hex") === SN.outputs["senate.csv"].sha256,
+      off.slice(0, 3).map((r) => r[0]).join(", "));
+  }
+  return SN;
+}
+
 export function verifyMpbCompare(check: Check, o: Opts): void {
   const C = verifyCongressSeats(check, o);
-  process.stdout.write("\nmulti-purpose/nep-vs-house-bill (the 2027 NEP and House bill side by side)\n");
+  process.stdout.write("\nmulti-purpose/nep-vs-house-bill (the 2027 NEP, House bill and Senate committee report side by side)\n");
   const dir = resolve(o.out, "mpb-years");
   const files = ["lines.json", "summary.json"].map((f) => resolve(dir, f));
   check("the map's lines and summary present", files.every((f) => existsSync(f)), dir);
   if (files.every((f) => existsSync(f))) {
     const data = decodeMpbLines(JSON.parse(readFileSync(files[0], "utf8")) as MpbLinesFile);
     const S = JSON.parse(readFileSync(files[1], "utf8")) as MpbSummary;
-    verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => S.budgets.find((x) => x.key === key)!, []);
-    const m = linesMatrix(data, S.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: "title_only" as const }) })));
-    verifyMatrix(check, COMPARE_TOPICS.mpb, data, m, (key) => S.budgets.find((x) => x.key === key), o, S.built_at);
+    const SN = verifyMpbSenate(check, data, dir);
+    if (!SN) return;
+    const total = (key: string) => (key === "senate-2027" ? SN.totals.senate : S.budgets.find((x) => x.key === key));
+    verifyTopic(check, o, COMPARE_TOPICS.mpb, data, S.built_at, (key) => total(key)!, []);
+    const m = linesMatrix(data, [
+      ...S.budgets.map((b) => ({ key: b.key, fy: b.fy, stage: b.stage, ...(b.pap_rule ? {} : { note: "title_only" as const }) })),
+      { key: "senate-2027", fy: 2027, stage: "senate" as const },
+    ]);
+    verifyMatrix(check, COMPARE_TOPICS.mpb, data, m, total, o, S.built_at);
     if (C) verifyPartyMatrix(check, o, COMPARE_TOPICS.mpb, linesDistrictMatrix(data, m.budgets), m.totals, C, S.built_at);
     // About this data (Jason, 2026-11-06: "Let's do the same for MPBs"): the grouping, the fields, the CSV.
-    const sc = mpbScope(data, S);
+    const all = mpbScope(data, S, SN);
+    const senateRow = all[all.length - 1];
+    check("how we grouped them: the Senate committee report's row, last: its lines and amount, by heading, its cuts listed at ₱0",
+      all.length === S.budgets.length + 1 && senateRow.stage === "senate" && senateRow.lines === SN.totals.senate.lines
+        && senateRow.php === SN.totals.senate.php && senateRow.parts.reduce((a, p) => a + p.php, 0) === SN.totals.senate.php
+        && senateRow.left_out?.lines === SN.totals.cut.lines && senateRow.check === "senate_report" && senateRow.source === budgetSource(2027, "senate"));
+    const sc = all.slice(0, -1);
     check(`how we grouped them: one row per budget; budget lines by heading, then lines in by title; each adds up to the map's figures (${[...new Set(sc.flatMap((r) => r.parts.map((p) => p.label)))].join(" | ")})`,
       sc.length === S.budgets.length && sc.every((r, i) => {
         const b = S.budgets[i];

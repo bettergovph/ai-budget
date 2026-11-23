@@ -53,6 +53,7 @@
     "verify:indicators": "tsx scripts/verify-indicators.ts",
     "build:mpb-population": "tsx scripts/build-mpb-population.ts",
     "build:mpb-documents": "tsx scripts/build-mpb-documents.ts",
+    "build:mpb-senate": "tsx scripts/build-mpb-senate.ts",
     "build:citizen-reports": "tsx scripts/build-citizen-report-shots.ts",
     "build:hgab-review-howto": "tsx scripts/build-hgab-review-howto.ts",
     "import:cycle": "tsx scripts/import-budget-cycle.ts",

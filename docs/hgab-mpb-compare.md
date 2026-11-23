@@ -1,8 +1,9 @@
 # Budgets side by side on maps: multi-purpose buildings and flood control
 
 Two pages, one design (`CompareTopic` in `src/lib/mpb-compare.ts`):
-- `/hgab/2027/multi-purpose/nep-vs-house-bill`: the 2027 NEP vs the House bill, two maps. It's in the Multi-purpose
-  buildings menu → NEP vs House bill, which is hidden in the nav for now (see `NAV_HIDDEN`).
+- `/hgab/2027/multi-purpose/nep-vs-house-bill`: the 2027 NEP, the House bill and (since 2026-11-23) the Senate
+  committee report, three maps. It's in the Multi-purpose buildings menu → "NEP, House bill and Senate", which is hidden
+  in the nav for now (see `NAV_HIDDEN`). See [The Senate committee report](#the-senate-committee-report).
 - `/hgab/2027/flood-control`, "Flood control projects are back": 2025, 2026 and 2027, three maps. No menu entry yet;
   see [Flood control](#flood-control) below.
 
@@ -10,6 +11,36 @@ Jason (2026-11-05): "a different page side by side comparison of 2027's NEP vs H
 points visible in the philippines to demonstrate the density and intensity of the changes … numbers visible as I would
 be publishing the page and take a screenshot of the section … Poster can follow after. We need the map view for visual
 impact."
+
+## The Senate committee report
+
+Jason (2026-11-23): "We need to add the Senate CR on the MPB pages". The Senate Committee on Finance's report on HB 10858
+(`docs/senate-cr-2027.md`) is the third 2027 stage on the multi-purpose buildings page.
+
+- **Data:** `npm run build:mpb-senate` (`scripts/build-mpb-senate.ts`) joins the Senate report pipeline's DPWH mapping
+  (`data/senate-cr/2027/dpwh_senate.csv`, `npm run build:senate-cr`) to the map's FY2027 House bill lines by id and
+  writes a sidecar, so the map isn't rebuilt: `mpb-years/senate.json` (one row per House bill line: Senate amount, status,
+  the report's Annex A-4 page; totals; checks; the CSV's checksum) and `mpb-years/senate.csv` (14 columns, for download).
+  The build stops unless every House bill line has a row at the same House amount, every status is known, a cut line is
+  at ₱0 and nothing else is, and the report adds no DPWH project (it adds none).
+- **The page** (`loadMpbCompare` applies it with `applyMpbSenate`; `MpbLine.senate`, null when cut):
+  - a third map, **Senate**: the lines the report keeps, blue (in the NEP too) and red (House additions), and the House
+    bill lines it cuts, yellow, at their House bill amount; the legend names yellow per map;
+  - a third headline line ("₱57.1 billion in the Senate committee report."), and two cells: −₱29.2 billion in the
+    Senate (34% less than the House bill), 1,800 House bill lines cut (NEP 2,815 → House bill 5,807 → Senate 4,007);
+  - the hero: "The Senate committee report keeps 4,007 of the House bill's 5,807 multi-purpose building lines; the NEP
+    carried 2,815"; the compact "Under citizen review" banner (`SenateReviewBanner`, while `SENATE_UNDER_REVIEW`);
+  - By region: Senate lines, Senate and Senate vs House columns, largest Senate amount first;
+  - By region and year, By party and year: a "2027 Senate" column (20th Congress); long row labels wrap so it fits;
+  - About this data: a "2027 Senate committee report" row (BIP lines and lines in by title; the 1,800 cut lines listed
+    at ₱0), the Senate CSV, and caveats (not yet passed; cuts to ₱0, none partway but the split Taysan row; no DPWH
+    additions; renamed lines keep the House title).
+- **Figures (2026-11-23):** House bill 5,807 lines, ₱86.26B → Senate 4,007, ₱57.10B. Cut 1,800 (₱29.15B), 1,625 of them
+  House insertions (₱24.85B); insertions kept 1,683 (₱23.35B). Statuses: 1,993 unchanged, 2,013 renamed, 1,800 cut,
+  1 reduced (Poblacion West, Taysan, Batangas: our ₱25M row is two printed lines, ₱15M and ₱10M; the report cuts one).
+- **verify:hgab** (`verifyMpbSenate` in `scripts/verify-hgab-mpb-compare.ts`): the sidecar's rows, totals and CSV, and
+  the Senate map's dots, legend, region and grid columns, and the scope row.
+- **Upload** `mpb-years/senate.json` and `senate.csv` before the merge that ships the page.
 
 ## The figure (screenshot this)
 

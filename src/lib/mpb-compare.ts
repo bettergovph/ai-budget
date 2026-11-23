@@ -1,7 +1,8 @@
 /**
  * Budgets side by side: the figures, and every line as a dot on maps drawn the same way. One page per topic
  * (`CompareTopic`):
- *   - multi-purpose buildings (`/hgab/2027/multi-purpose/nep-vs-house-bill`): the 2027 NEP and the House bill, two maps;
+ *   - multi-purpose buildings (`/hgab/2027/multi-purpose/nep-vs-house-bill`): the 2027 NEP, the House bill and the Senate
+ *     committee report, three maps (Jason, 2026-11-23: "We need to add the Senate CR on the MPB pages");
  *   - flood control (`/hgab/2027/flood-control`, "Flood control projects are back"): the 2025 and 2026 budgets and 2027,
  *     three maps; the 2027 map holds the NEP and the House bill together, told apart by colour.
  *
@@ -30,25 +31,31 @@
 import type { CongressSeatsFile } from './hgab-congress-seats';
 import { COMPARE_CARD_DISCLAIMER, PARTY_CARD_DISCLAIMER } from './hgab-disclaimers';
 import { partyName } from './hgab-parties';
-import type { MpbClass, MpbData, MpbLine, MpbSummary } from './hgab-mpb-years';
+import type { MpbClass, MpbData, MpbLine, MpbSenateFile, MpbSummary } from './hgab-mpb-years';
 import type { HgabGeo, RegionKey } from './hgab';
 
 export const MPB_COMPARE_ROOT = '/hgab/2027/multi-purpose/nep-vs-house-bill';
-export const MPB_COMPARE_TITLE = 'Multi-purpose buildings: NEP vs House bill';
+export const MPB_COMPARE_TITLE = 'Multi-purpose buildings: NEP, House bill and Senate';
 export const FLOOD_COMPARE_ROOT = '/hgab/2027/flood-control';
 export const FLOOD_COMPARE_TITLE = 'Flood control, 2025 to 2027';
 
 export type CompareClass = Exclude<MpbClass, null>;
-export type BudgetKey = 'gaa-2025' | 'gaa-2026' | 'nep-2027' | 'house-2027';
-export const BUDGET_KEYS: readonly BudgetKey[] = ['gaa-2025', 'gaa-2026', 'nep-2027', 'house-2027'];
+export type BudgetKey = 'gaa-2025' | 'gaa-2026' | 'nep-2027' | 'house-2027' | 'senate-2027';
+export const BUDGET_KEYS: readonly BudgetKey[] = ['gaa-2025', 'gaa-2026', 'nep-2027', 'house-2027', 'senate-2027'];
 export const BUDGET_LABELS: Record<BudgetKey, string> = {
-  'gaa-2025': '2025', 'gaa-2026': '2026', 'nep-2027': '2027 NEP', 'house-2027': '2027 House bill',
+  'gaa-2025': '2025', 'gaa-2026': '2026', 'nep-2027': '2027 NEP', 'house-2027': '2027 House bill', 'senate-2027': '2027 Senate',
 };
+/** A budget stage: an enacted budget, the President's, the House's, or the Senate committee report. */
+export type Stage = 'gaa' | 'nep' | 'house' | 'senate';
+/** A line's amount at a stage of its year (the Senate: once applyMpbSenate has run; null when the report cuts it). */
+export function stageAmount(l: MpbLine, stage: Stage): number | null {
+  return stage === 'gaa' ? l.gaa : stage === 'nep' ? l.nep : stage === 'house' ? l.house : l.senate ?? null;
+}
 /**
  * A map: one budget's lines (`nep`, `gaa-2025`, `gaa-2026`), or the House bill's with the NEP lines it lacks
  * (`house` on the multi-purpose page, `fy2027` on flood control's: the same dots, named for what the map shows).
  */
-export type PanelKey = 'nep' | 'house' | 'gaa-2025' | 'gaa-2026' | 'fy2027';
+export type PanelKey = 'nep' | 'house' | 'senate' | 'gaa-2025' | 'gaa-2026' | 'fy2027';
 export type CompareTopicKey = 'mpb' | 'flood';
 
 /** One comparison page: its address, its maps and budgets, its words, and the legend's dot sizes. */
@@ -84,10 +91,10 @@ export interface CompareTopic {
 export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
   mpb: {
     key: 'mpb', root: MPB_COMPARE_ROOT, title: MPB_COMPARE_TITLE, subject: 'Multi-purpose buildings',
-    lineWords: 'multi-purpose building lines', panels: ['nep', 'house'], budgets: ['nep-2027', 'house-2027'],
-    source: 'Source: NEP 2027 (DBM) and House Bill 10858, third reading; DPWH multi-purpose building lines', scope: '',
+    lineWords: 'multi-purpose building lines', panels: ['nep', 'house', 'senate'], budgets: ['nep-2027', 'house-2027', 'senate-2027'],
+    source: 'Source: NEP 2027 (DBM), House Bill 10858 (third reading) and the Senate committee report on it; DPWH multi-purpose building lines', scope: '',
     url: 'budget.bettergov.ph/hgab/2027/multi-purpose/nep-vs-house-bill',
-    imageName: 'bettergov-multi-purpose-buildings-2027-nep-vs-house-bill.png', sizes: [5e6, 25e6, 100e6],
+    imageName: 'bettergov-multi-purpose-buildings-2027-nep-house-bill-senate.png', sizes: [5e6, 25e6, 100e6],
     matrixTitle: 'Multi-purpose buildings by region and year',
     matrixImageName: 'bettergov-multi-purpose-buildings-by-region-2015-2027.png',
     partyTitle: 'Multi-purpose buildings by party and year',
@@ -96,7 +103,7 @@ export const COMPARE_TOPICS: Record<CompareTopicKey, CompareTopic> = {
   flood: {
     // Jason, 2026-11-05: "With our title 'Flood control projects are back'".
     key: 'flood', root: FLOOD_COMPARE_ROOT, title: FLOOD_COMPARE_TITLE, subject: 'Flood control projects are back',
-    lineWords: 'flood control lines', panels: ['gaa-2025', 'gaa-2026', 'fy2027'], budgets: [...BUDGET_KEYS],
+    lineWords: 'flood control lines', panels: ['gaa-2025', 'gaa-2026', 'fy2027'], budgets: ['gaa-2025', 'gaa-2026', 'nep-2027', 'house-2027'],
     source: 'Source: GAA 2025 and 2026, NEP 2027 (DBM), House Bill 10858, third reading; DPWH flood control lines',
     scope: 'Flood control here is the DPWH Flood Management Program, with BIP and SIPAG flood mitigation in 2025, as on our budget-by-year chart.',
     url: 'budget.bettergov.ph/hgab/2027/flood-control',
@@ -132,6 +139,8 @@ export interface AboutData {
   csvName: string;
   /** Flood control: the words that mark a flood control work in a title. */
   floodWords: string | null;
+  /** Multi-purpose buildings: the Senate committee report's CSV and totals (senate.json). */
+  senate?: { csvUrl: string; csvBytes: number; csvName: string; totals: MpbSenateFile['totals'] };
 }
 
 /**
@@ -140,20 +149,24 @@ export interface AboutData {
  * their titles under other codes); multi-purpose buildings' from the map's summary (`mpbScope`, the items listed at ₱0).
  */
 export interface ScopeRow {
-  key: string; fy: number; stage: 'gaa' | 'nep' | 'house';
+  key: string; fy: number; stage: Stage;
   source: string;
   parts: Array<{ label: string; lines: number; php: number }>;
   lines: number; php: number;
   /** The chart by year's figure (FY2020 on), or null. */
   chart_php: number | null;
-  /** chart: the total is the chart's; chart_budget_lines: the budget-line part is (multi-purpose buildings). */
-  check: 'chart' | 'chart_budget_lines' | 'printed_headings' | null;
+  /**
+   * chart: the total is the chart's; chart_budget_lines: the budget-line part is (multi-purpose buildings);
+   * senate_report: every amount is the report's, and its DPWH totals reconcile with what it prints.
+   */
+  check: 'chart' | 'chart_budget_lines' | 'printed_headings' | 'senate_report' | null;
   flood_titled_elsewhere?: Tally;
   left_out?: Tally;
 }
 
 /** Where a budget's lines come from, in plain words (the flood control build writes the same). */
-export function budgetSource(fy: number, stage: 'gaa' | 'nep' | 'house'): string {
+export function budgetSource(fy: number, stage: Stage): string {
+  if (stage === 'senate') return 'The Senate Committee on Finance’s report on House Bill 10858 (Annex A-4), as our Senate report reading maps it';
   if (stage === 'nep') return 'NEP 2027 (DBM), as the source workbench reads it';
   if (stage === 'house') return 'House Bill 10858, third reading, as the source workbench reads it';
   if (fy >= 2020) return 'DBM GAA extract on this site';
@@ -170,13 +183,18 @@ function mpbPart(pap: string): string {
   return pap;
 }
 
-/** Multi-purpose buildings' grouping, from the map's lines and summary: budget lines by heading, then lines in by title. */
-export function mpbScope(data: MpbData, s: MpbSummary): ScopeRow[] {
-  return s.budgets.map((b) => {
+/**
+ * Multi-purpose buildings' grouping, from the map's lines and summary: budget lines by heading, then lines in by title.
+ * With the Senate committee report (`senate`), a last row for it, its cut lines (listed at ₱0) in the last column.
+ */
+export function mpbScope(data: MpbData, s: MpbSummary, senate?: MpbSenateFile): ScopeRow[] {
+  const budgets = [...s.budgets.map((b) => ({ ...b, stage: b.stage as Stage })),
+    ...(senate ? [{ key: 'senate-2027', fy: 2027, stage: 'senate' as Stage, lines: senate.totals.senate.lines, php: senate.totals.senate.php, history_php: null, listed_at_zero: senate.totals.cut.lines }] : [])];
+  return budgets.map((b) => {
     const parts = new Map<string, Tally>();
     for (const l of data.lines) {
       if (l.fy !== b.fy) continue;
-      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      const v = stageAmount(l, b.stage);
       if (v == null) continue;
       const label = l.rule === 'title' ? MPB_TITLE_PART : mpbPart(l.pap);
       const t = parts.get(label) ?? { lines: 0, php: 0 };
@@ -188,7 +206,7 @@ export function mpbScope(data: MpbData, s: MpbSummary): ScopeRow[] {
       key: b.key, fy: b.fy, stage: b.stage, source: budgetSource(b.fy, b.stage),
       parts: [...parts].sort((x, y) => order(x[0]) - order(y[0]) || y[1].php - x[1].php).map(([label, t]) => ({ label, ...t })),
       lines: b.lines, php: b.php, chart_php: b.history_php,
-      check: b.history_php != null ? 'chart_budget_lines' : b.fy === 2019 ? 'printed_headings' : null,
+      check: b.stage === 'senate' ? 'senate_report' : b.history_php != null ? 'chart_budget_lines' : b.fy === 2019 ? 'printed_headings' : null,
       left_out: { lines: b.listed_at_zero, php: 0 },
     };
   });
@@ -233,7 +251,7 @@ export const FLOOD_CSV_FIELDS: ReadonlyArray<{ name: string; about: string }> = 
  * A budget column. `note`: `title_only`, the budget has no line for the topic, so its lines are in by title (multi-purpose
  * buildings, FY2015–FY2017); `former_codes`, the budget's older code set (flood control, FY2015–FY2017).
  */
-export interface MatrixBudget { key: string; fy: number; stage: 'gaa' | 'nep' | 'house'; note?: 'title_only' | 'former_codes' }
+export interface MatrixBudget { key: string; fy: number; stage: Stage; note?: 'title_only' | 'former_codes' }
 /** Each region's lines and amount in every budget (a region null: no region), and each budget's total. */
 export interface RegionYearMatrix {
   budgets: MatrixBudget[];
@@ -241,8 +259,12 @@ export interface RegionYearMatrix {
   totals: Tally[];
 }
 
-/** "2024", "2027 NEP", "2027 House bill". */
-export const matrixLabel = (b: MatrixBudget) => (b.stage === 'gaa' ? `${b.fy}` : `${b.fy} ${b.stage === 'nep' ? 'NEP' : 'House bill'}`);
+/** "2024", "2027 NEP", "2027 House bill", "2027 Senate". */
+export const matrixLabel = (b: Pick<MatrixBudget, 'fy' | 'stage'>) =>
+  (b.stage === 'gaa' ? `${b.fy}` : `${b.fy} ${b.stage === 'nep' ? 'NEP' : b.stage === 'house' ? 'House bill' : 'Senate'}`);
+/** The last budget a grid runs to, in a sentence: "the 2027 House bill", "the 2027 Senate committee report". */
+const runsTo = (budgets: readonly MatrixBudget[]) => (budgets[budgets.length - 1]?.stage === 'senate' ? 'the 2027 Senate committee report' : 'the 2027 House bill');
+const SENATE_IN = (budgets: readonly MatrixBudget[]) => budgets.some((b) => b.stage === 'senate');
 
 /** The matrix of a set of lines (multi-purpose buildings: the map's lines, every budget it holds). */
 export function linesMatrix(data: MpbData, budgets: readonly MatrixBudget[]): RegionYearMatrix {
@@ -252,7 +274,7 @@ export function linesMatrix(data: MpbData, budgets: readonly MatrixBudget[]): Re
   for (const l of data.lines) {
     budgets.forEach((b, i) => {
       if (l.fy !== b.fy) return;
-      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      const v = stageAmount(l, b.stage);
       if (v == null) return;
       const cells = by.get(l.region) ?? budgets.map(t);
       for (const c of [cells[i], totals[i]]) { c.lines++; c.php += v; }
@@ -290,6 +312,13 @@ export interface MatrixCopy {
   source: [string, string];
 }
 
+/** What the 2027 columns are. */
+function twentySevenNote(budgets: readonly MatrixBudget[]): string {
+  return SENATE_IN(budgets)
+    ? 'The 2027 columns are the NEP, the House bill and the Senate committee report, not yet law; the rest are enacted budgets.'
+    : 'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.';
+}
+
 /** The footnote for the starred columns ("* The 2015 to 2017 budgets …"), or none. */
 function starNote(budgets: readonly MatrixBudget[]): string[] {
   const marked = budgets.filter((b) => b.note);
@@ -304,11 +333,11 @@ export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: st
   const first = m.budgets[0];
   const what = topic.key === 'flood' ? 'flood control' : 'multi-purpose building';
   return {
-    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill`,
+    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to ${runsTo(m.budgets).replace(/^the /, '')}`,
     title: topic.matrixTitle,
-    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill, by the region its title or office places it in. Cells run from light green (less) to red (more).`,
+    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to ${runsTo(m.budgets)}, by the region its title or office places it in. Cells run from light green (less) to red (more).`,
     notes: [
-      'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.',
+      twentySevenNote(m.budgets),
       ...starNote(m.budgets),
       ...(topic.key === 'flood'
         ? ['Head-office lines that name no place count in the region the budget lists them under, mostly Metro Manila, or under No region where the file lists none.']
@@ -317,7 +346,7 @@ export function matrixCopy(topic: CompareTopic, m: RegionYearMatrix, builtAt: st
     ],
     disclaimer: COMPARE_CARD_DISCLAIMER,
     source: [
-      `Source: GAA ${first.fy}–2026 (DBM), NEP 2027 (DBM), House Bill 10858, third reading; DPWH ${what} lines`,
+      `Source: GAA ${first.fy}–2026 (DBM), NEP 2027 (DBM), House Bill 10858, third reading${SENATE_IN(m.budgets) ? ', the Senate committee report on it' : ''}; DPWH ${what} lines`,
       `${topic.url} · As of ${asOfDate(builtAt)}`,
     ],
   };
@@ -368,7 +397,7 @@ export function linesDistrictMatrix(data: MpbData, budgets: readonly MatrixBudge
   for (const l of data.lines) {
     budgets.forEach((b, i) => {
       if (l.fy !== b.fy) return;
-      const v = b.stage === 'gaa' ? l.gaa : b.stage === 'nep' ? l.nep : l.house;
+      const v = stageAmount(l, b.stage);
       if (v == null) return;
       const d = l.district >= 0 ? data.districts[l.district].id : null;
       const cells = by.get(d) ?? budgets.map(t);
@@ -494,9 +523,9 @@ export function partyCopy(topic: CompareTopic, m: PartyYearMatrix, builtAt: stri
   });
   const elected = runs.map((r) => `${r.year} (${r.from === r.to ? r.from : `${r.from}–${r.to}`})`).join(', ');
   return {
-    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill`,
+    kicker: `DPWH · ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to ${runsTo(m.budgets).replace(/^the /, '')}`,
     title: topic.partyTitle,
-    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to the 2027 House bill, by the party of its district’s representative in the Congress that passed the budget. Cells run from light green (less) to red (more).`,
+    dek: `Every ${what} line, ${matrixLabel(first)}${first.stage === 'gaa' ? ' GAA' : ''} to ${runsTo(m.budgets)}, by the party of its district’s representative in the Congress that passed the budget. Cells run from light green (less) to red (more).`,
     notes: [
       `Each budget carries the Congress that passed it, elected in ${elected}.`,
       'The party is the one the district’s representative ran under; switches during a term are not captured.',
@@ -504,13 +533,13 @@ export function partyCopy(topic: CompareTopic, m: PartyYearMatrix, builtAt: stri
       'Lines not placed in one district, and districts whose towns changed since that election, carry no party.',
       'The 2013 results list some races only as a total, so those districts show as No race on record.',
       ...(folded.length ? [`Other parties: ${folded.length} smaller parties, each under 1% of the total.`] : []),
-      'The 2027 columns are the NEP and the House bill, not yet law; the rest are enacted budgets.',
+      twentySevenNote(m.budgets),
       ...starNote(m.budgets),
       'Amounts are allocations, not spending.',
     ],
     disclaimer: PARTY_CARD_DISCLAIMER,
     source: [
-      `Source: GAA ${first.fy}–2026, NEP 2027 (DBM), House Bill 10858; election results: Open Halalan, via BetterGov Dynasties`,
+      `Source: GAA ${first.fy}–2026, NEP 2027 (DBM), House Bill 10858${SENATE_IN(m.budgets) ? ', the Senate committee report' : ''}; election results: Open Halalan, via BetterGov Dynasties`,
       `${topic.url} · As of ${asOfDate(builtAt)}`,
     ],
   };
@@ -585,6 +614,13 @@ export interface CompareFigures {
   house: Tally;
   houseOnly: Tally;
   nepOnly: Tally;
+  /**
+   * The Senate committee report, where the data has it (multi-purpose buildings): its lines and amount, the House bill
+   * lines it cuts to zero (at their House bill amounts), and the House insertions among them. Zero otherwise.
+   */
+  senate: Tally;
+  senateCut: Tally;
+  senateCutInserted: Tally;
   /** Lines in both: their NEP and House bill amounts, and how many are higher, lower or the same in the House bill. */
   paired: { lines: number; nep_php: number; house_php: number; higher: number; lower: number; same: number };
   /** FY2027 lines with no place on the map: budgeted nationwide (flood control has a few; multi-purpose buildings none). */
@@ -598,6 +634,7 @@ export function budgetAmount(l: MpbLine, key: BudgetKey): number | null {
     case 'gaa-2026': return l.fy === 2026 ? l.gaa : null;
     case 'nep-2027': return l.fy === 2027 ? l.nep : null;
     case 'house-2027': return l.fy === 2027 ? l.house : null;
+    case 'senate-2027': return l.fy === 2027 ? l.senate ?? null : null;
   }
 }
 
@@ -607,7 +644,7 @@ const tallies = () => Object.fromEntries(BUDGET_KEYS.map((k) => [k, { lines: 0, 
 export function compareFigures(data: MpbData): CompareFigures {
   const t = (): Tally => ({ lines: 0, php: 0 });
   const f: CompareFigures = {
-    budgets: tallies(), undrawn: tallies(), nep: t(), house: t(), houseOnly: t(), nepOnly: t(),
+    budgets: tallies(), undrawn: tallies(), nep: t(), house: t(), houseOnly: t(), nepOnly: t(), senate: t(), senateCut: t(), senateCutInserted: t(),
     paired: { lines: 0, nep_php: 0, house_php: 0, higher: 0, lower: 0, same: 0 },
     unmapped: { lines: 0, nep_php: 0, house_php: 0 },
   };
@@ -626,6 +663,11 @@ export function compareFigures(data: MpbData): CompareFigures {
     if (l.house != null) { f.house.lines++; f.house.php += l.house; }
     if (l.cls === 'house_only') { f.houseOnly.lines++; f.houseOnly.php += l.house ?? 0; }
     if (l.cls === 'nep_only') { f.nepOnly.lines++; f.nepOnly.php += l.nep ?? 0; }
+    if (l.senate != null) { f.senate.lines++; f.senate.php += l.senate; }
+    if (l.house != null && l.senateStatus != null && l.senate == null) {
+      f.senateCut.lines++; f.senateCut.php += l.house;
+      if (l.cls === 'house_only') { f.senateCutInserted.lines++; f.senateCutInserted.php += l.house; }
+    }
     if (l.cls === 'paired') {
       const p = f.paired;
       p.lines++; p.nep_php += l.nep ?? 0; p.house_php += l.house ?? 0;
@@ -683,7 +725,8 @@ export const GAA_PANEL_COLOR: Record<'gaa-2025' | 'gaa-2026', DotColor> = { 'gaa
 /**
  * The dots a map draws. A budget's own map: its lines, in one colour (the NEP blue; GAA_PANEL_COLOR). The House bill map (and flood control's 2027 map): the
  * House bill's lines, blue when the NEP has them too and red when added, then the NEP lines it does not have, yellow,
- * at their NEP amount (outside its total).
+ * at their NEP amount (outside its total). The Senate map: the lines the committee report keeps, at its amounts, blue
+ * and red as on the House bill map, then the House bill lines it cuts, yellow, at their House bill amount.
  */
 export function panelDots(data: MpbData, panel: PanelKey): CompareDot[] {
   const out: CompareDot[] = [];
@@ -701,6 +744,11 @@ export function panelDots(data: MpbData, panel: PanelKey): CompareDot[] {
   const fy27 = lines2027(data);
   if (panel === 'nep') {
     for (const l of fy27) if (l.nep != null) push(l, l.nep, 'blue');
+    return out;
+  }
+  if (panel === 'senate') {
+    for (const l of fy27) if (l.senate != null) push(l, l.senate, l.cls === 'house_only' ? 'red' : 'blue');
+    for (const l of fy27) if (l.house != null && l.senateStatus != null && l.senate == null) push(l, l.house, 'yellow');
     return out;
   }
   for (const l of fy27) if (l.house != null) push(l, l.house, l.cls === 'house_only' ? 'red' : 'blue');
@@ -770,7 +818,10 @@ export const COMPARE_COLORS = {
   ground: '#0c1322',
   land: '#1a2436',
   border: '#2a3750',
-  /** Dots: blue = in the budget (on the House bill map: and in the NEP), red = added in the House bill, yellow = in the NEP, not the House bill. */
+  /**
+   * Dots: blue = in the budget (on the House bill and Senate maps: and in the NEP), red = added in the House bill,
+   * yellow = in the stage before, not this one (the NEP's on the House bill map, the House bill's on the Senate map).
+   */
   dot: { blue: 'rgba(150, 182, 232, 0.66)', red: 'rgba(255, 64, 64, 0.72)', yellow: 'rgba(255, 204, 64, 0.92)' } as Record<DotColor, string>,
   /** Solid swatches for legends and halos. */
   swatch: { blue: '#96b6e8', red: '#ff4848', yellow: '#ffcc40' } as Record<DotColor, string>,
@@ -956,6 +1007,49 @@ export function compareCopy(
         + 'Head-office lines that name no place sit at the region the budget lists them under. '
         + 'On the 2027 map, red marks House bill lines with no matching NEP line, and yellow marks NEP lines with no '
         + `matching House bill line. ${CANDIDATES_NOTE}${tail}`,
+      ...shared,
+    };
+  }
+
+  if (topic.panels.includes('senate')) {
+    // The Senate committee report as the third map (Jason, 2026-11-23: "We need to add the Senate CR on the MPB pages").
+    const p = pct(f.senate.php, f.house.php) ?? 0;
+    return {
+      kicker: '2027 budget · NEP, House bill and Senate',
+      title: [
+        [{ text: topic.subject }],
+        [{ text: `${phpWords(f.nep.php)} in the NEP. ` }, { text: phpWords(f.house.php), red: true }, { text: ' in the House bill.' }],
+        [{ text: `${phpWords(f.senate.php)} in the Senate committee report.` }],
+      ],
+      cells: [
+        nepVsHouse,
+        {
+          strong: `${signed(f.senate.php - f.house.php, phpWords)} in the Senate`,
+          span: `${Math.abs(p)}% ${p >= 0 ? 'more' : 'less'} than the House bill (${phpShort(f.house.php)} → ${phpShort(f.senate.php)})`,
+          tone: null,
+        },
+        {
+          strong: `${n(f.senateCut.lines)} House bill lines cut`,
+          span: `NEP ${n(f.nep.lines)} → House bill ${n(f.house.lines)} → Senate ${n(f.senate.lines)} lines`,
+          tone: null,
+        },
+      ],
+      panels: [
+        { key: 'nep', name: 'NEP', sub: 'The President’s budget', amounts: one(f.nep.php), lines: `${n(f.nep.lines)} lines` },
+        { key: 'house', name: 'House bill', sub: 'House Bill 10858, third reading', amounts: one(f.house.php, 'red'), lines: `${n(f.house.lines)} lines` },
+        { key: 'senate', name: 'Senate', sub: 'The Senate committee report', amounts: one(f.senate.php), lines: `${n(f.senate.lines)} lines` },
+      ],
+      legend: [
+        { title: null, items: [{ color: 'blue', label: 'In the NEP' }, { color: 'red', label: 'Added in the House bill' }] },
+        { title: 'On the House bill map:', items: [{ color: 'yellow', label: 'In the NEP, not in the House bill' }] },
+        { title: 'On the Senate map:', items: [{ color: 'yellow', label: 'Cut by the Senate report' }] },
+      ],
+      notes: `${topic.scope ? `${topic.scope} ` : ''}${DOTS_NOTE}`
+        + 'On the House bill map, red marks lines with no matching NEP line, and yellow marks NEP lines with no matching '
+        + `House bill line. ${CANDIDATES_NOTE}`
+        + 'On the Senate map, red marks House additions it keeps; yellow marks House bill lines it cuts to ₱0, at their House '
+        + 'bill amount. The report is the Senate Committee on Finance’s; the Senate still votes on it. '
+        + tail,
       ...shared,
     };
   }
