@@ -533,7 +533,7 @@ function OfficeSection({ office, card, index, dpwh, docs, position, first }: {
 // History table: nine slots, per-Congress enacted subtotal rows
 // ---------------------------------------------------------------------------
 
-function HistoryTable({ office }: { office: OfficeHistory }) {
+export function HistoryTable({ office }: { office: OfficeHistory }) {
   const slots = historySlots(office);
   return (
     <div className="nep-table-wrap">

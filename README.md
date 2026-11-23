@@ -108,7 +108,7 @@ The main routes are:
   `hfep`, `nia`), `/hgab/2027/:dataset/p/:id` for one comparison record,
   `/hgab/2027/districts` (DPWH by district engineering office), `/hgab/2027/explorer`
   (the whole bill line by line, with downloads), `/hgab/2027/leaderboard`,
-  `/hgab/2027/parties`, `/hgab/2027/contractors`, `/hgab/2027/multi-purpose` (and `/map`),
+  `/hgab/2027/parties`, `/hgab/2027/contractors`, `/gaa/multi-purpose` (and `/map`),
   `/hgab/2027/letter` (letters to representatives), `/hgab/2027/sources` (every data file)
   and `/hgab/2027/methodology`
 - `/api/dept/:deptId/*` — internal Worker endpoints backed by D1 (used by the SPA)

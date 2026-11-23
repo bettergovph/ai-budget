@@ -1,5 +1,5 @@
 /**
- * The map on `/hgab/2027/multi-purpose/per-person`, shown first.
+ * The map on `/gaa/multi-purpose/per-person`, shown first.
  *
  * - Regions and provinces: the province outlines shaded by budget per person (or by how many MPB projects there are
  *   for the people), in five classes of about equal size. Regions shade all their provinces the same. People are those

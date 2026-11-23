@@ -28,15 +28,16 @@ import {
   type OfficeHistory, type ResidualYear,
 } from '../lib/hgab';
 import {
-  ATTRIBUTION_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
+  ATTRIBUTION_LABELS, DISTRICT_SORT_LABELS, FISCAL_STAGE_LONG, FISCAL_STAGE_SCOPE, FISCAL_STAGE_SHORT, bridgeGroupTitle, cardFy27, cardOffices,
   cardRegionalGroups, coServedIds, congressBudgetYears, congressOf, congressOrdinal, congressPlain, districtAnchor,
   districtLabel, districtRegionKey, dpwhOfficeName, fiscalYearRange, gaaSubtotal, headlineResidual, historySlots, officeParquetLabel,
   officeProjectsHref, officeTierBadgeText, officeTierText, officesFy27, regionNames, repName, residualMostlyOffCards,
   residualNoOffice, residualOfficeChange, residualShare, residualUnattributed, slotLabel, yearAmount, type HistorySlot,
   type OfficeGroup,
 } from '../lib/hgab-districts';
-import { DeoBadges, HgabDetails, SignedPhp } from './HgabBits';
+import { DeoBadges, HgabDetails, HgabHeader, HgabHero, SignedPhp } from './HgabBits';
 import { placedListHref } from '../lib/hgab-placed';
+import { registerHouseDistrictSite, useDistrictSite, type DistrictSite } from '../lib/district-site';
 import { displayName } from '../lib/hgab-leaderboard';
 import '../hgab-districts.css';
 
@@ -533,13 +534,14 @@ export function CongressCaveat() {
 
 /** Links to the other districts an office serves, separated by semicolons because each label has a comma. */
 export function CoServedLinks({ ids, index }: { ids: readonly string[]; index: HgabDistrictIndex }) {
+  const site = useDistrictSite();
   if (!ids.length) return null;
   return (
     <>
       {ids.map((id, i) => (
         <span key={id}>
           {i > 0 && '; '}
-          <Link to={districtPath(id)}>{districtLabel(index, id)}</Link>
+          <Link to={site.districtHref(id)}>{districtLabel(index, id)}</Link>
         </span>
       ))}
     </>
@@ -632,28 +634,31 @@ function bridgeAmount(sign: string, rows: number, php: number): string {
  * the words say the same). The card's 2027 headline; `compact` is the one-line
  * form an office heading in the list uses. `scope` is the hover text.
  */
-export function Fy27Headline({ nep, hgab3, net, compact = false, scope = 'Same named projects in both documents' }: {
+export function Fy27Headline({ nep, hgab3, net, compact = false, scope = 'Same named projects in both documents', from = 'NEP', to = 'House bill' }: {
   nep: number | null;
   hgab3: number | null;
   net: number | null;
   compact?: boolean;
   scope?: string;
+  /** The two documents' names (the Senate site: "House bill" → "Senate"). */
+  from?: string;
+  to?: string;
 }) {
   const tone = net == null ? 'is-flat' : net > 0 ? 'is-up' : net < 0 ? 'is-down' : 'is-flat';
   return (
     <div className={`hgab-dc-br-headline ${tone} ${compact ? 'is-compact' : ''}`.trim()} title={scope}>
       <span className="hgab-dc-br-flow">
         <span className="hgab-dc-br-stage">
-          <small>NEP</small>
+          <small>{from}</small>
           <strong title={fmt.php(nep, { unit: 'full' })}>{fmt.php(nep)}</strong>
         </span>
         <span className="hgab-dc-br-arrow" aria-hidden="true">→</span>
         <span className="hgab-dc-br-stage">
-          <small>House bill</small>
+          <small>{to}</small>
           <strong title={fmt.php(hgab3, { unit: 'full' })}>{fmt.php(hgab3)}</strong>
         </span>
       </span>
-      <span className="hgab-dc-br-netbig" title={`House bill minus the NEP, same named projects: ${fmt.php(net, { unit: 'full' })}`}>
+      <span className="hgab-dc-br-netbig" title={`${to} minus the ${from}, same named projects: ${fmt.php(net, { unit: 'full' })}`}>
         <small>Net change</small>
         <SignedPhp value={net} />
       </span>
@@ -823,6 +828,8 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
   const hid = `hgab-dc-${card.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const Heading = level === 5 ? 'h5' : level === 4 ? 'h4' : 'h3';
   const regionKey = districtRegionKey(card);
+  const site = useDistrictSite();
+  const extra = site.extraFigure?.(offices) ?? null;
 
   return (
     // `id` is the card's `#d-…` address: the sidebar scrolls here, and the
@@ -836,7 +843,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
             <AttributionBadge attribution={card.attribution} />
           </p>
           <Heading className="hgab-dc-district" id={hid} tabIndex={-1}>
-            <Link to={districtPath(card.id)}>{card.label}</Link>
+            <Link to={site.districtHref(card.id)}>{card.label}</Link>
             <DeoBadges offices={offices.map((o) => o.name)} jurisdiction={card.jurisdiction} />
           </Heading>
           <RepresentativeBlock rep={rep} />
@@ -862,7 +869,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
       {undivided && (
         <p className="hgab-dc-own">
           <Link
-            to={placedListHref(districtAnchor(card.id))}
+            to={site.placedHref(districtAnchor(card.id))}
             title={`The 2027 DPWH projects placed in ${card.label}, each counted once: the district’s own figures, not its office’s shared total`}
           >
             This district’s own projects →
@@ -879,10 +886,10 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
           tabs={[
             {
               key: 'fy2027',
-              label: '2027: NEP vs House bill',
+              label: site.fy27Label,
               panel: (
                 <div className="hgab-dc-fy27">
-                  {offices.map((o) => <OfficeBridgePanel key={o.id} office={o} withName={offices.length > 1} />)}
+                  {offices.map((o) => <site.Fy27Panel key={o.id} office={o} withName={offices.length > 1} />)}
                 </div>
               ),
             },
@@ -900,7 +907,7 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
                       <HistoryChart office={o} max={max || undefined} />
                     </div>
                   ))}
-                  <dl className="hgab-dc-figures">
+                  <dl className={`hgab-dc-figures ${extra ? 'is-four' : ''}`.trim()}>
                     <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office.`}>2026 enacted</dt><dd><Figure v={h.fy2026_gaa_php} /></dd></div>
                     <div>
                       <dt title={`${FISCAL_STAGE_LONG.nep} Named projects only, like the House bill figure.`}>2027 NEP</dt>
@@ -920,6 +927,12 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
                         )}
                       </dd>
                     </div>
+                    {extra && (
+                      <div>
+                        <dt title={extra.title}>{extra.label}</dt>
+                        <dd><Figure v={extra.php} />{extra.delta}</dd>
+                      </div>
+                    )}
                   </dl>
                 </div>
               ),
@@ -929,9 +942,9 @@ export const DistrictCardView = memo(function DistrictCardView({ card, index, le
       )}
 
       <footer className="hgab-card-ctas">
-        <Link className="hgab-cta hgab-cta-primary" to={districtPath(card.id)}>Open district →</Link>
+        <Link className="hgab-cta hgab-cta-primary" to={site.districtHref(card.id)}>Open district →</Link>
         {offices.map((o) => (
-          <Link key={o.id} className="hgab-cta" to={officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
+          <Link key={o.id} className="hgab-cta" to={site.officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
             Projects{offices.length > 1 ? ` · ${o.name}` : ''}
           </Link>
         ))}
@@ -990,6 +1003,8 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
   const Heading = level === 5 ? 'h5' : level === 4 ? 'h4' : 'h3';
   const regionKey = group.region;
   const n = cards.length;
+  const site = useDistrictSite();
+  const extra = site.extraFigure?.(offices) ?? null;
   const filtered = matched.length > 0 && matched.length < n;
   const gaa2026 = officesSum(offices, 2026, 'gaa');
   const hgab2027 = officesSum(offices, 2027, 'hgab3');
@@ -1034,7 +1049,7 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
                 )}
               </span>
               <span className="hgab-dc-member-body">
-                <Link className="hgab-dc-member-district" to={districtPath(d.id)} title={`${d.label}: ${repName(rep)}`}>
+                <Link className="hgab-dc-member-district" to={site.districtHref(d.id)} title={`${d.label}: ${repName(rep)}`}>
                   {shortDistrictLabel(d)}
                 </Link>
                 <span
@@ -1059,7 +1074,7 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
           <span key={d.id}>
             {i > 0 && <span aria-hidden="true"> · </span>}
             <Link
-              to={placedListHref(districtAnchor(d.id))}
+              to={site.placedHref(districtAnchor(d.id))}
               title={`The 2027 DPWH projects placed in ${d.label}, each counted once: the district’s own figures, not its office’s shared total`}
             >
               {shortDistrictLabel(d)}
@@ -1073,10 +1088,10 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
         tabs={[
           {
             key: 'fy2027',
-            label: '2027: NEP vs House bill',
+            label: site.fy27Label,
             panel: (
               <div className="hgab-dc-fy27">
-                {offices.map((o) => <OfficeBridgePanel key={o.id} office={o} withName={many} />)}
+                {offices.map((o) => <site.Fy27Panel key={o.id} office={o} withName={many} />)}
               </div>
             ),
           },
@@ -1094,7 +1109,7 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
                     <HistoryChart office={o} max={max || undefined} />
                   </div>
                 ))}
-                <dl className="hgab-dc-figures">
+                <dl className={`hgab-dc-figures ${extra ? 'is-four' : ''}`.trim()}>
                   <div><dt title={`${FISCAL_STAGE_LONG.gaa} Whole office${many ? 's' : ''}.`}>2026 enacted</dt><dd><Figure v={gaa2026} /></dd></div>
                   <div>
                     <dt title={`${FISCAL_STAGE_LONG.nep} Named projects only, like the House bill figure.`}>2027 NEP</dt>
@@ -1114,6 +1129,12 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
                       )}
                     </dd>
                   </div>
+                    {extra && (
+                      <div>
+                        <dt title={extra.title}>{extra.label}</dt>
+                        <dd><Figure v={extra.php} />{extra.delta}</dd>
+                      </div>
+                    )}
                 </dl>
               </div>
             ),
@@ -1123,7 +1144,7 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
 
       <footer className="hgab-card-ctas">
         {offices.map((o) => (
-          <Link key={o.id} className="hgab-cta" to={officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
+          <Link key={o.id} className="hgab-cta" to={site.officeProjectsHref(o)} title={`Every DPWH project recorded under ${officeParquetLabel(o)}`}>
             Projects{many ? ` · ${o.name}` : ''}
           </Link>
         ))}
@@ -1131,3 +1152,20 @@ export const SharedOfficeCardView = memo(function SharedOfficeCardView({ group, 
     </article>
   );
 });
+
+/**
+ * The House bill's district site: its addresses, its 2027 panel (NEP → House bill), its sorts and its page chrome. The
+ * default when no `DistrictSiteContext` provider is set (the Senate pages set theirs: src/pages/SenateDistricts.tsx).
+ */
+const HOUSE_DISTRICT_SITE: DistrictSite = {
+  root: districtPath(),
+  districtHref: districtPath,
+  placedHref: placedListHref,
+  officeProjectsHref,
+  fy27Label: '2027: NEP vs House bill',
+  Fy27Panel: OfficeBridgePanel,
+  sortLabels: DISTRICT_SORT_LABELS,
+  Header: HgabHeader,
+  Hero: HgabHero,
+};
+registerHouseDistrictSite(HOUSE_DISTRICT_SITE);

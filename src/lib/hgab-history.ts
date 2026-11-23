@@ -1,5 +1,5 @@
 /**
- * Multi-purpose buildings (`/hgab/2027/multi-purpose`, "Budget by year" in its own sub-nav menu):
+ * Multi-purpose buildings (`/gaa/multi-purpose`, "Budget by year" in its own sub-nav menu):
  * multi-purpose buildings, flood control and the lines around them, from the
  * FY2020 GAA to the FY2027 House bill, one figure per budget and stage.
  * (Code and data keep the name "history": history.json, HISTORY_*.)
@@ -31,7 +31,7 @@
  */
 
 export const HISTORY_SCHEMA = 1 as const;
-export const HISTORY_ROOT = '/hgab/2027/multi-purpose';
+export const HISTORY_ROOT = '/gaa/multi-purpose';
 /** The page's name: the sub-nav menu's label and the breadcrumb. */
 export const HISTORY_TITLE = 'Multi-purpose buildings';
 /** Paths under the data host (`dataUrl`), the same keys on R2. */

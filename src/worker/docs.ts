@@ -746,7 +746,7 @@ with range requests.</p>
       <td><a href="${SITE}/hgab/2027/parties">/hgab/2027/parties</a></td></tr>
   <tr><td>Multi-purpose buildings, FY2015 GAA to the FY2027 House bill, with coordinates</td>
       <td><code>hgab/2027/mpb-years/lines.csv</code>, <code>hgab/2027/mpb-years/summary.json</code></td>
-      <td><a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a></td></tr>
+      <td><a href="${SITE}/gaa/multi-purpose/map">/gaa/multi-purpose/map</a></td></tr>
   <tr><td>The four programs' own tables (what the endpoints above read)</td>
       <td><code>hgab/2027/overview.json</code>, <code>hgab/2027/{key}/summary.json</code>,
       <code>hgab/2027/{key}/projects.parquet</code></td>
@@ -940,7 +940,7 @@ noted where a feature has them; the rest are pages and <a href="#hgab-files">dat
 <h3>23 November 2026</h3>
 <ul>
   <li><b>Multi-purpose buildings: the Senate committee report.</b> The
-      <a href="${SITE}/hgab/2027/multi-purpose/nep-vs-house-bill">NEP vs House bill</a> page now adds the Senate
+      <a href="${SITE}/gaa/multi-purpose/nep-vs-house-bill">NEP, House bill and Senate</a> page now adds the Senate
       Committee on Finance's report on House Bill 10858 as a third map and a column in every table: it keeps 4,007 of
       the House bill's 5,807 multi-purpose building lines (₱57.1 billion of ₱86.3 billion) and cuts 1,800 to ₱0.
       New data files: <code>hgab/2027/mpb-years/senate.json</code> and <code>senate.csv</code>, one row per House bill
@@ -990,7 +990,7 @@ noted where a feature has them; the rest are pages and <a href="#hgab-files">dat
       district's representative and May 2025 party, the DPWH budget by party across three Congresses, a
       same-office comparison, and a page per party with every line.</li>
   <li><b>Multi-purpose buildings.</b> Top contractors, DPWH contract links and four leaderboards on the
-      <a href="${SITE}/hgab/2027/multi-purpose">multi-purpose buildings page</a>; map marks never cover one
+      <a href="${SITE}/gaa/multi-purpose">multi-purpose buildings page</a>; map marks never cover one
       another at any zoom.</li>
   <li><b>Citizen Reports.</b> <a href="${SITE}/citizen-reports">/citizen-reports</a>: budget analyses
       published on other sites, in one place.</li>
@@ -998,7 +998,7 @@ noted where a feature has them; the rest are pages and <a href="#hgab-files">dat
 
 <h3>2 November 2026</h3>
 <ul>
-  <li><b>Multi-purpose buildings map.</b> <a href="${SITE}/hgab/2027/multi-purpose/map">/hgab/2027/multi-purpose/map</a>:
+  <li><b>Multi-purpose buildings map.</b> <a href="${SITE}/gaa/multi-purpose/map">/gaa/multi-purpose/map</a>:
       every multi-purpose building line from the FY2015 GAA to the FY2027 House bill, with repeats across
       years, as files (<code>hgab/2027/mpb-years/</code>).</li>
   <li><b>GAA Explorer, 2000–2026.</b> <a href="${SITE}/gaa">/gaa</a> now reaches back to FY2000 with the
@@ -1022,7 +1022,7 @@ noted where a feature has them; the rest are pages and <a href="#hgab-files">dat
 
 <h3>28–29 October 2026</h3>
 <ul>
-  <li><b>Multi-purpose buildings.</b> <a href="${SITE}/hgab/2027/multi-purpose">/hgab/2027/multi-purpose</a>:
+  <li><b>Multi-purpose buildings.</b> <a href="${SITE}/gaa/multi-purpose">/gaa/multi-purpose</a>:
       DPWH multi-purpose buildings from the FY2020 GAA to the FY2027 House bill, set beside flood control,
       DepEd school facilities and DOH health facilities, with a poster.</li>
   <li><b>Write to your representative.</b> <a href="${SITE}/hgab/2027/letter">/hgab/2027/letter</a>: a

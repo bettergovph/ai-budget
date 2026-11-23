@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose/per-person`: multi-purpose buildings against the population in each budget's year, by
+ * `/gaa/multi-purpose/per-person`: multi-purpose buildings against the population in each budget's year, by
  * region, province (with its HUCs; Metro Manila as four districts) or city and municipality, for any budget FY2015 to
  * the 2027 House bill, the FY2020–2026 GAA combined, or all years (with the 2027 NEP or the House bill). Budgets of
  * several years are shown as a yearly average ("per person a year").
@@ -11,7 +11,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SenateReviewBanner } from '../components/SenateBits';
-import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { DisclaimerNotice, HgabError, HgabHero, HgabLoading } from '../components/HgabBits';
+import { GaaHeader } from '../components/GaaBits';
 import { cached, getJson, loadHgabGeo, type HgabGeo } from '../lib/hgab';
 import MpbPopulationMap from '../components/MpbPopulationMap';
 import { dataUrl } from '../lib/data-url';
@@ -220,8 +221,9 @@ export default function HgabMpbPopulation() {
 
   return (
     <>
-      <HgabHeader crumb="Multi-purpose buildings per person" />
+      <GaaHeader crumb="Multi-purpose buildings per person" />
       <HgabHero
+        section="gaa"
         compact
         crumb={<><Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link><span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">Per person</span></>}
         title={<>Multi-purpose buildings per person: {b.label}, {big(b.php)} in {projects(b.lines)}</>}

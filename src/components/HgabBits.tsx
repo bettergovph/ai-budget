@@ -26,11 +26,6 @@ import {
   datasetPath, traceInfo, type Bridge, type BridgeGroup, type DatasetKey, type ProjectRow,
 } from '../lib/hgab';
 import { DATASET_SHORT, DISTRICT_VIEWS, PLAIN, PROGRAM_NAV, districtsView, hubViews } from '../lib/hgab-ui';
-import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
-import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
-import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
-import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
-import { MPB_DOCS_ROOT } from '../lib/mpb-documents';
 import { INDICATORS_ROOT } from '../lib/indicators';
 import { CONTRACTORS_ROOT } from '../lib/hgab-contractors';
 import { PARTIES_ROOT } from '../lib/hgab-parties';
@@ -54,8 +49,8 @@ interface NavMenu { key: string; label: string; items: ReadonlyArray<{ key: stri
  * The section's sub-nav, left to right (Jason's order, 2026-11-02): Overview (the landing page, where `/hgab` and
  * `/hgab/2027` redirect), Line by line (the whole-bill explorer), Red Flags (PBC's red-flag basket; Jason, 2026-11-04:
  * "add a link 'Red Flags' after Line by Line") and Leaderboards; then the dropdowns Districts, the
- * four programs and Multi-purpose buildings; Foreign-assisted (Jason, 2026-11-12: "Move Foreign Assisted after
- * Multi-purpose buildings"); Hearings (the House's budget hearings, `/hearings`, under House since 2026-11-21); Write a
+ * four programs; Foreign-assisted (Jason, 2026-11-12: "Move Foreign Assisted after Multi-purpose buildings", which moved
+ * to the GAA tabs on 2026-11-23); Hearings (the House's budget hearings, `/hearings`, under House since 2026-11-21); Write a
  * letter; and About (Sources, Methodology, Indicators). The story-style
  * Explainer (`/intro`, HgabIntro.tsx) is hidden for now: its route redirects to the overview. NAV_HIDDEN takes more
  * entries out for now, keeping their pages at their addresses.
@@ -85,25 +80,12 @@ const TAIL_LINKS: readonly NavLink[] = [
 const NAV_HIDDEN: ReadonlySet<string> = new Set<string>();
 const SHOWN_LEAD_LINKS = LEAD_LINKS.filter((n) => !n.key || !NAV_HIDDEN.has(n.key));
 
-/** Multi-purpose buildings are DPWH lines, with a menu of their own: the budget by year, and every line on a map. */
-const MPB_MENU: NavMenu = {
-  key: 'multi-purpose',
-  label: HISTORY_TITLE,
-  items: [
-    { key: 'history', label: 'Budget by year', to: HISTORY_ROOT },
-    { key: 'map', label: 'Map of every line', to: MPB_MAP_ROOT },
-    { key: 'compare', label: 'NEP, House bill and Senate', to: MPB_COMPARE_ROOT },
-    { key: 'per-person', label: 'Per person', to: MPB_POPULATION_ROOT },
-    { key: 'documents', label: 'What the documents say', to: MPB_DOCS_ROOT },
-  ],
-};
 /**
- * Pages a program's menu opens after its own views: DPWH's flood control (FY2015 to the 2027 House bill, "Flood control
- * projects are back") and contractors (FY2016 to FY2026, from DPWH's contract list).
+ * Pages a program's menu opens after its own views: DPWH's contractors (FY2016 to FY2026, from DPWH's contract list).
+ * Multi-purpose buildings and flood control moved to the GAA tabs on 2026-11-23 (GaaBits; lib/moved-pages.ts).
  */
 const PROGRAM_EXTRAS: Partial<Record<DatasetKey, NavMenu['items']>> = {
   dpwh: [
-    { key: 'flood-control', label: 'Flood control', to: FLOOD_COMPARE_ROOT },
     { key: 'contractors', label: 'Contractors', to: CONTRACTORS_ROOT },
   ],
 };
@@ -149,7 +131,7 @@ export function HgabHeader({
   const programActive = (key: DatasetKey) => path === `${HGAB_ROOT}/${key}` || path.startsWith(`${HGAB_ROOT}/${key}/`);
   const extraKey = (key: DatasetKey) =>
     PROGRAM_EXTRAS[key]?.find((x) => path === x.to || path.startsWith(`${x.to}/`))?.key ?? null;
-  // A menu's current item: the exact page first (the map sits under the multi-purpose page's path), else a page below one.
+  // A menu's current item: the exact page first, else a page below one.
   const menuKey = (m: NavMenu) =>
     m.items.find((x) => path === x.to)?.key ?? m.items.find((x) => path.startsWith(`${x.to}/`))?.key ?? null;
   const menu = (m: NavMenu) => (
@@ -193,7 +175,6 @@ export function HgabHeader({
               currentKey={extraKey(p.key) ?? (programActive(p.key) && path === `${HGAB_ROOT}/${p.key}` ? view : null)}
             />
           ))}
-          {!NAV_HIDDEN.has(MPB_MENU.key) && menu(MPB_MENU)}
           {TAIL_LINKS.map(link)}
           {menu(ABOUT_MENU)}
         </nav>
@@ -226,14 +207,6 @@ export function HgabHeader({
               </div>
             </div>
           ))}
-          {!NAV_HIDDEN.has(MPB_MENU.key) && (
-            <div className="hgab-drawer-group">
-              <Link to={MPB_MENU.items[0].to} className={menuKey(MPB_MENU) ? 'active' : ''} aria-current={menuKey(MPB_MENU) === 'history' ? 'page' : undefined}>
-                {MPB_MENU.label}
-              </Link>
-              <div className="hgab-drawer-sub">{MPB_MENU.items.slice(1).map((x) => drawerLink(x, menuKey(MPB_MENU) === x.key))}</div>
-            </div>
-          )}
           {TAIL_LINKS.map(link)}
           {ABOUT_MENU.items.map((x) => drawerLink(x, menuKey(ABOUT_MENU) === x.key))}
         </nav>
@@ -243,7 +216,7 @@ export function HgabHeader({
 }
 
 /**
- * One sub-nav entry with a menu (Districts, a program, Multi-purpose buildings, About): a button that opens it.
+ * One sub-nav entry with a menu (Districts, a program, About; the GAA tabs' topics): a button that opens it.
  *
  * The sub-nav scrolls sideways on phones, which would clip an absolutely
  * positioned menu, so the panel is fixed to the viewport at the button's
@@ -363,6 +336,7 @@ export function HgabHero({
   note,
   children,
   compact = false,
+  section = 'hgab',
 }: {
   crumb: ReactNode;
   title: ReactNode;
@@ -374,12 +348,18 @@ export function HgabHero({
    * navy band. The landing pages (overview, explainer) keep the full band.
    */
   compact?: boolean;
+  /** The section the breadcrumb starts from: the House bill, or the GAA (pages that moved there, lib/moved-pages.ts). */
+  section?: 'hgab' | 'gaa';
 }) {
   const trail = (
     <span className="hgab-crumb" aria-label="Breadcrumb">
-      <span>FY2027</span>
-      <span className="hgab-crumb-sep" aria-hidden="true">·</span>
-      <Link to={HGAB_ROOT}>House Bill 10858</Link>
+      {section === 'gaa' ? <Link to="/gaa">GAA 2000–2026</Link> : (
+        <>
+          <span>FY2027</span>
+          <span className="hgab-crumb-sep" aria-hidden="true">·</span>
+          <Link to={HGAB_ROOT}>House Bill 10858</Link>
+        </>
+      )}
       <span className="hgab-crumb-sep" aria-hidden="true">·</span>
       {typeof crumb === 'string' ? <span className="hgab-crumb-here">{crumb}</span> : crumb}
     </span>

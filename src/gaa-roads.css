@@ -1,0 +1,129 @@
+/* /gaa/roads: the roads and bridges page. The list, tables and filters use the multi-purpose map's styles
+   (hgab-mpb-years.css); these are the page's own pieces. */
+
+.hgab-roads-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; margin-bottom: 14px; }
+.hgab-roads-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.hgab-roads-filters .hgab-mpbm-search { flex: 1 1 280px; }
+.hgab-roads-filters .hgab-mpbm-search input { width: 100%; }
+.hgab-roads-filters select, .hgab-roads-filters input[type='search'] {
+  font: inherit; font-size: 13.5px; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff;
+}
+.hgab-roads-filters .hgab-roads-check { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); padding-bottom: 7px; }
+
+.hgab-roads-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
+.hgab-roads-strip > div { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.hgab-roads-strip > div + div { border-left: 1px solid var(--rule); }
+.hgab-roads-strip strong { font-family: var(--font-hero, inherit); font-size: 22px; font-variant-numeric: tabular-nums; }
+.hgab-roads-strip span { font-size: 12px; color: var(--ink-2); }
+@media (max-width: 720px) {
+  .hgab-roads-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hgab-roads-strip > div:nth-child(3) { border-left: 0; }
+}
+
+.hgab-roads-map { position: relative; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.hgab-roads-mapbox { width: 100%; height: min(70vh, 620px); background: #eef1f5; }
+
+.hgab-roads-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--ink-2); }
+.hgab-roads-key li { display: flex; align-items: center; gap: 6px; }
+.hgab-roads-key i { display: inline-block; flex: none; }
+.hgab-roads-key .is-site { width: 9px; height: 9px; border-radius: 50%; background: #0b4fd9; border: 1.5px solid #fff; box-shadow: 0 0 0 1px #0b4fd9; }
+.hgab-roads-key .is-place { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 1.6px solid #121826; }
+.hgab-roads-key .is-area { width: 12px; height: 12px; border-radius: 50%; background: #8a93a3; opacity: 0.6; }
+.hgab-roads-key .is-line { width: 22px; height: 4px; border-radius: 2px; background: #d62828; }
+.hgab-roads-key .is-dash { width: 22px; height: 0; border-top: 4px dashed #d62828; }
+
+.hgab-roads-picked { position: relative; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--rule); border-left: 4px solid #0b4fd9; border-radius: 4px; background: var(--paper-2, #f7f8fa); }
+.hgab-roads-picked .hgab-mpbm-meta .hgab-mpbm-sub { display: block; }
+.hgab-roads-close { position: absolute; top: 10px; right: 12px; }
+
+.hgab-roads-sort { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.hgab-roads-sort select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+
+.hgab-roads-lvl { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.hgab-roads-lvl.is-contract, .hgab-roads-lvl.is-gps, .hgab-roads-lvl.is-stations { color: #0b4fd9; }
+.hgab-roads-lvl.is-none { color: var(--ink-3, #6b7385); }
+.hgab-roads-flag { color: #8a5a00; }
+.hgab-mpbm-table tr.is-current td { background: var(--paper-2, #f7f8fa); font-weight: 600; }
+
+/* /gaa/roads/leaderboards (GaaRoadsBoards): four ranked boards over the enacted budgets. */
+.gaa-rb-main { padding-bottom: 40px; }
+.gaa-rb-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; padding: 10px 0; background: var(--paper, #fff); border-bottom: 1px solid var(--rule); }
+.gaa-rb-years { flex-wrap: wrap; }
+.gaa-rb-jump { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.gaa-rb-jump a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.gaa-rb-scope { margin: 14px 0 0; font-size: 15px; color: var(--ink-2); }
+.gaa-rb-scope strong { color: var(--ink); }
+.gaa-rb-section { scroll-margin-top: 220px; }
+.gaa-rb-note { margin: 10px 0 0; max-width: 860px; font-size: 13px; line-height: 1.5; color: var(--ink-3, #6b7385); }
+.gaa-rb-more { margin: 10px 0 0; font-size: 13px; color: var(--ink-2); }
+
+.gaa-rb-tablewrap { overflow-x: auto; max-width: 100%; }
+.gaa-rb-section { min-width: 0; }
+.gaa-rb-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.gaa-rb-table th, .gaa-rb-table td { padding: 9px 10px; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.gaa-rb-table thead th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3, #6b7385); border-bottom: 2px solid var(--ink); }
+.gaa-rb-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gaa-rb-rank { width: 2.5em; color: var(--ink-3, #6b7385); font-variant-numeric: tabular-nums; }
+.gaa-rb-name { font-weight: 400; min-width: 220px; }
+.gaa-rb-title { display: block; color: var(--ink); font-weight: 600; }
+.gaa-rb-name a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--rule); }
+.gaa-rb-name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.gaa-rb-short { margin-left: 4px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; color: var(--ink-3, #6b7385); }
+.gaa-rb-sub { display: block; margin-top: 2px; font-size: 12.5px; color: var(--ink-3, #6b7385); }
+.gaa-rb-open { margin-top: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 12.5px; color: var(--accent); cursor: pointer; }
+.gaa-rb-open:hover { text-decoration: underline; }
+.gaa-rb-barcol { width: 36%; min-width: 180px; }
+.gaa-rb-barcol .gaa-rb-bar { display: inline-block; width: calc(100% - 76px); vertical-align: middle; }
+.gaa-rb-bar { position: relative; height: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 2px; overflow: hidden; }
+.gaa-rb-bar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 2px; }
+.gaa-rb-bar.is-thin { height: 6px; }
+.gaa-rb-amt { display: inline-block; min-width: 68px; margin-left: 8px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.gaa-rb-linkcol { width: 3.5em; text-align: right; font-size: 13px; }
+.gaa-rb-linkcol a { color: var(--accent); }
+.gaa-rb-table tr.is-unranked td, .gaa-rb-table tr.is-unranked th { background: var(--paper-2, #f7f8fa); }
+.gaa-rb-table tr.is-unranked .gaa-rb-bar i { background: var(--ink-3, #6b7385); }
+.gaa-rb-detail td { background: var(--paper-2, #f7f8fa); }
+
+.gaa-rb-programs { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.gaa-rb-programs li { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(80px, 180px) 76px minmax(120px, auto); align-items: center; gap: 4px 10px; font-size: 13px; }
+.gaa-rb-programs .gaa-rb-amt { margin-left: 0; }
+.gaa-rb-n { font-size: 12px; color: var(--ink-3, #6b7385); white-space: nowrap; }
+
+.gaa-rb-dist { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 4px; max-width: 760px; }
+.gaa-rb-dist li { display: grid; grid-template-columns: 92px 1fr minmax(170px, auto); align-items: center; gap: 10px; font-size: 13px; }
+.gaa-rb-dist-k { font-weight: 600; }
+.gaa-rb-dist-v { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.gaa-rb-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; margin-bottom: 10px; }
+.gaa-rb-filters label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.gaa-rb-filters select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.gaa-rb-count { padding-bottom: 7px; font-size: 13px; color: var(--ink-3, #6b7385); }
+
+.gaa-rb-repeats { margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
+.gaa-rb-rep { display: grid; grid-template-columns: 2.5em minmax(0, 1fr) auto 6.5em 5.5em; align-items: start; gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.gaa-rb-rep .gaa-rb-rank { padding-top: 1px; }
+.gaa-rb-rep-main { min-width: 0; }
+.gaa-rb-rep-n { text-align: right; white-space: nowrap; color: var(--ink-2); }
+.gaa-rb-rep-n strong { color: var(--ink); font-size: 16px; }
+.gaa-rb-rep .gaa-rb-amt { margin-left: 0; }
+.gaa-rb-dots { display: flex; gap: 3px; margin: 3px 0 0; padding: 0; list-style: none; }
+.gaa-rb-dots li { width: 11px; height: 11px; border-radius: 2px; background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.gaa-rb-dots li.is-on { background: var(--accent); }
+.gaa-rb-empty { padding: 14px 0; color: var(--ink-3, #6b7385); }
+.gaa-rb-sublines { margin-top: 8px; border-collapse: collapse; font-size: 13px; }
+.gaa-rb-sublines th, .gaa-rb-sublines td { padding: 5px 12px 5px 0; border-bottom: 1px solid var(--rule); text-align: left; }
+.gaa-rb-sublines th { font-size: 11.5px; font-weight: 600; color: var(--ink-3, #6b7385); }
+.gaa-rb-sublines .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.gaa-rb-sublines a { color: var(--accent); }
+
+@media (max-width: 760px) {
+  .gaa-rb-barcol { width: auto; min-width: 0; }
+  .gaa-rb-barcol .gaa-rb-bar { display: none; }
+  .gaa-rb-name { min-width: 150px; }
+  .gaa-rb-rep { grid-template-columns: 2em minmax(0, 1fr) auto; }
+  .gaa-rb-dots { grid-column: 2 / -1; }
+  .gaa-rb-rep-n { grid-column: 2; text-align: left; }
+  .gaa-rb-programs li { grid-template-columns: 1fr 76px; }
+  .gaa-rb-programs .gaa-rb-bar { display: none; }
+  .gaa-rb-programs .gaa-rb-n { grid-column: 1 / -1; }
+}

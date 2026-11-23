@@ -1,8 +1,8 @@
 /**
  * Budgets side by side on maps, one page per topic:
- *   - `/hgab/2027/multi-purpose/nep-vs-house-bill` (Multi-purpose buildings menu): the 2027 NEP, the House bill and the
+ *   - `/gaa/multi-purpose/nep-vs-house-bill` (Multi-purpose buildings menu): the 2027 NEP, the House bill and the
  *     Senate committee report, three maps (the Senate since 2026-11-23, with the "Under citizen review" banner);
- *   - `/hgab/2027/flood-control` ("Flood control projects are back"; linked from no menu yet): 2025, 2026 and 2027, three
+ *   - `/gaa/flood-control` ("Flood control projects are back"; linked from no menu yet): 2025, 2026 and 2027, three
  *     maps, the 2027 one holding the NEP and the House bill in different colours.
  * One figure, built to be screenshot and published: the headline amounts, the changes, and the maps with every line as
  * a dot. Below it, the figures by region.
@@ -14,8 +14,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
-import { DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
-import { HGAB_ROOT, REGION_LABELS, REGION_ORDER, loadFloodCompare, loadMpbCompare, type HgabGeo } from '../lib/hgab';
+import { DisclaimerNotice, HgabError, HgabHero, HgabLoading } from '../components/HgabBits';
+import { GaaHeader } from '../components/GaaBits';
+import { REGION_LABELS, REGION_ORDER, loadFloodCompare, loadMpbCompare, type HgabGeo } from '../lib/hgab';
 import { HISTORY_ROOT, HISTORY_TITLE, listHref } from '../lib/hgab-history';
 import { MPB_MAP_ROOT, type MpbData } from '../lib/hgab-mpb-years';
 import {
@@ -61,15 +62,14 @@ export default function HgabMpbCompare({ topic: key = 'mpb' }: { topic?: Compare
       </main>
     );
   }
-  const crumbHome = key === 'flood'
-    ? <Link to={`${HGAB_ROOT}/dpwh`}>DPWH</Link>
-    : <Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link>;
+  const crumbHome = key === 'flood' ? null : <><Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link><span className="hgab-crumb-sep" aria-hidden="true">·</span></>;
   return (
     <>
-      <HgabHeader crumb={topic.title} />
+      <GaaHeader crumb={topic.title} />
       <HgabHero
+        section="gaa"
         compact
-        crumb={<>{crumbHome}<span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">{key === 'flood' ? topic.title : 'NEP, House bill and Senate'}</span></>}
+        crumb={<>{crumbHome}<span className="hgab-crumb-here">{key === 'flood' ? topic.title : 'NEP, House bill and Senate'}</span></>}
         title={key === 'flood'
           ? <>Flood control: {n(figures.budgets['gaa-2025'].lines)} lines in 2025, {n(figures.budgets['gaa-2026'].lines)} in 2026, {n(figures.house.lines)} in the 2027 House bill</>
           : <>The Senate committee report keeps {n(figures.senate.lines)} of the House bill’s {n(figures.house.lines)} {topic.lineWords}; the NEP carried {n(figures.nep.lines)}</>}

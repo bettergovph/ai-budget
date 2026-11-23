@@ -1,5 +1,5 @@
 /**
- * "Multi-purpose buildings for the people": a five-slide carousel for /hgab/2027/multi-purpose/per-person, the number
+ * "Multi-purpose buildings for the people": a five-slide carousel for /gaa/multi-purpose/per-person, the number
  * of multi-purpose building (MPB) projects for the people of each region. It wears the dark figure style of the NEP vs
  * House bill images (src/lib/mpb-compare-image.ts): the navy ground, a Figtree headline with red runs, a strip of
  * figures, then the notes, the disclaimer, the source and the address.

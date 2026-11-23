@@ -24,6 +24,7 @@ import { REPORT_ROOT, REPORT_TITLE } from "./hgab-review-report";
 import { HOWTO_ROOT, HOWTO_SHOT_HEIGHT, HOWTO_SHOT_WIDTH, HOWTO_STEPS, HOWTO_TITLE, howtoShot } from "./hgab-review-howto";
 import { MPB_MAP_ROOT, MPB_MAP_TITLE } from "./hgab-mpb-years";
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from "./mpb-compare";
+import { ROADS_BOARDS_ROOT, ROADS_ROOT } from "./gaa-roads";
 import { CONTRACTORS_ROOT } from "./hgab-contractors";
 import { PARTIES_ROOT } from "./hgab-parties";
 import { PARTY_DATA_ROOT } from "./hgab-congress-seats";
@@ -355,6 +356,18 @@ export function pageMeta(pathname: string): PageMeta {
       noindex: true,
     };
   }
+  if (p === "/senate/2027/districts") {
+    return {
+      title: `Senate committee report 2027 by district — the DPWH budget each office gets · ${SITE}`,
+      description: "The DPWH budget the FY 2027 Senate committee report gives each DPWH office, beside the House bill and the legislative districts it serves: what it keeps, raises and cuts, by region and district.",
+    };
+  }
+  if (p.startsWith("/senate/2027/districts/")) {
+    return {
+      title: `A legislative district in the Senate committee report 2027 · ${SITE}`,
+      description: "One legislative district's DPWH offices in the FY 2027 Senate committee report: the House bill projects the report keeps, raises and cuts, and the projects placed in the district.",
+    };
+  }
   if (p === "/senate/2027/leaderboard" || p.startsWith("/senate/2027/leaderboard/")) {
     return {
       title: `Senate leaderboards 2027 — what the Senate committee report changes, ranked · ${SITE}`,
@@ -492,6 +505,24 @@ export function pageMeta(pathname: string): PageMeta {
         "Every DPWH flood control line in the FY 2025 and FY 2026 budgets, the FY 2027 NEP and House Bill 10858 (third " +
         "reading), on three maps, one dot per line: ₱346.6 billion in 2025, ₱4.8 billion in 2026, and 2027's NEP and " +
         "House bill on one map, with the lines the House bill added and the NEP lines it left out, by region.",
+    };
+  }
+  // Roads and bridges (GAA section): every line, FY2015 GAA to the FY2027 House bill, and its leaderboards.
+  if (p === ROADS_BOARDS_ROOT) {
+    return {
+      title: `Road and Bridge Leaderboards, FY 2015–2026 GAA: By Type, Region, Contractor and Repeat Funding · ${SITE}`,
+      description:
+        "Every DPWH road and bridge line in the FY 2015 to FY 2026 General Appropriations Acts, ranked by type of work, by " +
+        "region, by contractor (FY 2020–2026, from DPWH's contract list) and by how many budgets funded the same project.",
+    };
+  }
+  if (p === ROADS_ROOT) {
+    return {
+      title: `Roads and Bridges in Every Budget, FY 2015–2027: Every DPWH Road and Bridge Line · ${SITE}`,
+      description:
+        "Every DPWH road and bridge line in the FY 2015 to FY 2026 enacted budgets, the FY 2027 NEP and House Bill 10858: " +
+        "national roads, bridges, access roads and district roads, on a map at the matched DPWH contract's point or the " +
+        "place each title names, with lengths from the stations titles print. Search, filter and download every line.",
     };
   }
   // Multi-purpose buildings map: every line, FY2015 GAA to the FY2027 House bill.

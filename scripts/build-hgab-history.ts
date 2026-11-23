@@ -1,5 +1,5 @@
 /**
- * Multi-purpose buildings (`/hgab/2027/multi-purpose`, DPWH menu): multi-purpose buildings, flood control and
+ * Multi-purpose buildings (`/gaa/multi-purpose`, DPWH menu): multi-purpose buildings, flood control and
  * the lines around them, FY2020 GAA to the FY2027 House bill.
  *
  * Writes what `src/lib/hgab-history.ts` describes:

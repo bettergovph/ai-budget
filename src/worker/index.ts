@@ -44,6 +44,7 @@ import { SENATE_COPIES_API, handleSenateCopies } from "./hgab-senate-copies";
 import { docsHtml } from "./docs";
 import { robotsTxt, serveSpaHtml, sitemapXml } from "./seo";
 import { shortLinkTarget } from "../lib/short-links";
+import { movedTarget } from "../lib/moved-pages";
 import { serveStaticPage, staticPageFor } from "./static-pages";
 
 const YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
@@ -1432,6 +1433,10 @@ export default {
     // ---- short addresses for posters (/review → the project reviewer); 302 so a target can move ----
     const short = shortLinkTarget(url.pathname, url.search);
     if (short) return Response.redirect(new URL(short, url.origin).toString(), 302);
+
+    // ---- pages that moved (the multi-purpose buildings and flood control pages, to the GAA); 301, posters print them ----
+    const moved = movedTarget(url.pathname, url.search);
+    if (moved) return Response.redirect(new URL(moved, url.origin).toString(), 301);
 
     // ---- public surface: versioned API, MCP server, documentation ----
     // These must run before the asset fallback: the SPA's catch-all route

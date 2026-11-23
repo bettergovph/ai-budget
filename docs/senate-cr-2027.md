@@ -296,11 +296,69 @@ default). Its tables show the House bill and the Senate beside the ranked figure
 (`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
 (`hgab-share-render.ts`) is House-specific.
 
+## Districts
+
+`/senate/2027/districts` and `/senate/2027/districts/:id` (Jason, 2026-11-23: "Next is do the district, similar to HGAB's
+district pages"; a "Districts ▾" menu after "Leaderboards" in the Senate sub-nav, as the House bill's, with the three views;
+the phone drawer has the same group). They mirror the House bill's district pages and
+read the House district index (`data/hgab/2027/districts.json`: districts, offices, tiers, representatives) beside the
+Senate layer `senate/2027/districts.json`.
+
+- **Data:** `build_districts.py` (in `build:senate-cr`, after the leaderboards) joins the Senate DPWH rows to each office
+  by the label the House bill lists for it (2027 hgab3 `matched_label`, as the leaderboards). It holds out the lines the
+  House pages hold out of every district (office changed between the NEP and the House bill: 67; no office: 3).
+  - Per office: House bill and Senate amounts, the report's status (unchanged, renamed, cut to ₱0, reduced, raised),
+    the House insertions (the comparison's house_only_candidate, fuzzy_candidate and ambiguous traces) cut and kept,
+    and its eight largest cuts.
+  - `residual`: the money on no district card, split as the House index splits it (Central Office, regional offices,
+    offices not placed, office change, no office); `regions` (each office once); `placed`: projects placed in each
+    legislative district (`data/hgab/2027/locations.json`).
+  - The build stops unless every office's House figure equals the House index's `fy2027.hgab3_php`, the money on no card
+    splits as the House index's 2027 House bill residual, offices plus residual equal the DPWH program in both
+    documents, and a cut row is at ₱0 and only those.
+- **Figures (2026-11-23):** on district cards ₱174.8B in the House bill → ₱137.3B in the report; 2,879 projects cut
+  (₱37.5B). On no card ₱412.2B → ₱383.6B (Central Office ₱408.2B → ₱381.0B). Placed in a district: 15,122 projects,
+  ₱466.7B → ₱388.9B.
+- **Pages** (`SenateDistricts.tsx`, `SenateDistrict.tsx`, `src/components/SenateDistrictBits.tsx`,
+  `src/lib/senate-districts.ts`, `src/senate-districts.css`). Jason, 2026-11-23: "the senate's design district is
+  different, where are the cards??" The Senate pages draw the House bill's own district components, not copies:
+  - **How:** `src/lib/district-site.ts` holds a `DistrictSiteContext`. The House cards, list (`DistrictsCardsList`,
+    exported from `HgabDistricts.tsx`) and sidebar read their addresses, the card's first tab, extra figures, sort
+    labels and metrics, sidebar figures and the list's words from it. With no provider they draw the House bill's site
+    (registered by `HgabDistrictBits.tsx`), so the House pages are unchanged. `SenateDistrictsProvider` sets the
+    Senate's, and the Senate data through `SenateDistrictsContext`.
+  - **The index** has the House pages' three views:
+    - Overview (`SenateDistricts.tsx`): KPIs, where the DPWH budget sits, regions.
+    - District Engineering Offices (`?view=list`): the House district cards, sidebar, filters, region grouping and
+      browse-by-office. What the cards show on the Senate list:
+      - the first tab, "2027: House bill vs Senate" (`SenateOfficePanel`): House bill → Senate and the net change; a
+        bar of the budget the report moves (cut, reduced, raised); a cell for each status in the House panel's colours
+        (cut as a deletion, reduced as a decrease, raised as an increase, renamed as scope review); and the House
+        insertions it keeps.
+      - the History tab gains a fourth figure, "2027 Senate", with its change from the House bill.
+      - the sorts "Largest Senate committee report amount" and "Biggest cut from the House bill".
+      - the sidebar's and each region heading's figures are the Senate's.
+      - a card's "Projects" link opens the office's projects in the Senate project list.
+    - Legislative Districts (`?view=list-legislative`): projects placed in each district, still a table; each row
+      has its `#d-<district>` anchor so the cards' "This district's own projects" links land on it.
+  - **A district page** (`SenateDistrict.tsx`) has the House district page's layout: the sidebar (Senate links and
+    figures), the representative (portrait, or each member when the seat lists two), "Whose budget is this?", KPIs.
+    Then each office in the House page's office section:
+    - its Lone / Shared badge and the districts it shares;
+    - what the report does with its projects (KPIs and a table by status), its insertions cut and kept;
+    - its largest cuts (to their Senate record pages) and a link to its project list;
+    - its budget since 2020 (the House page's history table and chart).
+    The page ends with the projects placed in the district, "How to read this page", and a link to the House bill page.
+  - Every page carries the compact "Under citizen review" banner.
+- **The leaderboards** now link each place to its Senate district page (`senate_href` in `build_leaderboard.py`), not the
+  House bill's. Upload `leaderboard.json` after the merge that ships the routes.
+
 ## Not done yet
 
 - Not in the API, MCP or D1; no link-preview images or share cards for the Senate pages.
-- Districts, maps and leaderboards for the Senate version; MPB, flood control and foreign-assisted pages
-  don't have a Senate column yet.
+- Maps for the Senate version; flood control and foreign-assisted pages don't have a Senate column yet (the
+  multi-purpose buildings pages do: PR #112).
+- The Senate district pages have no map, and the Legislative Districts view is a table, not the House bill's placed-project cards.
 - Unprogrammed Appropriations and DOE corporations: Annex A rows are parsed, but our House tables don't
   hold those sections.
 - Annex A-3B (the NIA watershed list) and Annex A-5 (TIEZA/TPB pages) are not parsed into rows.

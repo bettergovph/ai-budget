@@ -81,6 +81,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
     ? null // the guide, the glossary and the citizen reports span several documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`
+    : /^\/gaa\/(?:roads|multi-purpose|flood-control)(?:\/|$)/.test(location.pathname)
+    ? 'FY 2015–2027'
     : location.pathname.startsWith('/gaa') || location.pathname.startsWith('/methodology')
     ? 'FY 2000–2026'
     : location.pathname.startsWith('/d/')
@@ -224,6 +226,12 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               className={`primary-nav-link ${isActivePath(location.pathname, '/learn') || isActivePath(location.pathname, '/glossary') ? 'active' : ''}`}
             >
               Learn
+            </Link>
+            <Link
+              to="/review"
+              className={`primary-nav-link`}
+            >
+              Review
             </Link>
             <a
               href="https://2026-budget.bettergov.ph"

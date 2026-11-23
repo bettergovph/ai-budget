@@ -1,9 +1,9 @@
 /**
  * The side-by-side pages, for verify-hgab.ts. Their figures come from src/lib/mpb-compare.ts over each topic's lines;
  * here they are checked against each build's own totals and recounted by class and colour:
- *   - multi-purpose buildings (/hgab/2027/multi-purpose/nep-vs-house-bill): the map's lines, against mpb-years/summary.json,
+ *   - multi-purpose buildings (/gaa/multi-purpose/nep-vs-house-bill): the map's lines, against mpb-years/summary.json,
  *     and the Senate committee report's amounts on them (mpb-years/senate.json, npm run build:mpb-senate);
- *   - flood control (/hgab/2027/flood-control): flood-compare/, against its summary and the flood control series on the
+ *   - flood control (/gaa/flood-control): flood-compare/, against its summary and the flood control series on the
  *     chart by year (history.json), in all four budgets.
  */
 import { createHash } from "node:crypto";

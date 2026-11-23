@@ -25,7 +25,7 @@ Helpers: `src/lib/indicators-view.ts` (colour classes, loader) and `src/lib/use-
 
 **Colours:** sequential indicators use one blue ramp in five quintile classes. Changes (growth, poverty change, House change) are diverging: blue went down, red went up, grey is about zero. The map note says the colours do not mean good or bad. The ramps passed the dataviz validator's CVD checks; the low-contrast light steps are covered by the table under every map.
 
-## Multi-purpose buildings per person (`/hgab/2027/multi-purpose/per-person`)
+## Multi-purpose buildings per person (`/gaa/multi-purpose/per-person`)
 
 This page sits in the House bill section's Multi-purpose buildings menu, as "Per person". It sets every MPB line (FY2015 GAA to the 2027 House bill, `mpb-years/lines.json`) against the population in each budget's own year.
 

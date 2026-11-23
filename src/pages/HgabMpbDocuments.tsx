@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose/documents` (Multi-purpose buildings menu): "Multi-purpose buildings or classrooms?" The House
+ * `/gaa/multi-purpose/documents` (Multi-purpose buildings menu): "Multi-purpose buildings or classrooms?" The House
  * bill's multi-purpose building projects, tallied by what their own documents say they are. Jason (2026-11-15): "From
  * the extracted Senate document data from the pdfs, I need a new tally for the MPBs and their projects. Create a new
  * page under multi-purpose buildings for their breakdown."
@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
-import { Caveats, DisclaimerNotice, HgabError, HgabHeader, HgabHero, HgabLoading } from '../components/HgabBits';
+import { Caveats, DisclaimerNotice, HgabError, HgabHero, HgabLoading } from '../components/HgabBits';
+import { GaaHeader } from '../components/GaaBits';
 import { cached, getJson, REGION_LABELS, type RegionKey } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { HISTORY_ROOT, HISTORY_TITLE } from '../lib/hgab-history';
@@ -75,8 +76,9 @@ function Page({ summary: s, projects }: { summary: MpbDocsSummary; projects: Mpb
 
   return (
     <>
-      <HgabHeader crumb={MPB_DOCS_TITLE} />
+      <GaaHeader crumb={MPB_DOCS_TITLE} />
       <HgabHero
+        section="gaa"
         compact
         crumb={<><Link to={HISTORY_ROOT}>{HISTORY_TITLE}</Link><span className="hgab-crumb-sep" aria-hidden="true">·</span><span className="hgab-crumb-here">What the documents say</span></>}
         title={MPB_DOCS_TITLE}

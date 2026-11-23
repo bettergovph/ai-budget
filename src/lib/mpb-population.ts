@@ -1,5 +1,5 @@
 /**
- * Multi-purpose buildings per person (`/hgab/2027/multi-purpose/per-person`): every MPB line (FY2015 GAA to the
+ * Multi-purpose buildings per person (`/gaa/multi-purpose/per-person`): every MPB line (FY2015 GAA to the
  * 2027 House bill, `mpb-years/lines.json`) set against the population of its region, its province and its city or
  * municipality in the budget's own year (PSA's 2015, 2020 and 2024 censuses; see popInYear). Budgets of several
  * years are read as a yearly average.
@@ -11,7 +11,7 @@
  * else the one legislative district its office serves; a region always. Placements are our reading of titles.
  */
 
-export const MPB_POPULATION_ROOT = '/hgab/2027/multi-purpose/per-person';
+export const MPB_POPULATION_ROOT = '/gaa/multi-purpose/per-person';
 export const MPB_POPULATION_PATH = 'hgab/2027/mpb-years/population.json';
 export const MPB_POPULATION_CSV_PATH = 'hgab/2027/mpb-years/population.csv';
 export const MPB_POPULATION_CSV_NAME = 'bettergov-multi-purpose-buildings-per-person.csv';

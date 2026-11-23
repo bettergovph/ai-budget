@@ -1,5 +1,5 @@
 /**
- * `/hgab/2027/multi-purpose` (Multi-purpose buildings menu) — multi-purpose buildings, flood
+ * `/gaa/multi-purpose` (Multi-purpose buildings menu) — multi-purpose buildings, flood
  * control, BIP, SIPAG and four other lines, from the FY2020 enacted budget to
  * the FY2027 House bill, one bar per budget and stage, on one shared scale.
  *
@@ -11,7 +11,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import SiteFooter from '../components/SiteFooter';
 import { SenateReviewBanner } from '../components/SenateBits';
-import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHeader, HgabHero, HgabLoading, WhatThisMeans } from '../components/HgabBits';
+import { Caveats, DisclaimerNotice, HgabDetails, HgabError, HgabHero, HgabLoading, WhatThisMeans } from '../components/HgabBits';
+import { GaaHeader } from '../components/GaaBits';
 import { HistoryBars, HistoryKey } from '../components/HgabHistoryChart';
 import { billions, bn, count, fullPeso, type HistoryMode } from '../lib/hgab-history-view';
 import { SectionHead } from '../components/shared';
@@ -324,8 +325,9 @@ export default function HgabHistory() {
 
   return (
     <>
-      <HgabHeader crumb={HISTORY_TITLE} />
+      <GaaHeader crumb={HISTORY_TITLE} />
       <HgabHero
+        section="gaa"
         compact
         crumb={HISTORY_TITLE}
         title={

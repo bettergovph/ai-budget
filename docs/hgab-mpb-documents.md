@@ -1,6 +1,6 @@
 # Multi-purpose buildings or classrooms?
 
-`/hgab/2027/multi-purpose/documents`, "What the documents say" in the Multi-purpose buildings menu. Jason (2026-11-15):
+`/gaa/multi-purpose/documents`, "What the documents say" in the Multi-purpose buildings menu. Jason (2026-11-15):
 "From the extracted Senate document data from the pdfs, I need a new tally for the MPBs and their projects. Create a new
 page under multi-purpose buildings for their breakdown. I want a poster too 'multi-purpose buildings or classrooms?'"
 

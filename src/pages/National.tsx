@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Eyebrow, SectionHead } from '../components/shared';
 import SiteFooter from '../components/SiteFooter';
 import SiteHeader from '../components/SiteHeader';
+import { GaaTopicMenus } from '../components/GaaBits';
 import GaaYears from '../components/GaaYears';
 import type { NationalIndex } from '../lib/types';
 import * as fmt from '../lib/format';
@@ -81,6 +82,7 @@ export default function National() {
             <button type="button" onClick={() => scrollToEl(groupsRef.current)}>
               All groups
             </button>
+            <GaaTopicMenus />
           </nav>
         }
       />

@@ -1,5 +1,5 @@
 /**
- * "Multi-purpose buildings or classrooms?" (`/hgab/2027/multi-purpose/documents`, Multi-purpose buildings menu): what the
+ * "Multi-purpose buildings or classrooms?" (`/gaa/multi-purpose/documents`, Multi-purpose buildings menu): what the
  * House bill's multi-purpose building projects are, read from their own documents. Jason (2026-11-15): "From the
  * extracted Senate document data from the pdfs, I need a new tally for the MPBs and their projects. Create a new page
  * under multi-purpose buildings for their breakdown."
@@ -12,7 +12,7 @@
  * (scripts/senate-extract/extract_projects.py on branch senate-redact; docs/hgab-mpb-documents.md). No personal names
  * are read. Data: `mpb-documents/` (npm run build:mpb-documents). Pure.
  */
-export const MPB_DOCS_ROOT = '/hgab/2027/multi-purpose/documents';
+export const MPB_DOCS_ROOT = '/gaa/multi-purpose/documents';
 export const MPB_DOCS_TITLE = 'Multi-purpose buildings or classrooms?';
 const BASE = 'hgab/2027/mpb-documents';
 export const MPB_DOCS_SUMMARY_PATH = `${BASE}/summary.json`;

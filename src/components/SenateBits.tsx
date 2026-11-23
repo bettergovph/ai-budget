@@ -14,6 +14,7 @@ import { SectionMenu } from './HgabBits';
 import { pdfUrl, type DatasetKey } from '../lib/hgab';
 import { PROGRAM_NAV } from '../lib/hgab-ui';
 import { INDICATORS_ROOT } from '../lib/indicators';
+import { SENATE_DISTRICTS_ROOT, SENATE_DISTRICT_VIEWS, senateDistrictsHref } from '../lib/senate-districts';
 import {
   SENATE_DOC, SENATE_EXPLORER_ROOT, SENATE_PROGRAM_VIEWS, SENATE_PROVISIONS_ROOT, SENATE_ROOT, SENATE_STATUS,
   SENATE_UNDER_REVIEW, senatePdfUrl, senateProgramPath, senateReportUrl, type SenateStatus,
@@ -43,6 +44,10 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
     // As the House bill section's sub-nav: Leaderboards after Line by line.
     { to: `${SENATE_ROOT}/leaderboard`, label: 'Leaderboards', on: path === `${SENATE_ROOT}/leaderboard` || path.startsWith(`${SENATE_ROOT}/leaderboard/`) },
   ];
+  // As the House bill section's: a Districts menu after Leaderboards, with the index's three views (2026-11-23).
+  const districtsOn = path === SENATE_DISTRICTS_ROOT || path.startsWith(`${SENATE_DISTRICTS_ROOT}/`);
+  const districtsKey = path === SENATE_DISTRICTS_ROOT ? (SENATE_DISTRICT_VIEWS.find((v) => v.key === view)?.key ?? 'overview') : null;
+  const districtItems = SENATE_DISTRICT_VIEWS.map((v) => ({ key: v.key, label: v.label, to: senateDistrictsHref(v.key) }));
   const tail = [{ to: SENATE_PROVISIONS_ROOT, label: 'Provisions', on: path === SENATE_PROVISIONS_ROOT }];
   const programOn = (k: DatasetKey) => path === `${SENATE_ROOT}/${k}` || path.startsWith(`${SENATE_ROOT}/${k}/`);
   const aboutKey = ABOUT.find((a) => path === a.to)?.key ?? null;
@@ -57,6 +62,7 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
       subNav={
         <nav className="view-tabs section-tabs hgab-subnav" aria-label="FY2027 Senate committee report sections">
           {lead.map(link)}
+          <SectionMenu label="Districts" items={districtItems} active={districtsOn} currentKey={districtsKey} />
           {PROGRAM_NAV.map((p) => (
             <SectionMenu
               key={p.key}
@@ -74,6 +80,14 @@ export function SenateHeader({ crumb, compiledMeta, heroBlend = false }: { crumb
         <nav className="nep-drawer-nav hgab-drawer-nav" aria-label="FY2027 Senate committee report sections">
           <p className="hgab-drawer-eyebrow">The Senate committee report for 2027</p>
           {lead.map(link)}
+          <div className="hgab-drawer-group">
+            <Link to={SENATE_DISTRICTS_ROOT} className={districtsOn ? 'active' : ''} aria-current={districtsKey === 'overview' ? 'page' : undefined}>Districts</Link>
+            <div className="hgab-drawer-sub">
+              {districtItems.filter((v) => v.key !== 'overview').map((v) => (
+                <Link key={v.key} to={v.to} className={districtsKey === v.key ? 'active' : ''} aria-current={districtsKey === v.key ? 'page' : undefined}>{v.label}</Link>
+              ))}
+            </div>
+          </div>
           {PROGRAM_NAV.map((p) => (
             <div className="hgab-drawer-group" key={p.key}>
               <Link to={senateProgramPath(p.key)} className={programOn(p.key) ? 'active' : ''}
