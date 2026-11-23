@@ -316,6 +316,16 @@ function verifyMpbSenate(check: Check, data: MpbData, dir: string, S: MpbSummary
     st.lines === SN.totals.senate.lines && st.php === SN.totals.senate.php && levelSum === st.lines
       && st.pap_lines + st.title_only_lines === st.lines && st.pap_php + st.title_only_php === st.php && st.listed_at_zero === SN.totals.cut.lines
       && data.lines.filter((l) => l.fy === 2027 && lineAmount(l, "senate") != null).length === st.lines);
+  // The budget-by-year chart's FY2027 Senate bar (history.json, build:hgab-history) counts the budget lines only: the
+  // House-bill lines on the multi-purpose building line the report keeps, at its amounts.
+  const historyPath = resolve(dir, "..", "history.json");
+  if (existsSync(historyPath)) {
+    const H = JSON.parse(readFileSync(historyPath, "utf8")) as { columns: Array<{ key: string }>; series: Array<{ key: string; php: Array<number | null> }> };
+    const ci = H.columns.findIndex((c) => c.key === "senate-2027");
+    const chart = ci >= 0 ? H.series.find((x) => x.key === "mpb")?.php[ci] : undefined;
+    check(`the chart by year's FY2027 Senate bar for multi-purpose buildings (₱${n(chart ?? 0)}) is the sidecar's budget lines`,
+      ci >= 0 && chart === st.pap_php, `chart ${chart}, sidecar budget lines ${st.pap_php}`);
+  }
   check("senate.json: the report raises no multi-purpose building line, and reduces one at most (the House row printed as two)",
     kept.filter((l) => l.senate! > l.house!).length === 0 && kept.filter((l) => l.senate! < l.house!).length <= 1);
   const csvPath = resolve(dir, "senate.csv");

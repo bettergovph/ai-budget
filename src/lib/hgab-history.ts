@@ -47,12 +47,12 @@ export const HISTORY_VOL_IA_PATH = 'hgab/2027/pdf/hb10858-3r-vol-ia.pdf';
 // ---------------------------------------------------------------------------
 
 export type HistoryStage = 'gaa' | 'nep' | 'house' | 'senate';
-export type HistorySourceKey = 'gaa' | 'pbc2026' | 'nep2027' | 'house2027';
+export type HistorySourceKey = 'gaa' | 'pbc2026' | 'nep2027' | 'house2027' | 'senate2027';
 
 export const STAGE_LABELS: Record<HistoryStage, { label: string; plain: string }> = {
   nep: { label: 'NEP', plain: 'the National Expenditure Program the Executive submits to Congress' },
   house: { label: 'House bill', plain: 'the budget bill as the House of Representatives approved it' },
-  senate: { label: 'Senate bill', plain: 'the budget bill as the Senate approved it' },
+  senate: { label: 'Senate', plain: 'the Senate’s version: the bill it approved for FY2026, its committee report for FY2027' },
   gaa: { label: 'GAA', plain: 'the General Appropriations Act, the budget as signed into law' },
 };
 
@@ -78,12 +78,14 @@ export const HISTORY_COLUMNS: readonly HistoryColumn[] = [
   { key: 'gaa-2026', fy: 2026, stage: 'gaa', label: 'FY2026 GAA', axis: 'GAA', source: 'gaa' },
   { key: 'nep-2027', fy: 2027, stage: 'nep', label: 'FY2027 NEP', axis: 'NEP', source: 'nep2027' },
   { key: 'house-2027', fy: 2027, stage: 'house', label: 'FY2027 House bill', axis: 'House', source: 'house2027' },
+  // The Senate Committee on Finance's report on HB 10858 (2026-11-23: "we need to add the senate committee report across pages").
+  { key: 'senate-2027', fy: 2027, stage: 'senate', label: 'FY2027 Senate committee report', axis: 'Senate', source: 'senate2027' },
 ];
 
 /** Year groups under the axis: one label per run of columns that share a fiscal year from FY2026 on. */
 export const HISTORY_YEAR_GROUPS: ReadonlyArray<{ fy: number; label: string; from: number; to: number }> = [
   { fy: 2026, label: 'FY2026', from: 6, to: 9 },
-  { fy: 2027, label: 'FY2027', from: 10, to: 11 },
+  { fy: 2027, label: 'FY2027', from: 10, to: 12 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -393,7 +395,7 @@ export function listHref(l: Pick<HistoryList, 'dataset' | 'params'>): string {
 }
 
 export interface HistorySource {
-  key: HistorySourceKey | 'vol_ia' | 'pbc_files';
+  key: HistorySourceKey | 'vol_ia' | 'pbc_files' | 'senate2027_annex_a';
   label: string;
   /** Path or URL as read by the builder (local paths are not published). */
   path: string;
@@ -424,6 +426,8 @@ export interface HistoryExtra {
   plain: string;
   nep_php: number | null;
   house_php: number | null;
+  /** The Senate committee report's amount (Annex A when it amends the line, else the House bill's). */
+  senate_php: number | null;
   page: number;
 }
 

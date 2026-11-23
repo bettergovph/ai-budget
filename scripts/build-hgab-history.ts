@@ -14,6 +14,9 @@
  *   data/hgab/2027/dpwh/projects.parquet         FY2027 House bill, DPWH lines (third reading), and their NEP side
  *   <pbc>/[PBC] 2026 Budget Data Analysis - *.csv  FY2026 NEP, House bill and Senate bill (People's Budget Coalition)
  *   data/hgab/2027/pdf/hb10858-3r-vol-ia.pdf     FY2027 House bill, DepEd and DOH program lines (pdftotext)
+ *   data/senate-cr/2027/dpwh_senate.csv          FY2027 Senate committee report, every House-bill DPWH line's amount
+ *   data/senate-cr/2027/annex_a_mapped.csv       FY2027 Senate committee report, Annex A rows (DepEd and DOH lines)
+ *                                                (both npm run build:senate-cr)
  *
  * Every one of these must hold, or nothing is written:
  *   - the tracker's GAA2025 column equals our FY2025 GAA for every part it carries;
@@ -211,6 +214,30 @@ async function main(): Promise<void> {
     nep: r[3] == null ? null : num(r[3]), house: r[4] == null ? null : num(r[4]), houseLines: num(r[5]), nepLines: num(r[6]),
   }));
 
+  // FY2027 Senate committee report (npm run build:senate-cr): every House-bill DPWH line's amount (0 when cut), and the
+  // Annex A rows that amend DepEd and DOH lines (a line it doesn't amend keeps the House bill's amount).
+  const senateCsv = resolve(args.data, "senate-cr/2027/dpwh_senate.csv");
+  const annexCsv = resolve(args.data, "senate-cr/2027/annex_a_mapped.csv");
+  ensure(existsSync(senateCsv) && existsSync(annexCsv), `${senateCsv} or ${annexCsv} not found (npm run build:senate-cr)`);
+  const senateOf = new Map((await rows(c, `SELECT id, senate_php, status FROM read_csv('${senateCsv}', header = true, all_varchar = true)`))
+    .map((r) => [String(r[0]), { php: num(r[1] ?? 0), status: String(r[2]) }]));
+  const annexRows = (await rows(c, `SELECT context, label, hb_thousands, senate_thousands, status, dept FROM read_csv('${annexCsv}', header = true, all_varchar = true)`))
+    .map((r) => ({ context: String(r[0] ?? ""), label: String(r[1] ?? ""), hb: r[2] == null ? null : num(r[2]) * 1000, senate: r[3] == null ? null : num(r[3]) * 1000, status: String(r[4] ?? ""), dept: String(r[5] ?? "") }));
+  const ANNEX_DEPT: Record<string, string> = { DepEd: "DEPARTMENT OF EDUCATION", DOH: "DEPARTMENT OF HEALTH" };
+  /**
+   * The Senate committee report's total for a program line Volume I-A prints: Annex A's TOTAL row for it in that
+   * department (several departments have a Quick Response Fund), else the House bill's.
+   */
+  const senatePrinted = (dept: string, label: string, house: number, owner: string): number => {
+    ensure(ANNEX_DEPT[dept], `${owner}: no Annex A department for ${dept}`);
+    const hits = annexRows.filter((a) => a.dept === ANNEX_DEPT[dept] && a.label === "TOTAL" && a.context.split(" > ")[0] === label);
+    ensure(hits.length <= 1, `${owner}: ${hits.length} Annex A TOTAL rows for ${label}`);
+    if (!hits.length) return house;
+    ensure(hits[0].hb === house && hits[0].senate != null && hits[0].status === "exact", `${owner}: Annex A cites ${peso(hits[0].hb)} for ${label}, the House bill prints ${peso(house)}`);
+    return hits[0].senate!;
+  };
+  const senateNotes: string[] = [];
+
   async function nepPart(p: HistoryPartDef): Promise<{ php: number | null; foreign: number | null }> {
     if (!p.codes && !p.foreign) return { php: null, foreign: null };
     const r = (await rows(c, `SELECT SUM(php), SUM(CASE WHEN ${FOREIGN("code")} THEN php ELSE 0 END) FROM nep WHERE ${partWhere(p)}`))[0];
@@ -286,6 +313,15 @@ async function main(): Promise<void> {
           php[col("house-2027")] = withHouse.length ? withHouse.reduce((a, r) => a + (r.house ?? 0), 0) : null;
           foreign[col("house-2027")] = withHouse.length ? withHouse.filter(isForeign).reduce((a, r) => a + (r.house ?? 0), 0) : null;
           projects[col("house-2027")] = withHouse.length ? withHouse.reduce((a, r) => a + r.houseLines, 0) : null;
+          // The Senate committee report: the same House-bill lines at its amounts; those it cuts to ₱0 are out. A line it
+          // reduces (our one row the bill prints as two, Taysan) is one project.
+          const missing = withHouse.filter((r) => !senateOf.has(r.id));
+          ensure(missing.length === 0, `${owner}: ${missing.length} House-bill lines have no Senate committee report amount (${missing[0]?.id})`);
+          const withSenate = withHouse.filter((r) => senateOf.get(r.id)!.php > 0);
+          const sen = (r: (typeof houseRows)[number]) => senateOf.get(r.id)!.php;
+          php[col("senate-2027")] = withHouse.length ? withSenate.reduce((a, r) => a + sen(r), 0) : null;
+          foreign[col("senate-2027")] = withHouse.length ? withSenate.filter(isForeign).reduce((a, r) => a + sen(r), 0) : null;
+          projects[col("senate-2027")] = withHouse.length ? withSenate.reduce((a, r) => a + (sen(r) < (r.house ?? 0) ? 1 : r.houseLines), 0) : null;
         }
       } else {
         php[col("nep-2027")] = nep27;
@@ -296,6 +332,8 @@ async function main(): Promise<void> {
           const n = (v: string) => Number(v.replace(/,/g, ""));
           ensure(n(mooe) + n(co) === n(total), `${owner}: Volume I-A MOOE ${mooe} + CO ${co} ≠ ${total}`);
           php[col("house-2027")] = n(total);
+          php[col("senate-2027")] = senatePrinted(s.department, p.label, n(total), owner);
+          senateNotes.push(`${p.label}: House ${peso(n(total))} → Senate ${peso(php[col("senate-2027")])}`);
           printed.push({ series: s.key, label: p.label, mooe_php: n(mooe), co_php: n(co), total_php: n(total), page: pageOfLine[hits[0].i], provision_page: provisionPage(p.label) });
           printedAt.set(s.key, hits[0].i);
         }
@@ -403,10 +441,12 @@ async function main(): Promise<void> {
     const total = nums[nums.length - 1];
     ensure(nums.slice(0, -1).reduce((a, b) => a + b, 0) === total, `${x.key}: Volume I-A expense classes do not add up to ${total}`);
     const v = (await rows(c, `SELECT SUM(php) FROM nep WHERE dept = '07' AND code = '${x.code}'`))[0][0];
-    extras.push({ series: x.series, key: x.key, label: x.label, plain: x.plain, nep_php: v == null ? null : num(v), house_php: total, page: pageOfLine[hits[0].i] });
+    extras.push({ series: x.series, key: x.key, label: x.label, plain: x.plain, nep_php: v == null ? null : num(v), house_php: total, senate_php: senatePrinted("DepEd", x.label, total, x.key), page: pageOfLine[hits[0].i] });
   }
   check("deped_extras", "DepEd's other school-facility lines found in Volume I-A and the NEP",
-    extras.map((x) => `${x.label}: NEP ${peso(x.nep_php)}, House ${peso(x.house_php)} (p.${x.page})`).join("; "));
+    extras.map((x) => `${x.label}: NEP ${peso(x.nep_php)}, House ${peso(x.house_php)}, Senate ${peso(x.senate_php)} (p.${x.page})`).join("; "));
+  check("senate2027_dpwh", "FY2027 Senate committee report: every House-bill DPWH line counted has its amount", `${senateOf.size} lines in the report's mapping; cut lines are out`);
+  check("senate2027_printed", "FY2027 Senate committee report: DepEd and DOH program lines from Annex A, at the House bill's cited amount", senateNotes.join("; "));
 
   const data: HistoryData = {
     schema: HISTORY_SCHEMA,
@@ -419,6 +459,8 @@ async function main(): Promise<void> {
       { key: "nep2027", label: "FY2027 National Expenditure Program, DBM extract", path: "data/2027/<dept>/line_items.parquet" },
       { key: "house2027", label: "House Bill No. 10858 (third reading), DPWH lines as compared with the NEP", path: "data/hgab/2027/dpwh/projects.parquet" },
       { key: "vol_ia", label: "House Bill No. 10858 (third reading), Volume I-A", path: basename(args.volIa), sha256: sha256(args.volIa) },
+      { key: "senate2027", label: "Senate Committee on Finance report on House Bill No. 10858, Annex A-4 (DPWH), as our Senate report reading maps it", path: "data/senate-cr/2027/dpwh_senate.csv", sha256: sha256(senateCsv) },
+      { key: "senate2027_annex_a", label: "Senate Committee on Finance report on House Bill No. 10858, Annex A (line-by-line amendments: DepEd, DOH)", path: "data/senate-cr/2027/annex_a_mapped.csv", sha256: sha256(annexCsv) },
     ],
     checks,
     printed,

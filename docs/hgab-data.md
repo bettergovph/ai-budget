@@ -914,6 +914,18 @@ the plain disclaimers with their link.
 `hgab/2027/history.json`; the CSV downloads as `bettergov-house-bill-2027-history.csv`.
 Run it after `import:nep2027` and `import:hgab`; `verify:hgab` re-checks it (17 checks; a missing file fails).
 
+**The FY2027 Senate committee report (2026-11-23),** the 13th column (`senate-2027`, "FY2027 Senate committee report",
+axis "Senate"; Jason: "we need to add the senate committee report across pages"). DPWH series: the same House-bill lines
+each part counts, at the report's amounts (`data/senate-cr/2027/dpwh_senate.csv`, `npm run build:senate-cr`); lines it cuts to
+₱0 are out, and the one line it reduces (our Taysan row the bill prints as two) is one project. DepEd and DOH: Annex A's TOTAL
+row for the printed program line in that department (`annex_a_mapped.csv`; it must cite the House bill's amount), else the
+House bill's. Basic Education Facilities ₱27.45B → ₱20.95B, Health Facilities Enhancement Program ₱10.09B → ₱15.58B; DepEd's
+other lines keep the House amounts. Multi-purpose buildings ₱83.7B → ₱55.6B (verify:hgab checks it equals the Senate sidecar's
+budget lines), flood control ₱96.1B → ₱85.0B, BIP ₱221.1B → ₱168.2B, foreign-assisted ₱44.7B → ₱77.8B. The other twelve
+columns did not change. The page adds the figure to each card's line (with its change against the House bill), the
+"Under citizen review" banner, sentences in the hero and "What this means", and two caveats; the legend reads
+"Senate (2026 bill, 2027 committee report)".
+
 | Column | Source |
 | --- | --- |
 | FY2020–FY2026 GAA | `data/<dept>/fpaps` (PAP level, thousands of pesos × 1,000), departments 18, 07, 13; the verifier recomputes every cell from `data/<dept>/full_extract.csv` |
