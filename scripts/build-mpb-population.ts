@@ -17,7 +17,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 // @ts-expect-error: plain JS module shared with the stats pipeline
 import { clean, key, mapGeography, unitOf } from './stats-psa/geo.mjs';
-import { ALL_HOUSE_KEY, ALL_NEP_KEY, COMBINED_KEY, MPB_POPULATION_CSV_PATH, peopleIn, type Census, type MpbPopBudget, type MpbPopTown, type MpbPopulationFile, type PopLevel, type Tally } from '../src/lib/mpb-population';
+import { ALL_HOUSE_KEY, ALL_NEP_KEY, ALL_SENATE_KEY, COMBINED_KEY, SENATE_KEY, MPB_POPULATION_CSV_PATH, peopleIn, type Census, type MpbPopBudget, type MpbPopTown, type MpbPopulationFile, type PopLevel, type Tally } from '../src/lib/mpb-population';
 import { REGION_NAMES, REGION_ORDER, type RegionBudgetFile } from '../src/lib/budget-regions';
 import { STATISTICS_SITE, type IndicatorsFile } from '../src/lib/indicators';
 
@@ -34,6 +34,9 @@ interface Lines {
 }
 const L = read<Lines>('hgab/2027/mpb-years/lines.json');
 const summary = read<{ budgets: { key: string; lines: number; php: number }[] }>('hgab/2027/mpb-years/summary.json');
+// The Senate committee report on the 2027 House bill lines (npm run build:mpb-senate): id → its amount, when it keeps the line.
+const senateFile = read<{ rows: [string, number, number, number | null][]; totals: { senate: { lines: number; php: number } } }>('hgab/2027/mpb-years/senate.json');
+const senateOf = new Map(senateFile.rows.filter((x) => x[1] > 0).map((x) => [x[0], x[1]]));
 type Raw = { id: string; title: string; source: string; sourceUpdated: string; retrieved: string; values: Record<string, { code: string; label: string }[]>; rows: { codes: string[]; labels: string[]; value: number }[] };
 const T = read<Raw>('stats-psa/raw/census2024_towns.json');
 const T15 = read<Raw>('stats-psa/raw/census2024_towns_2015.json'), T20 = read<Raw>('stats-psa/raw/census2024_towns_2020.json');
@@ -156,6 +159,8 @@ const budgets = new Map<string, MpbPopBudget>();
 const BUDGET_LABEL = (k: string) => (k === COMBINED_KEY ? 'FY2020–2026 GAA, seven budgets'
   : k === ALL_NEP_KEY ? 'All years: FY2015–2026 GAA and the 2027 NEP'
   : k === ALL_HOUSE_KEY ? 'All years: FY2015–2026 GAA and the 2027 House bill'
+  : k === ALL_SENATE_KEY ? 'All years: FY2015–2026 GAA and the 2027 Senate committee report'
+  : k === SENATE_KEY ? '2027 Senate committee report'
   : k.startsWith('gaa-') ? `FY${k.slice(4)} GAA` : k === 'nep-2027' ? '2027 NEP' : '2027 House bill');
 const tally = (bk: string, level: PopLevel, unit: string | null, php: number) => {
   const b = budgets.get(bk)!;
@@ -165,9 +170,10 @@ const tally = (bk: string, level: PopLevel, unit: string | null, php: number) =>
   b.placed[level][0]++; b.placed[level][1] += php;
 };
 const yearsOf = (k: string) => (k === COMBINED_KEY ? [2020, 2021, 2022, 2023, 2024, 2025, 2026]
-  : k === ALL_NEP_KEY || k === ALL_HOUSE_KEY ? Array.from({ length: 13 }, (_, i) => 2015 + i)
+  : k === ALL_NEP_KEY || k === ALL_HOUSE_KEY || k === ALL_SENATE_KEY ? Array.from({ length: 13 }, (_, i) => 2015 + i)
+  : k === SENATE_KEY ? [2027]
   : [L.budgets.find((b) => b.key === k)!.fy]);
-for (const k of [...L.budgets.map((b) => b.key), COMBINED_KEY, ALL_NEP_KEY, ALL_HOUSE_KEY]) {
+for (const k of [...L.budgets.map((b) => b.key), SENATE_KEY, COMBINED_KEY, ALL_NEP_KEY, ALL_HOUSE_KEY, ALL_SENATE_KEY]) {
   budgets.set(k, { key: k, label: BUDGET_LABEL(k), years: yearsOf(k), lines: 0, php: 0, placed: { region: [0, 0], area: [0, 0], town: [0, 0] } });
   by[k] = emptyBy();
 }
@@ -175,10 +181,10 @@ for (const r of L.rows) {
   const fy = r[c.fy] as number;
   const amounts: [string, number | null][] = fy <= 2026
     ? [[`gaa-${fy}`, r[c.gaa_php] as number | null]]
-    : [['nep-2027', r[c.nep_php] as number | null], ['house-2027', r[c.house_php] as number | null]];
+    : [['nep-2027', r[c.nep_php] as number | null], ['house-2027', r[c.house_php] as number | null], [SENATE_KEY, senateOf.get(r[c.id] as string) ?? null]];
   if (fy >= 2020 && fy <= 2026) amounts.push([COMBINED_KEY, r[c.gaa_php] as number | null]);
-  if (fy <= 2026) amounts.push([ALL_NEP_KEY, r[c.gaa_php] as number | null], [ALL_HOUSE_KEY, r[c.gaa_php] as number | null]);
-  else amounts.push([ALL_NEP_KEY, r[c.nep_php] as number | null], [ALL_HOUSE_KEY, r[c.house_php] as number | null]);
+  if (fy <= 2026) amounts.push([ALL_NEP_KEY, r[c.gaa_php] as number | null], [ALL_HOUSE_KEY, r[c.gaa_php] as number | null], [ALL_SENATE_KEY, r[c.gaa_php] as number | null]);
+  else amounts.push([ALL_NEP_KEY, r[c.nep_php] as number | null], [ALL_HOUSE_KEY, r[c.house_php] as number | null], [ALL_SENATE_KEY, senateOf.get(r[c.id] as string) ?? null]);
   const place = r[c.place] == null ? null : L.places[r[c.place] as number];
   let town: string | null = null, area: string | null = null;
   if (place && place[1] <= 3) { town = townCodeOf(place[0]); area = town ? townByCode.get(town)!.area : null; }
@@ -212,6 +218,11 @@ for (const [k, doc] of [[ALL_NEP_KEY, 'nep-2027'], [ALL_HOUSE_KEY, 'house-2027']
   const wantLines = gaaAll.reduce((a, s) => a + s.lines, 0) + summary.budgets.find((s) => s.key === doc)!.lines;
   check(budgets.get(k)!.php === want && budgets.get(k)!.lines === wantLines, `${k} = FY2015–2026 GAA + ${doc} (₱${want}, ${wantLines} lines)`);
 }
+// The Senate committee report: its lines and amount are the sidecar's; all years = FY2015–2026 GAA + it.
+const sen = budgets.get(SENATE_KEY)!;
+check(sen.lines === senateFile.totals.senate.lines && sen.php === senateFile.totals.senate.php, `${SENATE_KEY}: ${sen.lines} lines ₱${sen.php} = senate.json (${senateFile.totals.senate.lines}, ₱${senateFile.totals.senate.php})`);
+check(budgets.get(ALL_SENATE_KEY)!.php === gaaAll.reduce((a, s) => a + s.php, 0) + sen.php && budgets.get(ALL_SENATE_KEY)!.lines === gaaAll.reduce((a, s) => a + s.lines, 0) + sen.lines, `${ALL_SENATE_KEY} = FY2015–2026 GAA + ${SENATE_KEY}`);
+check(sen.placed.town[1] / sen.php > 0.8 && sen.placed.region[1] / sen.php > 0.88, `${SENATE_KEY}: placed like the House bill (town ${((100 * sen.placed.town[1]) / sen.php).toFixed(1)}%)`);
 for (const t of Object.keys(by['house-2027'].town)) check(townByCode.has(t), `town ${t} is a census town`);
 for (const bk of budgets.keys()) for (const [t, v] of Object.entries(by[bk].town)) {
   const area = townByCode.get(t)!.area;
@@ -230,7 +241,7 @@ if (failures.length) {
 const regions = REGION_ORDER.map((k) => ({ key: k, label: REGION_NAMES[k].label, plain: REGION_NAMES[k].plain, population: rb.regions.find((r) => r.key === k)!.population_2024, census: censusOfRegion.get(k)! }));
 const areas = ind.areas.map((a) => ({ id: a.id, name: a.name, region: a.region, population: popOfArea.get(a.id)!, census: sumCensus(towns.filter((t) => t.area === a.id)), psgc: a.psgc }));
 const order = [...L.budgets.map((b) => b.key)].reverse(); // newest first
-const budgetList = [...order.map((k) => budgets.get(k)!), comb, budgets.get(ALL_NEP_KEY)!, budgets.get(ALL_HOUSE_KEY)!];
+const budgetList = [budgets.get(SENATE_KEY)!, ...order.map((k) => budgets.get(k)!), comb, budgets.get(ALL_NEP_KEY)!, budgets.get(ALL_HOUSE_KEY)!, budgets.get(ALL_SENATE_KEY)!];
 const esc = (v: unknown) => (v == null ? '' : typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : String(v));
 // One row per budget and place. `people` is the population in the budget's year (the average over its years for the
 // combined and all-years budgets); the three rates are per year: totals ÷ years ÷ people.
@@ -261,6 +272,7 @@ const file: MpbPopulationFile = {
     'Each budget is measured against the population in its own year: PSA’s 2015, 2020 and 2024 censuses (the earlier two restated on today’s boundaries), filled in between them at a steady rate. Budgets after 2024 use the 2024 count; we do not project.',
     'The combined and all-years budgets are a yearly average: their projects and budget divided by the number of years and by the average population over those years.',
     'A province includes its highly urbanized cities; Metro Manila is its four districts, as in the Indicators section.',
+    'The 2027 Senate committee report is the Senate Committee on Finance’s amendments to the House bill; the Senate still votes on it. It counts the House bill lines it keeps, at its amounts, where those lines are placed.',
     'Amounts are allocations in the budget documents, not spending; a building funded over several years has a line in each year.',
   ],
 };

@@ -18,12 +18,18 @@ export const MPB_POPULATION_CSV_NAME = 'bettergov-multi-purpose-buildings-per-pe
 /** The combined budget: the seven enacted budgets FY2020–2026. */
 export const COMBINED_KEY = 'gaa-2020-2026';
 /**
- * All years: the twelve enacted budgets FY2015–2026 and one 2027 document (the NEP, or the House bill; never both,
- * which would count 2027 twice). Enacted budgets and a proposal are added together; the page reads it as a yearly
- * average over thirteen years.
+ * All years: the twelve enacted budgets FY2015–2026 and one 2027 document (the NEP, the House bill or the Senate
+ * committee report; never two, which would count 2027 twice). Enacted budgets and a proposal are added together; the
+ * page reads it as a yearly average over thirteen years.
  */
 export const ALL_NEP_KEY = 'all-2015-2027-nep';
 export const ALL_HOUSE_KEY = 'all-2015-2027-house';
+export const ALL_SENATE_KEY = 'all-2015-2027-senate';
+/**
+ * The 2027 Senate committee report (2026-11-23): the House bill lines it keeps, at its amounts (mpb-years/senate.json,
+ * npm run build:mpb-senate), placed where the House bill lines are.
+ */
+export const SENATE_KEY = 'senate-2027';
 
 export type PopLevel = 'region' | 'area' | 'town';
 
