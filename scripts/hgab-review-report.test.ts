@@ -9,8 +9,8 @@ import type { ReviewProject } from "../src/lib/hgab-review";
 import type { ReviewIndexFlag } from "../src/lib/hgab-documents";
 import {
   REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally, docsFrom,
-  flagPath, flagTallies, groupCounts, groupIndex, insertionKey, memberNames, projectPath, questionTallies, reportPath, reportProjects,
-  reviewRows, stamp, tallyBy, totalTally, type ReportCase,
+  flagPath, flagTallies, groupCounts, groupIndex, memberNames, projectPath, questionTallies, reportPath, reportProjects,
+  reviewRows, stamp, statusTallies, type ReportCase,
 } from "../src/lib/hgab-review-report";
 
 const project = (hgabId: string, amount: number) => ({
@@ -60,14 +60,6 @@ test("a project counts under its most serious final status, joined to the projec
   assert.equal(a.docs, 3);
   assert.equal(rows[1].insertion, null, "not in the project list: the review's own copy");
   assert.equal(rows[1].amount, 1_000_000);
-
-  const total = totalTally(rows, 3);
-  assert.equal(total.projects, 3);
-  assert.equal(total.reviews, 4);
-  assert.equal(total.groups.needs_immediate_attention.projects, 1);
-  assert.equal(total.groups.none.amount, 5_000_000);
-  const bySource = tallyBy(rows, insertionKey, (k) => (k === "insertion" ? 10 : null));
-  assert.deepEqual(bySource.map((t) => [t.key, t.projects, t.of]), [["insertion", 1, 10], ["unknown", 1, null], ["nep", 1, null]]);
 });
 
 test("question tallies, answer lines and CSV rows", () => {
@@ -118,9 +110,15 @@ test("the automatic review counts in the report until a member reviews the proje
   assert.equal(counts.not_reviewed.amount, 5_000_000);
   // Review-only CSVs leave the automatic ones out (no review to list).
   assert.equal(reviewRows(rows, memberNames(cases), "https://x").length, 4);
-  // Tallies put attention, the automatic review's included, first.
-  const byRegion = tallyBy(rows, (p) => [p.region, p.region]);
-  assert.deepEqual(byRegion.map((t) => [t.key, t.groups.auto.projects]), [["Region IV-A", 0], ["NCR", 1]]);
+  // Tallies count every project, reviewed or not, and put attention (the automatic review's included) first.
+  const byRegion = statusTallies(all, (h) => groups.get(h)!, (p) => [p.region, p.region]);
+  assert.deepEqual(byRegion.map((t) => [t.key, t.projects, t.groups.needs_immediate_attention.projects, t.groups.auto.projects, t.groups.not_reviewed.projects]),
+    [["Region IV-A", 2, 1, 0, 1], ["NCR", 2, 0, 1, 0]]);
+  assert.equal(byRegion[0].amount, 10_000_000);
+  // A region nobody has reviewed is still listed.
+  const quiet = statusTallies([...all, listed("HB10858-3-0009-000009", false, "CAR")], (h) => groups.get(h) ?? "not_reviewed", (p) => [p.region, p.region]);
+  assert.deepEqual(quiet.at(-1), { key: "CAR", label: "CAR", projects: 1, amount: 5_000_000, groups: { ...quiet.at(-1)!.groups } });
+  assert.equal(quiet.at(-1)!.groups.not_reviewed.projects, 1);
 });
 
 test("red flags and documents on every project", () => {

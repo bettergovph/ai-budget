@@ -81,6 +81,11 @@ export const ATTENTION_GROUPS: readonly ReportGroup[] = ['needs_immediate_attent
 export type ProjectGroup = ReportGroup | 'not_reviewed';
 export const PROJECT_GROUPS: readonly ProjectGroup[] = [...REPORT_GROUPS, 'not_reviewed'];
 export const PROJECT_GROUP_LABEL: Record<ProjectGroup, string> = { ...REPORT_GROUP_LABEL, not_reviewed: 'Not reviewed' };
+/** Column headers where every group is a column (the full label is the header's tooltip). */
+export const PROJECT_GROUP_SHORT: Record<ProjectGroup, string> = {
+  needs_immediate_attention: 'Immediate attention', needs_attention: 'Attention', auto: 'Auto-reviewed', satisfactory: 'Satisfactory',
+  none: 'No final status', not_reviewed: 'Not reviewed',
+};
 const severity = (v: Verdict | null) => (v ? RATINGS.indexOf(v) : -1);
 
 /** A reviewed project: the bill's line (from the project list when we have it, else the review's own copy) and its reviews. */
@@ -161,50 +166,27 @@ export function reportProjects(cases: readonly ReportCase[], projects: readonly 
 
 // --- Tallies -------------------------------------------------------------------------------------------------------
 
-export interface Tally {
-  key: string;
-  label: string;
-  projects: number;
-  amount: number;
-  reviews: number;
-  /** Projects and their budget by final status. */
-  groups: Record<ReportGroup, { projects: number; amount: number }>;
-  /** Projects of this kind in the House bill (for "reviewed of"), when the project list is loaded. */
-  of: number | null;
-}
-const emptyGroups = () => Object.fromEntries(REPORT_GROUPS.map((g) => [g, { projects: 0, amount: 0 }])) as Tally['groups'];
-const emptyTally = (key: string, label: string, of: number | null = null): Tally => ({ key, label, projects: 0, amount: 0, reviews: 0, groups: emptyGroups(), of });
-function add(t: Tally, p: ReportProject) {
-  t.projects++; t.amount += p.amount; t.reviews += p.reviews.length;
-  t.groups[p.group].projects++; t.groups[p.group].amount += p.amount;
-}
-
-export function totalTally(rows: readonly ReportProject[], billProjects: number | null): Tally {
-  const t = emptyTally('all', 'All reviewed projects', billProjects);
-  rows.forEach((p) => add(t, p));
-  return t;
-}
-
-/** Tallies by a key, most projects needing attention first (immediate, then any, the automatic review's included), then most reviewed. */
-const attention = (t: Tally) => ATTENTION_GROUPS.reduce((n, g) => n + t.groups[g].projects, 0);
-export function tallyBy(
-  rows: readonly ReportProject[], key: (p: ReportProject) => [string, string], of?: (key: string) => number | null,
-): Tally[] {
-  const out = new Map<string, Tally>();
-  for (const p of rows) {
+/**
+ * Every project's final status by a key (House insertion, region, DPWH office): all the projects in each group,
+ * reviewed or not, so a region or office nobody has reviewed yet is listed too (the maintainer, 2026-11-24: "display
+ * the projects as is"). Until then the tallies counted only the reviewed projects.
+ */
+export interface StatusTally { key: string; label: string; projects: number; amount: number; groups: GroupCounts }
+const attention = (t: StatusTally) => ATTENTION_GROUPS.reduce((n, g) => n + t.groups[g].projects, 0);
+/** Most needing immediate attention first, then any attention (the automatic review's included), then the largest. */
+export function statusTallies(
+  all: readonly ReviewProject[], groupOf: (hgabId: string) => ProjectGroup, key: (p: ReviewProject) => [string, string],
+): StatusTally[] {
+  const by = new Map<string, { label: string; ps: ReviewProject[] }>();
+  for (const p of all) {
     const [k, label] = key(p);
-    if (!out.has(k)) out.set(k, emptyTally(k, label, of?.(k) ?? null));
-    add(out.get(k)!, p);
+    if (!by.has(k)) by.set(k, { label, ps: [] });
+    by.get(k)!.ps.push(p);
   }
-  return [...out.values()].sort((a, b) =>
-    b.groups.needs_immediate_attention.projects - a.groups.needs_immediate_attention.projects
-    || attention(b) - attention(a)
-    || b.projects - a.projects || a.label.localeCompare(b.label));
+  return [...by.entries()].map(([k, g]): StatusTally => ({ key: k, label: g.label, projects: g.ps.length, amount: sumAmount(g.ps), groups: groupCounts(g.ps, groupOf) }))
+    .sort((a, b) => b.groups.needs_immediate_attention.projects - a.groups.needs_immediate_attention.projects
+      || attention(b) - attention(a) || b.projects - a.projects || a.label.localeCompare(b.label));
 }
-
-/** House insertion or NEP only (our comparison), as the reviewer's progress cards split them. */
-export const insertionKey = (p: ReportProject): [string, string] =>
-  p.insertion == null ? ['unknown', 'Not in the project list'] : p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only'];
 
 /** How members answered one of the 16 questions, over all reviews. */
 export interface QuestionTally {

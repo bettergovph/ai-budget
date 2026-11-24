@@ -17,12 +17,12 @@ import {
 import { QUESTION_OF_FLAG, RATINGS, TEAM_FLAGS, VERDICT_LABEL } from '../lib/hgab-redflags-team';
 import {
   ATTENTION_GROUPS, DOC_FROM, DOC_FROM_LABEL, DOC_FROM_NOTE, DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUP_NOTE, REPORT_PAGES,
-  checkTallies, docTallies, docTally, flagPath, flagSource, flagTallies, groupCounts, insertionKey, n, officeLine, pct,
-  questionTallies, reportPath, rulePath, sumAmount, tallyBy, type DocFrom, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
+  checkTallies, docTallies, docTally, flagPath, flagSource, flagTallies, groupCounts, n, officeLine, pct,
+  questionTallies, reportPath, rulePath, statusTallies, sumAmount, type DocFrom, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
 } from '../lib/hgab-review-report';
 import { fetchSenateStatus, senatePath, type SenateCopyStatus } from '../lib/hgab-review-api';
 import { useReport } from '../lib/hgab-report-data';
-import { Card, GroupBar, PageHead, Pill, ProjectLinks, ProjectTable, ReviewEntry, TallyTable } from './HgabReportParts';
+import { Card, GroupBar, PageHead, Pill, ProjectLinks, ProjectTable, ReviewEntry, StatusTable } from './HgabReportParts';
 
 const MEMBER_GROUPS: readonly ProjectGroup[] = ['needs_immediate_attention', 'needs_attention', 'satisfactory', 'none'];
 const total = (c: GroupCounts, gs: readonly ProjectGroup[]) => gs.reduce((s, g) => s + c[g].projects, 0);
@@ -529,33 +529,29 @@ function DocTable({ rows, head, link }: { rows: DocTally[]; head: string; link: 
 // --- By region -----------------------------------------------------------------------------------------------------------
 
 export function RegionsPage() {
-  const { all, rows } = useReport();
-  const billCount = useMemo(() => (key: (p: (typeof all)[number]) => string) => {
-    const m = new Map<string, number>();
-    for (const p of all) m.set(key(p), (m.get(key(p)) ?? 0) + 1);
-    return (k: string) => m.get(k) ?? 0;
-  }, [all]);
-  const bySource = useMemo(() => tallyBy(rows, insertionKey, billCount((p) => (p.insertion ? 'insertion' : 'nep'))), [rows, billCount]);
-  const byRegion = useMemo(() => tallyBy(rows, (p) => [p.region, p.region], billCount((p) => p.region)), [rows, billCount]);
-  const byOffice = useMemo(() => tallyBy(rows, (p) => [p.office, officeLine(p.office, p.districts)], billCount((p) => p.office.name)), [rows, billCount]);
+  const { all, groupOf } = useReport();
+  const projects = reportPath('projects');
+  const bySource = useMemo(() => statusTallies(all, groupOf, (p) => (p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only'])), [all, groupOf]);
+  const byRegion = useMemo(() => statusTallies(all, groupOf, (p) => [p.region, p.region]), [all, groupOf]);
+  const byOffice = useMemo(() => statusTallies(all, groupOf, (p) => [p.office.name, officeLine(p.office.name, p.office.districts)]), [all, groupOf]);
   return (
     <>
       <PageHead title="Final status by region">
-        <p>The projects members reviewed and those the automatic rule marked, by final status: House insertions and NEP only, region, and DPWH office. “Reviewed” counts both, of all the projects in that group.</p>
+        <p>Every project’s final status, reviewed or not: House insertions and NEP only, region, and DPWH office, each with all its projects. Members’ reviews come first, then the automatic rule’s; “Not reviewed” is the rest.</p>
       </PageHead>
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">House insertions and NEP only</h3>
         <p className="rr-note">House insertions are projects in the House bill but not in the NEP, by our comparison.</p>
-        <TallyTable rows={bySource} head="Projects" />
+        <StatusTable rows={bySource} head="Projects" link={(k) => `${projects}?src=${k}`} />
       </section>
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">By region</h3>
-        <TallyTable rows={byRegion} head="Region" />
+        <StatusTable rows={byRegion} head="Region" link={(k) => `${projects}?region=${encodeURIComponent(k)}`} />
       </section>
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">By DPWH office</h3>
+        <h3 className="rr-h3 is-first">By DPWH office <span className="rr-muted">({n(byOffice.length)})</span></h3>
         <p className="rr-note">Each DPWH office with the legislative districts it serves. Districts are where the office works, not who asked for a project.</p>
-        <TallyTable rows={byOffice} head="Legislative districts [DPWH office]" />
+        <StatusTable rows={byOffice} head="Legislative districts [DPWH office]" />
       </section>
     </>
   );
@@ -632,7 +628,7 @@ export function ProjectsPage() {
   return (
     <>
       <PageHead title="Projects">
-        <p>Every DPWH project in the House bill. The most serious final status comes first; filter by final status, region, House insertion or documents, or search. Open a project for its red flags, documents and reviews.</p>
+        <p>Every DPWH project in the House bill, with or without a red flag, in the bill’s order. Sort by final status to see the most serious first; filter by final status, region, House insertion or documents, or search. Open a project for its red flags, documents and reviews.</p>
       </PageHead>
       <section className="rr-sec"><ProjectTable projects={all} /></section>
     </>

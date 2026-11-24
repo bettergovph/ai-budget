@@ -153,6 +153,8 @@ a.rr-card:hover { border-color: var(--accent); }
 .rr-table td.is-satisfactory { color: var(--rr-ok); font-weight: 600; }
 .rr-table td.is-auto { color: var(--rr-att); }
 .rr-table.rr-narrow { width: auto; min-width: 50%; }
+.rr-status-table thead th { white-space: normal; vertical-align: bottom; }
+.rr-status-table thead th.num { min-width: 64px; }
 .rr-table th small, .rr-table td small { color: var(--ink-3); font-weight: 400; }
 .rr-meter { display: inline-flex; align-items: center; gap: 8px; }
 .rr-meter-track { display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--paper-3); overflow: hidden; }
