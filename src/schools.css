@@ -185,3 +185,16 @@
 .sch-records { font-family: var(--font-body); font-size: 12.5px; color: var(--ink-2); background: var(--paper); border: 1px solid var(--rule-soft); border-radius: 8px; padding: 8px 10px; margin: 10px 0 0; }
 .sch-field-count input { max-width: 90px; }
 .sch-datanote { display: block; margin-top: 6px; font-style: italic; }
+
+/* List: filters in a sidebar, styled as the map's (.sch-mapgrid / .sch-panel) (Jason, 2026-11-24) */
+.sch-listgrid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+.sch-listside { position: sticky; top: 16px; }
+.sch-filters-side { display: flex; flex-direction: column; gap: 16px; }
+.sch-listside .sch-check-line { margin: 0; align-items: flex-start; }
+.sch-listside .sch-chip { margin: 0; }
+.sch-clearall { font-size: 13px; align-self: flex-start; }
+.sch-listmain .sch-count { margin-top: 0; }
+@media (max-width: 1000px) {
+  .sch-listgrid { grid-template-columns: 1fr; }
+  .sch-listside { position: static; }
+}

@@ -1,37 +1,23 @@
 /**
- * Shared chrome for the schools directory (`/schools`): the masthead with the section's sub-nav, the preview notice,
+ * Shared chrome for the schools directory (`/schools`): the GAA masthead with its Schools dropdown, the preview notice,
  * the shortage legend and stat tiles, and the loading/error status line.
  */
 import type { ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import SiteHeader from './SiteHeader';
+import { Link } from 'react-router-dom';
+import { GaaHeader } from './GaaBits';
 import SiteFooter from './SiteFooter';
 import {
-  ALLOCATION_STATUS, DATA_NOTE, DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_LEVELS, statusInfo,
+  ALLOCATION_STATUS, DATA_NOTE, DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SHORTAGE_LEVELS, statusInfo,
   type AllocationStatus, type SchoolSource, type ShortageLevel,
 } from '../lib/schools';
 import '../nep2027.css';
 import '../schools.css';
 
-const TABS: [string, string][] = [
-  [SCHOOLS_OVERVIEW, 'Overview'],
-  [SCHOOLS_ROOT, 'Map'],
-  [SCHOOLS_LIST, 'List'],
-  [SCHOOLS_SHORTAGE, 'Shortages vs classrooms'],
-  [SCHOOLS_ABOUT, 'About the data'],
-];
-
+/** The schools pages sit in the GAA section for now (Jason, 2026-11-24): its header, with the Schools dropdown. */
 export function SchoolsChrome({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
-  const nav = (
-    <nav className="view-tabs section-tabs" aria-label="Schools">
-      {TABS.map(([to, text]) => (
-        <NavLink key={to} to={to} end className={({ isActive }) => (isActive ? 'active' : '')}>{text}</NavLink>
-      ))}
-    </nav>
-  );
   return (
     <div className="sch-page">
-      <SiteHeader crumb="Schools" subNav={nav} />
+      <GaaHeader crumb="Schools" />
       <main className={`nep-main sch-main${wide ? ' sch-main-wide' : ''}`}>
         {children}
         <SourcesNote />
