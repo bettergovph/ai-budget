@@ -12,17 +12,12 @@ import { INDICATORS_ROOT, type IndicatorsFile } from '../lib/indicators';
 import { loadIndicators } from '../lib/indicators-view';
 import { PreviewNotice, SchoolsChrome, Stat, Status, StatusBadge } from '../components/SchoolsBits';
 import {
-  BEFF_2027, BEFF_HISTORY, DATA_SOURCES, DPWH_KINDS, SBP_EARLY, EDCOM2_COST_PER_CLASSROOM, NO_DATA_EXPLAINED, SHORTAGE_LEVELS, levelInfo, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
+  BEFF_2027, DATA_SOURCES, DPWH_KINDS, EDCOM2_COST_PER_CLASSROOM, NO_DATA_EXPLAINED, SHORTAGE_LEVELS, levelInfo, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
   type AllocationStatus, type AnalysisFile, type AnalysisProvince, type ShortageLevel,
 } from '../lib/schools';
 import { useSchoolsApi } from '../lib/use-schools-api';
 
 type Sums = Omit<AnalysisProvince, 'province' | 'region_key'>;
-const BEFF_SERIES = [
-  { key: 'deped', label: 'DepEd’s Basic Education Facilities line (and its forerunners)', color: '#2a78d6' },
-  { key: 'dpwh', label: 'The same line, in DPWH’s budget (2013)', color: '#1baf7a' },
-  { key: 'other', label: 'Other: School Building Program; 2009 stimulus fund', color: '#eda100' },
-];
 const STATUS_COLS: AllocationStatus[] = ['under', 'fully', 'over', 'none', 'no_data'];
 const LEVEL_ROWS: (ShortageLevel | null)[] = ['moderate', 'severe', 'extreme', 'unrated', 'none', null];
 /** The level of a tenth of the shortage rate (tenths closed at the top: 0–1 up to 20%, 2–4 up to 50%). */
@@ -128,18 +123,6 @@ export default function SchoolsOverview() {
   const years = useMemo(() => [...new Set((d?.dpwh_years ?? []).map((r) => r.infra_year))].sort(), [d]);
   const yv = (y: string | number, k: string) => d?.dpwh_years.find((r) => r.infra_year === y && r.kind === k)?.budget_php ?? 0;
 
-  // DepEd's school-building budget, 2009–2027: the GAA history (lib), then D1's GAA 2020–2026, then the 2027 proposals.
-  const beffRows = useMemo(() => [
-    ...BEFF_HISTORY.map((b) => ({ x: String(b.year), deped: b.deped, dpwh: b.dpwh, other: b.other, source: b.source })),
-    ...(d?.beff_gaa ?? []).map((b) => ({ x: String(b.year), deped: b.amount_php as number | null, dpwh: undefined, other: undefined, source: `GAA ${b.year} (our GAA data)` })),
-    { x: '2027|NEP', deped: BEFF_2027.nep as number | null, dpwh: undefined, other: undefined, source: 'NEP 2027, Volume I, p. 389' },
-    { x: '2027|House', deped: BEFF_2027.house as number | null, dpwh: undefined, other: undefined, source: 'HB 10858 (third reading), Volume IA, p. 302' },
-  ], [d]);
-  const beffXs = beffRows.map((r) => r.x);
-  const beffValue = (x: string | number, k: string) => {
-    const r = beffRows.find((y) => y.x === x);
-    return (k === 'deped' ? r?.deped : k === 'dpwh' ? r?.dpwh : r?.other) ?? 0;
-  };
   const withPov = areas.filter((a) => a.poverty != null);
   const rhoShort = spearman(withPov.filter((a) => a.per1000 != null).map((a) => [a.poverty as number, a.per1000 as number]));
   const rhoCover = spearman(withPov.filter((a) => a.coverage != null).map((a) => [a.poverty as number, a.coverage as number]));
@@ -175,7 +158,7 @@ export default function SchoolsOverview() {
                   <li>At the 2026 list’s own average of <strong>{php(costPerRoom)} a classroom</strong>, building them all would cost about <strong>{billions(all.shortage * costPerRoom)}</strong>: {(all.shortage * costPerRoom / beff2026).toFixed(1)} times the {billions(beff2026)} in DepEd’s whole school-building line for 2026, and {(all.shortage * costPerRoom / BEFF_2027.nep).toFixed(1)} times the {billions(BEFF_2027.nep)} proposed for 2027.</li>
                 )}
                 {beff2026 != null && (
-                  <li>That line <strong>falls by {Math.round((1 - BEFF_2027.nep / beff2026) * 100)}%</strong> in the 2027 proposal, from {billions(beff2026)} to {billions(BEFF_2027.nep)}, and the House bill cuts it to {billions(BEFF_2027.house)}. It was ₱105B in 2018, then ₱5.9B in 2022.</li>
+                  <li>That line <strong>falls by {Math.round((1 - BEFF_2027.nep / beff2026) * 100)}%</strong> in the 2027 proposal, from {billions(beff2026)} to {billions(BEFF_2027.nep)}, and the House bill cuts it to {billions(BEFF_2027.house)}.</li>
                 )}
                 <li>The FY 2026 School Building Program allocates <strong>{rooms(all.allocated)} classrooms</strong>, an allocation-to-shortage ratio of {pct(all.allocated, all.shortage)}. School by school it fills {rooms(all.covered)}, leaving <strong>{rooms(all.gap)} remaining unfunded</strong>, and {rooms(all.excess)} are <strong>excess allocated classrooms</strong>: {rooms(all.excess_no_shortage)} at schools with no recorded shortage, {rooms(all.excess - all.excess_no_shortage)} beyond the need of schools that are short. At EDCOM 2’s ₱2.5M a classroom they come to {billions(all.excess * EDCOM2_COST_PER_CLASSROOM)}; from the projects’ own budgets, {billions(all.excess_budget_php)}.</li>
                 <li>DPWH contracts that name a school added up to <strong>{billions(dpwhTotal)}</strong> from 2016 to 2026. {billions(fv('beff'))} of it was DepEd’s own school-building budget carried out by DPWH. Of the {billions(fv('dpwh'))} from DPWH’s own budget, <strong>{pctOf(share(fv('dpwh', 'mpb'), fv('dpwh')))} went to multi-purpose buildings and covered courts</strong>, against {pctOf(share(fv('beff', 'mpb'), fv('beff')))} of DepEd’s.</li>
@@ -252,33 +235,19 @@ export default function SchoolsOverview() {
             </div>
             <p className="sch-footnote">EDCOM 2’s “Classroom Allocation Status by Shortage Level”, in schools, with the levels by Classroom Shortage Rate = shortage ÷ (available classrooms + shortage) × 100: Moderate up to 20%, Severe more than 20% to 50%, Extreme more than 50% (EDCOM 2’s proposed change from counts of 1–4, 5–10 and 11 or more classrooms). “Rate unknown”: short, but the registry has no classroom count. “No recorded shortage” with an allocation counts as overallocated. Shortages are DepEd’s figures rounded to whole classrooms per school.</p>
 
-            <h2 className="sch-h2">DepEd’s school-building budget, 2009 to 2027</h2>
-            <p className="sch-muted sch-lede">“Basic Education Facilities” in DepEd’s budget, the line that pays for new classrooms, repairs, water and sanitation, and school furniture (under earlier names before 2015), in the GAA as enacted; then the 2027 proposal (NEP) and the House bill. In 2013 part of it sat in DPWH’s budget; until 2014 a separate School Building Program added ₱1–2B a year.</p>
-            <Stacked title="DepEd's school-building budget by year, 2009 to 2027" xs={beffXs} series={BEFF_SERIES} value={beffValue} format={billions}
-              muted={(x) => String(x).startsWith('2027')} note={(x) => (beffRows.find((r) => r.x === x)?.deped === null ? 'n/a' : null)} />
-            <div className="sch-tablewrap">
-              <table className="sch-table">
-                <thead><tr><th>Year</th><th className="num">DepEd’s line</th><th className="num">In DPWH’s budget</th><th className="num">Other school-building lines</th><th className="num">All</th><th>Source</th></tr></thead>
-                <tbody>
-                  {beffRows.map((r) => (
-                    <tr key={r.x}>
-                      <td>{r.x.replace('|', ' ')}</td>
-                      <td className="num">{r.deped == null ? 'not in our data' : billions(r.deped)}</td>
-                      <td className="num">{r.dpwh ? billions(r.dpwh) : '—'}</td>
-                      <td className="num">{r.other ? billions(r.other) : '—'}</td>
-                      <td className="num">{r.deped == null ? '—' : billions((r.deped ?? 0) + (r.dpwh ?? 0) + (r.other ?? 0))}</td>
-                      <td className="sch-sub-cell">{r.source}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <h2 className="sch-h2">DepEd’s school-building budget</h2>
+            <p className="sch-muted sch-lede">“Basic Education Facilities” in DepEd’s budget, the line that pays for new classrooms, repairs and furniture: the GAA as enacted for 2020 to 2026, then the 2027 proposal (NEP) and the House bill.</p>
+            <Columns title="DepEd's Basic Education Facilities budget by year" color="#2a78d6" format={billions}
+              data={[
+                ...d.beff_gaa.map((b) => ({ key: String(b.year), label: String(b.year), sub: 'GAA', value: b.amount_php })),
+                { key: 'nep', label: '2027', sub: 'NEP', value: BEFF_2027.nep, muted: true },
+                { key: 'house', label: '2027', sub: 'House bill', value: BEFF_2027.house, muted: true },
+              ]} />
             <p className="sch-footnote">
-              Sources: DBM’s GAA archive through <Link to="/gaa">our GAA data</Link> (DepEd, activity 310200100006000 from 2018);{' '}
+              Sources: <Link to="/gaa">the GAA</Link> (DepEd, activity 310200100006000), 2020 to 2026;{' '}
               <a href={DATA_SOURCES.find((x) => x.key === 'nep')?.url ?? '#'} target="_blank" rel="noopener noreferrer">2027 NEP, Volume I, p. 389</a>;{' '}
               <a href={DATA_SOURCES.find((x) => x.key === 'house')?.url ?? '#'} target="_blank" rel="noopener noreferrer">HB 10858 on third reading, Volume IA, p. 302</a>.
-              For 2014 and 2017 only DepEd’s totals are in our data, so the line is not shown. Before 2009 our data has only the separate
-              School Building Program ({SBP_EARLY.map((x) => `${x.year} ${billions(x.amount)}`).join(', ')}). The 2027 columns are lighter: proposals, not yet law.
+              The 2027 columns are lighter: proposals, not yet law.
             </p>
 
             <h2 className="sch-h2">Allocation by funding and implementation, FY 2026</h2>

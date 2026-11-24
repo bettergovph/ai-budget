@@ -544,40 +544,6 @@ export const BEFF_FPAP_ID = '07-001-310200100006000';
  */
 export const BEFF_2027 = { nep: 30_551_016_000, house: 27_453_016_000 } as const;
 
-/**
- * DepEd's school-building budget before 2020, from our GAA history (data/gaa-history, DBM's archive; docs/gaa-history.md),
- * checked line by line on 2026-11-24. 2020–2026 come from the GAA tables in D1 (`beff_gaa` in the analysis API).
- * `deped`: the Basic Education Facilities line, called "Lump-sum for the Requirement of Basic Educational Facilities"
- * (2011–2012) and "Provision and maintenance of Basic Education Facilities" (2015–2016); for 2009–2010 its two
- * forerunners, "Construction/Repair/Rehabilitation of Classrooms/School Buildings/Water and Sanitation Facilities…"
- * and "Construction of Elementary and Secondary School Buildings in Areas Experiencing Acute Classroom Shortage".
- * `dpwh`: the part of the line carried in DPWH's budget (2013 only). `other`: the separate "DepEd – School Building
- * Program" (₱1–2B) and, in 2009, the Economic Stimulus Fund's "Construction of Classroom/Schoolbuilding" (₱3B).
- * `deped` null: the line is not in our GAA data that year (2014, 2017: only DepEd's totals were extracted).
- */
-export interface BeffYear { year: number; deped: number | null; dpwh?: number; other?: number; source: string }
-export const BEFF_HISTORY: BeffYear[] = [
-  { year: 2009, deped: 2_261_500_000 + 1_600_000_000, other: 2_000_000_000 + 3_000_000_000, source: 'GAA 2009 (DBM CSV)' },
-  { year: 2010, deped: 3_564_950_000 + 1_700_000_000, other: 2_000_000_000, source: 'GAA 2010 (DBM CSV)' },
-  // DBM's 2011 CSV; the draft GAA text reads ₱11,291,236,000.
-  { year: 2011, deped: 12_041_236_000, other: 1_000_000_000, source: 'GAA 2011 (DBM CSV)' },
-  // Not in DBM's 2012 CSV; from the printed GAA (GAA2012.zip, DEPED/A.pdf, item A.III.e.17.p).
-  { year: 2012, deped: 16_420_020_000, other: 1_000_000_000, source: 'GAA 2012, DepEd volume (DBM PDF)' },
-  { year: 2013, deped: 11_157_927_000, dpwh: 14_110_400_000, other: 1_000_000_000, source: 'GAA 2013 (DBM CSV)' },
-  { year: 2014, deped: null, other: 1_000_000_000, source: 'GAA 2014 summary (DBM PDF); DepEd’s lines not extracted' },
-  { year: 2015, deped: 53_875_250_000, source: 'GAA 2015 (DBM CSV)' },
-  { year: 2016, deped: 82_262_890_000, source: 'GAA 2016, DepEd (DBM UACS Excel)' },
-  { year: 2017, deped: null, source: 'GAA 2017; DepEd’s lines not extracted' },
-  { year: 2018, deped: 105_461_287_000, source: 'GAA 2018 (DBM Excel)' },
-  // Not in our extracted rows; from the technical GAA (TechGAA2019/DEPED/A.pdf, 310200100006000).
-  { year: 2019, deped: 30_973_016_000, source: 'GAA 2019, DepEd volume (DBM PDF)' },
-];
-/** The separate "DepEd – School Building Program" before 2009 (the only school-building line in our data for those years). */
-export const SBP_EARLY: { year: number; amount: number }[] = [
-  { year: 2002, amount: 2_000_000_000 }, { year: 2003, amount: 2_000_000_000 }, { year: 2005, amount: 1_000_000_000 },
-  { year: 2007, amount: 1_760_000_000 }, { year: 2008, amount: 2_000_000_000 },
-];
-
 export type DpwhKind = 'buildings' | 'mpb' | 'repair' | 'other';
 /** How a DPWH school contract is grouped by its description (first rule that fits, in this order: repair, mpb, buildings). */
 export const DPWH_KINDS: { key: DpwhKind; label: string; color: string }[] = [

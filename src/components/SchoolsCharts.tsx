@@ -91,14 +91,9 @@ export function Columns({ data, color, format, title }: { data: Column[]; color:
 
 export interface StackSeries { key: string; label: string; color: string }
 
-/**
- * Stacked columns: one per `x`, segments in `series` order from the baseline, a 2px gap between segments. A label with
- * "|" is drawn on two lines ("2027|NEP"); `muted` columns are lighter (a proposal, say); `note` writes a word above
- * the baseline of a column (a year with no data: "n/a").
- */
-export function Stacked({ xs, series, value, format, title, muted, note }: {
+/** Stacked columns: one per `x`, segments in `series` order from the baseline, a 2px gap between segments. */
+export function Stacked({ xs, series, value, format, title }: {
   xs: (string | number)[]; series: StackSeries[]; value: (x: string | number, s: string) => number; format: (v: number) => string; title: string;
-  muted?: (x: string | number) => boolean; note?: (x: string | number) => string | null;
 }) {
   const { box, show, hide, view } = useTip();
   const totals = xs.map((x) => series.reduce((a, s) => a + value(x, s.key), 0));
@@ -127,28 +122,24 @@ export function Stacked({ xs, series, value, format, title, muted, note }: {
             acc += v;
             return { s, v, h, yTop };
           }).filter((g) => g.h > 0);
-          const [line1, line2] = String(x).split('|');
           const tipBody = (
-            <><strong>{line1}{line2 ? ` ${line2}` : ''}</strong> · {note?.(x) ?? format(totals[i])}
+            <><strong>{x}</strong> · {format(totals[i])}
               {series.map((s) => <span key={s.key} className="sch-tip-row"><span className="sch-swatch" style={{ background: s.color }} />{s.label}: {format(value(x, s.key))}</span>)}</>
           );
           return (
             <g key={x}>
               <rect x={PAD.l + band * i} y={PAD.t} width={band} height={ih} fill="transparent" tabIndex={0}
-                aria-label={`${line1}${line2 ? ` ${line2}` : ''}: ${note?.(x) ?? format(totals[i])}`}
+                aria-label={`${x}: ${format(totals[i])}`}
                 onMouseMove={(e) => show(e, e.currentTarget, tipBody)} onFocus={(e) => show(null, e.currentTarget, tipBody)} onBlur={hide} />
               {segs.map((g, j) => {
                 const last = j === segs.length - 1;
                 // 2px surface gap between segments: each segment but the lowest gives up its bottom 2px.
                 const gap = j === 0 ? 0 : Math.min(2, g.h / 2);
-                const op = muted?.(x) ? 0.45 : 1;
                 return last
-                  ? <path key={g.s.key} d={columnPath(left, g.yTop, bw, g.h - gap, 4)} fill={g.s.color} opacity={op} pointerEvents="none" />
-                  : <rect key={g.s.key} x={left} y={g.yTop} width={bw} height={Math.max(0, g.h - gap)} fill={g.s.color} opacity={op} pointerEvents="none" />;
+                  ? <path key={g.s.key} d={columnPath(left, g.yTop, bw, g.h - gap, 4)} fill={g.s.color} pointerEvents="none" />
+                  : <rect key={g.s.key} x={left} y={g.yTop} width={bw} height={Math.max(0, g.h - gap)} fill={g.s.color} pointerEvents="none" />;
               })}
-              {note?.(x) && <text x={left + bw / 2} y={base - 6 - (segs.reduce((a, g) => a + g.h, 0))} className="sch-axis sch-axis-sub" textAnchor="middle">{note(x)}</text>}
-              <text x={left + bw / 2} y={H - PAD.b + 16} className="sch-axis" textAnchor="middle">{line1}</text>
-              {line2 && <text x={left + bw / 2} y={H - PAD.b + 30} className="sch-axis sch-axis-sub" textAnchor="middle">{line2}</text>}
+              <text x={left + bw / 2} y={H - PAD.b + 16} className="sch-axis" textAnchor="middle">{x}</text>
             </g>
           );
         })}
