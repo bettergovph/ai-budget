@@ -104,6 +104,41 @@ export interface SchoolProject {
   /** True when this school is only a review candidate for the project, not its ID-linked school. */
   candidate?: boolean;
 }
+/** A DPWH contract linked to the school (build_dpwh_links.py): DPWH's own figures, and how the link was made. */
+export interface DpwhProject {
+  contract_id: string;
+  description: string | null;
+  category: string | null;
+  status: string | null;
+  progress: number | null;
+  budget_php: number | null;
+  amount_paid_php: number | null;
+  contractor: string | null;
+  start_date: string | null;
+  completion_date: string | null;
+  infra_year: number | null;
+  program_name: string | null;
+  source_of_funds: string | null;
+  deo: string | null;
+  /** How many schools the contract is confidently linked to (a cluster contract's budget covers them all). */
+  schools_confident: number | null;
+  match: DpwhMatch;
+  confident: 0 | 1;
+  distance_m: number | null;
+}
+export type DpwhMatch = 'school_id' | 'school_id_name_differs' | 'name' | 'name_annex' | 'several' | 'near_name' | 'near';
+export const DPWH_MATCH_LABEL: Record<DpwhMatch, string> = {
+  school_id: 'School ID in the contract',
+  school_id_name_differs: 'School ID in the contract; the name is spelt differently',
+  name: 'School’s name in the contract',
+  name_annex: 'Name in the contract, but it says “annex”: maybe its annex',
+  several: 'Name in the contract, but other schools share it',
+  near_name: 'Near the school, and part of its name is in the contract',
+  near: 'Near the school on DPWH’s map only',
+};
+/** Key of a DPWH contract in a report's `projects` (SBP projects use their own ids). */
+export const dpwhKey = (contractId: string) => `dpwh:${contractId}`;
+
 export interface ReportTally {
   reports: number;
   confirmed: number;
@@ -121,6 +156,8 @@ export interface SchoolFile {
   facilities: Record<string, string | number | null> | null;
   enrollment: Record<string, string | number | null> | null;
   projects: SchoolProject[];
+  /** DPWH contracts linked to the school, newest first (confident and possible). */
+  dpwh: DpwhProject[];
   join_review: { source_sheet: string; join_outcome: string; fallback_method: string | null }[];
   reports: ReportTally;
 }
@@ -184,7 +221,7 @@ export interface SchoolReport {
   /** Only with shortage 'confirmed'. */
   classrooms_needed: number | null;
   signs: Sign[];
-  /** What the reporter saw of each 2026 project at this school, by project id. */
+  /** What the reporter saw of each project, by id: 2026 SBP projects (SBP-P…) and DPWH contracts (dpwh:…). */
   projects: Record<string, ProjectSeen>;
   relation: Relation | null;
   notes: string;
@@ -199,7 +236,7 @@ export const emptyReport = (schoolId: string): SchoolReport => ({
 
 export const LIMITS = { notes: 1000, photos: 3, photoUrl: 500, classrooms: 200 } as const;
 export const SCHOOL_ID_RE = /^[0-9A-Za-z-]{3,20}$/;
-const PROJECT_ID_RE = /^SBP-P\d{6}$/;
+const PROJECT_ID_RE = /^(SBP-P\d{6}|dpwh:[A-Za-z0-9-]{4,30})$/;
 
 const pick = <T extends readonly (readonly [string, string])[]>(list: T, v: unknown, field: string, problems: string[]) => {
   if (v == null || v === '') return null;

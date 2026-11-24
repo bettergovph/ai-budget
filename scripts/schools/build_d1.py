@@ -20,6 +20,8 @@ source's table (the workbook's rule "blank is not zero" holds by construction):
   schools_fields             the field dictionary + where each field lives in D1
   schools_meta               source file hashes, counts, build time
 
+It also writes data/schools/registry-names.csv (names, place, 2022 point per school) for build_dpwh_links.py.
+
 The SBP_2026_* roll-ups are not stored: view `schools_sbp_rollup_2026`
 recomputes them from the projects, and this build asserts it reproduces the
 workbook's values for every school.
@@ -432,6 +434,19 @@ def main():
                     e[col] = None
                 else:
                     e[col + "_note"] = None
+
+    # --- registry names, place and points, for matching other datasets to schools (build_dpwh_links.py) ---
+    os.makedirs(OUT_DIR, exist_ok=True)
+    by_id = {c["school_id"]: c for c in coords}
+    with open(os.path.join(OUT_DIR, "registry-names.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["school_id", "school_name", "shortage_name", "coord_name", "province", "municipality", "latitude", "longitude"])
+        alt = {sh["school_id"]: sh["school_name"] for sh in shortage}
+        for s in schools:
+            c = by_id.get(s["school_id"])
+            ok = c is not None and c["in_ph_bbox"] == 1
+            w.writerow([s["school_id"], s["school_name"], alt.get(s["school_id"]) or "", (c or {}).get("school_name") or "",
+                        s["province"] or "", s["municipality"] or "", c["latitude"] if ok else "", c["longitude"] if ok else ""])
 
     # --- projects + exploded review candidates ---
     registry_ids = seen

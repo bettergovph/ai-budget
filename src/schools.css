@@ -105,6 +105,11 @@
 .sch-big-value { font-family: var(--font-hero); font-size: 32px; font-weight: 800; color: var(--ink); }
 .sch-big-label { font-family: var(--font-body); font-size: 13px; color: var(--ink-2); }
 .sch-section .sch-h2 { margin-top: 28px; }
+.sch-ask { gap: 4px; padding: 8px 0; border-top: 1px solid var(--rule-soft); }
+.sch-ask > span:first-child { font-weight: 500 !important; }
+.sch-desc { min-width: 280px; font-size: 12.5px; }
+.sch-details { margin-top: 16px; }
+.sch-details summary { cursor: pointer; font-family: var(--font-body); font-size: 13.5px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
 .sch-list { font-family: var(--font-body); font-size: 13px; color: var(--ink-2); padding-left: 18px; }
 
 .sch-report { border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; background: var(--paper-2); }

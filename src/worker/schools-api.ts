@@ -18,7 +18,7 @@
 import { fail, login, memberFor, message, missingTable, reply, type ReviewEnv } from "./hgab-reviews";
 import {
   SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
-  type AreaRow, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
+  type AreaRow, type DpwhProject, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
 } from "../lib/schools";
 
 export const SCHOOLS_API = "/api/schools";
@@ -214,6 +214,18 @@ async function school(env: ReviewEnv, id: string): Promise<Response> {
     env.DB.prepare(`SELECT source_sheet, join_outcome, fallback_method FROM schools_join_review WHERE primary_id = ?1 ORDER BY review_id`).bind(id).all(),
     tallyFor(env, id),
   ]);
+  let dpwh: DpwhProject[] = [];
+  try {
+    dpwh = (await env.DB.prepare(
+      `SELECT c.contract_id, c.description, c.category, c.status, c.progress, c.budget_php, c.amount_paid_php, c.contractor,
+              c.start_date, c.completion_date, c.infra_year, c.program_name, c.source_of_funds, c.deo, c.schools_confident,
+              l.match, l.confident, l.distance_m
+       FROM schools_dpwh_links l JOIN schools_dpwh_contracts c ON c.contract_id = l.contract_id
+       WHERE l.school_id = ?1 ORDER BY l.confident DESC, c.infra_year DESC, c.start_date DESC`,
+    ).bind(id).all<DpwhProject>()).results;
+  } catch (e) {
+    if (!missingTable(e)) throw e; // the DPWH links not loaded into this D1 yet
+  }
   if (!s) return fail(404, "not_found", "No school has this ID in the registry.");
   delete s.school_head_name;
   const pickProject = (p: SchoolProject, candidateOnly: boolean): SchoolProject => ({
@@ -225,7 +237,7 @@ async function school(env: ReviewEnv, id: string): Promise<Response> {
   return reply({
     school: s, shortage, coordinates, facilities, enrollment,
     projects: [...linked.results.map((p) => pickProject(p, false)), ...candidate.results.map((p) => pickProject(p, true))],
-    join_review: review.results, reports,
+    dpwh, join_review: review.results, reports,
   });
 }
 
@@ -256,14 +268,18 @@ async function send(request: Request, env: ReviewEnv, url: URL): Promise<Respons
   if (!report) return fail(422, "invalid", "Some answers need fixing.", { problems });
   const known = await env.DB.prepare("SELECT school_id FROM schools WHERE school_id = ?1").bind(report.school_id).first();
   if (!known) return fail(404, "not_found", "No school has this ID in the registry.");
-  const ids = Object.keys(report.projects);
-  if (ids.length) {
-    const { results } = await env.DB.prepare(
-      `SELECT project_id FROM schools_sbp_projects_2026 WHERE project_id IN (${ids.map((_, i) => `?${i + 2}`).join(",")})
-         AND (school_id = ?1 OR project_id IN (SELECT project_id FROM schools_sbp_candidates WHERE school_id = ?1))`,
-    ).bind(report.school_id, ...ids).all<{ project_id: string }>();
-    if (results.length !== ids.length) return fail(422, "invalid", "Some answers need fixing.", { problems: ["projects: not this school's"] });
-  }
+  // Every project answered must be this school's: a 2026 SBP project (linked or a candidate) or a linked DPWH contract.
+  const keys = Object.keys(report.projects);
+  const sbp = keys.filter((k) => !k.startsWith("dpwh:"));
+  const contracts = keys.filter((k) => k.startsWith("dpwh:")).map((k) => k.slice(5));
+  const theirs = async (sql: string, list: string[]) => list.length === 0 || (await env.DB.prepare(
+    sql.replace("$IN", list.map((_, i) => `?${i + 2}`).join(",")),
+  ).bind(report.school_id, ...list).all()).results.length === list.length;
+  const ok = await theirs(
+    `SELECT project_id FROM schools_sbp_projects_2026 WHERE project_id IN ($IN)
+       AND (school_id = ?1 OR project_id IN (SELECT project_id FROM schools_sbp_candidates WHERE school_id = ?1))`, sbp,
+  ) && await theirs(`SELECT contract_id FROM schools_dpwh_links WHERE school_id = ?1 AND contract_id IN ($IN)`, contracts);
+  if (!ok) return fail(422, "invalid", "Some answers need fixing.", { problems: ["projects: not this school's"] });
   const t = now();
   const member = await memberFor(env, who, t);
   if (member instanceof Response) return member;

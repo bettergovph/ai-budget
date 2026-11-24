@@ -21,6 +21,7 @@ export default function SchoolsAbout() {
           <li><strong>Classroom shortages, 2023</strong>: matched to 47,362 schools, by School ID (or, for 355, a unique new School ID).</li>
           <li><strong>Coordinates, 2022</strong>: 47,828 schools (LIS first, then NSBI). Seven points fall outside the Philippines and are left off the map.</li>
           <li><strong>Facilities, 2023</strong> (59,101 schools) and <strong>enrolment and classrooms, 2023</strong> (47,449 schools).</li>
+          <li><strong>DPWH contracts, 2016 to 2026</strong>: each school’s project history. Of 33,275 school contracts, 26,802 name a school by its School ID or by its name in the same province, and are linked to 16,985 schools. Matches by location alone are shown apart, as possible matches. DPWH’s list doesn’t include classrooms built by DepEd or local governments.</li>
           <li><strong>The 2026 School Building Program list</strong>: 5,652 projects. 5,560 are linked to a school by its ID, and 92 are left for review.</li>
         </ul>
         <h2 className="sch-h2">How to read it</h2>

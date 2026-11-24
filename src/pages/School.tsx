@@ -5,14 +5,16 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import DpwhContractLink from '../components/DpwhContractLink';
 import MemberProvider from '../components/HgabReviewMember';
 import { PreviewNotice, SchoolsChrome, Status } from '../components/SchoolsBits';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import { useMember } from '../lib/hgab-review-member';
 import { php } from '../lib/format';
 import {
-  LIMITS, LISTINGS, PROJECT_SEEN, RELATIONS, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_ANSWERS, SIGNS, classrooms, emptyReport, num, scopeLabel,
-  regionName, rooms, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
+  DPWH_MATCH_LABEL, LIMITS, LISTINGS, PROJECT_SEEN, RELATIONS, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_ANSWERS, SIGNS, classrooms, dpwhKey,
+  emptyReport, num, scopeLabel,
+  regionName, rooms, type DpwhProject, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
 } from '../lib/schools';
 
 type Row = Record<string, string | number | null>;
@@ -53,6 +55,7 @@ function School() {
               <div className="sch-schoolmain">
                 <Headline data={data} tally={tally} />
                 <Projects projects={data.projects} />
+                <History dpwh={data.dpwh ?? []} />
                 <Section title="Classrooms and learners (2023)">
                   {data.enrollment ? <Enrollment e={data.enrollment} s={s} /> : <Missing what="enrolment" />}
                 </Section>
@@ -86,7 +89,7 @@ function School() {
                 </Section>
               </div>
               <aside className="sch-schoolside">
-                <ReportBox schoolId={String(s.school_id)} projects={data.projects} shortage={(data.shortage?.total_shortage as number | undefined) ?? null} onTally={setTally} />
+                <ReportBox schoolId={String(s.school_id)} projects={askAbout(data)} shortage={(data.shortage?.total_shortage as number | undefined) ?? null} onTally={setTally} />
               </aside>
             </div>
           </>
@@ -146,6 +149,61 @@ function Projects({ projects }: { projects: SchoolProject[] }) {
   );
 }
 
+function History({ dpwh }: { dpwh: DpwhProject[] }) {
+  const sure = dpwh.filter((p) => p.confident === 1);
+  const maybe = dpwh.filter((p) => p.confident !== 1);
+  const years = sure.map((p) => p.infra_year).filter((y): y is number => y != null);
+  return (
+    <Section title="Project history: DPWH, 2016 to 2026">
+      {sure.length === 0 ? (
+        <p className="sch-muted">No DPWH contract since 2016 names this school or its School ID.</p>
+      ) : (
+        <>
+          <p className="sch-muted">
+            {sure.length} DPWH {sure.length === 1 ? 'contract names' : 'contracts name'} this school
+            {years.length ? `, from ${Math.min(...years)} to ${Math.max(...years)}` : ''}, for {php(sure.reduce((a, p) => a + (p.budget_php ?? 0), 0))} in all.
+          </p>
+          <DpwhTable rows={sure} />
+        </>
+      )}
+      {maybe.length > 0 && (
+        <details className="sch-details">
+          <summary>{maybe.length} possible {maybe.length === 1 ? 'match' : 'matches'} to check</summary>
+          <p className="sch-muted">These contracts may be for this school, but the link is uncertain: they sit near it on DPWH’s map, or another school shares the name. They are not counted above.</p>
+          <DpwhTable rows={maybe} />
+        </details>
+      )}
+      <p className="sch-footnote">
+        From DPWH’s contract list, matched to the school by its School ID or its name in the contract’s province. Only DPWH’s
+        contracts are here, not classrooms built by DepEd, local governments or others. The budget is the contract’s; a status
+        is DPWH’s own. If you know what was built, say so in a field report.
+      </p>
+    </Section>
+  );
+}
+
+function DpwhTable({ rows }: { rows: DpwhProject[] }) {
+  return (
+    <div className="sch-tablewrap">
+      <table className="sch-table">
+        <thead><tr><th>Year</th><th>Project</th><th>Status</th><th className="num">Budget</th><th>Contractor</th><th>Contract</th></tr></thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.contract_id}>
+              <td className="num">{p.infra_year ?? '—'}</td>
+              <td className="sch-desc">{p.description ?? '—'}<span className="sch-sub">{DPWH_MATCH_LABEL[p.match]}{p.distance_m != null ? ` · ${num(p.distance_m)} m from the school’s point` : ''}</span></td>
+              <td>{p.status ?? '—'}{p.progress != null && p.status !== 'Completed' ? <span className="sch-sub">{Math.round(p.progress)}% done</span> : null}</td>
+              <td className="num">{php(p.budget_php)}{(p.schools_confident ?? 0) > 1 && <span className="sch-sub">one contract for {p.schools_confident} schools</span>}</td>
+              <td>{p.contractor ?? '—'}</td>
+              <td><DpwhContractLink id={p.contract_id} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Enrollment({ e, s }: { e: Row; s: Row }) {
   return (
     <Facts rows={[
@@ -200,8 +258,28 @@ const Missing = ({ what }: { what: string }) => <p className="sch-muted">No 2023
 // The field report
 // ---------------------------------------------------------------------------
 
+/** A project the report asks about: the 2026 list's, then the newest DPWH contracts that surely name the school. */
+interface Asked { key: string; title: string; sub: string }
+const MAX_DPWH_ASKED = 5;
+/** A DPWH description, short and in sentence case: "CONSTRUCTION OF MULTI-PURPOSE BUILDING AT …" → "Construction of multi-purpose building". */
+function shortDesc(d: string | null): string {
+  const head = (d ?? 'DPWH contract').split(/,| AT | IN | @ /i)[0].trim().toLowerCase();
+  const cut = head.length > 70 ? `${head.slice(0, 70)}…` : head;
+  return cut.charAt(0).toUpperCase() + cut.slice(1);
+}
+function askAbout(data: SchoolFile): Asked[] {
+  return [
+    ...data.projects.map((p) => ({ key: p.project_id, title: `2026 list: ${scopeLabel(p.scope_of_work)}`, sub: `${p.project_id} · ${p.modality ?? ''}` })),
+    ...(data.dpwh ?? []).filter((p) => p.confident === 1).slice(0, MAX_DPWH_ASKED).map((p) => ({
+      key: dpwhKey(p.contract_id),
+      title: `${p.infra_year ?? ''} · ${shortDesc(p.description)}`,
+      sub: `${p.contract_id} · DPWH says ${p.status?.toLowerCase() ?? 'no status'}`,
+    })),
+  ];
+}
+
 function ReportBox({ schoolId, projects, shortage, onTally }: {
-  schoolId: string; projects: SchoolProject[]; shortage: number | null; onTally: (t: ReportTally) => void;
+  schoolId: string; projects: Asked[]; shortage: number | null; onTally: (t: ReportTally) => void;
 }) {
   const member = useMember();
   const [report, setReport] = useState<SchoolReport>(() => emptyReport(schoolId));
@@ -276,13 +354,13 @@ function ReportBox({ schoolId, projects, shortage, onTally }: {
           )}
           {projects.length > 0 && (
             <fieldset className="sch-field">
-              <legend>5. What have you seen of the 2026 {projects.length === 1 ? 'project' : 'projects'}?</legend>
+              <legend>5. What have you seen of {projects.length === 1 ? 'this project' : 'these projects'}?</legend>
               {projects.map((p) => (
-                <label key={p.project_id} className="sch-field sch-field-inline">
-                  <span>{scopeLabel(p.scope_of_work)}<span className="sch-sub">{p.project_id} · {p.modality ?? ''}</span></span>
-                  <select value={report.projects[p.project_id] ?? ''} onChange={(e) => {
+                <label key={p.key} className="sch-field sch-ask">
+                  <span>{p.title}<span className="sch-sub">{p.sub}</span></span>
+                  <select value={report.projects[p.key] ?? ''} onChange={(e) => {
                     const next = { ...report.projects };
-                    if (e.target.value) next[p.project_id] = e.target.value as SchoolReport['projects'][string]; else delete next[p.project_id];
+                    if (e.target.value) next[p.key] = e.target.value as SchoolReport['projects'][string]; else delete next[p.key];
                     set('projects', next);
                   }}>
                     <option value="">Don’t know</option>
