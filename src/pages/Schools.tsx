@@ -11,7 +11,7 @@ import { php } from '../lib/format';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import {
   PROJECT_SETS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, levelOf, num, pct, regionName, rooms,
-  schoolPath, statusOf, type ProjectSet,
+  schoolPath, schoolReviewPath, statusOf, type ProjectSet,
   type AreasFile, type ListFile, type PointsFile, type SchoolFile, type SectorCode,
 } from '../lib/schools';
 
@@ -166,7 +166,7 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
               <div><dt>2027 proposals</dt><dd>{y27.length ? `${y27.length} DPWH ${y27.length === 1 ? 'project' : 'projects'}: ${php(y27.reduce((a, l) => a + (l.house_php ?? 0), 0))} in the House bill${y27.some((l) => l.change === 'added') ? ', added by the House' : ''}` : 'None naming it'}</dd></div>
               <div><dt>Field reports</dt><dd>{data?.reports.reports ? `${data.reports.reports} (${data.reports.confirmed} say it needs classrooms)` : 'None yet'}</dd></div>
             </dl>
-            <Link className="sch-button" to={schoolPath(id)}>Open the school · report from the field</Link>
+            <span className="sch-cardactions"><Link className="sch-button" to={schoolReviewPath(id)}>Review</Link> <Link to={schoolPath(id)}>Open the school →</Link></span>
           </>
         )}
       </Status>

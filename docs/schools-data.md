@@ -127,3 +127,7 @@ EDCOM 2's shortage sheet (`/data/schools-src/edcom2-sheet/shortage.csv`) is now 
 - The map's "Projects" picker rings one set: FY 2026 allocations in green, or a FY 2027 set in magenta (solid at every zoom). "Only schools with these projects" filters the map to that set.
 - The list's "Projects" filter takes `sbp2026` (older links: `yes`), `nep2027`, `house2027` or `added2027`, and a column gives the 2027 House bill amount, split when a line names several schools.
 - Each school page has a "2027 proposals" section with NEP and House amounts linked to the document pages. DepEd's 2027 school-building line is a lump sum and names no school.
+
+## Review buttons (2026-11-24)
+
+Every row of `/schools/list` has a **Review** button with the school's review count. So do the map's school card and the top of each school page. The button opens the school's page at `#review`: the form ("Review this school") opens and scrolls into view, or the sign-in button shows first.

@@ -3,7 +3,7 @@
  * facilities and enrolment), its 2026 School Building Program projects, any join left for review, and the field
  * reports. Signed-in members (the project reviewer's accounts) can send one report per school and edit it.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import DpwhContractLink from '../components/DpwhContractLink';
 import MemberProvider from '../components/HgabReviewMember';
@@ -14,7 +14,7 @@ import { php } from '../lib/format';
 import { pdfUrl, recordPath } from '../lib/hgab';
 import {
   COUNT_FIELDS, DPWH_MATCH_LABEL, LIMITS, LISTINGS, NEEDS, NEED_REASONS, NO_DATA_EXPLAINED, NO_NEED_REASONS, PROJECT_SEEN, RELATIONS,
-  CHANGE_2027, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_LIST_ONLY, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
+  CHANGE_2027, REVIEW_HASH, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_LIST_ONLY, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
   shortageRate, statusOf, type DpwhProject, type Line2027, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
 } from '../lib/schools';
 
@@ -52,6 +52,7 @@ function School() {
             </div>
             <PreviewNotice />
             {s.in_registry === 0 && <p className="sch-notice sch-notice-info" role="note">{SHORTAGE_LIST_ONLY}</p>}
+            <p className="sch-reviewbar"><a className="sch-button" href={`#${REVIEW_HASH}`} onClick={(e) => { e.preventDefault(); document.getElementById(REVIEW_HASH)?.scrollIntoView({ behavior: 'smooth' }); }}>Review this school</a> <span className="sch-muted">Does it need more classrooms? Has a project been built? Tell DepEd and EDCOM 2.</span></p>
 
             <div className="sch-schoolgrid">
               <div className="sch-schoolmain">
@@ -335,7 +336,13 @@ function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
   const [report, setReport] = useState<SchoolReport>(() => emptyReport(schoolId));
   const [saved, setSaved] = useState<SchoolReport | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null; problems: string[]; done: string | null }>({ busy: false, error: null, problems: [], done: null });
-  const [open, setOpen] = useState(false);
+  // Arriving from a Review button (…#review): the form opens and comes into view.
+  const wantsReview = typeof window !== 'undefined' && window.location.hash === `#${REVIEW_HASH}`;
+  const [open, setOpen] = useState(wantsReview);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (wantsReview) box.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [wantsReview]);
 
   useEffect(() => {
     if (!member.userId) return;
@@ -373,17 +380,17 @@ function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
   const mustExplain = disputesData(report, shortage);
 
   return (
-    <div className="sch-report">
-      <h2 className="sch-h2">Report from the field</h2>
+    <div className="sch-report" id={REVIEW_HASH} ref={box}>
+      <h2 className="sch-h2">Review this school</h2>
       <p className="sch-muted">Know this school? Tell DepEd and EDCOM 2 whether it is here and whether it needs more classrooms. Your name is never shown; the page shows only how many reports agree, and every report is reviewed before any figure changes.</p>
       <p className="sch-records">{records}</p>
       {!member.enabled && <p className="sch-notice">Sign-in isn’t set up on this copy of the site, so this form can be tried but not sent.</p>}
       {member.enabled && !member.loaded ? (
         <p className="sch-muted">Checking your sign-in…</p>
       ) : member.enabled && !member.userId ? (
-        <button type="button" className="sch-button" onClick={member.signIn}>Sign in to report (email code, no password)</button>
+        <button type="button" className="sch-button" onClick={member.signIn}>Sign in to review (email code, no password)</button>
       ) : !open ? (
-        <button type="button" className="sch-button" onClick={() => setOpen(true)}>Start a report on this school</button>
+        <button type="button" className="sch-button" onClick={() => setOpen(true)}>Start a review of this school</button>
       ) : (
         <form className="sch-form" onSubmit={(e) => { e.preventDefault(); void call('POST'); }}>
           <Choice legend="1. Is the school here and open?" list={LISTINGS} value={report.listing} onChange={(v) => set('listing', v)} />
