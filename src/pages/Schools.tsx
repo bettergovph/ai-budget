@@ -41,6 +41,8 @@ export default function Schools() {
     };
   }, [regions.data]);
 
+  const pickedRow = picked ? where.get(picked) : undefined;
+  const pickedAt: [number, number] | null = pickedRow ? [pickedRow[1], pickedRow[2]] : null;
   const pick = (id: string) => {
     setPicked(id);
     const r = where.get(id);
@@ -122,14 +124,16 @@ export default function Schools() {
             )}
           </div>
 
-          {picked ? <PickedCard id={picked} onClose={() => setPicked(null)} /> : (
+          {/* A school with coordinates gets its card on the map, above its dot; one without (picked from search) here. */}
+          {picked && !where.has(picked) ? <PickedCard id={picked} onClose={() => setPicked(null)} /> : (
             <p className="sch-muted">Click a dot for the school. Zoom in to see each one. <Link to={SCHOOLS_SHORTAGE}>Shortages by division →</Link></p>
           )}
         </aside>
 
         <div className="sch-mapwrap">
           <Status error={pts.error} loading={false}>
-            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} ring={ring} projectsOnly={projectsOnly} colorBy={colorBy} selected={picked} onPick={pick} fit={fit} />
+            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} ring={ring} projectsOnly={projectsOnly} colorBy={colorBy} selected={picked} onPick={pick} fit={fit}
+              popup={picked && pickedAt ? { at: pickedAt, content: <PickedCard id={picked} onClose={() => setPicked(null)} />, onClose: () => setPicked(null) } : null} />
           </Status>
           {pts.loading && <p className="sch-maploading">Loading {num(60204)} schools…</p>}
           {pts.data && (

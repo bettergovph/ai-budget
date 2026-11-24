@@ -233,3 +233,9 @@
   .sch-modal[open] { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
 }
 .sch-report > .sch-button { margin-top: 4px; }
+
+/* The picked school's card on the map (SchoolsMap `popup`): MapLibre's popup, anchored above the dot. */
+.sch-popup { z-index: 3; }
+.sch-popup .maplibregl-popup-content { padding: 0; border-radius: 10px; background: none; box-shadow: 0 10px 28px rgba(17, 21, 28, 0.22); }
+.sch-popup .sch-card { width: min(320px, calc(100vw - 48px)); max-height: min(60vh, 420px); overflow-y: auto; border-color: var(--rule); }
+.sch-popup .maplibregl-popup-tip { border-top-color: var(--paper); }
