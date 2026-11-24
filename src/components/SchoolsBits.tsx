@@ -3,11 +3,12 @@
  * the shortage legend and stat tiles, and the loading/error status line.
  */
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import SiteFooter from './SiteFooter';
 import {
-  NO_SHORTAGE_DATA, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_CLASSES,
+  DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_CLASSES,
+  type SchoolSource,
 } from '../lib/schools';
 import '../nep2027.css';
 import '../schools.css';
@@ -31,7 +32,10 @@ export function SchoolsChrome({ children, wide = false }: { children: ReactNode;
   return (
     <div className="sch-page">
       <SiteHeader crumb="Schools" subNav={nav} />
-      <main className={`nep-main sch-main${wide ? ' sch-main-wide' : ''}`}>{children}</main>
+      <main className={`nep-main sch-main${wide ? ' sch-main-wide' : ''}`}>
+        {children}
+        <SourcesNote />
+      </main>
       <SiteFooter />
     </div>
   );
@@ -72,4 +76,40 @@ export function Status({ error, loading, children }: { error: string | null; loa
   if (error) return <p className="nep-status nep-status-error">{error}</p>;
   if (loading) return <p className="nep-status">Loading…</p>;
   return <>{children}</>;
+}
+
+function SourceLink({ s }: { s: SchoolSource }) {
+  if (!s.url) return <>{s.title}</>;
+  if (s.url.startsWith('/')) return <Link to={s.url}>{s.title}</Link>;
+  return <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}<span aria-hidden="true"> ↗</span></a>;
+}
+
+/** The short source line under every schools page. */
+function SourcesNote() {
+  return (
+    <aside className="sch-sources-note" aria-label="Sources">
+      <strong>Sources.</strong>{' '}
+      {OFFICIAL_SOURCES.map((s, i) => (
+        <span key={s.key}>{i > 0 && ' · '}{s.who}, <SourceLink s={s} /></span>
+      ))}
+      . Built from DepEd’s school data (the Classroom Shortages &amp; Projects Data Pack), with DPWH’s contracts, the GAA,
+      the 2027 NEP and House bill, and PSA’s statistics. <Link to={SCHOOLS_ABOUT}>Every source →</Link>
+    </aside>
+  );
+}
+
+/** The full list, for the About page. */
+export function SourcesList() {
+  return (
+    <>
+      <h3 className="sch-h3">Official sources to check against</h3>
+      <ul className="sch-sources">
+        {OFFICIAL_SOURCES.map((s) => <li key={s.key}><span className="sch-sources-who">{s.who}</span> <SourceLink s={s} /><span className="sch-sub">{s.note}</span></li>)}
+      </ul>
+      <h3 className="sch-h3">What the figures here are built from</h3>
+      <ul className="sch-sources">
+        {DATA_SOURCES.map((s) => <li key={s.key}><span className="sch-sources-who">{s.who}</span> <SourceLink s={s} /><span className="sch-sub">{s.note}</span></li>)}
+      </ul>
+    </>
+  );
 }

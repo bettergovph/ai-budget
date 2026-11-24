@@ -12,7 +12,7 @@ import { php } from '../lib/format';
 import { INDICATORS_ROOT, type IndicatorsFile } from '../lib/indicators';
 import { loadIndicators } from '../lib/indicators-view';
 import {
-  BEFF_2027, DPWH_KINDS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
+  BEFF_2027, DATA_SOURCES, DPWH_KINDS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
   type AnalysisFile, type AnalysisProvince,
 } from '../lib/schools';
 import { useSchoolsApi } from '../lib/use-schools-api';
@@ -194,7 +194,12 @@ export default function SchoolsOverview() {
                 { key: 'nep', label: '2027', sub: 'NEP', value: BEFF_2027.nep, muted: true },
                 { key: 'house', label: '2027', sub: 'House bill', value: BEFF_2027.house, muted: true },
               ]} />
-            <p className="sch-footnote">GAA amounts from our GAA data (DepEd, activity 310200100006000); 2027 from the NEP (Vol. I p. 413) and HB 10858 on third reading (Vol. IA p. 312). The 2027 columns are lighter: proposals, not yet law.</p>
+            <p className="sch-footnote">
+              Sources: <Link to="/gaa">the GAA</Link> (DepEd, activity 310200100006000), 2020 to 2026;{' '}
+              <a href={DATA_SOURCES.find((x) => x.key === 'nep')?.url ?? '#'} target="_blank" rel="noopener noreferrer">2027 NEP, Volume I, p. 389</a>;{' '}
+              <a href={DATA_SOURCES.find((x) => x.key === 'house')?.url ?? '#'} target="_blank" rel="noopener noreferrer">HB 10858 on third reading, Volume IA, p. 302</a>.
+              The 2027 columns are lighter: proposals, not yet law.
+            </p>
 
             <h2 className="sch-h2">The 2026 School Building Program list</h2>
             <div className="sch-tablewrap">

@@ -3,7 +3,7 @@
  * own rules, docs/schools-data.md), plus how field reports are handled.
  */
 import { Link } from 'react-router-dom';
-import { SchoolsChrome } from '../components/SchoolsBits';
+import { SchoolsChrome, SourcesList } from '../components/SchoolsBits';
 import { SCHOOLS_LIST, SCHOOLS_OVERVIEW } from '../lib/schools';
 
 export default function SchoolsAbout() {
@@ -34,6 +34,8 @@ export default function SchoolsAbout() {
           <li><strong>Some projects belong to no school here.</strong> 151 linked projects use a School ID that is in the shortage list but not in the registry, so the area totals leave them out.</li>
           <li><strong>Shortage figures are DepEd’s.</strong> They are often fractional, and we round them to whole classrooms for display.</li>
         </ul>
+        <h2 className="sch-h2">Sources</h2>
+        <SourcesList />
         <h2 className="sch-h2">Field reports</h2>
         <p>
           Anyone who knows a school can sign in (email code, no password) and send one report on it, which they can change at

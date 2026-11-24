@@ -166,3 +166,11 @@
 .sch-twocharts figure { margin: 0; }
 .sch-twocharts figcaption { font: 600 13.5px var(--font-body); color: var(--ink); }
 @media (max-width: 1000px) { .sch-twocharts { grid-template-columns: 1fr; } }
+
+/* Sources */
+.sch-sources-note { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--rule); font-family: var(--font-body); font-size: 12.5px; line-height: 1.6; color: var(--ink-3); max-width: 1100px; }
+.sch-sources-note a { color: var(--accent); }
+.sch-sources { list-style: none; padding: 0; margin: 0 0 8px; }
+.sch-sources li { padding: 8px 0; border-bottom: 1px solid var(--rule-soft); }
+.sch-sources a { color: var(--accent); font-weight: 600; }
+.sch-sources-who { display: inline-block; min-width: 150px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-mute); }

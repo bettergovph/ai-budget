@@ -383,8 +383,9 @@ export const SCHOOLS_OVERVIEW = '/schools/overview';
 /** DepEd's "Basic Education Facilities" activity, the national school building line (GAA fpaps id; amounts in ₱ thousands). */
 export const BEFF_FPAP_ID = '07-001-310200100006000';
 /**
- * FY2027 figures for the same line. NEP: data/2027/07/fpaps.json (NEP 2027 Vol. I p. 413). House bill: HB 10858, 3rd
- * reading (Vol. IA p. 312), from hgab/2027/explorer/d/department-of-education.json. One line in each; pesos.
+ * FY2027 figures for the same line. NEP: data/2027/07/fpaps.json (NEP 2027 Vol. I p. 389, PDF p. 413). House bill:
+ * HB 10858, 3rd reading (Vol. IA p. 302, PDF p. 312), from hgab/2027/explorer/d/department-of-education.json. One line
+ * in each; pesos.
  */
 export const BEFF_2027 = { nep: 30_551_016_000, house: 27_453_016_000 } as const;
 
@@ -449,3 +450,53 @@ export function areaOfProvince(province: string | null | undefined): string | nu
   if (!province) return null;
   return AREA_ALIAS[province] ?? province.toLowerCase().replace(/ñ/g, 'n').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
+
+// ---------------------------------------------------------------------------
+// Sources (every schools page cites them; the About page lists them in full)
+// ---------------------------------------------------------------------------
+
+export interface SchoolSource { key: string; who: string; title: string; url: string | null; note: string }
+const R2 = 'https://budget-assets.bettergov.ph';
+/** The official sources to check the directory against, as the maintainer named them (2026-11-24). */
+export const OFFICIAL_SOURCES: SchoolSource[] = [
+  {
+    key: 'edcom2', who: 'EDCOM 2', title: 'Classroom supply and demand dashboard (LGU Breakdown)',
+    url: 'https://public.tableau.com/app/profile/rafaela.manasan/viz/classroom_supply_demand_v3_backup2/LGUBreakdown',
+    note: 'Tableau Public workbook by Rafaela Manasan, last published 13 November 2026.',
+  },
+  {
+    key: 'deped-files', who: 'DepEd', title: 'Machine-ready files', url: 'https://www.deped.gov.ph/machine-ready-files/',
+    note: 'DepEd’s downloadable data files.',
+  },
+  {
+    key: 'deped-bukas', who: 'DepEd', title: 'Paaralang Bukas public dashboard', url: 'https://www.deped.gov.ph/paaralang-bukas/',
+    note: 'DepEd’s public dashboard.',
+  },
+];
+/** What this directory is built from, and the budget and statistics it is read against. */
+export const DATA_SOURCES: SchoolSource[] = [
+  {
+    key: 'pack', who: 'DepEd data, joined', title: 'Classroom Shortages & Projects Data Pack', url: null,
+    note: 'The workbook behind every school figure here: DepEd’s school registry, 2023 classroom shortages, 2022 coordinates (LIS, NSBI), 2023 facilities and enrolment, and the 2026 School Building Program list, joined by School ID.',
+  },
+  {
+    key: 'dpwh', who: 'DPWH', title: 'Transparency portal: contracts', url: 'https://transparency.dpwh.gov.ph',
+    note: 'Contracts with infra years 2016 to 2026, as listed on 3 November 2026; linked to schools by School ID or name.',
+  },
+  {
+    key: 'gaa', who: 'DBM', title: 'General Appropriations Act, 2020 to 2026', url: '/gaa',
+    note: 'DepEd’s “Basic Education Facilities” line, from our GAA data.',
+  },
+  {
+    key: 'nep', who: 'DBM', title: 'National Expenditure Program 2027, Volume I', url: `${R2}/hgab/2027/pdf/nep2027-vol-i.pdf#page=413`,
+    note: 'Basic Education Facilities, p. 389 (PDF p. 413).',
+  },
+  {
+    key: 'house', who: 'House of Representatives', title: 'HB 10858 (third reading), Volume IA', url: `${R2}/hgab/2027/pdf/hb10858-3r-vol-ia.pdf#page=312`,
+    note: 'Basic Education Facilities, p. 302 (PDF p. 312).',
+  },
+  {
+    key: 'psa', who: 'PSA', title: 'Poverty 2023 and Census 2024, by province', url: 'https://statistics.bettergov.ph',
+    note: 'Through our Indicators section (PSA’s 87 areas).',
+  },
+];
