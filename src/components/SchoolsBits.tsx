@@ -7,8 +7,8 @@ import { Link, NavLink } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import SiteFooter from './SiteFooter';
 import {
-  DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_CLASSES,
-  type SchoolSource,
+  ALLOCATION_STATUS, DATA_NOTE, DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_LEVELS, statusInfo,
+  type AllocationStatus, type SchoolSource, type ShortageLevel,
 } from '../lib/schools';
 import '../nep2027.css';
 import '../schools.css';
@@ -45,21 +45,47 @@ export function SchoolsChrome({ children, wide = false }: { children: ReactNode;
 export function PreviewNotice() {
   return (
     <p className="sch-notice" role="note">
-      <strong>Preview.</strong> Shortages are DepEd’s 2023 figures and the projects are the 2026 School Building Program
-      list, joined by School ID. None of it has been confirmed in the field yet: that is what the reports are for.
+      <strong>Preview.</strong> Classroom shortage figures are DepEd’s for SY 2023–2024, while classroom allocations are
+      from the FY 2026 School Building Program, joined by School ID. Field reports are subject to review and validation
+      before any figure changes.
     </p>
   );
 }
 
+/** EDCOM 2's shortage levels (blue) and the hollow brown ring for no data. */
 export function ShortageLegend({ withNoData = true }: { withNoData?: boolean }) {
   return (
-    <ul className="sch-legend" aria-label="Classrooms short in 2023">
-      {SHORTAGE_CLASSES.map((c) => (
-        <li key={c.label}><span className="sch-swatch" style={{ background: c.color }} />{c.label}</li>
+    <ul className="sch-legend" aria-label="Classroom shortage level, SY 2023–2024">
+      {SHORTAGE_LEVELS.map((c) => (
+        <li key={c.key}><span className="sch-swatch" style={{ background: c.color }} />{c.key === 'none' ? 'None' : `${c.label} (${c.range})`}</li>
       ))}
-      {withNoData && <li><span className="sch-swatch sch-swatch-ring" style={{ borderColor: NO_SHORTAGE_DATA }} />No 2023 shortage data</li>}
+      {withNoData && <li><span className="sch-swatch sch-swatch-ring" style={{ borderColor: NO_SHORTAGE_DATA }} />No shortage data</li>}
     </ul>
   );
+}
+
+/** EDCOM 2's allocation statuses. */
+export function StatusLegend() {
+  return (
+    <ul className="sch-legend" aria-label="Allocation status">
+      {ALLOCATION_STATUS.map((c) => (
+        <li key={c.key} title={c.plain}>
+          <span className={`sch-swatch${c.key === 'no_data' ? ' sch-swatch-ring' : ''}`} style={c.key === 'no_data' ? { borderColor: c.color } : { background: c.color }} />{c.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function StatusBadge({ status }: { status: AllocationStatus }) {
+  const s = statusInfo(status);
+  return <span className="sch-badge" title={s.plain}><span className={`sch-swatch${status === 'no_data' ? ' sch-swatch-ring' : ''}`} style={status === 'no_data' ? { borderColor: s.color } : { background: s.color }} />{s.label}</span>;
+}
+
+export function LevelBadge({ level }: { level: ShortageLevel | null }) {
+  if (!level) return <span className="sch-badge"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: NO_SHORTAGE_DATA }} />No data</span>;
+  const l = SHORTAGE_LEVELS.find((x) => x.key === level)!;
+  return <span className="sch-badge"><span className="sch-swatch" style={{ background: l.color }} />{l.key === 'none' ? 'None' : l.label}</span>;
 }
 
 export function Stat({ value, label, note }: { value: ReactNode; label: ReactNode; note?: ReactNode }) {
@@ -92,8 +118,10 @@ function SourcesNote() {
       {OFFICIAL_SOURCES.map((s, i) => (
         <span key={s.key}>{i > 0 && ' · '}{s.who}, <SourceLink s={s} /></span>
       ))}
-      . Built from DepEd’s school data (the Classroom Shortages &amp; Projects Data Pack), with DPWH’s contracts, the GAA,
-      the 2027 NEP and House bill, and PSA’s statistics. <Link to={SCHOOLS_ABOUT}>Every source →</Link>
+      . Built from DepEd’s datasets as submitted to EDCOM 2 (FY 2026 SBP Masterlist; classroom shortage and LIS enrollment,
+      SY 2023–2024; Project BUKAS facilities), with DPWH’s contracts, the GAA, the 2027 NEP and House bill, and PSA’s
+      statistics. <Link to={SCHOOLS_ABOUT}>Every source →</Link>
+      <span className="sch-datanote">{DATA_NOTE}</span>
     </aside>
   );
 }

@@ -6,11 +6,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SchoolsMap from '../components/SchoolsMap';
-import { PreviewNotice, SchoolsChrome, ShortageLegend, Stat, Status } from '../components/SchoolsBits';
+import { LevelBadge, PreviewNotice, SchoolsChrome, ShortageLegend, Stat, Status, StatusBadge, StatusLegend } from '../components/SchoolsBits';
 import { useSchoolsApi } from '../lib/use-schools-api';
-import { php } from '../lib/format';
 import {
-  PROJECT_RING, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, num, regionName, rooms, schoolPath,
+  PROJECT_RING, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, levelOf, num, pct, regionName, rooms,
+  schoolPath, statusOf,
   type AreasFile, type ListFile, type PointsFile, type SchoolFile, type SectorCode,
 } from '../lib/schools';
 
@@ -21,6 +21,7 @@ export default function Schools() {
   const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region&v=${SCHOOLS_API_VERSION}`);
   const [sectors, setSectors] = useState<SectorCode[]>([0]);
   const [projectsOnly, setProjectsOnly] = useState(false);
+  const [colorBy, setColorBy] = useState<'level' | 'status'>('level');
   const [picked, setPicked] = useState<string | null>(null);
   const [fit, setFit] = useState<[[number, number], [number, number]] | null>(null);
   const [q, setQ] = useState('');
@@ -29,11 +30,11 @@ export default function Schools() {
   const where = useMemo(() => new Map((pts.data?.rows ?? []).map((r) => [r[0], r] as const)), [pts.data]);
   const totals = useMemo(() => {
     const rows = regions.data?.rows ?? [];
-    const sum = (k: 'schools' | 'with_shortage_data' | 'schools_short' | 'shortage' | 'sbp_classrooms_funded' | 'sbp_classrooms_bidding' | 'sbp_budget_php' | 'reports') =>
+    const sum = (k: 'schools' | 'with_shortage_data' | 'schools_short' | 'shortage' | 'allocated' | 'gap' | 'excess' | 'reports') =>
       rows.reduce((a, r) => a + r[k], 0);
     return {
       schools: sum('schools'), withData: sum('with_shortage_data'), short: sum('schools_short'), shortage: sum('shortage'),
-      funded: sum('sbp_classrooms_funded'), bidding: sum('sbp_classrooms_bidding'), budget: sum('sbp_budget_php'), reports: sum('reports'),
+      allocated: sum('allocated'), gap: sum('gap'), excess: sum('excess'), reports: sum('reports'),
     };
   }, [regions.data]);
 
@@ -49,17 +50,17 @@ export default function Schools() {
         <p className="page-eyebrow">Basic education · {totals.schools ? num(totals.schools) : '…'} schools</p>
         <h1 className="page-title">Schools and their classroom shortages</h1>
         <p className="page-dek">
-          Every school in DepEd’s registry, where it is, how many classrooms it was short in 2023, and the classrooms the
-          2026 School Building Program lists for it. If you know a school, tell us whether the shortage is real.
+          Every school in DepEd’s registry, where it is, its classroom shortage in SY 2023–2024, and the classrooms the
+          FY 2026 School Building Program allocates to it. If you know a school, tell us whether the shortage is real.
         </p>
       </div>
       <PreviewNotice />
 
       <div className="sch-stats">
-        <Stat value={rooms(totals.shortage)} label="classrooms short in 2023" note={`${num(totals.short)} schools short, of ${num(totals.withData)} with shortage data`} />
-        <Stat value={rooms(totals.funded)} label="classrooms in the 2026 list with a budget" note={`${php(totals.budget)} listed`} />
-        <Stat value={rooms(totals.bidding)} label="more classrooms “for bidding”" note="PSIP III, no amount yet" />
-        <Stat value={num(totals.reports)} label="field reports so far" note={<Link to={SCHOOLS_LIST + '?sort=shortage&shortage=short'}>Find a school to report on</Link>} />
+        <Stat value={num(totals.short)} label="schools with shortages" note={`out of ${num(totals.withData)} schools with shortage data`} />
+        <Stat value={rooms(totals.shortage)} label="classroom shortage" note="classrooms needed, SY 2023–2024" />
+        <Stat value={rooms(totals.allocated)} label="classrooms for allocation" note={`FY 2026; ${pct(totals.allocated, totals.shortage)} of the shortage (allocation-to-shortage ratio)`} />
+        <Stat value={rooms(totals.gap)} label="remaining unfunded" note={`${rooms(totals.excess)} allocated classrooms exceed recorded needs`} />
       </div>
 
       <div className="sch-mapgrid">
@@ -94,14 +95,22 @@ export default function Schools() {
             ))}
             <label className="sch-check">
               <input type="checkbox" checked={projectsOnly} onChange={(e) => setProjectsOnly(e.target.checked)} />
-              Only schools in the 2026 list
+              Only schools with FY 2026 allocations
             </label>
           </fieldset>
 
           <div className="sch-field">
-            <span>Classrooms short in 2023</span>
-            <ShortageLegend />
-            <p className="sch-legend-note"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: PROJECT_RING }} /> In the 2026 School Building Program</p>
+            <span>Colour schools by</span>
+            <div className="sch-seg" role="group" aria-label="Colour schools by">
+              <button type="button" aria-pressed={colorBy === 'level'} onClick={() => setColorBy('level')}>Shortage level</button>
+              <button type="button" aria-pressed={colorBy === 'status'} onClick={() => setColorBy('status')}>Allocation status</button>
+            </div>
+            {colorBy === 'level' ? (
+              <>
+                <ShortageLegend />
+                <p className="sch-legend-note"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: PROJECT_RING }} /> Has FY 2026 classrooms for allocation</p>
+              </>
+            ) : <StatusLegend />}
           </div>
 
           {picked ? <PickedCard id={picked} onClose={() => setPicked(null)} /> : (
@@ -111,7 +120,7 @@ export default function Schools() {
 
         <div className="sch-mapwrap">
           <Status error={pts.error} loading={false}>
-            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} projectsOnly={projectsOnly} selected={picked} onPick={pick} fit={fit} />
+            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} projectsOnly={projectsOnly} colorBy={colorBy} selected={picked} onPick={pick} fit={fit} />
           </Status>
           {pts.loading && <p className="sch-maploading">Loading {num(60204)} schools…</p>}
           {pts.data && (
@@ -129,6 +138,8 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
   const { data, error, loading } = useSchoolsApi<SchoolFile>(`${SCHOOLS_API}/school/${encodeURIComponent(id)}`);
   const s = data?.school;
   const linked = data?.projects.filter((p) => !p.candidate) ?? [];
+  const allocated = linked.reduce((a, p) => a + (p.classrooms ?? 0), 0);
+  const shortage = data?.shortage ? Math.round(data.shortage.total_shortage as number) : null;
   return (
     <div className="sch-card">
       <button type="button" className="sch-card-close" onClick={onClose} aria-label="Close">×</button>
@@ -139,11 +150,10 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
             <h2 className="sch-card-title">{s.school_name}</h2>
             <p className="sch-muted">{[s.barangay, s.municipality, s.province].filter(Boolean).join(', ')} · {s.sector} · {s.curricular_offering}</p>
             <dl className="sch-facts">
-              <div><dt>Short in 2023</dt><dd>{data?.shortage ? classrooms(data.shortage.total_shortage as number) : 'No data'}</dd></div>
-              <div><dt>Learners (2023)</dt><dd>{num(data?.enrollment?.enrolment_total as number | null)}</dd></div>
-              <div><dt>Classrooms</dt><dd>{num(s.instructional_classrooms as number | null)}</dd></div>
-              <div><dt>2026 list</dt><dd>{linked.length ? classrooms(linked.reduce((a, p) => a + (p.classrooms ?? 0), 0)) : 'None'}</dd></div>
-              <div><dt>Field reports</dt><dd>{data?.reports.reports ? `${data.reports.reports} (${data.reports.confirmed} confirm a shortage)` : 'None yet'}</dd></div>
+              <div><dt>Shortage</dt><dd>{shortage == null ? 'No data' : classrooms(shortage)} <LevelBadge level={levelOf(shortage)} /></dd></div>
+              <div><dt>Allocated FY 2026</dt><dd>{classrooms(allocated)} <StatusBadge status={statusOf(shortage, allocated)} /></dd></div>
+              <div><dt>Learners</dt><dd>{num(data?.enrollment?.enrolment_total as number | null)} · {num(s.instructional_classrooms as number | null)} classrooms</dd></div>
+              <div><dt>Field reports</dt><dd>{data?.reports.reports ? `${data.reports.reports} (${data.reports.confirmed} say it needs classrooms)` : 'None yet'}</dd></div>
             </dl>
             <Link className="sch-button" to={schoolPath(id)}>Open the school · report from the field</Link>
           </>

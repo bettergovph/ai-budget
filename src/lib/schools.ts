@@ -16,7 +16,7 @@ export const SCHOOLS_API = '/api/schools';
  * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by
  * address, so a new address is how a new shape reaches readers at once.
  */
-export const SCHOOLS_API_VERSION = '3';
+export const SCHOOLS_API_VERSION = '6';
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -25,7 +25,7 @@ export const SCHOOLS_API_VERSION = '3';
 /** Map points, column-wise for size: one entry per school with usable 2022 coordinates. */
 export interface PointsFile {
   meta: { generated_at: string; schools: number; with_coordinates: number };
-  /** [school_id, lon, lat, shortage (null: no 2023 shortage row), SBP 2026 classrooms, sector code] */
+  /** [school_id, lon, lat, shortage in whole classrooms (null: no SY 2023–2024 shortage row), FY 2026 classrooms allocated, sector code] */
   rows: [string, number, number, number | null, number, SectorCode][];
 }
 /** 0 public (DepEd), 1 private, 2 SUC/LUC, 3 schools abroad (PSO). */
@@ -44,8 +44,15 @@ export interface ListRow {
   curricular_offering: string | null;
   enrolment_total: number | null;
   instructional_classrooms: number | null;
+  /** Whole classrooms (DepEd's figure rounded); null = no SY 2023–2024 shortage data. */
   shortage: number | null;
-  sbp_classrooms: number | null;
+  /** FY 2026 classrooms allocated (ID-linked SBP projects, any modality); 0 when none. */
+  allocated: number;
+  status: AllocationStatus;
+  level: ShortageLevel | null;
+  /** Shortage ÷ (instructional classrooms + shortage); null without both figures. */
+  shortage_rate: number | null;
+  modalities: string | null;
   sbp_budget_php: number | null;
   reports: number;
 }
@@ -53,29 +60,49 @@ export interface ListFile {
   meta: { total: number; page: number; per: number; sort: ListSort };
   rows: ListRow[];
 }
-export type ListSort = 'shortage' | 'gap' | 'name' | 'enrolment' | 'reports';
+export type ListSort = 'shortage' | 'gap' | 'rate' | 'excess' | 'name' | 'enrolment' | 'reports';
 export type ShortageFilter = 'any' | 'short' | 'none' | 'nodata';
 
-export interface AreaRow {
-  region_key: string | null;
-  division: string | null;
+/** Totals over a group of schools (an area); shortage figures are whole classrooms, rounded per school. */
+export interface AreaTotals {
   schools: number;
   public_schools: number;
-  /** Schools with a 2023 shortage row (the rest have no shortage data, which is not zero). */
+  /** Schools with a SY 2023–2024 shortage row (the rest have no shortage data, which is not zero). */
   with_shortage_data: number;
   schools_short: number;
   shortage: number;
+  /** FY 2026 classrooms allocated (projects, classrooms with a budget, "for bidding"), and the budget. */
   sbp_projects: number;
-  /** SBP 2026 classrooms with a budget, and those still "For Bidding" (PSIP III, no amount). */
+  allocated: number;
   sbp_classrooms_funded: number;
   sbp_classrooms_bidding: number;
   sbp_budget_php: number;
-  /** Per school, summed: the part of its own shortage the 2026 list covers, and the part left. */
+  /** Per school: shortage filled by its own allocation; Remaining Unfunded; Excess Allocated Classrooms (EDCOM 2). */
   covered: number;
   gap: number;
-  /** 2026 classrooms listed at schools DepEd counted as not short (0) / with no shortage data. */
-  listed_not_short: number;
-  listed_no_data: number;
+  excess: number;
+  /** Excess at schools with no recorded shortage; the budget of the excess (each school's budget × excess ÷ allocated). */
+  excess_no_shortage: number;
+  excess_budget_php: number;
+  /** Allocated classrooms at schools with no shortage data (cannot be assessed). */
+  allocated_no_data: number;
+  schools_under: number;
+  schools_fully: number;
+  schools_over: number;
+  schools_moderate: number;
+  schools_severe: number;
+  schools_extreme: number;
+  instructional_classrooms: number;
+  /** Instructional classrooms at the schools with shortage data: with the shortage, the "total classrooms needed". */
+  instructional_with_data: number;
+}
+export interface AreaRow extends AreaTotals {
+  region_key: string | null;
+  division: string | null;
+  /** City or municipality, with its province and income class (level=lgu). */
+  province?: string | null;
+  municipality?: string | null;
+  income_class?: string | null;
   /** Mean of the schools' 2022 points, for placing the area on the map; null without any. */
   lat: number | null;
   lon: number | null;
@@ -85,7 +112,7 @@ export interface AreaRow {
 export interface AreasFile {
   meta: {
     generated_at: string;
-    level: 'region' | 'division';
+    level: 'region' | 'division' | 'lgu';
     /** ID-linked projects whose School ID is not in the registry: counted nowhere by area. */
     unplaced_projects: number;
     unplaced_classrooms: number;
@@ -168,17 +195,18 @@ export interface SchoolFile {
 }
 
 // ---------------------------------------------------------------------------
-// Field reports
+// Field reports: our form merged with EDCOM 2's School Feedback Form
 // ---------------------------------------------------------------------------
 //
-// Only what DepEd and EDCOM2 need to act on the list, in this order:
-//   1. Is the school here and open?            (checks the facilities list)
-//   2. Does it lack classrooms?                 (confirms or disputes the 2023 shortage)
-//   3. About how many more does it need?        (only if yes: against DepEd's count)
-//   4. What do you see?                         (only if yes: the evidence, any that apply)
-//   5. What have you seen of each 2026 project? (only for projects listed at the school)
-//   6. How do you know the school?              (so reports can be weighed)
-// plus an optional note and photo links.
+// One report per member per school. Its parts map one to one to EDCOM 2's four report types, so an export sorts
+// into their categories (`edcomTypes`):
+//   1. Is the school here and open?                    (ours: checks DepEd's list itself)
+//   2. Does it need more classrooms?                   (their type 1 "needs" / type 2 "does not need")
+//      2a why (needs) · 2b about how many · 2c optional counts · 2d why not (does not need)
+//   3. Is there space to build?                        (their type 3, site issues)
+//   4. Each project's status                           (their type 4, FY 2026 list and DPWH contracts)
+//   5. When last seen · 6. relationship to the school · details (required when the report disputes the data)
+//   · photo links. Name and contact come from the sign-in and are seen only by the review team.
 
 export const LISTINGS = [
   ['open', 'Yes, it is here and open'],
@@ -186,48 +214,82 @@ export const LISTINGS = [
   ['closed', 'It has closed or merged'],
   ['not_found', 'I could not find it'],
 ] as const;
-export const SHORTAGE_ANSWERS = [
-  ['confirmed', 'Yes, not enough classrooms'],
-  ['none', 'No, there are enough'],
+export const NEEDS = [
+  ['yes', 'Yes, it needs more classrooms'],
+  ['no', 'No, it does not'],
   ['unsure', 'Not sure'],
 ] as const;
-export const SIGNS = [
-  ['shifts', 'Classes take turns in shifts'],
-  ['makeshift', 'Classes in makeshift rooms, tents or hallways'],
-  ['shared', 'Two or more classes share one room'],
-  ['unsafe', 'Rooms in use are unsafe or condemned'],
+export const NEED_REASONS = [
+  ['enrolment', 'Not enough classrooms for current enrolment'],
+  ['growing', 'Enrolment is increasing'],
+  ['damaged', 'Classrooms are damaged or unusable'],
+  ['temporary', 'Classes rely on temporary or makeshift spaces'],
+  ['other', 'Other'],
+] as const;
+export const NO_NEED_REASONS = [
+  ['enough', 'The existing classrooms are enough'],
+  ['built', 'New classrooms have been completed'],
+  ['fewer', 'Enrolment has decreased'],
+  ['other', 'Other'],
+] as const;
+export const SITE = [
+  ['available', 'There is space to build'],
+  ['no_space', 'No space for more classrooms'],
+  ['unsuitable', 'The space is unsuitable for building'],
+  ['land', 'Land ownership or permission issues'],
+  ['overlooked', 'There is suitable space, but it has not been considered'],
+  ['unsure', 'Not sure'],
 ] as const;
 export const PROJECT_SEEN = [
-  ['not_started', 'Not started'],
+  ['not_started', 'Not yet started'],
   ['ongoing', 'Under construction'],
-  ['done', 'Finished and in use'],
-  ['done_unused', 'Finished, not in use'],
-  ['no_sign', 'No sign of it'],
+  ['delayed', 'Delayed or stalled'],
+  ['done', 'Completed and in use'],
+  ['done_unused', 'Completed, not in use'],
+  ['unsure', 'Not sure'],
 ] as const;
 export const RELATIONS = [
-  ['staff', 'Teacher or school staff'],
-  ['family', 'Learner or parent'],
-  ['official', 'Barangay or LGU official'],
-  ['community', 'Live nearby or visited'],
+  ['principal', 'Principal or OIC'],
+  ['personnel', 'Teacher or school personnel'],
+  ['parent', 'Parent or guardian'],
+  ['student', 'Student'],
+  ['lgu', 'LGU official or personnel'],
+  ['citizen', 'Concerned citizen'],
+  ['other', 'Other'],
 ] as const;
 
 type Keys<T extends readonly (readonly [string, string])[]> = T[number][0];
 export type Listing = Keys<typeof LISTINGS>;
-export type ShortageAnswer = Keys<typeof SHORTAGE_ANSWERS>;
-export type Sign = Keys<typeof SIGNS>;
+export type Needs = Keys<typeof NEEDS>;
+export type NeedReason = Keys<typeof NEED_REASONS>;
+export type NoNeedReason = Keys<typeof NO_NEED_REASONS>;
+export type Site = Keys<typeof SITE>;
 export type ProjectSeen = Keys<typeof PROJECT_SEEN>;
 export type Relation = Keys<typeof RELATIONS>;
+
+/** Optional counts (EDCOM 2's suggestion), matching DepEd's Project BUKAS facility fields. */
+export interface ReportCounts { makeshift_tls: number | null; shift_classes: number | null; condemned: number | null }
+export const COUNT_FIELDS: [keyof ReportCounts, string][] = [
+  ['makeshift_tls', 'Makeshift rooms or temporary learning spaces in use'],
+  ['shift_classes', 'Classes held in shifts'],
+  ['condemned', 'Classrooms for condemnation (unsafe, or past 50 years)'],
+];
 
 export interface SchoolReport {
   report_id?: string;
   school_id: string;
   listing: Listing | null;
-  shortage: ShortageAnswer | null;
-  /** Only with shortage 'confirmed'. */
+  needs: Needs | null;
+  need_reasons: NeedReason[];
+  /** About how many more classrooms, if known (needs = yes). */
   classrooms_needed: number | null;
-  signs: Sign[];
-  /** What the reporter saw of each project, by id: 2026 SBP projects (SBP-P…) and DPWH contracts (dpwh:…). */
+  counts: ReportCounts;
+  no_need_reasons: NoNeedReason[];
+  site: Site | null;
+  /** Each project's status, by id: FY 2026 SBP projects (SBP-P…) and DPWH contracts (dpwh:…). */
   projects: Record<string, ProjectSeen>;
+  /** When the reporter last saw this, YYYY-MM-DD. */
+  observed_on: string | null;
   relation: Relation | null;
   notes: string;
   photo_links: string[];
@@ -235,13 +297,35 @@ export interface SchoolReport {
 }
 
 export const emptyReport = (schoolId: string): SchoolReport => ({
-  school_id: schoolId, listing: null, shortage: null, classrooms_needed: null, signs: [], projects: {}, relation: null,
-  notes: '', photo_links: [],
+  school_id: schoolId, listing: null, needs: null, need_reasons: [], classrooms_needed: null,
+  counts: { makeshift_tls: null, shift_classes: null, condemned: null }, no_need_reasons: [], site: null, projects: {},
+  observed_on: null, relation: null, notes: '', photo_links: [],
 });
 
-export const LIMITS = { notes: 1000, photos: 3, photoUrl: 500, classrooms: 200 } as const;
+export const LIMITS = { notes: 1000, photos: 3, photoUrl: 500, classrooms: 200, count: 500 } as const;
 export const SCHOOL_ID_RE = /^[0-9A-Za-z-]{3,20}$/;
 const PROJECT_ID_RE = /^(SBP-P\d{6}|dpwh:[A-Za-z0-9-]{4,30})$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Whether a report disputes the data, so its details are required: the school isn't where the registry says, or the
+ * answer on classrooms goes against DepEd's count (needs more but DepEd recorded none; doesn't but DepEd recorded some).
+ */
+export function disputesData(r: Pick<SchoolReport, 'listing' | 'needs'>, depedShortage: number | null): boolean {
+  if (r.listing && r.listing !== 'open') return true;
+  if (depedShortage == null) return false;
+  return (r.needs === 'yes' && depedShortage === 0) || (r.needs === 'no' && depedShortage > 0);
+}
+
+/** EDCOM 2's report types a report covers (their School Feedback Form, 1–4), for exports. */
+export function edcomTypes(r: SchoolReport): string[] {
+  const out: string[] = [];
+  if (r.needs === 'yes') out.push('1. This school needs additional classrooms');
+  if (r.needs === 'no') out.push('2. This school does not need additional classrooms');
+  if (r.site && r.site !== 'available' && r.site !== 'unsure') out.push('3. Issue with available space for classroom construction');
+  if (Object.keys(r.projects).length) out.push('4. Update on the project’s construction status');
+  return out;
+}
 
 const pick = <T extends readonly (readonly [string, string])[]>(list: T, v: unknown, field: string, problems: string[]) => {
   if (v == null || v === '') return null;
@@ -249,33 +333,38 @@ const pick = <T extends readonly (readonly [string, string])[]>(list: T, v: unkn
   problems.push(`${field}: not one of the answers`);
   return null;
 };
+const pickMany = <T extends readonly (readonly [string, string])[]>(list: T, v: unknown, field: string, problems: string[]) => {
+  if (v == null) return [];
+  if (!Array.isArray(v)) { problems.push(`${field}: a list`); return []; }
+  return [...new Set(v)].map((x) => pick(list, x, field, problems)).filter((x): x is Keys<T> => x != null);
+};
+const count = (v: unknown, min: number, max: number, field: string, problems: string[]) => {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max) return v;
+  problems.push(`${field}: a whole number from ${min} to ${max}`);
+  return null;
+};
 
-/** A report from the page, checked field by field; `problems` lists anything refused. */
-export function readSchoolReport(raw: unknown): { report: SchoolReport | null; problems: string[] } {
+/**
+ * A report from the page, checked field by field; `problems` lists anything refused. `depedShortage` (the school's
+ * SY 2023–2024 shortage in whole classrooms, null without one) decides whether details are required.
+ */
+export function readSchoolReport(raw: unknown, depedShortage: number | null = null): { report: SchoolReport | null; problems: string[] } {
   const problems: string[] = [];
   if (!raw || typeof raw !== 'object') return { report: null, problems: ['not a report'] };
   const r = raw as Record<string, unknown>;
   const schoolId = typeof r.school_id === 'string' && SCHOOL_ID_RE.test(r.school_id) ? r.school_id : null;
   if (!schoolId) problems.push('school_id: missing');
-  const shortage = pick(SHORTAGE_ANSWERS, r.shortage, 'shortage', problems);
-
-  let needed: number | null = null;
-  if (r.classrooms_needed != null && r.classrooms_needed !== '') {
-    const v = r.classrooms_needed;
-    if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= LIMITS.classrooms) needed = v;
-    else problems.push(`classrooms_needed: a whole number from 1 to ${LIMITS.classrooms}`);
-  }
-  const signs: Sign[] = [];
-  if (r.signs != null) {
-    if (!Array.isArray(r.signs)) problems.push('signs: a list');
-    else for (const v of new Set(r.signs)) { const k = pick(SIGNS, v, 'signs', problems); if (k) signs.push(k); }
-  }
-  // A school that is closed or can't be found has no shortage to report; the follow-ups belong to a confirmed one only.
   const listing = pick(LISTINGS, r.listing, 'listing', problems);
   const gone = listing === 'closed' || listing === 'not_found';
-  const shortageKept = gone ? null : shortage;
-  if (shortageKept !== 'confirmed') { needed = null; signs.length = 0; }
-
+  let needs = pick(NEEDS, r.needs, 'needs', problems);
+  if (gone) needs = null; // a school that is closed or can't be found has no classroom need to report
+  const c = (r.counts && typeof r.counts === 'object' ? r.counts : {}) as Record<string, unknown>;
+  const counts: ReportCounts = {
+    makeshift_tls: count(c.makeshift_tls, 0, LIMITS.count, 'counts.makeshift_tls', problems),
+    shift_classes: count(c.shift_classes, 0, LIMITS.count, 'counts.shift_classes', problems),
+    condemned: count(c.condemned, 0, LIMITS.count, 'counts.condemned', problems),
+  };
   const projects: Record<string, ProjectSeen> = {};
   if (r.projects != null) {
     if (typeof r.projects !== 'object' || Array.isArray(r.projects)) problems.push('projects: by project id');
@@ -284,6 +373,12 @@ export function readSchoolReport(raw: unknown): { report: SchoolReport | null; p
       const seen = pick(PROJECT_SEEN, v, `projects.${id}`, problems);
       if (seen) projects[id] = seen;
     }
+  }
+  let observed: string | null = null;
+  if (r.observed_on != null && r.observed_on !== '') {
+    const t = typeof r.observed_on === 'string' && DATE_RE.test(r.observed_on) ? Date.parse(r.observed_on) : NaN;
+    if (Number.isNaN(t) || t > Date.now() + 86_400_000 || t < Date.parse('2016-01-01')) problems.push('observed_on: a date from 2016 to today');
+    else observed = r.observed_on as string;
   }
   let notes = '';
   if (r.notes != null) {
@@ -303,20 +398,26 @@ export function readSchoolReport(raw: unknown): { report: SchoolReport | null; p
       }
     }
   }
+  const yes = needs === 'yes', no = needs === 'no';
   const report: SchoolReport = {
     school_id: schoolId ?? '',
     listing,
-    shortage: shortageKept,
-    classrooms_needed: needed,
-    signs,
+    needs,
+    need_reasons: yes ? pickMany(NEED_REASONS, r.need_reasons, 'need_reasons', problems) : [],
+    classrooms_needed: yes ? count(r.classrooms_needed, 1, LIMITS.classrooms, 'classrooms_needed', problems) : null,
+    counts: gone ? { makeshift_tls: null, shift_classes: null, condemned: null } : counts,
+    no_need_reasons: no ? pickMany(NO_NEED_REASONS, r.no_need_reasons, 'no_need_reasons', problems) : [],
+    site: gone ? null : pick(SITE, r.site, 'site', problems),
     projects,
+    observed_on: observed,
     relation: pick(RELATIONS, r.relation, 'relation', problems),
     notes,
     photo_links: photos,
   };
   if (!report.listing) problems.push('Say whether the school is here and open.');
-  if (report.listing && !gone && !report.shortage) problems.push('Say whether the school lacks classrooms.');
+  if (report.listing && !gone && !report.needs) problems.push('Say whether the school needs more classrooms.');
   if (!report.relation) problems.push('Say how you know the school.');
+  if (disputesData(report, depedShortage) && report.notes.length < 10) problems.push('Explain the school’s situation in a few words: your report differs from the records.');
   return { report: problems.length ? null : report, problems };
 }
 
@@ -324,16 +425,57 @@ export function readSchoolReport(raw: unknown): { report: SchoolReport | null; p
 // Display
 // ---------------------------------------------------------------------------
 
-/** Shortage classes for the map and badges (classrooms short in 2023). */
-export const SHORTAGE_CLASSES = [
-  { min: 0, max: 0, label: 'None', color: '#c9d3df' },
-  { min: 0.0001, max: 2, label: '1–2', color: '#f6c28b' },
-  { min: 2.0001, max: 5, label: '3–5', color: '#ee8a4f' },
-  { min: 5.0001, max: 10, label: '6–10', color: '#d9502c' },
-  { min: 10.0001, max: Infinity, label: 'More than 10', color: '#9e1b1b' },
-] as const;
-export const NO_SHORTAGE_DATA = '#8a92a1';
-export const PROJECT_RING = '#0b4fd9';
+// EDCOM 2's terms and levels (their Classroom Construction Dashboard v3; docs/schools-edcom2-reconciliation.md).
+// A school's shortage is DepEd's SY 2023–2024 figure rounded to whole classrooms; levels and status use that.
+
+export type ShortageLevel = 'none' | 'moderate' | 'severe' | 'extreme';
+/** Classroom shortage levels: Moderate 1–4, Severe 5–10, Extreme 11 or more (EDCOM 2). Shortage is blue (their legend). */
+export const SHORTAGE_LEVELS: { key: ShortageLevel; label: string; range: string; min: number; max: number; color: string }[] = [
+  { key: 'none', label: 'No recorded shortage', range: '0', min: 0, max: 0, color: '#c9d3df' },
+  { key: 'moderate', label: 'Moderate', range: '1–4', min: 1, max: 4, color: '#86b6ef' },
+  { key: 'severe', label: 'Severe', range: '5–10', min: 5, max: 10, color: '#2a78d6' },
+  { key: 'extreme', label: 'Extreme', range: '11 or more', min: 11, max: Infinity, color: '#0d366b' },
+];
+export const levelOf = (shortage: number | null | undefined): ShortageLevel | null =>
+  shortage == null ? null : SHORTAGE_LEVELS.find((l) => shortage >= l.min && shortage <= l.max)?.key ?? 'extreme';
+/** Kept for the map and badges: index into SHORTAGE_LEVELS, -1 for no data. */
+export const SHORTAGE_CLASSES = SHORTAGE_LEVELS;
+export const shortageClass = (v: number | null) => {
+  const l = levelOf(v == null ? null : Math.round(v));
+  return l == null ? -1 : SHORTAGE_LEVELS.findIndex((x) => x.key === l);
+};
+/** No shortage data: brown in EDCOM 2's legend; drawn as a hollow ring so it never reads as a filled red dot. */
+export const NO_SHORTAGE_DATA = '#9c5b1a';
+/** Allocation is green in EDCOM 2's legend: the ring around schools with FY 2026 classrooms. */
+export const PROJECT_RING = '#1f8a70';
+
+export type AllocationStatus = 'under' | 'fully' | 'over' | 'none' | 'no_data';
+/**
+ * EDCOM 2's allocation status of a school. Colours follow their legend (underallocated red, fully allocated green,
+ * overallocated orange, no data brown) with the reds and greens set apart in lightness for colour-blind readers
+ * (validated); always shown with the label.
+ */
+export const ALLOCATION_STATUS: { key: AllocationStatus; label: string; plain: string; color: string }[] = [
+  { key: 'under', label: 'Underallocated', plain: 'Allocations fall below the recorded shortage, including schools with no allocation.', color: '#c63b31' },
+  { key: 'fully', label: 'Fully allocated', plain: 'Allocations match the recorded shortage.', color: '#1f8a70' },
+  { key: 'over', label: 'Overallocated', plain: 'Allocations exceed the recorded shortage, including allocations to schools with no recorded shortage.', color: '#f0a030' },
+  { key: 'none', label: 'No recorded shortage', plain: 'A recorded shortage of zero, and no allocation.', color: '#a7b0bd' },
+  { key: 'no_data', label: 'No shortage data', plain: 'No SY 2023–2024 shortage figure, so the allocation cannot be assessed.', color: NO_SHORTAGE_DATA },
+];
+export const statusInfo = (k: AllocationStatus) => ALLOCATION_STATUS.find((x) => x.key === k) ?? ALLOCATION_STATUS[4];
+export function statusOf(shortage: number | null | undefined, allocated: number): AllocationStatus {
+  if (shortage == null) return 'no_data';
+  if (allocated === 0 && shortage === 0) return 'none';
+  return allocated < shortage ? 'under' : allocated === shortage ? 'fully' : 'over';
+}
+/** EDCOM 2's proposed Classroom Shortage Rate: shortage ÷ (available classrooms + shortage). */
+export const shortageRate = (shortage: number | null | undefined, available: number | null | undefined) =>
+  shortage == null || available == null || available + shortage <= 0 ? null : shortage / (available + shortage);
+/** Why a school has no shortage figure (EDCOM 2's answer, 2026-10-16). */
+export const NO_DATA_EXPLAINED =
+  'Shortage estimates use SY 2023–2024 as the reference year. No figure means the School ID was not found in that year’s data: it was missing from the dataset, or the school opened after SY 2023–2024.';
+/** EDCOM 2's assumed cost of a classroom, for the funds tied to excess allocations. */
+export const EDCOM2_COST_PER_CLASSROOM = 2_500_000;
 
 /** Coverage of a shortage by 2026 classrooms, for the areas map and its legend. */
 export const COVERAGE_CLASSES = [
@@ -345,8 +487,6 @@ export const COVERAGE_CLASSES = [
 export const coverageClass = (covered: number, shortage: number) =>
   shortage <= 0 ? COVERAGE_CLASSES.length - 1 : COVERAGE_CLASSES.findIndex((c) => covered / shortage < c.max);
 
-export const shortageClass = (v: number | null) =>
-  v == null ? -1 : SHORTAGE_CLASSES.findIndex((c) => v >= c.min && v <= c.max);
 
 /** Classrooms are counted in whole numbers; the source's shortages are often fractional (7.999…). */
 export const rooms = (v: number | null | undefined) => (v == null ? '—' : Math.round(v).toLocaleString('en-US'));
@@ -398,24 +538,14 @@ export const DPWH_KINDS: { key: DpwhKind; label: string; color: string }[] = [
   { key: 'other', label: 'Other (water, fences, overpasses, sites)', color: '#eda100' },
 ];
 
-export interface AnalysisProvince {
+export interface AnalysisProvince extends AreaTotals {
   province: string;
   region_key: string | null;
-  schools: number;
-  public_schools: number;
-  with_shortage_data: number;
-  schools_short: number;
-  shortage: number;
-  /** Learners (2023) at schools that also have a shortage row, so shortage per learner compares like with like. */
+  /** Learners (SY 2023–2024) at schools that also have a shortage row, so shortage per learner compares like with like. */
   learners_with_shortage: number;
   learners: number;
   classrooms: number;
   makeshift_tls: number;
-  sbp_funded: number;
-  sbp_bidding: number;
-  sbp_budget_php: number;
-  covered: number;
-  listed_not_short: number;
   /** DPWH contracts confidently linked to the province's schools, 2016-2026; a contract for n schools counts 1/n each. */
   dpwh_contracts: number;
   dpwh_budget_php: number;
@@ -434,6 +564,12 @@ export interface AnalysisFile {
   dpwh_funds: { fund: 'beff' | 'dpwh'; kind: DpwhKind; contracts: number; budget_php: number }[];
   /** GAA amounts of BEFF_FPAP_ID by year, in pesos. */
   beff_gaa: { year: number; amount_php: number }[];
+  /** EDCOM 2's "Classroom Allocation Status by Shortage Level": schools (and classrooms) per level × status. */
+  status_levels: { level: ShortageLevel | null; status: AllocationStatus; schools: number; shortage: number; allocated: number }[];
+  /** Schools short of classrooms by size, in steps of 10 (lo = 1, 11, … 91; 101 = over 100). */
+  shortage_sizes: { lo: number; schools: number; shortage: number }[];
+  /** Short schools by Classroom Shortage Rate, in tenths (0 = under 10% … 9 = 90% or more). */
+  shortage_rates: { tenth: number; schools: number }[];
 }
 
 /** Registry provinces whose names differ from PSA's 87 areas (src/lib/indicators.ts); others match by slug. */
@@ -473,11 +609,37 @@ export const OFFICIAL_SOURCES: SchoolSource[] = [
     note: 'DepEd’s public dashboard.',
   },
 ];
-/** What this directory is built from, and the budget and statistics it is read against. */
+/**
+ * What this directory is built from, worded as EDCOM 2's dashboard cites DepEd's datasets ("the latest datasets
+ * submitted by DepEd to EDCOM II"), and the budget and statistics it is read against.
+ */
 export const DATA_SOURCES: SchoolSource[] = [
   {
-    key: 'pack', who: 'DepEd data, joined', title: 'Classroom Shortages & Projects Data Pack', url: null,
-    note: 'The workbook behind every school figure here: DepEd’s school registry, 2023 classroom shortages, 2022 coordinates (LIS, NSBI), 2023 facilities and enrolment, and the 2026 School Building Program list, joined by School ID.',
+    key: 'sbp', who: 'DepEd', title: 'FY 2026 School Building Program (SBP) Masterlist', url: null,
+    note: '5,652 projects across all implementation modalities: DPWH, PSIP III, DepEd LCS/LMS, and provincial, city and municipal LGUs. As of 20 August 2026.',
+  },
+  {
+    key: 'shortage', who: 'DepEd', title: 'School-level classroom shortage, SY 2023–2024', url: null,
+    note: 'Kindergarten to Grade 12 classroom shortage per public school, submitted 13 October 2025.',
+  },
+  {
+    key: 'lis', who: 'DepEd', title: 'Learner Information System (LIS): school-level enrollment, SY 2023–2024', url: null,
+    note: 'All public and private schools. As of 31 January 2024.',
+  },
+  {
+    key: 'bukas', who: 'DepEd', title: 'Project BUKAS facilities data, SY 2023–2024', url: 'https://www.deped.gov.ph/paaralang-bukas/',
+    note: 'Temporary learning spaces, makeshift rooms and condemnation. As of July 2026.',
+  },
+  {
+    key: 'tags', who: 'DepEd', title: 'Public schools with IPEd and Last Mile School tags, SY 2025–2026', url: null,
+    note: '48,129 public schools. As of February 2026.',
+  },
+  {
+    key: 'blgf', who: 'DOF–BLGF', title: 'LGU income classification, FY 2025', url: null, note: 'As of September 2026.',
+  },
+  {
+    key: 'pack', who: 'BetterGov.ph', title: 'Classroom Shortages & Projects Data Pack', url: null,
+    note: 'The workbook that joins these by School ID, with the school registry and 2022 school coordinates (LIS, then NSBI). Source years are kept in every field name.',
   },
   {
     key: 'dpwh', who: 'DPWH', title: 'Transparency portal: contracts', url: 'https://transparency.dpwh.gov.ph',
@@ -500,3 +662,6 @@ export const DATA_SOURCES: SchoolSource[] = [
     note: 'Through our Indicators section (PSA’s 87 areas).',
   },
 ];
+/** EDCOM 2's data note, carried on every schools page. */
+export const DATA_NOTE =
+  'The dashboard uses the latest datasets submitted by DepEd to EDCOM II as of publication. Classroom shortage figures are from SY 2023–2024, while classroom allocations are from FY 2026. Reported concerns will be subject to review and validation before any changes are made to the dashboard.';

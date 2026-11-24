@@ -1,24 +1,22 @@
 /**
- * `/schools/list` — every school in the registry, 50 at a time, searchable and filterable; the filters live in the
- * address so a list can be shared ("public schools in Region V short of classrooms, biggest gap first").
+ * `/schools/list` — every school in the registry, 50 at a time, searchable and filterable by EDCOM 2's shortage levels
+ * and allocation statuses; the filters live in the address so a list can be shared ("public schools in Region V,
+ * underallocated, biggest remaining unfunded first").
  */
 import { useSearchParams, Link } from 'react-router-dom';
-import { PreviewNotice, SchoolsChrome, Status } from '../components/SchoolsBits';
+import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '../components/SchoolsBits';
 import { useSchoolsApi } from '../lib/use-schools-api';
-import { php } from '../lib/format';
 import {
-  REGION_KEYS, SCHOOLS_API, num, regionName, rooms, schoolPath, shortageClass, SHORTAGE_CLASSES, NO_SHORTAGE_DATA,
-  type ListFile, type ListSort, type ShortageFilter,
+  ALLOCATION_STATUS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, num, regionName, rooms, schoolPath,
+  type ListFile, type ListSort,
 } from '../lib/schools';
 
 const SORT_LABELS: [ListSort, string][] = [
-  ['shortage', 'Biggest shortage'], ['gap', 'Shortage left after the 2026 list'], ['enrolment', 'Most learners'],
-  ['reports', 'Most field reports'], ['name', 'Name'],
-];
-const SHORTAGE_LABELS: [ShortageFilter, string][] = [
-  ['any', 'Any'], ['short', 'Short of classrooms'], ['none', 'Not short'], ['nodata', 'No shortage data'],
+  ['gap', 'Remaining unfunded'], ['shortage', 'Classroom shortage'], ['rate', 'Classroom shortage rate'],
+  ['excess', 'Excess allocated classrooms'], ['enrolment', 'Most learners'], ['reports', 'Most field reports'], ['name', 'Name'],
 ];
 const SECTORS: [string, string][] = [['all', 'All'], ['Public', 'Public'], ['Private', 'Private'], ['SUCsLUCs', 'State or local university']];
+const CHIPS: [string, string][] = [['division', 'Division'], ['province', 'Province'], ['municipality', 'City or municipality']];
 
 export default function SchoolsList() {
   const [params, setParams] = useSearchParams();
@@ -30,20 +28,25 @@ export default function SchoolsList() {
     setParams(next, { replace: true });
   };
   const api = new URLSearchParams();
-  for (const k of ['q', 'region', 'division', 'shortage', 'projects', 'sort', 'page']) if (params.get(k)) api.set(k, params.get(k) as string);
+  for (const k of ['q', 'region', 'division', 'province', 'municipality', 'shortage', 'level', 'status', 'projects', 'page']) {
+    if (params.get(k)) api.set(k, params.get(k) as string);
+  }
+  api.set('sort', get('sort', 'gap'));
   // Public schools unless the address says otherwise; "all" sends no sector.
   const sector = params.get('sector') ?? 'Public';
   if (sector !== 'all') api.set('sector', sector);
   const { data, error, loading } = useSchoolsApi<ListFile>(`${SCHOOLS_API}/list?${api}`);
   const page = data?.meta.page ?? 1;
   const pages = data ? Math.max(1, Math.ceil(data.meta.total / data.meta.per)) : 1;
+  // The level select also offers "no shortage data", which the API takes as shortage=nodata.
+  const levelValue = get('shortage') === 'nodata' ? 'nodata' : get('level');
 
   return (
     <SchoolsChrome>
       <div className="page-headline">
         <p className="page-eyebrow">Basic education · the registry</p>
         <h1 className="page-title">Every school</h1>
-        <p className="page-dek">Search by name, School ID or town, or narrow by region and shortage. Open a school to see all its data and to report what you know.</p>
+        <p className="page-dek">Search by name, School ID or town, or narrow by region, shortage level and allocation status. Open a school to see all its data and to report what you know.</p>
       </div>
       <PreviewNotice />
 
@@ -54,7 +57,7 @@ export default function SchoolsList() {
             onBlur={(e) => { if (e.target.value.trim() !== get('q')) set('q', e.target.value.trim()); }} />
         </label>
         <label className="sch-field"><span>Region</span>
-          <select value={get('region')} onChange={(e) => { set('region', e.target.value); }}>
+          <select value={get('region')} onChange={(e) => set('region', e.target.value)}>
             <option value="">All regions</option>
             {REGION_KEYS.map((k) => <option key={k} value={k}>{regionName(k)}</option>)}
           </select>
@@ -64,24 +67,37 @@ export default function SchoolsList() {
             {SECTORS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
         </label>
-        <label className="sch-field"><span>2023 shortage</span>
-          <select value={get('shortage', 'any')} onChange={(e) => set('shortage', e.target.value === 'any' ? '' : e.target.value)}>
-            {SHORTAGE_LABELS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+        <label className="sch-field"><span>Shortage level</span>
+          <select value={levelValue} onChange={(e) => {
+            const v = e.target.value, next = new URLSearchParams(params);
+            next.delete('page'); next.delete('shortage'); next.delete('level');
+            if (v === 'nodata') next.set('shortage', 'nodata'); else if (v) next.set('level', v);
+            setParams(next, { replace: true });
+          }}>
+            <option value="">Any</option>
+            {SHORTAGE_LEVELS.map((l) => <option key={l.key} value={l.key}>{l.key === 'none' ? l.label : `${l.label} (${l.range})`}</option>)}
+            <option value="nodata">No shortage data</option>
+          </select>
+        </label>
+        <label className="sch-field"><span>Allocation status</span>
+          <select value={get('status')} onChange={(e) => set('status', e.target.value)}>
+            <option value="">Any</option>
+            {ALLOCATION_STATUS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </label>
         <label className="sch-field"><span>Sort</span>
-          <select value={get('sort', 'shortage')} onChange={(e) => set('sort', e.target.value === 'shortage' ? '' : e.target.value)}>
+          <select value={get('sort', 'gap')} onChange={(e) => set('sort', e.target.value === 'gap' ? '' : e.target.value)}>
             {SORT_LABELS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
           </select>
         </label>
-        <label className="sch-check sch-check-inline">
-          <input type="checkbox" checked={get('projects') === 'yes'} onChange={(e) => set('projects', e.target.checked ? 'yes' : '')} />
-          In the 2026 list
-        </label>
       </form>
-      {get('division') && (
-        <p className="sch-chip">Division: <strong>{get('division')}</strong> <button type="button" onClick={() => set('division', '')}>Clear</button></p>
-      )}
+      <label className="sch-check sch-check-line">
+        <input type="checkbox" checked={get('projects') === 'yes'} onChange={(e) => set('projects', e.target.checked ? 'yes' : '')} />
+        Only schools with FY 2026 classrooms for allocation
+      </label>
+      {CHIPS.filter(([k]) => get(k)).map(([k, t]) => (
+        <p key={k} className="sch-chip">{t}: <strong>{get(k)}</strong> <button type="button" onClick={() => set(k, '')}>Clear</button></p>
+      ))}
 
       <Status error={error} loading={loading && !data}>
         {data && (
@@ -92,27 +108,24 @@ export default function SchoolsList() {
                 <thead>
                   <tr>
                     <th>School</th><th>Where</th><th className="num">Learners</th><th className="num">Classrooms</th>
-                    <th className="num">Short (2023)</th><th className="num">2026 list</th><th className="num">Reports</th>
+                    <th className="num">Shortage</th><th className="num">Shortage rate</th><th className="num">Allocated FY 2026</th>
+                    <th className="num">Remaining unfunded</th><th className="num">Reports</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((r) => {
-                    const c = shortageClass(r.shortage);
-                    return (
-                      <tr key={r.school_id}>
-                        <td><Link to={schoolPath(r.school_id)}>{r.school_name}</Link><span className="sch-sub">{r.school_id} · {r.curricular_offering ?? r.sector}</span></td>
-                        <td>{[r.municipality, r.province].filter(Boolean).join(', ')}<span className="sch-sub">{regionName(r.region_key)} · {r.division}</span></td>
-                        <td className="num">{num(r.enrolment_total)}</td>
-                        <td className="num">{num(r.instructional_classrooms)}</td>
-                        <td className="num">
-                          <span className="sch-dot" style={c < 0 ? { borderColor: NO_SHORTAGE_DATA } : { background: SHORTAGE_CLASSES[c].color, borderColor: SHORTAGE_CLASSES[c].color }} />
-                          {r.shortage == null ? 'No data' : rooms(r.shortage)}
-                        </td>
-                        <td className="num">{r.sbp_classrooms ? <>{num(r.sbp_classrooms)} rooms<span className="sch-sub">{r.sbp_budget_php ? php(r.sbp_budget_php) : 'for bidding'}</span></> : '—'}</td>
-                        <td className="num">{r.reports || '—'}</td>
-                      </tr>
-                    );
-                  })}
+                  {data.rows.map((r) => (
+                    <tr key={r.school_id}>
+                      <td><Link to={schoolPath(r.school_id)}>{r.school_name}</Link><span className="sch-sub">{r.school_id} · {r.curricular_offering ?? r.sector}</span></td>
+                      <td>{[r.municipality, r.province].filter(Boolean).join(', ')}<span className="sch-sub">{regionName(r.region_key)} · {r.division}</span></td>
+                      <td className="num">{num(r.enrolment_total)}</td>
+                      <td className="num">{num(r.instructional_classrooms)}</td>
+                      <td className="num">{r.shortage == null ? '—' : rooms(r.shortage)}<span className="sch-sub"><LevelBadge level={r.level} /></span></td>
+                      <td className="num">{r.shortage_rate == null ? '—' : `${Math.round(r.shortage_rate * 100)}%`}</td>
+                      <td className="num">{r.allocated ? rooms(r.allocated) : '—'}<span className="sch-sub"><StatusBadge status={r.status} /></span>{r.modalities && <span className="sch-sub">{r.modalities.replace(/,/g, ', ')}</span>}</td>
+                      <td className="num">{r.shortage == null ? '—' : rooms(Math.max(0, r.shortage - r.allocated))}</td>
+                      <td className="num">{r.reports || '—'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

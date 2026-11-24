@@ -7,14 +7,14 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import DpwhContractLink from '../components/DpwhContractLink';
 import MemberProvider from '../components/HgabReviewMember';
-import { PreviewNotice, SchoolsChrome, Status } from '../components/SchoolsBits';
+import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '../components/SchoolsBits';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import { useMember } from '../lib/hgab-review-member';
 import { php } from '../lib/format';
 import {
-  DPWH_MATCH_LABEL, LIMITS, LISTINGS, PROJECT_SEEN, RELATIONS, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_ANSWERS, SIGNS, classrooms, dpwhKey,
-  emptyReport, num, scopeLabel,
-  regionName, rooms, type DpwhProject, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
+  COUNT_FIELDS, DPWH_MATCH_LABEL, LIMITS, LISTINGS, NEEDS, NEED_REASONS, NO_DATA_EXPLAINED, NO_NEED_REASONS, PROJECT_SEEN, RELATIONS,
+  SCHOOLS_API, SCHOOLS_LIST, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
+  shortageRate, statusOf, type DpwhProject, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
 } from '../lib/schools';
 
 type Row = Record<string, string | number | null>;
@@ -56,10 +56,10 @@ function School() {
                 <Headline data={data} tally={tally} />
                 <Projects projects={data.projects} />
                 <History dpwh={data.dpwh ?? []} />
-                <Section title="Classrooms and learners (2023)">
+                <Section title="Classrooms and learners, SY 2023–2024">
                   {data.enrollment ? <Enrollment e={data.enrollment} s={s} /> : <Missing what="enrolment" />}
                 </Section>
-                <Section title="Buildings and facilities (2023)">
+                <Section title="Buildings and facilities, SY 2023–2024">
                   {data.facilities ? <Facilities f={data.facilities} /> : <Missing what="facilities" />}
                 </Section>
                 <Section title="Registry entry">
@@ -71,10 +71,10 @@ function School() {
                 </Section>
                 <Section title="How this school was matched">
                   <Facts rows={[
-                    ['2023 shortage', `${s.join_shortage ?? 'No match'}${s.join_shortage_method ? ` · ${s.join_shortage_method}` : ''}`],
+                    ['SY 2023–2024 shortage', `${s.join_shortage ?? 'No match'}${s.join_shortage_method ? ` · ${s.join_shortage_method}` : ''}`],
                     ['2022 coordinates', `${s.join_coordinates ?? 'No match'}${s.join_coordinates_method ? ` · ${s.join_coordinates_method}` : ''}`],
-                    ['2023 facilities', `${s.join_facilities ?? 'No match'}${s.join_facilities_method ? ` · ${s.join_facilities_method}` : ''}`],
-                    ['2023 enrolment', `${s.join_enrollment ?? 'No match'}${s.join_enrollment_method ? ` · ${s.join_enrollment_method}` : ''}`],
+                    ['SY 2023–2024 facilities', `${s.join_facilities ?? 'No match'}${s.join_facilities_method ? ` · ${s.join_facilities_method}` : ''}`],
+                    ['SY 2023–2024 enrolment', `${s.join_enrollment ?? 'No match'}${s.join_enrollment_method ? ` · ${s.join_enrollment_method}` : ''}`],
                   ]} />
                   {data.join_review.length > 0 && (
                     <ul className="sch-list">{data.join_review.map((r, i) => <li key={i}><strong>{r.source_sheet}:</strong> {r.join_outcome}{r.fallback_method ? ` (${r.fallback_method})` : ''}</li>)}</ul>
@@ -89,7 +89,9 @@ function School() {
                 </Section>
               </div>
               <aside className="sch-schoolside">
-                <ReportBox schoolId={String(s.school_id)} projects={askAbout(data)} shortage={(data.shortage?.total_shortage as number | undefined) ?? null} onTally={setTally} />
+                <ReportBox schoolId={String(s.school_id)} projects={askAbout(data)}
+                  shortage={data.shortage ? Math.round(data.shortage.total_shortage as number) : null}
+                  allocated={data.projects.filter((p) => !p.candidate).reduce((a, p) => a + (p.classrooms ?? 0), 0)} onTally={setTally} />
               </aside>
             </div>
           </>
@@ -101,32 +103,41 @@ function School() {
 
 function Headline({ data, tally }: { data: SchoolFile; tally: ReportTally | null }) {
   const sh = data.shortage;
-  const listed = data.projects.filter((p) => !p.candidate).reduce((a, p) => a + (p.classrooms ?? 0), 0);
+  const shortage = sh ? Math.round(sh.total_shortage as number) : null;
+  const allocated = data.projects.filter((p) => !p.candidate).reduce((a, p) => a + (p.classrooms ?? 0), 0);
+  const status = statusOf(shortage, allocated);
+  const rate = shortageRate(shortage, data.school.instructional_classrooms as number | null);
   return (
     <div className="sch-headline">
       <div className="sch-big">
-        <span className="sch-big-value">{sh ? rooms(sh.total_shortage as number) : '—'}</span>
-        <span className="sch-big-label">{sh ? 'classrooms short in 2023' : 'No 2023 shortage data for this school (not the same as none)'}</span>
-        {sh && <span className="sch-sub">Kinder to Grade 10: {rooms(sh.shortage_k10 as number)} short, {rooms(sh.excess_k10 as number)} extra · Senior high: {rooms(sh.shortage_shs as number)} short</span>}
+        <span className="sch-big-value">{shortage == null ? '—' : num(shortage)}</span>
+        <span className="sch-big-label">{shortage == null ? 'No shortage data' : `classroom shortage, SY 2023–2024`}</span>
+        <span className="sch-sub"><LevelBadge level={levelOf(shortage)} />{rate != null && ` · shortage rate ${Math.round(rate * 100)}%`}</span>
+        {shortage == null
+          ? <span className="sch-sub">{NO_DATA_EXPLAINED}</span>
+          : <span className="sch-sub">Kinder to Grade 10: {rooms(sh?.shortage_k10 as number)} short, {rooms(sh?.excess_k10 as number)} extra · Senior high: {rooms(sh?.shortage_shs as number)} short</span>}
       </div>
       <div className="sch-big">
-        <span className="sch-big-value">{listed ? num(listed) : '—'}</span>
-        <span className="sch-big-label">classrooms in the 2026 School Building Program list</span>
+        <span className="sch-big-value">{num(allocated)}</span>
+        <span className="sch-big-label">classrooms for allocation, FY 2026</span>
+        <span className="sch-sub"><StatusBadge status={status} /></span>
+        {shortage != null && status === 'under' && <span className="sch-sub">Remaining unfunded: {classrooms(shortage - allocated)}</span>}
+        {shortage != null && status === 'over' && <span className="sch-sub">Excess allocated: {classrooms(allocated - shortage)}{shortage === 0 ? ', at a school with no recorded shortage' : ''}</span>}
       </div>
       <div className="sch-big">
         <span className="sch-big-value">{tally?.reports ? `${tally.confirmed} of ${tally.reports}` : '0'}</span>
-        <span className="sch-big-label">{tally?.reports ? 'field reports confirm a shortage' : 'field reports yet'}</span>
-        {tally?.classrooms_needed_median != null && <span className="sch-sub">Reporters say {num(tally.classrooms_needed_median)} more classrooms are needed (median)</span>}
-        {tally?.listing_issues ? <span className="sch-sub">{tally.listing_issues} say the listing is wrong (moved, closed or not found)</span> : null}
+        <span className="sch-big-label">{tally?.reports ? 'field reports say it needs more classrooms' : 'field reports yet'}</span>
+        {tally?.classrooms_needed_median != null && <span className="sch-sub">Reporters say about {num(tally.classrooms_needed_median)} more are needed (median)</span>}
+        {tally?.listing_issues ? <span className="sch-sub">{tally.listing_issues} say the school is elsewhere, closed or not found</span> : null}
       </div>
     </div>
   );
 }
 
 function Projects({ projects }: { projects: SchoolProject[] }) {
-  if (!projects.length) return <Section title="2026 School Building Program"><p className="sch-muted">No project in the 2026 list names this school’s ID.</p></Section>;
+  if (!projects.length) return <Section title="FY 2026 School Building Program"><p className="sch-muted">No project in the 2026 list names this school’s ID.</p></Section>;
   return (
-    <Section title="2026 School Building Program">
+    <Section title="FY 2026 School Building Program">
       <div className="sch-tablewrap">
         <table className="sch-table">
           <thead><tr><th>Project</th><th>Who builds it</th><th>Scope</th><th className="num">Classrooms</th><th className="num">Budget</th><th>Expected</th></tr></thead>
@@ -252,7 +263,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
   return <dl className="sch-facts sch-facts-wide">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v ?? '—'}</dd></div>)}</dl>;
 }
-const Missing = ({ what }: { what: string }) => <p className="sch-muted">No 2023 {what} row was matched to this School ID. That means no data, not zero.</p>;
+const Missing = ({ what }: { what: string }) => <p className="sch-muted">No SY 2023–2024 {what} row was matched to this School ID. That means no data, not zero.</p>;
 
 // ---------------------------------------------------------------------------
 // The field report
@@ -269,7 +280,7 @@ function shortDesc(d: string | null): string {
 }
 function askAbout(data: SchoolFile): Asked[] {
   return [
-    ...data.projects.map((p) => ({ key: p.project_id, title: `2026 list: ${scopeLabel(p.scope_of_work)}`, sub: `${p.project_id} · ${p.modality ?? ''}` })),
+    ...data.projects.map((p) => ({ key: p.project_id, title: `FY 2026 allocation: ${scopeLabel(p.scope_of_work)}`, sub: `${p.project_id} · ${p.modality ?? ''}` })),
     ...(data.dpwh ?? []).filter((p) => p.confident === 1).slice(0, MAX_DPWH_ASKED).map((p) => ({
       key: dpwhKey(p.contract_id),
       title: `${p.infra_year ?? ''} · ${shortDesc(p.description)}`,
@@ -278,8 +289,8 @@ function askAbout(data: SchoolFile): Asked[] {
   ];
 }
 
-function ReportBox({ schoolId, projects, shortage, onTally }: {
-  schoolId: string; projects: Asked[]; shortage: number | null; onTally: (t: ReportTally) => void;
+function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
+  schoolId: string; projects: Asked[]; shortage: number | null; allocated: number; onTally: (t: ReportTally) => void;
 }) {
   const member = useMember();
   const [report, setReport] = useState<SchoolReport>(() => emptyReport(schoolId));
@@ -318,12 +329,15 @@ function ReportBox({ schoolId, projects, shortage, onTally }: {
       setState({ busy: false, error: 'We couldn’t reach the server. Check your connection and try again.', problems: [], done: null });
     }
   };
-  const shortageHint = shortage == null ? 'DepEd has no 2023 count for this school.' : `DepEd counted ${classrooms(shortage)} short in 2023.`;
+  const records = `DepEd’s SY 2023–2024 count: ${shortage == null ? 'no figure' : classrooms(shortage)} short. FY 2026 allocation: ${classrooms(allocated)}.`;
+  const gone = report.listing === 'closed' || report.listing === 'not_found';
+  const mustExplain = disputesData(report, shortage);
 
   return (
     <div className="sch-report">
       <h2 className="sch-h2">Report from the field</h2>
-      <p className="sch-muted">Know this school? Tell DepEd and EDCOM2 whether it is here and whether it really lacks classrooms. Under a minute; your name is never shown, only how many reports agree.</p>
+      <p className="sch-muted">Know this school? Tell DepEd and EDCOM 2 whether it is here and whether it needs more classrooms. Your name is never shown; the page shows only how many reports agree, and every report is reviewed before any figure changes.</p>
+      <p className="sch-records">{records}</p>
       {!member.enabled && <p className="sch-notice">Sign-in isn’t set up on this copy of the site, so this form can be tried but not sent.</p>}
       {member.enabled && !member.loaded ? (
         <p className="sch-muted">Checking your sign-in…</p>
@@ -334,27 +348,36 @@ function ReportBox({ schoolId, projects, shortage, onTally }: {
       ) : (
         <form className="sch-form" onSubmit={(e) => { e.preventDefault(); void call('POST'); }}>
           <Choice legend="1. Is the school here and open?" list={LISTINGS} value={report.listing} onChange={(v) => set('listing', v)} />
-          {report.listing !== 'closed' && report.listing !== 'not_found' && (
-            <Choice legend="2. Does it lack classrooms?" list={SHORTAGE_ANSWERS} value={report.shortage} onChange={(v) => set('shortage', v)} />
-          )}
-          {report.shortage === 'confirmed' && report.listing !== 'closed' && report.listing !== 'not_found' && (
+          {!gone && (
             <>
-              <NumberField label="3. About how many more classrooms does it need?" value={report.classrooms_needed} max={LIMITS.classrooms}
-                onChange={(v) => set('classrooms_needed', v)} hint={shortageHint} />
-              <fieldset className="sch-field">
-                <legend>4. What do you see? (any that apply)</legend>
-                {SIGNS.map(([k, t]) => (
-                  <label key={k} className="sch-check">
-                    <input type="checkbox" checked={report.signs.includes(k)}
-                      onChange={(e) => set('signs', e.target.checked ? [...report.signs, k] : report.signs.filter((x) => x !== k))} />{t}
-                  </label>
-                ))}
-              </fieldset>
+              <Choice legend="2. Does the school need more classrooms?" list={NEEDS} value={report.needs} onChange={(v) => set('needs', v)} />
+              {report.needs === 'yes' && (
+                <>
+                  <Checks legend="Why? (any that apply)" list={NEED_REASONS} value={report.need_reasons} onChange={(v) => set('need_reasons', v)} />
+                  <NumberField label="About how many more classrooms, if you know?" value={report.classrooms_needed} min={1} max={LIMITS.classrooms}
+                    onChange={(v) => set('classrooms_needed', v)} hint={records} />
+                </>
+              )}
+              {report.needs === 'no' && (
+                <Checks legend="Why not? (any that apply)" list={NO_NEED_REASONS} value={report.no_need_reasons} onChange={(v) => set('no_need_reasons', v)} />
+              )}
+              {report.needs && (
+                <fieldset className="sch-field">
+                  <legend>If you know them (optional)</legend>
+                  {COUNT_FIELDS.map(([k, t]) => (
+                    <NumberField key={k} label={t} value={report.counts[k]} min={0} max={LIMITS.count} inline
+                      onChange={(v) => set('counts', { ...report.counts, [k]: v })} />
+                  ))}
+                </fieldset>
+              )}
+              {(report.needs === 'yes' || allocated > 0) && (
+                <Choice legend="3. Is there space at the school to build classrooms?" list={SITE} value={report.site} onChange={(v) => set('site', v)} />
+              )}
             </>
           )}
           {projects.length > 0 && (
             <fieldset className="sch-field">
-              <legend>5. What have you seen of {projects.length === 1 ? 'this project' : 'these projects'}?</legend>
+              <legend>{gone ? '2' : '4'}. What is the status of {projects.length === 1 ? 'this project' : 'these projects'}?</legend>
               {projects.map((p) => (
                 <label key={p.key} className="sch-field sch-ask">
                   <span>{p.title}<span className="sch-sub">{p.sub}</span></span>
@@ -370,13 +393,16 @@ function ReportBox({ schoolId, projects, shortage, onTally }: {
               ))}
             </fieldset>
           )}
-          <Choice legend={`${projects.length > 0 ? 6 : 5}. How do you know this school?`} list={RELATIONS} value={report.relation} onChange={(v) => set('relation', v)} />
-          <label className="sch-field"><span>Anything else? (optional)</span>
-            <textarea maxLength={LIMITS.notes} rows={3} value={report.notes} onChange={(e) => set('notes', e.target.value)}
-              placeholder={report.listing && report.listing !== 'open' ? 'Where is it now, or when did it close?' : 'What DepEd should know'} />
+          <label className="sch-field"><span>When did you last see this?</span>
+            <input type="date" value={report.observed_on ?? ''} min="2016-01-01" max={new Date().toISOString().slice(0, 10)} onChange={(e) => set('observed_on', e.target.value || null)} />
+          </label>
+          <Choice legend="What is your relationship to the school?" list={RELATIONS} value={report.relation} onChange={(v) => set('relation', v)} />
+          <label className="sch-field"><span>{mustExplain ? 'Please explain the school’s situation (needed: your report differs from the records)' : 'Anything else? (optional)'}</span>
+            <textarea maxLength={LIMITS.notes} rows={3} value={report.notes} onChange={(e) => set('notes', e.target.value)} required={mustExplain}
+              placeholder={report.listing && report.listing !== 'open' ? 'Where is it now, or when did it close or merge?' : 'What DepEd and EDCOM 2 should know'} />
             <span className="sch-sub">Don’t write anyone’s name or contact details.</span>
           </label>
-          <label className="sch-field"><span>Photo links (optional, https, up to {LIMITS.photos})</span>
+          <label className="sch-field"><span>Links to photos or documents (optional, https, up to {LIMITS.photos})</span>
             <textarea rows={2} value={report.photo_links.join('\n')} placeholder="https://…"
               onChange={(e) => set('photo_links', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, LIMITS.photos))} />
           </label>
@@ -386,7 +412,11 @@ function ReportBox({ schoolId, projects, shortage, onTally }: {
             <button type="submit" className="sch-button" disabled={state.busy || !member.enabled}>{saved ? 'Update my report' : 'Send my report'}</button>
             {saved && <button type="button" className="sch-linkbtn" disabled={state.busy} onClick={() => void call('DELETE')}>Withdraw it</button>}
           </div>
-          {member.userId && <p className="sch-sub">Signed in as {member.email}. <button type="button" className="sch-linkbtn" onClick={member.signOut}>Sign out</button></p>}
+          <p className="sch-sub">
+            {member.userId ? <>Signed in as {member.email}. </> : null}
+            Your name and email are seen only by the review team, never on the site.
+            {member.userId && <> <button type="button" className="sch-linkbtn" onClick={member.signOut}>Sign out</button></>}
+          </p>
         </form>
       )}
     </div>
@@ -406,11 +436,26 @@ function Choice<T extends string>({ legend, list, value, onChange }: { legend: s
   );
 }
 
-function NumberField({ label, value, max, onChange, hint }: { label: string; value: number | null; max: number; onChange: (v: number | null) => void; hint?: string }) {
+function Checks<T extends string>({ legend, list, value, onChange }: { legend: string; list: readonly (readonly [T, string])[]; value: T[]; onChange: (v: T[]) => void }) {
   return (
-    <label className="sch-field"><span>{label}</span>
-      <input type="number" inputMode="numeric" min={1} max={max} step={1} value={value ?? ''}
-        onChange={(e) => { const n = Number.parseInt(e.target.value, 10); onChange(Number.isFinite(n) ? Math.min(max, Math.max(1, n)) : null); }} />
+    <fieldset className="sch-field">
+      <legend>{legend}</legend>
+      {list.map(([k, t]) => (
+        <label key={k} className="sch-check">
+          <input type="checkbox" checked={value.includes(k)} onChange={(e) => onChange(e.target.checked ? [...value, k] : value.filter((x) => x !== k))} />{t}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function NumberField({ label, value, min, max, onChange, hint, inline = false }: {
+  label: string; value: number | null; min: number; max: number; onChange: (v: number | null) => void; hint?: string; inline?: boolean;
+}) {
+  return (
+    <label className={`sch-field${inline ? ' sch-field-inline sch-field-count' : ''}`}><span>{label}</span>
+      <input type="number" inputMode="numeric" min={min} max={max} step={1} value={value ?? ''}
+        onChange={(e) => { const n = Number.parseInt(e.target.value, 10); onChange(Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null); }} />
       {hint && <span className="sch-sub">{hint}</span>}
     </label>
   );

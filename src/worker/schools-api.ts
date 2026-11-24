@@ -45,65 +45,89 @@ async function cached(request: Request, ctx: ExecutionContext | undefined, make:
 
 const LIVE_REPORTS = "FROM school_reports WHERE withdrawn_at IS NULL";
 
-async function points(env: ReviewEnv): Promise<Response> {
-  const { results } = await env.DB.prepare(
-    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, sh.total_shortage AS shortage,
-            COALESCE(r.project_classrooms_numeric_sum, 0) AS cr, s.sector AS sector
-     FROM schools s
-     JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1
-     LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
-     LEFT JOIN schools_sbp_rollup_2026 r ON r.school_id = s.school_id`,
-  ).all<{ id: string; lon: number; lat: number; shortage: number | null; cr: number; sector: string }>();
-  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM schools").first<{ n: number }>();
-  const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
-  return reply({
-    meta: { generated_at: new Date().toISOString(), schools: total?.n ?? 0, with_coordinates: results.length },
-    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage == null ? null : round(r.shortage, 1), r.cr, SECTOR_OF[r.sector] ?? 0]),
-  });
-}
-
-/** Per school: SBP 2026 classrooms with a budget and those for bidding, budget and project count (ID-linked only). */
+/** Per school: FY 2026 classrooms with a budget and those for bidding, budget, projects, modalities (ID-linked only). */
 const SBP_BY_SCHOOL = `SELECT school_id,
     COUNT(*) AS projects,
     SUM(CASE WHEN budget_php IS NOT NULL THEN COALESCE(classrooms, 0) ELSE 0 END) AS funded,
     SUM(CASE WHEN budget_php IS NULL THEN COALESCE(classrooms, 0) ELSE 0 END) AS bidding,
-    SUM(COALESCE(budget_php, 0)) AS budget
+    SUM(COALESCE(budget_php, 0)) AS budget,
+    GROUP_CONCAT(DISTINCT modality) AS modalities
   FROM schools_sbp_projects_2026 WHERE link_status = 'ID-linked' GROUP BY school_id`;
 
+// EDCOM 2's terms, per school (lib/schools.ts statusOf / levelOf / shortageRate, which the pages use, say the same).
+// Shortage is DepEd's SY 2023-2024 figure rounded to whole classrooms; `sh` is NULL for a school without one.
+const SCHOOL_FROM = `FROM schools s
+  LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
+  LEFT JOIN (${SBP_BY_SCHOOL}) p ON p.school_id = s.school_id`;
+const SHR = "ROUND(sh.total_shortage)";
+const ALLOC = "(COALESCE(p.funded, 0) + COALESCE(p.bidding, 0))";
+const STATUS = `(CASE WHEN sh.school_id IS NULL THEN 'no_data' WHEN ${ALLOC} = 0 AND ${SHR} = 0 THEN 'none'
+  WHEN ${ALLOC} < ${SHR} THEN 'under' WHEN ${ALLOC} = ${SHR} THEN 'fully' ELSE 'over' END)`;
+const LEVEL = `(CASE WHEN sh.school_id IS NULL THEN NULL WHEN ${SHR} = 0 THEN 'none' WHEN ${SHR} <= 4 THEN 'moderate'
+  WHEN ${SHR} <= 10 THEN 'severe' ELSE 'extreme' END)`;
+const RATE = `(CASE WHEN sh.school_id IS NULL OR s.instructional_classrooms IS NULL OR s.instructional_classrooms + ${SHR} = 0 THEN NULL
+  ELSE ${SHR} * 1.0 / (s.instructional_classrooms + ${SHR}) END)`;
+const z = (expr: string, as: string) => `COALESCE(${expr}, 0) AS ${as}`;
+/** AreaTotals (lib/schools.ts) over the grouped schools. */
+const TOTALS = [
+  "COUNT(*) AS schools", z("SUM(s.sector = 'Public')", "public_schools"), "COUNT(sh.school_id) AS with_shortage_data",
+  z(`SUM(${SHR} > 0)`, "schools_short"), z(`SUM(${SHR})`, "shortage"), z("SUM(p.projects)", "sbp_projects"),
+  z(`SUM(${ALLOC})`, "allocated"), z("SUM(p.funded)", "sbp_classrooms_funded"), z("SUM(p.bidding)", "sbp_classrooms_bidding"),
+  z("SUM(p.budget)", "sbp_budget_php"),
+  z(`SUM(MIN(${SHR}, ${ALLOC}))`, "covered"), z(`SUM(MAX(0, ${SHR} - ${ALLOC}))`, "gap"),
+  z(`SUM(CASE WHEN sh.school_id IS NOT NULL THEN MAX(0, ${ALLOC} - ${SHR}) END)`, "excess"),
+  z(`SUM(CASE WHEN ${SHR} = 0 THEN ${ALLOC} END)`, "excess_no_shortage"),
+  z(`SUM(CASE WHEN sh.school_id IS NOT NULL AND ${ALLOC} > ${SHR} THEN p.budget * 1.0 * (${ALLOC} - ${SHR}) / ${ALLOC} END)`, "excess_budget_php"),
+  z(`SUM(CASE WHEN sh.school_id IS NULL THEN ${ALLOC} END)`, "allocated_no_data"),
+  ...["under", "fully", "over"].map((k) => z(`SUM(${STATUS} = '${k}')`, `schools_${k}`)),
+  ...["moderate", "severe", "extreme"].map((k) => z(`SUM(${LEVEL} = '${k}')`, `schools_${k}`)),
+  z("SUM(s.instructional_classrooms)", "instructional_classrooms"),
+  z("SUM(CASE WHEN sh.school_id IS NOT NULL THEN s.instructional_classrooms END)", "instructional_with_data"),
+].join(",\n  ");
+
+async function points(env: ReviewEnv): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, ${SHR} AS shortage, ${ALLOC} AS alloc, s.sector AS sector
+     ${SCHOOL_FROM}
+     JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1`,
+  ).all<{ id: string; lon: number; lat: number; shortage: number | null; alloc: number; sector: string }>();
+  const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM schools").first<{ n: number }>();
+  const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
+  return reply({
+    meta: { generated_at: new Date().toISOString(), schools: total?.n ?? 0, with_coordinates: results.length },
+    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage, r.alloc, SECTOR_OF[r.sector] ?? 0]),
+  });
+}
+
 async function areas(env: ReviewEnv, url: URL): Promise<Response> {
-  const level = url.searchParams.get("level") === "division" ? "division" : "region";
+  const lv = url.searchParams.get("level");
+  const level = lv === "division" || lv === "lgu" ? lv : "region";
   const region = url.searchParams.get("region");
-  const group = level === "division" ? "s.region_key, s.division" : "s.region_key";
+  const group = level === "division" ? "s.region_key, s.division" : level === "lgu" ? "s.region_key, s.province, s.municipality" : "s.region_key";
+  const cols = level === "division" ? "s.division AS division"
+    // Income class as the shortage file gives it per school; where a city's schools disagree ("1st Class City" vs
+    // "1st Class Municipality"), MIN picks "City".
+    : level === "lgu" ? "NULL AS division, s.province, s.municipality, MIN(sh.lgu_classification) AS income_class" : "NULL AS division";
   const where = region ? "WHERE s.region_key = ?1" : "";
   const { results } = await env.DB.prepare(
-    `SELECT s.region_key, ${level === "division" ? "s.division" : "NULL"} AS division,
-            COUNT(*) AS schools, COALESCE(SUM(s.sector = 'Public'), 0) AS public_schools,
-            COUNT(sh.school_id) AS with_shortage_data, COALESCE(SUM(sh.total_shortage > 0), 0) AS schools_short,
-            COALESCE(SUM(sh.total_shortage), 0) AS shortage,
-            COALESCE(SUM(p.projects), 0) AS sbp_projects, COALESCE(SUM(p.funded), 0) AS sbp_classrooms_funded,
-            COALESCE(SUM(p.bidding), 0) AS sbp_classrooms_bidding, COALESCE(SUM(p.budget), 0) AS sbp_budget_php,
-            -- per school: what the list covers of its own shortage, what is left, and what goes to schools not short
-            COALESCE(SUM(MIN(sh.total_shortage, COALESCE(p.funded, 0) + COALESCE(p.bidding, 0))), 0) AS covered,
-            COALESCE(SUM(MAX(0, sh.total_shortage - COALESCE(p.funded, 0) - COALESCE(p.bidding, 0))), 0) AS gap,
-            COALESCE(SUM(CASE WHEN sh.total_shortage = 0 THEN COALESCE(p.funded, 0) + COALESCE(p.bidding, 0) ELSE 0 END), 0) AS listed_not_short,
-            COALESCE(SUM(CASE WHEN sh.school_id IS NULL THEN COALESCE(p.funded, 0) + COALESCE(p.bidding, 0) ELSE 0 END), 0) AS listed_no_data,
-            AVG(c.latitude) AS lat, AVG(c.longitude) AS lon
-     FROM schools s
-     LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
-     LEFT JOIN (${SBP_BY_SCHOOL}) p ON p.school_id = s.school_id
+    `SELECT s.region_key, ${cols}, ${TOTALS}, AVG(c.latitude) AS lat, AVG(c.longitude) AS lon
+     ${SCHOOL_FROM}
      LEFT JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1
      ${where}
      GROUP BY ${group}
-     ORDER BY shortage DESC`,
+     ORDER BY gap DESC`,
   ).bind(...(region ? [region] : [])).all<Omit<AreaRow, "reports" | "reports_confirming">>();
   // Reports by area: few rows, so tallied here rather than joined.
+  const keyOf = (r: { region_key: string | null; division?: string | null; province?: string | null; municipality?: string | null }) =>
+    `${r.region_key}|${r.division ?? ""}|${r.province ?? ""}|${r.municipality ?? ""}`;
   const tally = new Map<string, { n: number; confirmed: number }>();
   try {
+    const repCols = level === "division" ? "s.division" : level === "lgu" ? "NULL AS division, s.province, s.municipality" : "NULL AS division";
     const { results: rep } = await env.DB.prepare(
-      `SELECT s.region_key, ${level === "division" ? "s.division" : "NULL"} AS division, COUNT(*) AS n, SUM(r.shortage = 'confirmed') AS confirmed
+      `SELECT s.region_key, ${repCols}, COUNT(*) AS n, SUM(r.shortage = 'confirmed') AS confirmed
        FROM school_reports r JOIN schools s ON s.school_id = r.school_id WHERE r.withdrawn_at IS NULL GROUP BY ${group}`,
-    ).all<{ region_key: string | null; division: string | null; n: number; confirmed: number }>();
-    for (const r of rep ?? []) tally.set(`${r.region_key}|${r.division}`, { n: r.n, confirmed: r.confirmed ?? 0 });
+    ).all<{ region_key: string | null; division: string | null; province?: string; municipality?: string; n: number; confirmed: number }>();
+    for (const r of rep ?? []) tally.set(keyOf(r), { n: r.n, confirmed: r.confirmed ?? 0 });
   } catch (e) {
     if (!missingTable(e)) throw e;
   }
@@ -113,7 +137,7 @@ async function areas(env: ReviewEnv, url: URL): Promise<Response> {
   return reply({
     meta: { generated_at: new Date().toISOString(), level, unplaced_projects: unplaced?.n ?? 0, unplaced_classrooms: unplaced?.cr ?? 0 },
     rows: results.map((r) => {
-      const t = tally.get(`${r.region_key}|${r.division}`);
+      const t = tally.get(keyOf(r));
       return { ...r, reports: t?.n ?? 0, reports_confirming: t?.confirmed ?? 0 };
     }),
   });
@@ -129,23 +153,16 @@ const DPWH_KIND = `CASE
 const CONFIDENT = "EXISTS (SELECT 1 FROM schools_dpwh_links x WHERE x.contract_id = c.contract_id AND x.confident = 1)";
 
 async function analysis(env: ReviewEnv): Promise<Response> {
-  const [provinces, years, funds, modality, beff] = await Promise.all([
+  const [provinces, years, funds, modality, beff, statusLevels, sizes, rates] = await Promise.all([
     env.DB.prepare(
-      `SELECT s.province, s.region_key, COUNT(*) AS schools, COALESCE(SUM(s.sector = 'Public'), 0) AS public_schools,
-              COUNT(sh.school_id) AS with_shortage_data, COALESCE(SUM(sh.total_shortage > 0), 0) AS schools_short,
-              COALESCE(SUM(sh.total_shortage), 0) AS shortage,
-              COALESCE(SUM(CASE WHEN sh.school_id IS NOT NULL THEN e.enrolment_total END), 0) AS learners_with_shortage,
-              COALESCE(SUM(e.enrolment_total), 0) AS learners, COALESCE(SUM(e.instr_cr_total), 0) AS classrooms,
-              COALESCE(SUM(COALESCE(e.makeshift_es, 0) + COALESCE(e.makeshift_hs, 0) + COALESCE(e.tls_es, 0) + COALESCE(e.tls_hs, 0)), 0) AS makeshift_tls,
-              COALESCE(SUM(p.funded), 0) AS sbp_funded, COALESCE(SUM(p.bidding), 0) AS sbp_bidding, COALESCE(SUM(p.budget), 0) AS sbp_budget_php,
-              COALESCE(SUM(MIN(sh.total_shortage, COALESCE(p.funded, 0) + COALESCE(p.bidding, 0))), 0) AS covered,
-              COALESCE(SUM(CASE WHEN sh.total_shortage = 0 THEN COALESCE(p.funded, 0) + COALESCE(p.bidding, 0) ELSE 0 END), 0) AS listed_not_short,
-              COALESCE(SUM(d.contracts), 0) AS dpwh_contracts, COALESCE(SUM(d.budget), 0) AS dpwh_budget_php,
-              COALESCE(SUM(d.buildings), 0) AS dpwh_buildings_php, COALESCE(SUM(d.mpb), 0) AS dpwh_mpb_php
-       FROM schools s
-       LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
+      `SELECT s.province, s.region_key, ${TOTALS},
+              ${z("SUM(CASE WHEN sh.school_id IS NOT NULL THEN e.enrolment_total END)", "learners_with_shortage")},
+              ${z("SUM(e.enrolment_total)", "learners")}, ${z("SUM(e.instr_cr_total)", "classrooms")},
+              ${z("SUM(COALESCE(e.makeshift_es, 0) + COALESCE(e.makeshift_hs, 0) + COALESCE(e.tls_es, 0) + COALESCE(e.tls_hs, 0))", "makeshift_tls")},
+              ${z("SUM(d.contracts)", "dpwh_contracts")}, ${z("SUM(d.budget)", "dpwh_budget_php")},
+              ${z("SUM(d.buildings)", "dpwh_buildings_php")}, ${z("SUM(d.mpb)", "dpwh_mpb_php")}
+       ${SCHOOL_FROM}
        LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id
-       LEFT JOIN (${SBP_BY_SCHOOL}) p ON p.school_id = s.school_id
        LEFT JOIN (
          SELECT l.school_id, SUM(1.0 / MAX(c.schools_confident, 1)) AS contracts,
                 SUM(COALESCE(c.budget_php, 0) / MAX(c.schools_confident, 1)) AS budget,
@@ -176,6 +193,21 @@ async function analysis(env: ReviewEnv): Promise<Response> {
     env.DB.prepare(
       `SELECT amount_2020, amount_2021, amount_2022, amount_2023, amount_2024, amount_2025, amount_2026 FROM fpaps WHERE id = ?1`,
     ).bind(BEFF_FPAP_ID).first<Record<string, number | null>>(),
+    // EDCOM 2's "Classroom Allocation Status by Shortage Level", in schools (and classrooms)
+    env.DB.prepare(
+      `SELECT ${LEVEL} AS level, ${STATUS} AS status, COUNT(*) AS schools, ${z(`SUM(${SHR})`, "shortage")}, ${z(`SUM(${ALLOC})`, "allocated")}
+       ${SCHOOL_FROM} GROUP BY 1, 2`,
+    ).all<AnalysisFile["status_levels"][number]>(),
+    // How shortages are spread: schools by classrooms short, in steps of 10 (1–10, 11–20, … 91–100, over 100)
+    env.DB.prepare(
+      `SELECT CASE WHEN ${SHR} > 100 THEN 101 ELSE CAST((${SHR} - 1) / 10 AS INTEGER) * 10 + 1 END AS lo, COUNT(*) AS schools, SUM(${SHR}) AS shortage
+       ${SCHOOL_FROM} WHERE ${SHR} >= 1 GROUP BY 1 ORDER BY 1`,
+    ).all<AnalysisFile["shortage_sizes"][number]>(),
+    // Schools by Classroom Shortage Rate, in tenths (0–9%, 10–19%, … 90–100%)
+    env.DB.prepare(
+      `SELECT MIN(9, CAST(${RATE} * 10 AS INTEGER)) AS tenth, COUNT(*) AS schools ${SCHOOL_FROM}
+       WHERE ${SHR} >= 1 AND ${RATE} IS NOT NULL GROUP BY 1 ORDER BY 1`,
+    ).all<AnalysisFile["shortage_rates"][number]>(),
   ]);
   // GAA amounts are in thousands of pesos.
   const beff_gaa = beff
@@ -184,17 +216,22 @@ async function analysis(env: ReviewEnv): Promise<Response> {
   const out: AnalysisFile = {
     meta: { generated_at: new Date().toISOString() },
     provinces: provinces.results, dpwh_years: years.results, dpwh_funds: funds.results, sbp_modality: modality.results, beff_gaa,
+    status_levels: statusLevels.results, shortage_sizes: sizes.results, shortage_rates: rates.results,
   };
   return reply(out);
 }
 
 const SORTS: Record<ListSort, string> = {
-  shortage: "sh.total_shortage IS NULL, sh.total_shortage DESC, s.school_name",
-  gap: "sh.total_shortage IS NULL, (COALESCE(sh.total_shortage, 0) - COALESCE(r.project_classrooms_numeric_sum, 0)) DESC, s.school_name",
+  shortage: `sh.school_id IS NULL, ${SHR} DESC, s.school_name`,
+  gap: `sh.school_id IS NULL, MAX(0, ${SHR} - ${ALLOC}) DESC, ${SHR} DESC, s.school_name`,
+  rate: `${RATE} IS NULL, ${RATE} DESC, ${SHR} DESC, s.school_name`,
+  excess: `sh.school_id IS NULL, MAX(0, ${ALLOC} - ${SHR}) DESC, s.school_name`,
   name: "s.school_name",
   enrolment: "e.enrolment_total IS NULL, e.enrolment_total DESC, s.school_name",
-  reports: "reports DESC, sh.total_shortage DESC, s.school_name",
+  reports: `reports DESC, ${SHR} DESC, s.school_name`,
 };
+const STATUS_KEYS = new Set(["under", "fully", "over", "none", "no_data"]);
+const LEVEL_KEYS = new Set(["none", "moderate", "severe", "extreme"]);
 
 async function list(env: ReviewEnv, url: URL): Promise<Response> {
   const p = url.searchParams;
@@ -214,26 +251,38 @@ async function list(env: ReviewEnv, url: URL): Promise<Response> {
   if (region) where.push(`s.region_key = ${bind(region)}`);
   const division = p.get("division");
   if (division) where.push(`s.division = ${bind(division)}`);
+  const province = p.get("province");
+  if (province) where.push(`s.province = ${bind(province)}`);
+  const municipality = p.get("municipality");
+  if (municipality) where.push(`s.municipality = ${bind(municipality)}`);
   const sector = p.get("sector");
   if (sector) where.push(`s.sector = ${bind(sector)}`);
   const shortage = (p.get("shortage") ?? "any") as ShortageFilter;
-  if (shortage === "short") where.push("sh.total_shortage > 0");
-  else if (shortage === "none") where.push("sh.total_shortage = 0");
+  if (shortage === "short") where.push(`${SHR} > 0`);
+  else if (shortage === "none") where.push(`${SHR} = 0`);
   else if (shortage === "nodata") where.push("sh.school_id IS NULL");
-  if (p.get("projects") === "yes") where.push("r.school_id IS NOT NULL");
+  const status = p.get("status");
+  if (status) {
+    if (!STATUS_KEYS.has(status)) return fail(400, "bad_status", "Unknown allocation status.");
+    where.push(`${STATUS} = ${bind(status)}`);
+  }
+  const level = p.get("level");
+  if (level) {
+    if (!LEVEL_KEYS.has(level)) return fail(400, "bad_level", "Unknown shortage level.");
+    where.push(`${LEVEL} = ${bind(level)}`);
+  }
+  if (p.get("projects") === "yes") where.push("p.school_id IS NOT NULL");
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const from = `FROM schools s
-    LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
-    LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id
-    LEFT JOIN schools_sbp_rollup_2026 r ON r.school_id = s.school_id`;
+  const from = `${SCHOOL_FROM}
+    LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id`;
   let hasReports = true;
   const reportsCol = "(SELECT COUNT(*) FROM school_reports x WHERE x.school_id = s.school_id AND x.withdrawn_at IS NULL)";
   const run = (withReports: boolean) => Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).bind(...binds).first<{ n: number }>(),
     env.DB.prepare(
       `SELECT s.school_id, s.school_name, s.region_key, s.division, s.province, s.municipality, s.sector, s.curricular_offering,
-              e.enrolment_total, s.instructional_classrooms, sh.total_shortage AS shortage,
-              r.project_classrooms_numeric_sum AS sbp_classrooms, r.known_budget_sum_php AS sbp_budget_php,
+              e.enrolment_total, s.instructional_classrooms, ${SHR} AS shortage, ${ALLOC} AS allocated, ${STATUS} AS status,
+              ${LEVEL} AS level, ${RATE} AS shortage_rate, p.modalities, p.budget AS sbp_budget_php,
               ${withReports ? reportsCol : "0"} AS reports
        ${from} ${whereSql} ORDER BY ${withReports || sort !== "reports" ? SORTS[sort] : SORTS.shortage} LIMIT ${PER} OFFSET ${(page - 1) * PER}`,
     ).bind(...binds).all(),
@@ -335,10 +384,15 @@ async function send(request: Request, env: ReviewEnv, url: URL): Promise<Respons
   if (body.length > MAX_BODY) return fail(413, "too_large", "That report is too long.");
   let raw: unknown;
   try { raw = JSON.parse(body); } catch { return fail(400, "bad_json", "That isn't a report."); }
-  const { report, problems } = readSchoolReport(raw);
-  if (!report) return fail(422, "invalid", "Some answers need fixing.", { problems });
-  const known = await env.DB.prepare("SELECT school_id FROM schools WHERE school_id = ?1").bind(report.school_id).first();
+  // The school's recorded shortage decides whether the report disputes the data (then its details are required).
+  const rawId = typeof (raw as { school_id?: unknown })?.school_id === "string" ? (raw as { school_id: string }).school_id : "";
+  if (!SCHOOL_ID_RE.test(rawId)) return fail(422, "invalid", "Some answers need fixing.", { problems: ["school_id: missing"] });
+  const known = await env.DB.prepare(
+    "SELECT s.school_id, ROUND(sh.total_shortage) AS shortage FROM schools s LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id WHERE s.school_id = ?1",
+  ).bind(rawId).first<{ school_id: string; shortage: number | null }>();
   if (!known) return fail(404, "not_found", "No school has this ID in the registry.");
+  const { report, problems } = readSchoolReport(raw, known.shortage);
+  if (!report) return fail(422, "invalid", "Some answers need fixing.", { problems });
   // Every project answered must be this school's: a 2026 SBP project (linked or a candidate) or a linked DPWH contract.
   const keys = Object.keys(report.projects);
   const sbp = keys.filter((k) => !k.startsWith("dpwh:"));
@@ -359,17 +413,19 @@ async function send(request: Request, env: ReviewEnv, url: URL): Promise<Respons
   const id = prev?.report_id ?? reportId();
   const revision = (prev?.revision ?? 0) + 1;
   const payload = JSON.stringify({ ...report, report_id: id });
+  // The public tally reads the `shortage` column: needs more classrooms = 'confirmed', does not = 'none'.
+  const shortageAnswer = report.needs === "yes" ? "confirmed" : report.needs === "no" ? "none" : report.needs === "unsure" ? "unsure" : null;
   try {
     await env.DB.batch([
       prev
         ? env.DB.prepare(
           `UPDATE school_reports SET revision = ?2, shortage = ?3, classrooms_needed = ?4, listing = ?5, payload = ?6, updated_at = ?7, withdrawn_at = NULL
            WHERE report_id = ?1 AND revision = ?8`,
-        ).bind(id, revision, report.shortage, report.classrooms_needed, report.listing, payload, t, prev.revision)
+        ).bind(id, revision, shortageAnswer, report.classrooms_needed, report.listing, payload, t, prev.revision)
         : env.DB.prepare(
           `INSERT INTO school_reports (report_id, school_id, member_id, revision, shortage, classrooms_needed, listing, payload, created_at, updated_at)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)`,
-        ).bind(id, report.school_id, member, revision, report.shortage, report.classrooms_needed, report.listing, payload, t),
+        ).bind(id, report.school_id, member, revision, shortageAnswer, report.classrooms_needed, report.listing, payload, t),
       env.DB.prepare("INSERT INTO school_report_revisions (report_id, revision, action, payload, created_at) VALUES (?1, ?2, 'save', ?3, ?4)")
         .bind(id, revision, payload, t),
     ]);

@@ -1,5 +1,7 @@
 # Schools directory × EDCOM 2's Classroom Construction Dashboard
 
+**Status: built 2026-11-24** (see docs/schools-data.md, "EDCOM 2's terms, built in"); the questions in section 6 are still open.
+
 A reconciliation of EDCOM 2's working document "Classroom Dashboard Comments" (Google Doc, tabs v3, v2, Field Notes and Feedback Form, read 2026-11-24) with what `/schools` does. It covers what matches, what to adopt, what differs and what to ask them. Figures are from our D1 on 2026-11-24.
 
 ## 1. Same data

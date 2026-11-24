@@ -7,20 +7,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Columns, Scatter, Stacked } from '../components/SchoolsCharts';
-import { PreviewNotice, SchoolsChrome, Stat, Status } from '../components/SchoolsBits';
 import { php } from '../lib/format';
 import { INDICATORS_ROOT, type IndicatorsFile } from '../lib/indicators';
 import { loadIndicators } from '../lib/indicators-view';
+import { PreviewNotice, SchoolsChrome, Stat, Status, StatusBadge } from '../components/SchoolsBits';
 import {
-  BEFF_2027, DATA_SOURCES, DPWH_KINDS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
-  type AnalysisFile, type AnalysisProvince,
+  BEFF_2027, DATA_SOURCES, DPWH_KINDS, EDCOM2_COST_PER_CLASSROOM, NO_DATA_EXPLAINED, SHORTAGE_LEVELS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
+  type AllocationStatus, type AnalysisFile, type AnalysisProvince, type ShortageLevel,
 } from '../lib/schools';
 import { useSchoolsApi } from '../lib/use-schools-api';
 
 type Sums = Omit<AnalysisProvince, 'province' | 'region_key'>;
+const STATUS_COLS: AllocationStatus[] = ['under', 'fully', 'over', 'none', 'no_data'];
+const LEVEL_ROWS: (ShortageLevel | null)[] = ['moderate', 'severe', 'extreme', 'none', null];
 const KEYS: (keyof Sums)[] = [
   'schools', 'public_schools', 'with_shortage_data', 'schools_short', 'shortage', 'learners_with_shortage', 'learners', 'classrooms',
-  'makeshift_tls', 'sbp_funded', 'sbp_bidding', 'sbp_budget_php', 'covered', 'listed_not_short', 'dpwh_contracts', 'dpwh_budget_php',
+  'makeshift_tls', 'sbp_projects', 'allocated', 'sbp_classrooms_funded', 'sbp_classrooms_bidding', 'sbp_budget_php', 'covered', 'gap',
+  'excess', 'excess_no_shortage', 'excess_budget_php', 'allocated_no_data', 'schools_under', 'schools_fully', 'schools_over',
+  'schools_moderate', 'schools_severe', 'schools_extreme', 'instructional_classrooms', 'instructional_with_data', 'dpwh_contracts', 'dpwh_budget_php',
   'dpwh_buildings_php', 'dpwh_mpb_php',
 ];
 function sum(rows: AnalysisProvince[]): Sums {
@@ -99,6 +103,7 @@ export default function SchoolsOverview() {
     });
   }, [d, ind]);
 
+  const sizes81 = d?.shortage_sizes.find((x) => x.lo === 101)?.schools ?? 0;
   const costPerRoom = useMemo(() => {
     if (!d) return null;
     const b = d.sbp_modality.reduce((a, m) => a + m.budget_php, 0), c = d.sbp_modality.reduce((a, m) => a + m.classrooms_with_budget, 0);
@@ -145,14 +150,14 @@ export default function SchoolsOverview() {
             <section className="sch-findings">
               <h2 className="sch-h2">What the data says</h2>
               <ol>
-                <li>DepEd counted <strong>{rooms(all.shortage)} classrooms short</strong> in 2023, at {num(all.schools_short)} of the {num(all.with_shortage_data)} schools it measured: {one(perThousand(all))} classrooms for every 1,000 learners.</li>
+                <li>DepEd recorded a <strong>classroom shortage of {rooms(all.shortage)}</strong> for SY 2023–2024, at {num(all.schools_short)} of the {num(all.with_shortage_data)} schools with shortage data: {one(perThousand(all))} classrooms for every 1,000 learners. {num(sizes81)} schools are each short of more than 100.</li>
                 {costPerRoom != null && beff2026 != null && (
                   <li>At the 2026 list’s own average of <strong>{php(costPerRoom)} a classroom</strong>, building them all would cost about <strong>{billions(all.shortage * costPerRoom)}</strong>: {(all.shortage * costPerRoom / beff2026).toFixed(1)} times the {billions(beff2026)} in DepEd’s whole school-building line for 2026, and {(all.shortage * costPerRoom / BEFF_2027.nep).toFixed(1)} times the {billions(BEFF_2027.nep)} proposed for 2027.</li>
                 )}
                 {beff2026 != null && (
                   <li>That line <strong>falls by {Math.round((1 - BEFF_2027.nep / beff2026) * 100)}%</strong> in the 2027 proposal, from {billions(beff2026)} to {billions(BEFF_2027.nep)}, and the House bill cuts it to {billions(BEFF_2027.house)}.</li>
                 )}
-                <li>The 2026 list would fill <strong>{pctOf(share(all.covered, all.shortage))} of the shortage</strong>, school by school. {rooms(all.listed_not_short)} of its classrooms are at schools DepEd counted as not short, and {rooms(all.sbp_bidding)} are “for bidding”, with no amount yet.</li>
+                <li>The FY 2026 School Building Program allocates <strong>{rooms(all.allocated)} classrooms</strong>, an allocation-to-shortage ratio of {pct(all.allocated, all.shortage)}. School by school it fills {rooms(all.covered)}, leaving <strong>{rooms(all.gap)} remaining unfunded</strong>, and {rooms(all.excess)} are <strong>excess allocated classrooms</strong>: {rooms(all.excess_no_shortage)} at schools with no recorded shortage, {rooms(all.excess - all.excess_no_shortage)} beyond the need of schools that are short. At EDCOM 2’s ₱2.5M a classroom they come to {billions(all.excess * EDCOM2_COST_PER_CLASSROOM)}; from the projects’ own budgets, {billions(all.excess_budget_php)}.</li>
                 <li>DPWH contracts that name a school added up to <strong>{billions(dpwhTotal)}</strong> from 2016 to 2026. {billions(fv('beff'))} of it was DepEd’s own school-building budget carried out by DPWH. Of the {billions(fv('dpwh'))} from DPWH’s own budget, <strong>{pctOf(share(fv('dpwh', 'mpb'), fv('dpwh')))} went to multi-purpose buildings and covered courts</strong>, against {pctOf(share(fv('beff', 'mpb'), fv('beff')))} of DepEd’s.</li>
                 {ind && (
                   <li>Across PSA’s {areas.length} areas, poverty and the shortage per learner show {strength(rhoShort)}; poverty and the share of the shortage the 2026 list covers show {strength(rhoCover)}.</li>
@@ -160,31 +165,66 @@ export default function SchoolsOverview() {
               </ol>
             </section>
 
-            <h2 className="sch-h2">The need, 2023</h2>
+            <h2 className="sch-h2">The need, SY 2023–2024</h2>
             <div className="sch-stats">
-              <Stat value={rooms(all.shortage)} label="classrooms short" note={`${num(all.schools_short)} schools`} />
+              <Stat value={rooms(all.shortage)} label="classroom shortage" note={`at ${num(all.schools_short)} schools with shortages`} />
               <Stat value={one(perThousand(all))} label="classrooms short per 1,000 learners" note="at schools with shortage data" />
               <Stat value={one(share(all.learners, all.classrooms), 0)} label="learners per instructional classroom" note={`${num(all.learners)} learners, ${num(all.classrooms)} rooms`} />
               <Stat value={num(all.makeshift_tls)} label="makeshift rooms and temporary learning spaces" />
             </div>
             <div className="sch-tablewrap">
               <table className="sch-table">
-                <thead><tr><th>Region</th><th className="num">Short</th><th className="num">Per 1,000 learners</th><th className="num">Schools short</th><th className="num">Learners per room</th><th className="num">2026 list covers</th><th className="num">DPWH at schools, 2016–2026</th></tr></thead>
+                <thead><tr><th>Region</th><th className="num">Short</th><th className="num">Per 1,000 learners</th><th className="num">Schools short</th><th className="num">Learners per room</th><th className="num">Allocated FY 2026</th><th className="num">Remaining unfunded</th><th className="num">DPWH at schools, 2016–2026</th></tr></thead>
                 <tbody>
                   {regions.map(({ key, s }) => (
                     <tr key={key}>
-                      <td><Link to={`${SCHOOLS_LIST}?region=${key}&shortage=short`}>{regionName(key)}</Link></td>
+                      <td><Link to={`${SCHOOLS_LIST}?region=${key}&status=under`}>{regionName(key)}</Link></td>
                       <td className="num">{rooms(s.shortage)}</td>
                       <td className="num">{one(perThousand(s))}</td>
                       <td className="num">{pct(s.schools_short, s.with_shortage_data)}</td>
                       <td className="num">{one(share(s.learners, s.classrooms), 0)}</td>
-                      <td className="num">{pctOf(share(s.covered, s.shortage))}</td>
+                      <td className="num">{rooms(s.allocated)} <span className="sch-sub">{pct(s.allocated, s.shortage)} of the shortage</span></td>
+                      <td className="num">{rooms(s.gap)}</td>
                       <td className="num">{billions(s.dpwh_budget_php)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            <h2 className="sch-h2">How big the shortages are</h2>
+            <p className="sch-muted sch-lede">Schools short of classrooms, by how many they lack, in steps of 10; then by EDCOM 2’s proposed Classroom Shortage Rate, the shortage as a share of the classrooms the school needs (available + shortage), which tells a school lacking 1 of 6 from one lacking 1 of 31.</p>
+            <div className="sch-twocharts">
+              <figure>
+                <figcaption>Schools by classrooms short</figcaption>
+                <Columns title="Schools by classrooms short, in steps of 10" color="#2a78d6" format={(v) => num(Math.round(v))}
+                  data={d.shortage_sizes.map((x) => ({ key: String(x.lo), label: x.lo === 101 ? '100+' : `${x.lo}–${x.lo + 9}`, value: x.schools }))} />
+              </figure>
+              <figure>
+                <figcaption>Schools by Classroom Shortage Rate</figcaption>
+                <Columns title="Schools short of classrooms by shortage rate, in tenths" color="#2a78d6" format={(v) => num(Math.round(v))}
+                  data={d.shortage_rates.map((x) => ({ key: String(x.tenth), label: x.tenth === 9 ? '90%+' : `${x.tenth * 10}%`, value: x.schools }))} />
+              </figure>
+            </div>
+            <div className="sch-tablewrap">
+              <table className="sch-table">
+                <thead><tr><th>Classroom shortage level</th>{STATUS_COLS.map((k) => <th key={k} className="num"><StatusBadge status={k} /></th>)}<th className="num">Classrooms short</th></tr></thead>
+                <tbody>
+                  {LEVEL_ROWS.map((lv) => {
+                    const cell = (st: AllocationStatus) => d.status_levels.find((x) => x.level === lv && x.status === st)?.schools ?? 0;
+                    const info = SHORTAGE_LEVELS.find((l) => l.key === lv);
+                    return (
+                      <tr key={String(lv)}>
+                        <td>{lv == null ? 'No shortage data' : info?.key === 'none' ? 'No recorded shortage' : `${info?.label} (${info?.range})`}</td>
+                        {STATUS_COLS.map((st) => <td key={st} className="num">{cell(st) ? num(cell(st)) : '—'}</td>)}
+                        <td className="num">{rooms(d.status_levels.filter((x) => x.level === lv).reduce((a, x) => a + x.shortage, 0))}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="sch-footnote">EDCOM 2’s “Classroom Allocation Status by Shortage Level”, in schools. Moderate 1–4 (the average is about 3.5), Severe 5–10, Extreme 11 or more. “No recorded shortage” with an allocation counts as overallocated. Shortages are DepEd’s figures rounded to whole classrooms per school.</p>
 
             <h2 className="sch-h2">DepEd’s school-building budget</h2>
             <p className="sch-muted sch-lede">“Basic Education Facilities” in DepEd’s budget, the line that pays for new classrooms, repairs and furniture: the GAA as enacted for 2020 to 2026, then the 2027 proposal (NEP) and the House bill.</p>
@@ -201,10 +241,10 @@ export default function SchoolsOverview() {
               The 2027 columns are lighter: proposals, not yet law.
             </p>
 
-            <h2 className="sch-h2">The 2026 School Building Program list</h2>
+            <h2 className="sch-h2">Allocation by funding and implementation, FY 2026</h2>
             <div className="sch-tablewrap">
               <table className="sch-table">
-                <thead><tr><th>Who builds</th><th className="num">Projects</th><th className="num">Classrooms</th><th className="num">Budget</th><th className="num">Per classroom</th></tr></thead>
+                <thead><tr><th>Funding and implementation modality</th><th className="num">Projects</th><th className="num">Classrooms</th><th className="num">Budget</th><th className="num">Per classroom</th></tr></thead>
                 <tbody>
                   {d.sbp_modality.map((m) => (
                     <tr key={m.modality}>
@@ -259,10 +299,10 @@ export default function SchoolsOverview() {
                       <p className="sch-footnote">{strength(rhoShort)[0].toUpperCase() + strength(rhoShort).slice(1)}.</p>
                     </figure>
                     <figure>
-                      <figcaption>Share of the shortage the 2026 list covers</figcaption>
+                      <figcaption>Share of the shortage FY 2026 allocations fill</figcaption>
                       <Scatter title="Share of the shortage the 2026 list covers against poverty incidence, by area" color="#eb6834" labelled={top('coverage')}
                         dots={areas.filter((a) => a.poverty != null && a.coverage != null).map((a) => ({ key: a.id, label: a.name, x: a.poverty as number, y: (a.coverage as number) * 100, note: `${rooms(a.sums.covered)} of ${rooms(a.sums.shortage)} short` }))}
-                        xLabel="Poverty incidence, 2023" yLabel="Covered by the 2026 list" fx={(v) => `${v}%`} fy={(v) => `${Math.round(v)}%`} />
+                        xLabel="Poverty incidence, 2023" yLabel="Filled by FY 2026 allocations" fx={(v) => `${v}%`} fy={(v) => `${Math.round(v)}%`} />
                       <p className="sch-footnote">{strength(rhoCover)[0].toUpperCase() + strength(rhoCover).slice(1)}. DPWH’s school budget per learner, 2016–2026, against poverty: {strength(rhoDpwh)}.</p>
                     </figure>
                   </div>
@@ -273,14 +313,14 @@ export default function SchoolsOverview() {
                         <option value="per1000">Most short per learner</option>
                         <option value="shortage">Most classrooms short</option>
                         <option value="poverty">Highest poverty</option>
-                        <option value="coverage">Least covered by the 2026 list</option>
+                        <option value="coverage">Least filled by FY 2026 allocations</option>
                         <option value="dpwhPerLearner">Most DPWH school budget per learner</option>
                       </select>
                     </label>
                   </div>
                   <div className="sch-tablewrap">
                     <table className="sch-table">
-                      <thead><tr><th>Area</th><th className="num">Short</th><th className="num">Per 1,000 learners</th><th className="num">Poverty, 2023</th><th className="num">Under 15, 2024</th><th className="num">2026 list covers</th><th className="num">DPWH per learner, 2016–2026</th></tr></thead>
+                      <thead><tr><th>Area</th><th className="num">Short</th><th className="num">Per 1,000 learners</th><th className="num">Poverty, 2023</th><th className="num">Under 15, 2024</th><th className="num">Shortage filled by FY 2026</th><th className="num">DPWH per learner, 2016–2026</th></tr></thead>
                       <tbody>
                         {sortedAreas.map((a) => (
                           <tr key={a.id}>
@@ -302,7 +342,8 @@ export default function SchoolsOverview() {
 
             <h2 className="sch-h2">Reading these figures</h2>
             <ul className="sch-prose sch-notes">
-              <li>The shortage is DepEd’s 2023 count for the {num(all.with_shortage_data)} schools it measured. Schools without a shortage row have no data, not zero. We round DepEd’s fractional counts to whole classrooms.</li>
+              <li>The shortage is DepEd’s for SY 2023–2024, for the {num(all.with_shortage_data)} schools with a figure; allocations are FY 2026. {NO_DATA_EXPLAINED} DepEd’s fractional counts are rounded to whole classrooms per school (the unrounded total is 164,763).</li>
+              <li>The dashboard follows EDCOM 2’s definitions. Reported concerns are subject to review and validation before any figure changes.</li>
               <li>The cost of the whole shortage is an estimate: the shortage times the 2026 list’s average cost of a classroom with a budget. Real costs vary with storeys, site and region.</li>
               <li>DepEd’s school-building line is not only classrooms: it also pays for repairs, furniture and other facilities. Much of it is carried out by DPWH, so DPWH’s “DepEd BEFF” contracts and the GAA line are the same budget seen from two sides: don’t add them.</li>
               <li>Cotabato City has no PSA area of its own, so its schools are counted with Maguindanao. A rank correlation (ρ) measures whether areas that rank high on one figure rank high on the other. It does not show cause.</li>

@@ -2,8 +2,9 @@
  * The schools maps (`/schools`, `/schools/shortage`). MapLibre GL over CARTO's Positron basemap, as the multi-purpose
  * buildings map (MpbMap.tsx).
  *
- * `points`: one dot per school at its 2022 coordinates, coloured by its 2023 classroom shortage (grey ring: no
- * shortage data, which is not zero), with a blue ring where the 2026 School Building Program lists classrooms.
+ * `points`: one dot per school at its 2022 coordinates, coloured by its SY 2023–2024 shortage level (EDCOM 2's Moderate,
+ * Severe, Extreme, in blue; a brown ring: no shortage data, which is not zero), with a green ring where the FY 2026
+ * School Building Program allocates classrooms; or coloured by allocation status (under, fully, over).
  * `areas`: one disc per schools division at the middle of its schools, sized by its shortage and coloured by how
  * much of it the 2026 list covers. Every value on the map is also in the page's tables.
  */
@@ -16,7 +17,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { FeatureCollection, Point } from 'geojson';
 import {
-  COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, coverageClass, shortageClass,
+  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, coverageClass, shortageClass, statusOf,
   type AreaRow, type PointsFile, type SectorCode,
 } from '../lib/schools';
 
@@ -27,6 +28,8 @@ const PH: [[number, number], [number, number]] = [[116.9, 4.6], [126.8, 21.1]];
 export type MapProps =
   | {
     mode: 'points'; points: PointsFile['rows']; sectors: SectorCode[]; projectsOnly: boolean;
+    /** Colour each school by its shortage level (EDCOM 2's, blue) or by its allocation status. */
+    colorBy?: 'level' | 'status';
     selected: string | null; onPick: (id: string) => void; fit?: [[number, number], [number, number]] | null;
   }
   | {
@@ -34,16 +37,18 @@ export type MapProps =
     fit?: [[number, number], [number, number]] | null;
   };
 
-const classColor: ExpressionSpecification = ['match', ['get', 'c'],
-  0, SHORTAGE_CLASSES[0].color, 1, SHORTAGE_CLASSES[1].color, 2, SHORTAGE_CLASSES[2].color,
-  3, SHORTAGE_CLASSES[3].color, 4, SHORTAGE_CLASSES[4].color, '#ffffff'];
+const levelColor: ExpressionSpecification = ['match', ['get', 'c'],
+  0, SHORTAGE_CLASSES[0].color, 1, SHORTAGE_CLASSES[1].color, 2, SHORTAGE_CLASSES[2].color, 3, SHORTAGE_CLASSES[3].color, '#ffffff'];
+/** `st` = index into ALLOCATION_STATUS; the last (no data) is drawn as a ring only. */
+const statusColor: ExpressionSpecification = ['match', ['get', 'st'],
+  0, ALLOCATION_STATUS[0].color, 1, ALLOCATION_STATUS[1].color, 2, ALLOCATION_STATUS[2].color, 3, ALLOCATION_STATUS[3].color, '#ffffff'];
 
 function pointsData(rows: PointsFile['rows']): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
     features: rows.map(([id, lon, lat, shortage, cr, sec]) => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: { id, c: shortageClass(shortage), s: shortage ?? -1, cr, sec },
+      properties: { id, c: shortageClass(shortage), s: shortage ?? -1, cr, sec, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
     })),
   };
 }
@@ -88,11 +93,11 @@ export default function SchoolsMap(props: MapProps) {
           id: 'sch-dots', type: 'circle', source: 'sch',
           layout: { 'circle-sort-key': ['get', 'c'] }, // the biggest shortages on top
           paint: {
-            'circle-color': classColor,
+            'circle-color': levelColor,
             'circle-opacity': ['case', ['==', ['get', 'c'], -1], 0, 0.85],
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['>', ['get', 'c'], 2], 2.4, 1.6], 9, 3.5, 13, 7],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['>=', ['get', 'c'], 2], 2.4, 1.6], 9, 3.5, 13, 7],
             'circle-stroke-color': ['case', ['==', ['get', 'c'], -1], NO_SHORTAGE_DATA, '#ffffff'],
-            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'c'], -1], 0.6, 0], 10, 1],
+            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'c'], -1], 0.9, 0], 10, ['case', ['==', ['get', 'c'], -1], 1.6, 1]],
           },
         });
         m.addLayer({
@@ -152,7 +157,8 @@ export default function SchoolsMap(props: MapProps) {
       src.setData(pointsData(p.points));
       const sectorFilter: ExpressionSpecification = ['in', ['get', 'sec'], ['literal', p.sectors]];
       m.setFilter('sch-dots', p.projectsOnly ? ['all', sectorFilter, ['>', ['get', 'cr'], 0]] : sectorFilter);
-      m.setFilter('sch-projects', ['all', sectorFilter, ['>', ['get', 'cr'], 0]]);
+      m.setFilter('sch-projects', p.colorBy === 'status' ? ['==', ['get', 'cr'], -1] : ['all', sectorFilter, ['>', ['get', 'cr'], 0]]);
+      m.setPaintProperty('sch-dots', 'circle-color', p.colorBy === 'status' ? statusColor : levelColor);
     } else {
       src.setData(areasData(p.areas));
     }
@@ -160,7 +166,7 @@ export default function SchoolsMap(props: MapProps) {
   }
 
   const dataKey = props.mode === 'points'
-    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}`
+    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}|${props.colorBy ?? 'level'}`
     : `${props.areas.length}|${props.areas[0]?.division ?? ''}`;
   useEffect(sync, [dataKey, props.selected]);
 
