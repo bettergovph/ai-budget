@@ -587,6 +587,19 @@ def main():
             if abs(a - b) > 0.01:
                 fail(f"rollup: {sid} {k} workbook {a} vs recomputed {b}")
     counts["rollup_schools_checked"] = len(roll)
+
+    # A project linked to a shortage-list School ID that the pack attached to a registry school through its New School
+    # ID still carries the shortage-list ID; it follows its school to the registry ID (checked above on the pack's links).
+    to_school = {sh["src_school_id"]: sh["school_id"] for sh in shortage}
+    school_ids = {x["school_id"] for x in schools}
+    for p in projects:
+        sid = p["school_id"]
+        if sid is not None and sid not in school_ids and sid in to_school:
+            p["school_id"] = to_school[sid]
+            p["link_method"] = f"{p['link_method']}; school ID {sid} is the registry's {to_school[sid]} (New School ID)"
+            counts["projects_moved_to_registry_id"] += 1
+        p["school_in_registry"] = None if p["school_id"] is None else int(p["school_id"] in registry_ids)
+    counts["projects_linked_to_no_school"] = sum(1 for p in projects if p["school_id"] is not None and p["school_id"] not in school_ids)
     counts["projects_linked_outside_registry"] = sum(1 for p in projects if p["school_in_registry"] == 0)
 
     # --- field dictionary, with each field's D1 home ---
