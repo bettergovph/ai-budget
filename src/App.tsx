@@ -14,7 +14,7 @@ import { MPB_POPULATION_ROOT } from './lib/mpb-population';
 import { MPB_DOCS_ROOT } from './lib/mpb-documents';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from './lib/mpb-compare';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
-import { SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_ROOT, SCHOOLS_SHORTAGE } from './lib/schools';
+import { SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE } from './lib/schools';
 import TermsGate from './components/TermsGate';
 
 const National = lazy(() => import('./pages/National'));
@@ -82,6 +82,7 @@ const Schools = lazy(() => import('./pages/Schools'));
 const SchoolsList = lazy(() => import('./pages/SchoolsList'));
 const SchoolsShortage = lazy(() => import('./pages/SchoolsShortage'));
 const SchoolsAbout = lazy(() => import('./pages/SchoolsAbout'));
+const SchoolsOverview = lazy(() => import('./pages/SchoolsOverview'));
 const SchoolPage = lazy(() => import('./pages/School'));
 
 /**
@@ -165,6 +166,7 @@ export default function App() {
           <Route path={SCHOOLS_LIST} element={<SchoolsList />} />
           <Route path={SCHOOLS_SHORTAGE} element={<SchoolsShortage />} />
           <Route path={SCHOOLS_ABOUT} element={<SchoolsAbout />} />
+          <Route path={SCHOOLS_OVERVIEW} element={<SchoolsOverview />} />
           <Route path="/schools/:id" element={<SchoolPage />} />
           <Route path="/indicators" element={<Indicators />} />
           <Route path="/indicators/places/:area" element={<IndicatorPlace />} />

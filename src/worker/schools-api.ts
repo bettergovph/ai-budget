@@ -6,6 +6,7 @@
  *   GET    /api/schools/points               every school with usable 2022 coordinates, column-wise (cached)
  *   GET    /api/schools/list?q=&region=&division=&sector=&shortage=&projects=&sort=&page=
  *   GET    /api/schools/areas?level=region|division[&region=]   shortage vs SBP 2026 classrooms by area (cached)
+ *   GET    /api/schools/analysis            by province: need, 2026 list, DPWH 2016-2026; DPWH by year and kind; BEFF (cached)
  *   GET    /api/schools/school/:id           one school: every source attached to it, its projects, the report tally
  *   GET    /api/schools/reports/mine?school= the signed-in member's report on a school
  *   POST   /api/schools/reports              send a report (one per member per school, kept editable)
@@ -17,7 +18,8 @@
  */
 import { fail, login, memberFor, message, missingTable, reply, type ReviewEnv } from "./hgab-reviews";
 import {
-  SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
+  BEFF_FPAP_ID, SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
+  type AnalysisFile, type AnalysisProvince,
   type AreaRow, type DpwhProject, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
 } from "../lib/schools";
 
@@ -115,6 +117,75 @@ async function areas(env: ReviewEnv, url: URL): Promise<Response> {
       return { ...r, reports: t?.n ?? 0, reports_confirming: t?.confirmed ?? 0 };
     }),
   });
+}
+
+/** A DPWH school contract's kind, from its description (DPWH_KINDS in lib/schools.ts: repair, then mpb, then buildings). */
+const has = (...words: string[]) => words.map((w) => `c.description LIKE '%${w}%'`).join(" OR ");
+const DPWH_KIND = `CASE
+  WHEN ${has("REPAIR", "REHAB", "RENOVAT", "RETROFIT", "IMPROVEMENT")} THEN 'repair'
+  WHEN ${has("MULTI%PURPOSE", "MPB", "COVERED COURT", "GYM", "CANOPY", "GRANDSTAND", "SPORT")} THEN 'mpb'
+  WHEN ${has("CLASSROOM", "SCHOOL BUILDING", "SCHOOL BLDG", "STOREY", "STY", "WORKSHOP", "WS)", "LABORATOR", "BUILDING")} THEN 'buildings'
+  ELSE 'other' END`;
+const CONFIDENT = "EXISTS (SELECT 1 FROM schools_dpwh_links x WHERE x.contract_id = c.contract_id AND x.confident = 1)";
+
+async function analysis(env: ReviewEnv): Promise<Response> {
+  const [provinces, years, funds, modality, beff] = await Promise.all([
+    env.DB.prepare(
+      `SELECT s.province, s.region_key, COUNT(*) AS schools, COALESCE(SUM(s.sector = 'Public'), 0) AS public_schools,
+              COUNT(sh.school_id) AS with_shortage_data, COALESCE(SUM(sh.total_shortage > 0), 0) AS schools_short,
+              COALESCE(SUM(sh.total_shortage), 0) AS shortage,
+              COALESCE(SUM(CASE WHEN sh.school_id IS NOT NULL THEN e.enrolment_total END), 0) AS learners_with_shortage,
+              COALESCE(SUM(e.enrolment_total), 0) AS learners, COALESCE(SUM(e.instr_cr_total), 0) AS classrooms,
+              COALESCE(SUM(COALESCE(e.makeshift_es, 0) + COALESCE(e.makeshift_hs, 0) + COALESCE(e.tls_es, 0) + COALESCE(e.tls_hs, 0)), 0) AS makeshift_tls,
+              COALESCE(SUM(p.funded), 0) AS sbp_funded, COALESCE(SUM(p.bidding), 0) AS sbp_bidding, COALESCE(SUM(p.budget), 0) AS sbp_budget_php,
+              COALESCE(SUM(MIN(sh.total_shortage, COALESCE(p.funded, 0) + COALESCE(p.bidding, 0))), 0) AS covered,
+              COALESCE(SUM(CASE WHEN sh.total_shortage = 0 THEN COALESCE(p.funded, 0) + COALESCE(p.bidding, 0) ELSE 0 END), 0) AS listed_not_short,
+              COALESCE(SUM(d.contracts), 0) AS dpwh_contracts, COALESCE(SUM(d.budget), 0) AS dpwh_budget_php,
+              COALESCE(SUM(d.buildings), 0) AS dpwh_buildings_php, COALESCE(SUM(d.mpb), 0) AS dpwh_mpb_php
+       FROM schools s
+       LEFT JOIN schools_shortage_2023 sh ON sh.school_id = s.school_id
+       LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id
+       LEFT JOIN (${SBP_BY_SCHOOL}) p ON p.school_id = s.school_id
+       LEFT JOIN (
+         SELECT l.school_id, SUM(1.0 / MAX(c.schools_confident, 1)) AS contracts,
+                SUM(COALESCE(c.budget_php, 0) / MAX(c.schools_confident, 1)) AS budget,
+                SUM(CASE WHEN k.kind = 'buildings' THEN COALESCE(c.budget_php, 0) / MAX(c.schools_confident, 1) ELSE 0 END) AS buildings,
+                SUM(CASE WHEN k.kind = 'mpb' THEN COALESCE(c.budget_php, 0) / MAX(c.schools_confident, 1) ELSE 0 END) AS mpb
+         FROM schools_dpwh_links l
+         JOIN schools_dpwh_contracts c ON c.contract_id = l.contract_id
+         JOIN (SELECT c.contract_id, ${DPWH_KIND} AS kind FROM schools_dpwh_contracts c) k ON k.contract_id = c.contract_id
+         WHERE l.confident = 1 GROUP BY l.school_id
+       ) d ON d.school_id = s.school_id
+       GROUP BY s.province, s.region_key`,
+    ).all<AnalysisProvince>(),
+    env.DB.prepare(
+      `SELECT c.infra_year, ${DPWH_KIND} AS kind, COUNT(*) AS contracts, COALESCE(SUM(c.budget_php), 0) AS budget_php
+       FROM schools_dpwh_contracts c WHERE c.infra_year IS NOT NULL AND ${CONFIDENT} GROUP BY 1, 2 ORDER BY 1`,
+    ).all<AnalysisFile["dpwh_years"][number]>(),
+    env.DB.prepare(
+      `SELECT CASE WHEN c.source_of_funds LIKE '%BEFF%' THEN 'beff' ELSE 'dpwh' END AS fund, ${DPWH_KIND} AS kind,
+              COUNT(*) AS contracts, COALESCE(SUM(c.budget_php), 0) AS budget_php
+       FROM schools_dpwh_contracts c WHERE ${CONFIDENT} GROUP BY 1, 2`,
+    ).all<AnalysisFile["dpwh_funds"][number]>(),
+    env.DB.prepare(
+      `SELECT COALESCE(modality, 'Not stated') AS modality, COUNT(*) AS projects, COALESCE(SUM(classrooms), 0) AS classrooms,
+              COALESCE(SUM(budget_php), 0) AS budget_php,
+              COALESCE(SUM(CASE WHEN budget_php IS NOT NULL THEN classrooms END), 0) AS classrooms_with_budget
+       FROM schools_sbp_projects_2026 GROUP BY 1 ORDER BY classrooms DESC`,
+    ).all<AnalysisFile["sbp_modality"][number]>(),
+    env.DB.prepare(
+      `SELECT amount_2020, amount_2021, amount_2022, amount_2023, amount_2024, amount_2025, amount_2026 FROM fpaps WHERE id = ?1`,
+    ).bind(BEFF_FPAP_ID).first<Record<string, number | null>>(),
+  ]);
+  // GAA amounts are in thousands of pesos.
+  const beff_gaa = beff
+    ? [2020, 2021, 2022, 2023, 2024, 2025, 2026].flatMap((y) => (beff[`amount_${y}`] == null ? [] : [{ year: y, amount_php: (beff[`amount_${y}`] as number) * 1000 }]))
+    : [];
+  const out: AnalysisFile = {
+    meta: { generated_at: new Date().toISOString() },
+    provinces: provinces.results, dpwh_years: years.results, dpwh_funds: funds.results, sbp_modality: modality.results, beff_gaa,
+  };
+  return reply(out);
 }
 
 const SORTS: Record<ListSort, string> = {
@@ -335,6 +406,7 @@ export async function handleSchools(request: Request, env: ReviewEnv, url: URL, 
     if (request.method === "GET") {
       if (path === "/points") return await cached(request, ctx, () => points(env));
       if (path === "/areas") return await cached(request, ctx, () => areas(env, url));
+      if (path === "/analysis") return await cached(request, ctx, () => analysis(env));
       if (path === "/list") return await list(env, url);
       if (path === "/reports/mine") return await mine(request, env, url);
       const m = /^\/school\/([^/]+)$/.exec(path);

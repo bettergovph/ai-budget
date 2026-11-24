@@ -10,15 +10,15 @@ import { PreviewNotice, SchoolsChrome, ShortageLegend, Stat, Status } from '../c
 import { useSchoolsApi } from '../lib/use-schools-api';
 import { php } from '../lib/format';
 import {
-  PROJECT_RING, SCHOOLS_API, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, num, regionName, rooms, schoolPath,
+  PROJECT_RING, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, num, regionName, rooms, schoolPath,
   type AreasFile, type ListFile, type PointsFile, type SchoolFile, type SectorCode,
 } from '../lib/schools';
 
 const SECTORS: SectorCode[] = [0, 1, 2];
 
 export default function Schools() {
-  const pts = useSchoolsApi<PointsFile>(`${SCHOOLS_API}/points`);
-  const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region`);
+  const pts = useSchoolsApi<PointsFile>(`${SCHOOLS_API}/points?v=${SCHOOLS_API_VERSION}`);
+  const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region&v=${SCHOOLS_API_VERSION}`);
   const [sectors, setSectors] = useState<SectorCode[]>([0]);
   const [projectsOnly, setProjectsOnly] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);

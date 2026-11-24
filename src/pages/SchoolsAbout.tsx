@@ -4,7 +4,7 @@
  */
 import { Link } from 'react-router-dom';
 import { SchoolsChrome } from '../components/SchoolsBits';
-import { SCHOOLS_LIST } from '../lib/schools';
+import { SCHOOLS_LIST, SCHOOLS_OVERVIEW } from '../lib/schools';
 
 export default function SchoolsAbout() {
   return (
@@ -24,6 +24,7 @@ export default function SchoolsAbout() {
           <li><strong>DPWH contracts, 2016 to 2026</strong>: each school’s project history. Of 33,275 school contracts, 26,802 name a school by its School ID or by its name in the same province, and are linked to 16,985 schools. Matches by location alone are shown apart, as possible matches. DPWH’s list doesn’t include classrooms built by DepEd or local governments.</li>
           <li><strong>The 2026 School Building Program list</strong>: 5,652 projects. 5,560 are linked to a school by its ID, and 92 are left for review.</li>
         </ul>
+        <p>The <Link to={SCHOOLS_OVERVIEW}>overview</Link> reads all of it against DepEd’s school-building budget and PSA’s figures on poverty and children.</p>
         <h2 className="sch-h2">How to read it</h2>
         <ul>
           <li><strong>No data is not zero.</strong> A school that no source row matched shows “No data”. A zero means the source reported zero.</li>

@@ -135,3 +135,34 @@
   .sch-facts-wide div { grid-template-columns: 1fr; gap: 2px; }
   .sch-map { height: 62vh; }
 }
+
+/* Overview (/schools/overview) */
+.sch-findings ol { font-family: var(--font-body); font-size: 15px; line-height: 1.6; color: var(--ink-2); max-width: 980px; padding-left: 22px; }
+.sch-findings li { margin-bottom: 10px; }
+.sch-lede { max-width: 900px; }
+.sch-h3 { font-family: var(--font-hero); font-size: 15.5px; font-weight: 700; color: var(--ink); margin: 24px 0 10px; }
+.sch-notes { padding-left: 20px; font-size: 13.5px; }
+.sch-chart { position: relative; max-width: 980px; margin: 8px 0 12px; }
+.sch-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sch-grid { stroke: var(--rule-soft); stroke-width: 1; }
+.sch-base { stroke: var(--ink-mute); stroke-width: 1; }
+.sch-axis { font: 11px var(--font-body); fill: var(--ink-3); }
+.sch-axis-sub { font-size: 10px; fill: var(--ink-mute); }
+.sch-axis-title { font-size: 11.5px; fill: var(--ink-2); font-weight: 600; }
+.sch-val { font: 600 11px var(--font-body); fill: var(--ink-2); }
+.sch-val-left { font-weight: 500; fill: var(--ink-3); }
+.sch-chart rect[tabindex], .sch-chart circle[tabindex] { outline: none; cursor: default; }
+.sch-chart rect[tabindex]:focus-visible, .sch-chart circle[tabindex]:focus-visible { stroke: var(--accent); stroke-width: 1.5; }
+.sch-tip {
+  position: absolute; transform: translate(-50%, calc(-100% - 12px)); pointer-events: none; z-index: 5; white-space: nowrap;
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(17, 21, 28, 0.12);
+  font: 12px/1.45 var(--font-body); color: var(--ink-2);
+}
+.sch-tip strong { color: var(--ink); }
+.sch-tip-row { display: flex; align-items: center; gap: 6px; }
+.sch-swatch-sq { border-radius: 3px; }
+.sch-chart-legend { margin-top: 6px; }
+.sch-twocharts { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.sch-twocharts figure { margin: 0; }
+.sch-twocharts figcaption { font: 600 13.5px var(--font-body); color: var(--ink); }
+@media (max-width: 1000px) { .sch-twocharts { grid-template-columns: 1fr; } }

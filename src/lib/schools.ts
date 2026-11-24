@@ -12,6 +12,11 @@ export const SCHOOLS_SHORTAGE = '/schools/shortage';
 export const SCHOOLS_ABOUT = '/schools/about';
 export const schoolPath = (id: string) => `/schools/${encodeURIComponent(id)}`;
 export const SCHOOLS_API = '/api/schools';
+/**
+ * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by
+ * address, so a new address is how a new shape reaches readers at once.
+ */
+export const SCHOOLS_API_VERSION = '3';
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -368,3 +373,79 @@ export const REGION_SHORT: Record<string, string> = {
 };
 export const REGION_KEYS = Object.keys(REGION_SHORT);
 export const regionName = (k: string | null | undefined) => (k ? REGION_SHORT[k] ?? k : 'Schools abroad');
+
+// ---------------------------------------------------------------------------
+// Overview / analysis (`/schools/overview`, GET /api/schools/analysis)
+// ---------------------------------------------------------------------------
+
+export const SCHOOLS_OVERVIEW = '/schools/overview';
+
+/** DepEd's "Basic Education Facilities" activity, the national school building line (GAA fpaps id; amounts in ₱ thousands). */
+export const BEFF_FPAP_ID = '07-001-310200100006000';
+/**
+ * FY2027 figures for the same line. NEP: data/2027/07/fpaps.json (NEP 2027 Vol. I p. 413). House bill: HB 10858, 3rd
+ * reading (Vol. IA p. 312), from hgab/2027/explorer/d/department-of-education.json. One line in each; pesos.
+ */
+export const BEFF_2027 = { nep: 30_551_016_000, house: 27_453_016_000 } as const;
+
+export type DpwhKind = 'buildings' | 'mpb' | 'repair' | 'other';
+/** How a DPWH school contract is grouped by its description (first rule that fits, in this order: repair, mpb, buildings). */
+export const DPWH_KINDS: { key: DpwhKind; label: string; color: string }[] = [
+  { key: 'buildings', label: 'School buildings and classrooms', color: '#2a78d6' },
+  { key: 'mpb', label: 'Multi-purpose buildings and covered courts', color: '#eb6834' },
+  { key: 'repair', label: 'Repairs and improvements', color: '#1baf7a' },
+  { key: 'other', label: 'Other (water, fences, overpasses, sites)', color: '#eda100' },
+];
+
+export interface AnalysisProvince {
+  province: string;
+  region_key: string | null;
+  schools: number;
+  public_schools: number;
+  with_shortage_data: number;
+  schools_short: number;
+  shortage: number;
+  /** Learners (2023) at schools that also have a shortage row, so shortage per learner compares like with like. */
+  learners_with_shortage: number;
+  learners: number;
+  classrooms: number;
+  makeshift_tls: number;
+  sbp_funded: number;
+  sbp_bidding: number;
+  sbp_budget_php: number;
+  covered: number;
+  listed_not_short: number;
+  /** DPWH contracts confidently linked to the province's schools, 2016-2026; a contract for n schools counts 1/n each. */
+  dpwh_contracts: number;
+  dpwh_budget_php: number;
+  dpwh_buildings_php: number;
+  dpwh_mpb_php: number;
+}
+export interface AnalysisFile {
+  meta: { generated_at: string };
+  provinces: AnalysisProvince[];
+  dpwh_years: { infra_year: number; kind: DpwhKind; contracts: number; budget_php: number }[];
+  sbp_modality: { modality: string; projects: number; classrooms: number; budget_php: number; classrooms_with_budget: number }[];
+  /**
+   * The same contracts by who funds them: 'beff' = DepEd's school-building line carried out by DPWH (DPWH's source of
+   * funds says "DepEd BEFF"), 'dpwh' = DPWH's own budget (regular infra, including SSP and other programs).
+   */
+  dpwh_funds: { fund: 'beff' | 'dpwh'; kind: DpwhKind; contracts: number; budget_php: number }[];
+  /** GAA amounts of BEFF_FPAP_ID by year, in pesos. */
+  beff_gaa: { year: number; amount_php: number }[];
+}
+
+/** Registry provinces whose names differ from PSA's 87 areas (src/lib/indicators.ts); others match by slug. */
+const AREA_ALIAS: Record<string, string> = {
+  'NORTH COTABATO': 'cotabato', '(SGA - North Cotabato)': 'special-geographic-area', 'WESTERN SAMAR': 'samar',
+  'COMPOSTELA VALLEY': 'davao-de-oro', 'CITY OF ISABELA': 'isabela-city',
+  // PSA has no area of its own for Cotabato City; it is counted with Maguindanao, as PSA's tables did before 2019.
+  'CITY OF COTABATO': 'maguindanao',
+  'MANILA, NCR, FIRST DISTRICT': 'metro-manila-1st-district', 'NCR SECOND DISTRICT': 'metro-manila-2nd-district',
+  'NCR THIRD DISTRICT': 'metro-manila-3rd-district', 'NCR FOURTH DISTRICT': 'metro-manila-4th-district',
+};
+/** The PSA area (indicators) a registry province belongs to; null for schools abroad. */
+export function areaOfProvince(province: string | null | undefined): string | null {
+  if (!province) return null;
+  return AREA_ALIAS[province] ?? province.toLowerCase().replace(/ñ/g, 'n').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}

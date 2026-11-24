@@ -10,15 +10,15 @@ import { PreviewNotice, SchoolsChrome, Stat, Status } from '../components/School
 import { useSchoolsApi } from '../lib/use-schools-api';
 import { php } from '../lib/format';
 import {
-  COVERAGE_CLASSES, SCHOOLS_API, SCHOOLS_LIST, classrooms, coverageClass, num, pct, regionName, rooms, type AreaRow, type AreasFile,
+  COVERAGE_CLASSES, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, classrooms, coverageClass, num, pct, regionName, rooms, type AreaRow, type AreasFile,
 } from '../lib/schools';
 
 const allocated = (r: AreaRow) => r.sbp_classrooms_funded + r.sbp_classrooms_bidding;
 const gap = (r: AreaRow) => r.gap;
 
 export default function SchoolsShortage() {
-  const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region`);
-  const divisions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=division`);
+  const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region&v=${SCHOOLS_API_VERSION}`);
+  const divisions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=division&v=${SCHOOLS_API_VERSION}`);
   const [region, setRegion] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [sort, setSort] = useState<'gap' | 'shortage' | 'coverage'>('gap');

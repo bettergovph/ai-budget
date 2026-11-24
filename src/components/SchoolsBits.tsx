@@ -7,12 +7,13 @@ import { NavLink } from 'react-router-dom';
 import SiteHeader from './SiteHeader';
 import SiteFooter from './SiteFooter';
 import {
-  NO_SHORTAGE_DATA, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_CLASSES,
+  NO_SHORTAGE_DATA, SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE, SHORTAGE_CLASSES,
 } from '../lib/schools';
 import '../nep2027.css';
 import '../schools.css';
 
 const TABS: [string, string][] = [
+  [SCHOOLS_OVERVIEW, 'Overview'],
   [SCHOOLS_ROOT, 'Map'],
   [SCHOOLS_LIST, 'List'],
   [SCHOOLS_SHORTAGE, 'Shortages vs classrooms'],
