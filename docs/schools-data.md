@@ -72,4 +72,4 @@ DPWH rarely writes the School ID (1,616 links), so most links come from the scho
 
 The school page shows these contracts as "Project history" (confident ones in a table, possible ones folded away), and the report form's question 5 asks about the 2026 projects and the 5 newest confident DPWH contracts (`projects["dpwh:<contract id>"]`).
 
-Load: `npx wrangler d1 execute budget --local --file=data/schools/dpwh-import.sql`. **Production: not loaded yet.** It needs the maintainer to run it, either as a file import (off-peak: about 10 s of D1 500s) or statement by statement through the D1 query API. Until then the school page has no history in production (the API returns `dpwh: []` without the tables).
+Load: `npx wrangler d1 execute budget --local --file=data/schools/dpwh-import.sql`. **Production: loaded 2026-11-24** (maintainer's go-ahead) one statement at a time through the D1 query API rather than a file import, so D1 never went down. The 32 descriptions holding `\r\n` were then rewritten from the local copy, and production matches local on counts, budgets, text lengths and distances.
