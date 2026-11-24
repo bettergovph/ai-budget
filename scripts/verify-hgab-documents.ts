@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, LINK_METHODS, NAMED_TYPES, PROPOSAL_TYPE_MAP,
-  AUTO_REVIEW, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoScore, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
+  AUTO_REVIEW, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoScore, uncoveredId, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
 } from "../src/lib/hgab-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -52,7 +52,7 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
 
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_p AS SELECT * FROM read_parquet('${q(P)}')`);
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_f AS SELECT * FROM read_parquet('${q(F)}')`);
-  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page, trace FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
+  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page, trace, title, office, pap FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
 
   // Rows: the research site's rows, once each, on one of our House bill rows.
   const cov = readJson<{ projects: { hgabId: string; amountPesos: number; senateDocuments: { fileLinkId: number; path: string; documentType: string }[]; senateDocumentTypes: string[]; proposalDocumentTypes: string[]; proposalDocumentsMatched: boolean }[] }>(src("coverage"));
@@ -185,9 +185,12 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
       const ours = HOUSE_ONLY_TRACES.includes(meta.get(h)?.trace ?? ''), theirs = codes.includes('potential-nep-insertion');
       return [...(ours ? [OUR_NEP_FLAGS.houseOnly.code] : []), ...(ours !== theirs ? [OUR_NEP_FLAGS.disagree.code] : [])];
     };
-    check("review.json: every row once, in bill order", ix.rows.length === pFull.length && new Set(ix.rows.map((r) => r[0])).size === ix.rows.length
+    // The House bill's lines outside the research site's coverage (uncoveredId): documents not checked yet.
+    const unchecked = new Set(ix.unchecked?.rows ?? []);
+    check("review.json: every row once, in bill order", ix.rows.length === pFull.length + unchecked.size && new Set(ix.rows.map((r) => r[0])).size === ix.rows.length
       && ix.rows.every((r, i) => i === 0 || parseHgabId(r[0])!.seq > parseHgabId(ix.rows[i - 1][0])!.seq));
     const rowOff = ix.rows.filter(([h, pid, title, oi, ri, , amt, fi, mask, nf, from]) => {
+      if (unchecked.has(h)) return false;
       const m = meta.get(h), p = pBy.get(h);
       if (!m || !p) return true;
       const research = p.review_flags.map((f) => f.code);
@@ -201,6 +204,7 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     // By source (2026-11-18): the House bill's documents (Senate copies) and the NEP's (DPWH Transparency).
     const maskOf = (types: readonly string[]) => NAMED_TYPES.reduce((m, t, i) => (types.includes(t) ? m | (1 << i) : m), 0);
     const srcOff = ix.rows.filter(([h, , , , , , , , mask, nf, , sMask, pMask, sFiles, pFiles]) => {
+      if (unchecked.has(h)) return false;
       const p = pBy.get(h);
       if (!p || sMask == null || pMask == null) return true;
       const pTypes = p.proposal_types.map((t) => PROPOSAL_TYPE_MAP[t]).filter(Boolean);
@@ -211,17 +215,34 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     const nOff = ix.flags.filter((f, i) => f.n !== ix.rows.filter((r) => r[7].includes(i)).length || flagFamily(f.code) !== f.family);
     check(`review.json: all ${ix.flags.length} flags' counts and families hold`, nOff.length === 0, nOff.map((f) => f.code).join(", "));
     const nOf = (code: string) => ix.flags.find((f) => f.code === code)?.n ?? -1;
-    const theirs = nOf('potential-nep-insertion'), ours = nOf(OUR_NEP_FLAGS.houseOnly.code), dis = nOf(OUR_NEP_FLAGS.disagree.code);
+    // Ours counts the unchecked lines too; the comparison is on the research site's rows.
+    const oursUnchecked = ix.rows.filter((r) => unchecked.has(r[0]) && r[7].some((i) => ix.flags[i].code === OUR_NEP_FLAGS.houseOnly.code)).length;
+    const theirs = nOf('potential-nep-insertion'), ours = nOf(OUR_NEP_FLAGS.houseOnly.code) - oursUnchecked, dis = nOf(OUR_NEP_FLAGS.disagree.code);
     const both = ix.rows.filter((r) => { const cs = r[7].map((i) => ix.flags[i].code); return cs.includes('potential-nep-insertion') && cs.includes(OUR_NEP_FLAGS.houseOnly.code); }).length;
     check(`our NEP comparison beside the research site's: ${ours.toLocaleString('en-US')} House-only lines, ${theirs.toLocaleString('en-US')} research insertion flags, ${dis.toLocaleString('en-US')} where they disagree (= ours + theirs − 2 × both)`,
       ours > 6_000 && dis === ours + theirs - 2 * both && ix.flags.filter((f) => f.source === 'bettergov').every((f) => f.code.startsWith('missing-') || f.note), `both ${both}`);
     // Automatic review, recomputed here from each row's documents and files.
     const auto = ix.auto;
-    const want = ix.rows.filter((r) => r[8] === 0 && r[9] === 0).map((r) => r[0]);
+    const want = ix.rows.filter((r) => r[8] === 0 && r[9] === 0 && !unchecked.has(r[0])).map((r) => r[0]);
     const autoOk = !!auto && auto.method === AUTO_REVIEW.method && Object.keys(auto.rows).length === want.length
       && want.every((h) => auto.rows[h]?.r.length === 1 && auto.rows[h].s === autoScore(['no-key-documents']))
       && auto.rules.length === AUTO_REVIEW.rules.length && auto.rules.every((r) => r.team_flags.every((id) => /^RF-\d{3}$/.test(id)));
-    check(`automatic review: the ${want.length.toLocaleString('en-US')} lines with none of the 5 key documents and no file are auto-reviewed, score ${autoScore(['no-key-documents'])}, and no others`, autoOk);
+    check(`automatic review: the ${want.length.toLocaleString('en-US')} lines with none of the 5 key documents and no file are auto-reviewed, score ${autoScore(['no-key-documents'])}, and no others (none of the unchecked)`, autoOk);
+    // The unchecked lines: every House bill DPWH line the research site doesn't cover, each once, under its own id, as the
+    // bill has it, with nothing found because nothing was looked for.
+    const ourAll = new Map((await rows<{ id: string; title: string; office: string; pap: string | null; hgab3_php: string; hgab3_page: number; trace: string }>(c,
+      "SELECT id, title, coalesce(office, '') office, pap, hgab3_php::VARCHAR hgab3_php, hgab3_page, trace FROM doc_ours WHERE hgab3_php > 0")).map((r) => [r.id, r]));
+    const covered = new Set(pFull.map((p) => meta.get(p.hgab_id)?.project_id));
+    const wantUnchecked = [...ourAll.values()].filter((r) => !covered.has(r.id));
+    const uncheckedOff = ix.rows.filter((r) => unchecked.has(r[0])).filter(([h, pid, title, oi, , , amt, fi, mask, nf, from, sm, pm, sf, pf]) => {
+      const o = ourAll.get(pid);
+      return !o || covered.has(pid) || uncoveredId(pid, o.hgab3_page) !== h || o.title !== title || ix.offices[oi]?.name !== o.office || String(amt) !== o.hgab3_php
+        || [mask, nf, from, sm, pm, sf, pf].some((x) => x !== 0) || !!auto?.rows[h]
+        || fi.map((i) => ix.flags[i].code).join() !== (HOUSE_ONLY_TRACES.includes(o.trace) ? OUR_NEP_FLAGS.houseOnly.code : '');
+    });
+    check(`unchecked: the ${wantUnchecked.length.toLocaleString('en-US')} House bill DPWH lines outside the research site's coverage are in, each once under its own id, as the bill has them, with no documents counted and no automatic review`,
+      unchecked.size === wantUnchecked.length && uncheckedOff.length === 0 && wantUnchecked.every((r) => unchecked.has(uncoveredId(r.id, r.hgab3_page) ?? '')),
+      `${unchecked.size} vs ${wantUnchecked.length}; off: ${uncheckedOff.slice(0, 3).map((r) => r[0]).join(", ")}`);
     const deo = ix.offices.filter((x) => /Engineering Office/i.test(x.name) && (!x.districts.length || x.tier !== (x.districts.length === 1 ? "A" : "B")));
     check("review.json: every DPWH engineering office names the legislative districts it serves, lone or shared", deo.length === 0, deo.map((x) => x.name).join(", "));
     // Detail shards: every row in its shard, with exactly its files and flags.
@@ -236,8 +257,13 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
         || JSON.stringify(d.flags.map(norm)) !== JSON.stringify(p.review_flags.map(norm)) || d.missing_upstream.join() !== p.missing_flags_upstream.join();
     });
     check(`detail shards (${shardCache.size}): every row in its shard with exactly its files, flags and evidence`, detOff.length === 0, detOff.slice(0, 3).map((p) => p.hgab_id).join(", "));
+    const uncheckedDetailOff = [...unchecked].filter((h) => {
+      const d = shard(detailShardPath(parseHgabId(h)!.seq))?.[h];
+      return !d || d.files.length > 0 || d.flags.length > 0 || d.join_method !== "not_covered" || !d.notes.includes("documents_not_checked");
+    });
+    check(`detail shards: each unchecked line has its own entry, with no files, flags or evidence`, uncheckedDetailOff.length === 0, uncheckedDetailOff.slice(0, 3).join(", "));
     const extra = [...shardCache.values()].reduce((s, x) => s + Object.keys(x ?? {}).length, 0);
-    check("detail shards hold no other rows", extra === pFull.length, String(extra));
+    check("detail shards hold no other rows", extra === pFull.length + unchecked.size, String(extra));
   }
 
   check("more rows are complete with our links than upstream, and none fewer except where a reviewed folder moved away",

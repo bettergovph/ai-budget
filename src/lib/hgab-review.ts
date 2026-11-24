@@ -43,6 +43,12 @@ export interface ReviewProject {
    */
   bySource?: { senate: { docs: number; files: number }; nep: { docs: number; files: number } } | null;
   /**
+   * Its documents haven't been checked: a House bill line outside research.bettergov.ph's document check (review.json
+   * `unchecked`; foreign-assisted projects and small facility lines, since 2026-11-24). Its `docs` and `files` read 0
+   * because nobody looked, not because nothing was found.
+   */
+  unchecked?: boolean;
+  /**
    * What the Senate committee report did to it (documents/senate.json): removed (cut to zero, labelled SENATE:REMOVED)
    * or kept; null without the Senate file.
    */
@@ -65,6 +71,7 @@ export const SENATE_STATUS_NOTE: Record<ReviewSenateStatus, string> = {
 export function decodeIndex(ix: ReviewIndex, senate?: ReviewSenateIndex | null): ReviewProject[] {
   const removed = senate ? new Map(senate.removed) : null;
   const ins = ix.flags.findIndex((f) => f.code === INSERTION_FLAG);
+  const unchecked = new Set(ix.unchecked?.rows ?? []);
   return ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flags, docs, files, from, sDocs, pDocs, sFiles, pFiles]) => {
     const { seq, page } = parseHgabId(hgabId) ?? { seq: 0, page: 0 };
     const a = ix.auto?.rows[hgabId];
@@ -74,6 +81,7 @@ export function decodeIndex(ix: ReviewIndex, senate?: ReviewSenateIndex | null):
     return {
       hgabId, seq, page, projectId, title, office: ix.offices[oi], region: ix.regions[ri], program: ix.programs[pi], amount, flags, docs, files,
       source: sourceGroup(from ?? 0), insertion: ins >= 0 && flags.includes(ins), auto, bySource, senate: senateStatus, senatePage: removed?.get(hgabId) ?? null,
+      unchecked: unchecked.has(hgabId),
     };
   });
 }
@@ -83,7 +91,7 @@ export const hasDoc = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 
 // --- Steps --------------------------------------------------------------------------------------------------------
 
-export type DocsFilter = 'none' | 'incomplete' | 'complete';
+export type DocsFilter = 'none' | 'incomplete' | 'complete' | 'unchecked';
 /** Filters where checking several values keeps projects matching any of them (one funnel step each). */
 export type MultiKind = 'region' | 'office' | 'program' | 'docs' | 'team' | 'status' | 'source' | 'senate';
 export type Step =
@@ -105,7 +113,7 @@ export type Step =
   /** The signed-in member's own reviews ("Show my reviews"). */
   | { kind: 'mine' };
 
-export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete'];
+export const DOCS_FILTERS: readonly DocsFilter[] = ['none', 'incomplete', 'complete', 'unchecked'];
 
 /**
  * Where a project's documents come from: Senate copies (DPWH's documents for the House bill's additions; 98% of the
@@ -265,6 +273,7 @@ export const DOCS_FILTER_LABEL: Record<DocsFilter, string> = {
   none: 'No documents found',
   incomplete: 'Fewer than 4 of the 5 key documents',
   complete: 'At least 4 of the 5 key documents',
+  unchecked: 'Documents not checked yet',
 };
 
 /** Several values of one filter in the URL: `region:Region V|Region IV-A`. Names never contain "|". */
@@ -354,8 +363,9 @@ export interface StepContext {
   /** Whether the signed-in member has a review of a project (none when signed out). */
   isMine?: (hgabId: string) => boolean;
 }
+/** A project whose documents weren't checked is only "not checked yet": nothing found means nothing looked for. */
 const docsTest = (v: DocsFilter) => (p: ReviewProject) =>
-  v === 'none' ? p.files === 0 && p.docs === 0 : v === 'complete' ? docCount(p.docs) >= 4 : docCount(p.docs) < 4;
+  v === 'unchecked' ? !!p.unchecked : !p.unchecked && (v === 'none' ? p.files === 0 && p.docs === 0 : v === 'complete' ? docCount(p.docs) >= 4 : docCount(p.docs) < 4);
 export function stepTest(s: Step, ctx: StepContext): (p: ReviewProject) => boolean {
   switch (s.kind) {
     case 'flag': {
@@ -609,6 +619,8 @@ export const LINK_LABEL: Record<LinkMethod, string> = {
 };
 /** A project's detail `notes`, in plain words (the reviewer's overview and the report's project page). */
 export const DETAIL_NOTE_TEXT: Record<string, (d: ReviewDetail, files: DetailFile[]) => string | null> = {
+  documents_not_checked: () =>
+    'This project is outside research.bettergov.ph’s document check (foreign-assisted projects and small facility lines), so nobody has looked for its documents yet. None are listed here, and the automatic review leaves it out.',
   proposal_documents_via_nep_counterpart: () =>
     'DPWH Transparency lists no documents under this project’s own name. The DPWH Transparency files here come from its NEP counterpart.',
   proposal_types_without_files: () =>

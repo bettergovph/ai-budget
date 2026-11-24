@@ -52,7 +52,9 @@ test("filters keep their place in the funnel", () => {
 test("automatic review: no key document and no file, a red flag the list can hide", { skip: !ix && "review.json not built" }, () => {
   const all = decodeIndex(ix!);
   const auto = all.filter((p) => p.auto);
-  assert.equal(auto.length, all.filter((p) => p.docs === 0 && p.files === 0).length);
+  // Every checked project with nothing found; none whose documents weren't checked (review.json `unchecked`).
+  assert.equal(auto.length, all.filter((p) => p.docs === 0 && p.files === 0 && !p.unchecked).length);
+  assert.ok(all.filter((p) => p.unchecked).every((p) => !p.auto));
   assert.ok(auto.length > 1000 && auto.every((p) => p.auto!.score === autoScore(["no-key-documents"]) && p.auto!.rules[0] === "no-key-documents"));
   assert.equal(scoreBand(100), "High");
   // A member's final status takes over; a review without one shows "in progress"; nobody's review leaves the automatic one.
@@ -133,7 +135,8 @@ test("reader text says House bill, not HGAB", () => {
 
 test("the funnel on review.json", { skip: !ix && "review.json not built" }, () => {
   const all = decodeIndex(ix!);
-  assert.equal(all.length, 15_979);
+  // research.bettergov.ph's 15,979 rows, and since 2026-11-24 the House bill's other DPWH lines (documents not checked).
+  assert.equal(all.length, 15_979 + (ix!.unchecked?.rows.length ?? 0));
   const flagIndex = new Map(ix!.flags.map((f, i) => [f.code, i]));
   // List status as the page has it with no member reviews: auto-reviewed where review.json marks it, else not started.
   const autoSet = new Set(Object.keys(ix!.auto?.rows ?? {}));
@@ -157,16 +160,17 @@ test("the funnel on review.json", { skip: !ix && "review.json not built" }, () =
   }
   // Yields over everything are the flag counts.
   assert.deepEqual(flagYields(all, ix!.flags.length), ix!.flags.map((f) => f.n));
-  // Docs filters partition the rows with at least one document.
-  const n = (v: "none" | "incomplete" | "complete") => runFunnel(all, [{ kind: "docs", values: [v] }], ctx)[1].projects.length;
-  assert.equal(runFunnel(all, [{ kind: "docs", values: ["incomplete", "complete"] }], ctx)[1].projects.length, all.length);
+  // Docs filters: incomplete and complete cover every checked row; "not checked yet" the rest.
+  const n = (v: "none" | "incomplete" | "complete" | "unchecked") => runFunnel(all, [{ kind: "docs", values: [v] }], ctx)[1].projects.length;
+  assert.equal(runFunnel(all, [{ kind: "docs", values: ["incomplete", "complete", "unchecked"] }], ctx)[1].projects.length, all.length);
+  assert.equal(n("unchecked"), ix!.unchecked?.rows.length ?? 0);
   // Several regions keep any of them; options count against every other step.
   const two = runFunnel(all, [{ kind: "region", values: ["National Capital Region", "CAR"] }], ctx)[1].projects.length;
   const byRegion = countBy(all, (p) => p.region);
   assert.ok((byRegion.get("National Capital Region") ?? 0) > 0 && (byRegion.get("CAR") ?? 0) > 0);
   assert.equal(two, byRegion.get("National Capital Region")! + byRegion.get("CAR")!);
   assert.equal(projectsWithout(all, steps, "region", ctx).length, L[2].projects.length);
-  assert.equal(n("incomplete") + n("complete"), all.length);
+  assert.equal(n("incomplete") + n("complete") + n("unchecked"), all.length);
   assert.ok(n("none") > 0 && n("none") <= n("incomplete"));
   assert.equal(n("complete"), all.filter((p) => docCount(p.docs) >= 4).length);
   // Every preset's flags exist, and every preset keeps some projects.

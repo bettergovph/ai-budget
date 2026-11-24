@@ -136,6 +136,9 @@ a.rr-card:hover { border-color: var(--accent); }
 .rr-bar-stack .is-doc-complete { background: var(--rr-ok); }
 .rr-bar-stack .is-doc-partial { background: #d9b24c; color: var(--ink); }
 .rr-bar-stack .is-doc-none { background: var(--rr-imm); }
+.rr-bar-stack .is-doc-unchecked { background: repeating-linear-gradient(135deg, var(--paper-3) 0 4px, var(--paper) 4px 8px); color: var(--ink-3); }
+/* Documents nobody has looked for (outside the research site's document check). */
+.rr-unchecked { padding: 0 5px; border: 1px dashed var(--ink-mute); border-radius: 4px; color: var(--ink-3); font-size: 11.5px; white-space: nowrap; }
 
 /* --- tables ------------------------------------------------------------------------ */
 .rr-table-wrap { overflow-x: auto; }

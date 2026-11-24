@@ -240,7 +240,9 @@ function ReviewProgress({ all, statusOf, onPick }: { all: ReviewProject[]; statu
 /** The funnel, left to right: every project, then what each step keeps. */
 // --- Project list -----------------------------------------------------------------------------------------------
 
-function DocDots({ mask }: { mask: number }) {
+function DocDots({ mask, unchecked = false }: { mask: number; unchecked?: boolean }) {
+  // Nobody looked for these documents: say so, rather than five empty dots.
+  if (unchecked) return <span className="rv-unchecked" title="Outside research.bettergov.ph’s document check: nobody has looked for its documents yet">docs not checked</span>;
   return (
     <span className="rv-dots" role="img" aria-label={`${docCount(mask)} of 5 key documents: ${NAMED_TYPES.filter((_, i) => hasDoc(mask, i)).join(', ') || 'none'}`}>
       {NAMED_TYPES.map((t, i) => <i key={t} className={hasDoc(mask, i) ? 'is-on' : ''} title={`${t}: ${hasDoc(mask, i) ? 'found' : 'not found'}`} />)}
@@ -282,7 +284,7 @@ function ProjectList({ projects, selected, statusOf, reviewsOf, verdictsOf, mine
               <span className="rv-item-foot">
                 <b>{pesoShort(p.amount)}</b>
                 <span className={`rv-flagcount ${p.flags.length >= 5 ? 'is-many' : ''}`}>{p.flags.length} {p.flags.length === 1 ? 'flag' : 'flags'}</span>
-                <DocDots mask={p.docs} />
+                <DocDots mask={p.docs} unchecked={p.unchecked} />
                 {p.senate === 'removed' && <SenateRemoved page={p.senatePage} />}
                 {mine[p.hgabId] && <span className="rv-yours">Yours</span>}
               </span>
@@ -432,8 +434,10 @@ function PhonePdf({ href, title }: { href: string; title: string }) {
   );
 }
 
-function Viewer({ files, keyTypes, file, onPick, onClose, inline, phone = false }: {
+function Viewer({ files, keyTypes, file, onPick, onClose, inline, phone = false, unchecked = false }: {
   files: readonly DetailFile[];
+  /** Its documents haven't been looked for (ReviewProject.unchecked). */
+  unchecked?: boolean;
   keyTypes: number;
   file: DetailFile | null;
   onPick: (f: DetailFile) => void;
@@ -446,7 +450,7 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, phone = false 
   const held = useSenateBlock()(file?.[5] ?? '');
   const body = (
     <div className="rv-viewer">
-      <p className="rv-viewer-count">{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</p>
+      <p className="rv-viewer-count">{unchecked ? 'Documents not checked yet' : <>{files.length} {files.length === 1 ? 'file' : 'files'} · {keyTypes} of 5 key types found</>}</p>
       <DocSwitcher files={files} file={file} onPick={onPick} />
       {file && (
         <div className="rv-viewer-bar">
@@ -458,7 +462,7 @@ function Viewer({ files, keyTypes, file, onPick, onClose, inline, phone = false 
         </div>
       )}
       {!file
-        ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : 'We found no files for this project.'}</p></div>
+        ? <div className="rv-viewer-empty"><p>{files.length ? 'Pick a document above to read it here.' : unchecked ? 'Nobody has looked for this project’s documents yet: it is outside research.bettergov.ph’s document check.' : 'We found no files for this project.'}</p></div>
         : held || !href
           ? <HeldBackDoc block={held ?? { region: null, checking: false }} />
           : isPdf(file) && (phone || TOUCH)
@@ -750,14 +754,16 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
                 {' · '}<Link to={recordPath('dpwh', project.projectId)}>NEP and House bill</Link>
               </dd></div>
             </dl>
-            <ul className="rv-checklist" aria-label="The 5 key documents">
-              {NAMED_TYPES.map((t, i) => (
-                <li key={t} className={hasDoc(project.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
-                  <span aria-hidden="true">{hasDoc(project.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}
-                  <span className="visually-hidden">{hasDoc(project.docs, i) ? ' found' : ' not found'}</span>
-                </li>
-              ))}
-            </ul>
+            {project.unchecked ? <p className="rv-unchecked-note"><b>Documents not checked yet.</b></p> : (
+              <ul className="rv-checklist" aria-label="The 5 key documents">
+                {NAMED_TYPES.map((t, i) => (
+                  <li key={t} className={hasDoc(project.docs, i) ? 'is-on' : ''} title={NAMED_MEANING[t]}>
+                    <span aria-hidden="true">{hasDoc(project.docs, i) ? '✓' : '✗'}</span> {NAMED_SHORT[t]}
+                    <span className="visually-hidden">{hasDoc(project.docs, i) ? ' found' : ' not found'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {detail && detail.notes.map((k) => NOTE_TEXT[k]?.(detail, detail.files)).filter(Boolean).map((t) => <p key={t} className="rv-note">{t}</p>)}
             {detail && nFlags > 0 && (
               <details className="rv-flags">
@@ -783,7 +789,7 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
           </section>
           {phone && docsSeen && detail && (
             <section className="rv-phone-docs" aria-label="Documents">
-              <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline phone onPick={setOpen} onClose={() => setOpen(null)} />
+              <Viewer files={detail.files} keyTypes={docCount(project.docs)} unchecked={project.unchecked} file={open} inline phone onPick={setOpen} onClose={() => setOpen(null)} />
             </section>
           )}
           <section className="rv-review" aria-label="Review">
@@ -796,7 +802,7 @@ function ProjectPane({ project, index, mine, entry, opening, profile, loadError,
         </div>
       </div>
       {inlineViewer && <SplitHandle width={split} onWidth={onSplit} container={box} />}
-      {detail && !phone && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
+      {detail && !phone && (inlineViewer || open) && <Viewer files={detail.files} keyTypes={docCount(project.docs)} unchecked={project.unchecked} file={open} inline={inlineViewer} onPick={setOpen} onClose={() => setOpen(null)} />}
     </div>
     </DocLinkContext.Provider>
     </SenateBlockContext.Provider>

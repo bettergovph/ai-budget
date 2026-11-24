@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyFlagCheck, emptyQuestionAnswer, newCaseReview, type CaseReview, type Verdict } from "../src/lib/hgab-redflags-team";
-import type { ReviewProject } from "../src/lib/hgab-review";
+import { decodeIndex, stepTest, type ReviewProject } from "../src/lib/hgab-review";
+import { uncoveredId, type ReviewIndex } from "../src/lib/hgab-documents";
 import type { ReviewIndexFlag } from "../src/lib/hgab-documents";
 import {
   REPORT_ANSWER_COLUMNS, REPORT_PAGES, REPORT_REVIEW_COLUMNS, answerLines, answerRows, checkTallies, docLevel, docTallies, docTally, docsFrom,
@@ -133,7 +134,7 @@ test("red flags and documents on every project", () => {
 
   assert.deepEqual(all.map(docLevel), ["partial", "none", "complete"]);
   const d = docTally(all);
-  assert.deepEqual(d.levels, { complete: 1, partial: 1, none: 1 });
+  assert.deepEqual(d.levels, { complete: 1, partial: 1, none: 1, unchecked: 0 });
   assert.deepEqual(d.byType, [2, 2, 2, 1, 1]);
   assert.deepEqual(d.byCount, [1, 0, 0, 1, 0, 1]);
   assert.equal(d.files, 12);
@@ -163,15 +164,15 @@ test("documents are counted from the House bill (Senate copies), the NEP (DPWH T
   const senate = docTally(all, "all", "All", "senate"), nep = docTally(all, "all", "All", "nep"), either = docTally(all);
   assert.deepEqual([senate.files, nep.files, either.files], [7, 8, 15]);
   assert.deepEqual([senate.withFile, nep.withFile, either.withFile], [2, 1, 2]);
-  assert.deepEqual(senate.levels, { complete: 1, partial: 1, none: 1 });
-  assert.deepEqual(nep.levels, { complete: 1, partial: 1, none: 1 }, "listed key documents count without a file");
-  assert.deepEqual(either.levels, { complete: 2, partial: 1, none: 0 });
+  assert.deepEqual(senate.levels, { complete: 1, partial: 1, none: 1, unchecked: 0 });
+  assert.deepEqual(nep.levels, { complete: 1, partial: 1, none: 1, unchecked: 0 }, "listed key documents count without a file");
+  assert.deepEqual(either.levels, { complete: 2, partial: 1, none: 0, unchecked: 0 });
   assert.deepEqual(senate.byType, [2, 1, 1, 1, 1]);
   assert.deepEqual(nep.byType, [2, 2, 0, 1, 1]);
   // The same counts as budget: every project here is ₱5M.
   assert.equal(either.amount, 15_000_000);
   assert.deepEqual([senate.amounts.withFile, nep.amounts.withFile, either.amounts.withFile], [10_000_000, 5_000_000, 10_000_000]);
-  assert.deepEqual(senate.amounts.levels, { complete: 5_000_000, partial: 5_000_000, none: 5_000_000 });
+  assert.deepEqual(senate.amounts.levels, { complete: 5_000_000, partial: 5_000_000, none: 5_000_000, unchecked: 0 });
   assert.deepEqual(nep.amounts.byType, [10_000_000, 10_000_000, 0, 5_000_000, 5_000_000]);
   assert.deepEqual(either.amounts.byCount, [0, 0, 5_000_000, 0, 5_000_000, 5_000_000]);
   assert.deepEqual(either.amounts.sources, { senate: 5_000_000, nep: 0, both: 5_000_000, none: 5_000_000 });
@@ -182,4 +183,31 @@ test("each page's stamp: the date and time in Manila", () => {
   assert.equal(stamp("2026-11-18T14:54:00Z"), "November 18, 2026, 10:54 PM");
   assert.equal(stamp("2026-11-18T16:05:00Z"), "November 19, 2026, 12:05 AM", "Manila's date, not UTC's");
   assert.equal(stamp("not a date"), "");
+});
+
+test("House bill lines outside the research site's document check: in, with their documents not checked", () => {
+  assert.equal(uncoveredId("house-reading:5", 941), "HB10858-3-0941-900005");
+  assert.equal(uncoveredId("house-reading:120000", 941), null, "beyond the id range");
+  assert.equal(uncoveredId("other:5", 941), null);
+  const ix = {
+    flags: [], offices: [{ name: "Central Office", districts: [], tier: null }], regions: ["National Capital Region"], programs: ["Bridge Program"],
+    rows: [
+      ["HB10858-3-0111-000001", "house-reading:9000", "Bridge A", 0, 0, 0, 1_000_000, [], 0, 0, 0, 0, 0, 0, 0],
+      ["HB10858-3-0941-900005", "house-reading:5", "MMPBSIP PH-P272", 0, 0, 0, 792_964_000, [], 0, 0, 0, 0, 0, 0, 0],
+    ],
+    unchecked: { note: "", rows: ["HB10858-3-0941-900005"] },
+  } as unknown as ReviewIndex;
+  const [a, b] = decodeIndex(ix);
+  assert.deepEqual([a.unchecked, b.unchecked], [false, true]);
+  assert.deepEqual([docLevel(a), docLevel(b)], ["none", "unchecked"], "nothing found vs nothing looked for");
+  const ctx = { flagIndex: new Map<string, number>(), statusOf: () => "not_started" as const };
+  const keeps = (v: "none" | "incomplete" | "complete" | "unchecked") => [a, b].filter(stepTest({ kind: "docs", values: [v] }, ctx)).map((p) => p.title);
+  assert.deepEqual(keeps("none"), ["Bridge A"]);
+  assert.deepEqual(keeps("incomplete"), ["Bridge A"]);
+  assert.deepEqual(keeps("unchecked"), ["MMPBSIP PH-P272"]);
+  const t = docTally([a, b]);
+  assert.deepEqual(t.levels, { complete: 0, partial: 0, none: 1, unchecked: 1 });
+  assert.equal(t.amounts.levels.unchecked, 792_964_000);
+  assert.deepEqual(t.byCount, [1, 0, 0, 0, 0, 0], "an unchecked project isn't counted as 0 of 5");
+  assert.equal(t.sources.none, 1);
 });

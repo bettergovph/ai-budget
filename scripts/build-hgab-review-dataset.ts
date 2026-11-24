@@ -25,7 +25,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { FLAG_FAMILIES, NAMED_TYPES, parseHgabId, type ReviewIndex } from "../src/lib/hgab-documents";
+import { FLAG_FAMILIES, NAMED_TYPES, UNCOVERED_SEQ, parseHgabId, type ReviewIndex } from "../src/lib/hgab-documents";
 import { INSERTION_FLAG, LINK_LABEL } from "../src/lib/hgab-review";
 import { SENATE_REGIONS_HELD_BACK, heldBackRegion } from "../src/lib/senate-copies-held-back";
 
@@ -143,15 +143,19 @@ for (const f of flags) {
 const has = (mask: number, i: number) => ((mask >> i) & 1) === 1;
 const insertionIdx = flagMeta.findIndex((f) => f.code === INSERTION_FLAG);
 ensure(insertionIdx >= 0, `review.json has no ${INSERTION_FLAG} flag.`);
+// Lines outside the research site's document check (review.json `unchecked`): their key documents are unknown, not zero.
+const unchecked = new Set(ix.unchecked?.rows ?? []);
 const projects: Record<string, Cell>[] = ix.rows.map(([hgabId, projectId, title, oi, ri, pi, amount, flagIdx, mask]) => {
   const d = detail[hgabId];
+  const checked = !unchecked.has(hgabId);
+  const doc = (i: number) => (checked ? has(mask, i) : null);
   const office = ix.offices[oi];
   const id = parseHgabId(hgabId);
   const c = byProject.get(hgabId) ?? { senate: 0, redacted: 0, dpwh: 0 };
   return {
     hgab_id: hgabId,
     bill_pdf_page: id?.page ?? null,
-    bill_row: id?.seq ?? null,
+    bill_row: id && id.seq < UNCOVERED_SEQ ? id.seq : null,
     title,
     amount_php: amount,
     region: ix.regions[ri],
@@ -163,12 +167,13 @@ const projects: Record<string, Cell>[] = ix.rows.map(([hgabId, projectId, title,
     house_insertion: flagIdx.includes(insertionIdx),
     red_flags: flagRowsByProject.get(hgabId) ?? 0,
     red_flag_codes: [...(flagsByProject.get(hgabId) ?? [])].sort().join("; ") || null,
-    key_documents_found: NAMED_TYPES.reduce((n, _, i) => n + (has(mask, i) ? 1 : 0), 0),
-    has_pow: has(mask, 0),
-    has_bp202: has(mask, 1),
-    has_development_council: has(mask, 2),
-    has_geotagged_photos: has(mask, 3),
-    has_certificate_of_implementability: has(mask, 4),
+    documents_checked: checked,
+    key_documents_found: checked ? NAMED_TYPES.reduce((n, _, i) => n + (has(mask, i) ? 1 : 0), 0) : null,
+    has_pow: doc(0),
+    has_bp202: doc(1),
+    has_development_council: doc(2),
+    has_geotagged_photos: doc(3),
+    has_certificate_of_implementability: doc(4),
     senate_files: c.senate,
     senate_files_redacted: c.redacted,
     dpwh_transparency_files: c.dpwh,
@@ -188,9 +193,9 @@ const tables: Table[] = [
     about: "Every DPWH project in the FY2027 House bill (HB 10858, third reading, Vol. I-C), one row each, with the documents found for it and its red flags. No review data.",
     rows: projects,
     columns: [
-      { name: "hgab_id", type: "VARCHAR", about: "The project's row in the House bill: HB10858-3-<PDF page>-<row>. Stable; join the other files on it." },
+      { name: "hgab_id", type: "VARCHAR", about: "The project's row in the House bill: HB10858-3-<PDF page>-<row>. Stable; join the other files on it. Rows from 900000 up are lines outside research.bettergov.ph's list (documents_checked false), numbered by our own row id." },
       { name: "bill_pdf_page", type: "INTEGER", about: "PDF page of Vol. I-C that prints the project." },
-      { name: "bill_row", type: "INTEGER", about: "Row number in the bill's DPWH list." },
+      { name: "bill_row", type: "INTEGER", about: "Row number in the bill's DPWH list (research.bettergov.ph's numbering); empty for lines outside that list." },
       { name: "title", type: "VARCHAR", about: "Project title, as published." },
       { name: "amount_php", type: "BIGINT", about: "Amount in the House bill, in pesos." },
       { name: "region", type: "VARCHAR", about: "Region, as the bill groups the project." },
@@ -202,6 +207,7 @@ const tables: Table[] = [
       { name: "house_insertion", type: "BOOLEAN", about: "true when our comparison finds the project in the House bill only, not in the NEP: a candidate insertion, not a finding." },
       { name: "red_flags", type: "INTEGER", about: "How many red flags the project has (rows in the red-flags file)." },
       { name: "red_flag_codes", type: "VARCHAR", about: "Its red-flag codes, separated by \"; \"." },
+      { name: "documents_checked", type: "BOOLEAN", about: "false for House bill lines outside research.bettergov.ph's document check (foreign-assisted projects, small facility lines): nobody has looked for their documents, so the key-document columns are empty, not zero." },
       { name: "key_documents_found", type: "INTEGER", about: "How many of the five key documents were found: program of work, BP 202, development council endorsement, geotagged photos, certificate of implementability." },
       { name: "has_pow", type: "BOOLEAN", about: "Program of work found." },
       { name: "has_bp202", type: "BOOLEAN", about: "BP 202 (project profile) found." },

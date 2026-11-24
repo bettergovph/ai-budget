@@ -143,6 +143,7 @@ const FILES_FROM: Record<SourceGroup, string> = {
 };
 /** "3/5" key documents from one source, with its file count in the tooltip; blank where review.json predates the split. */
 function SourceDocs({ p, from }: { p: ReviewProject; from: 'senate' | 'nep' }) {
+  if (p.unchecked) return <span className="rr-unchecked" title="Outside research.bettergov.ph’s document check: nobody has looked for its documents yet">not checked</span>;
   const d = p.bySource?.[from];
   if (!d) return <span className="rr-muted">—</span>;
   const label = from === 'senate' ? 'House bill' : 'NEP';

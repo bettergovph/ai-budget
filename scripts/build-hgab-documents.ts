@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  AMOUNT_FLAG_RE, AUTO_REVIEW, FROM_PROPOSAL, FROM_SENATE, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  AMOUNT_FLAG_RE, AUTO_REVIEW, FROM_PROPOSAL, FROM_SENATE, uncoveredId, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
   PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
   type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
   type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
@@ -98,7 +98,11 @@ interface ProposalRec { code: string; name: string; office: string; region: stri
 interface PowResult { code: string; matchStatus: string; hgabId: string | null }
 interface LinkRow { id: number; region: string; path: string; url: string; bytes: number; sha256: string }
 interface TrackerRow { code: string; title: string; amount_php: number; office: string }
-interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null; trace: string }
+interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null; trace: string; region: string }
+/** Our region names as the research site's (the reviewer's) read them. */
+const REGION_NAMES: Readonly<Record<string, string>> = { NCR: "National Capital Region", NIR: "Negros Island Region" };
+/** A House bill line outside the research site's coverage: our row, and the id the reviewer gives it (uncoveredId). */
+interface Uncovered { hgab_id: string; seq: number; row: OurRow }
 
 function curl(url: string, out: string): void {
   log(`  fetching ${url}`);
@@ -139,10 +143,11 @@ async function readTracker(path: string): Promise<TrackerRow[]> {
 
 async function readOurs(c: DuckDBConnection, path: string): Promise<OurRow[]> {
   const r = await c.runAndReadAll(`SELECT id, title, hgab3_php, hgab3_page, coalesce(office, ''), json_extract_string(record_json, '$.api.id'),
-    hgab3_doc, coalesce(program, ''), pap, coalesce(trace, '') FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
-  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap, trace]) => ({
+    hgab3_doc, coalesce(program, ''), pap, coalesce(trace, ''), coalesce(region, '') FROM read_parquet('${path}') WHERE hgab3_php IS NOT NULL`);
+  return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap, trace, region]) => ({
     id: String(id), title: String(title), amount: Number(amt), page: Number(page), office: String(office), apiId: api == null ? null : String(api),
     doc: doc == null ? null : String(doc), program: String(program), pap: pap == null ? null : String(pap), trace: String(trace),
+    region: REGION_NAMES[String(region)] ?? String(region),
   }));
 }
 
@@ -364,6 +369,15 @@ async function main(): Promise<void> {
   ensure(typeMisses.length <= 1, `file-type rule differs from the research site on ${typeMisses.length} files: ${typeMisses.slice(0, 5).map((d) => d.documentName).join(", ")}`);
 
   const joined = joinRows(cov.projects, ours);
+  // The House bill's other DPWH lines: in the reviewer too, with their documents not checked yet (the maintainer,
+  // 2026-11-24, after "Metro Manila Priority Bridges Seismic Improvement Project … PH-P272" was missing).
+  const usedOurs = new Set([...joined.values()].map((j) => j.row.id));
+  const uncovered: Uncovered[] = ours.filter((o) => o.amount > 0 && !usedOurs.has(o.id)).map((row) => {
+    const hgabId = uncoveredId(row.id, row.page);
+    ensure(hgabId, `${row.id} (page ${row.page}) has no reviewer id`);
+    return { hgab_id: hgabId, seq: parseHgabId(hgabId)!.seq, row };
+  });
+  ensure(new Set(uncovered.map((u) => u.hgab_id)).size === uncovered.length, "two uncovered lines share a reviewer id");
   const F = linkFolders(cov.projects, links, pow, tracker);
   const P = linkProposals(cov.projects, joined, proposals);
   const linkById = new Map(links.map((l) => [l.id, l]));
@@ -486,7 +500,7 @@ async function main(): Promise<void> {
     link_method: "VARCHAR",
   });
 
-  const reviewer = writeReviewer(args.out, projects, files, joined, namedBySource, {
+  const reviewer = writeReviewer(args.out, projects, files, joined, namedBySource, uncovered, {
     coverage: cov.generatedAtUtc, flags: flags.generatedAtUtc, in_depth: inDepth.generatedAtUtc,
   });
 
@@ -559,7 +573,7 @@ const namedMask = (types: readonly string[]) => NAMED_TYPES.reduce((m, t, i) => 
 
 function writeReviewer(
   out: string, projects: DocumentProject[], files: DocumentFile[], joined: Map<string, { row: OurRow }>, namedBySource: ReadonlyMap<string, NamedBySource>,
-  generated: Record<string, string>,
+  uncovered: readonly Uncovered[], generated: Record<string, string>,
 ) {
   const districts = readJson<{ districts: { id: string; label: string }[]; offices: Record<string, { name: string; district_ids: string[]; tier: string | null }> }>(resolve(out, "districts.json"));
   const label = new Map(districts.districts.map((d) => [d.id, d.label]));
@@ -572,7 +586,7 @@ function writeReviewer(
   const officeByName = new Map(Object.values(districts.offices).map((o) => [officeKey(o.name), o]));
   const idx = <T,>(list: T[], key: (x: T) => string) => { const m = new Map(list.map((x, i) => [key(x), i])); return (k: string) => m.get(k)!; };
 
-  const officeNames = uniq(projects.map((p) => p.office)).sort();
+  const officeNames = uniq([...projects.map((p) => p.office), ...uncovered.map((u) => u.row.office)]).sort();
   const offices: ReviewIndexOffice[] = officeNames.map((name) => {
     const o = officeByName.get(officeKey(name));
     const ds = (o?.district_ids ?? []).map((id) => label.get(id)).filter((x): x is string => !!x);
@@ -580,8 +594,8 @@ function writeReviewer(
   });
   const deoWithout = offices.filter((o) => /Engineering Office/i.test(o.name) && o.districts.length === 0).map((o) => o.name);
   ensure(deoWithout.length === 0, `DPWH offices with no legislative district in districts.json: ${deoWithout.join(", ")}`);
-  const regions = uniq(projects.map((p) => p.region)).sort();
-  const programs = uniq(projects.map((p) => joined.get(p.hgab_id)!.row.program)).sort();
+  const regions = uniq([...projects.map((p) => p.region), ...uncovered.map((u) => u.row.region)]).sort();
+  const programs = uniq([...projects.map((p) => joined.get(p.hgab_id)!.row.program), ...uncovered.map((u) => u.row.program)]).sort();
 
   // Flags: the research site's review flags, then our missing-document flags (with our links).
   const flagLabel = (l: string) => AMOUNT_FLAG_RE.exec(l)?.[1] ?? l;
@@ -603,8 +617,11 @@ function writeReviewer(
     ...(ourHouseOnly(p) ? [OUR_NEP_FLAGS.houseOnly.code] : []),
     ...(ourHouseOnly(p) !== researchInsertion(p) ? [OUR_NEP_FLAGS.disagree.code] : []),
   ];
+  // Uncovered lines: ours only (the research site has no row to disagree with).
+  const uncoveredNep = (u: Uncovered) => (HOUSE_ONLY_TRACES.includes(u.row.trace) ? [OUR_NEP_FLAGS.houseOnly.code] : []);
   for (const f of [OUR_NEP_FLAGS.houseOnly, OUR_NEP_FLAGS.disagree]) {
-    flagsIdx.push({ code: f.code, label: f.label, family: "nep", n: projects.filter((p) => ourNep(p).includes(f.code)).length, source: "bettergov", note: f.note });
+    const n = projects.filter((p) => ourNep(p).includes(f.code)).length + uncovered.filter((u) => uncoveredNep(u).includes(f.code)).length;
+    flagsIdx.push({ code: f.code, label: f.label, family: "nep", n, source: "bettergov", note: f.note });
   }
   for (const t of NAMED_TYPES) {
     const code = missingCode(t), lab = `Missing ${t}`;
@@ -623,10 +640,16 @@ function writeReviewer(
     filesBy.get(p.hgab_id)?.length ?? 0,
     (p.senate_files > 0 ? FROM_SENATE : 0) | (p.proposal_files > 0 ? FROM_PROPOSAL : 0),
     namedMask(namedBySource.get(p.hgab_id)!.senate), namedMask(namedBySource.get(p.hgab_id)!.proposal), p.senate_files, p.proposal_files,
-  ]);
+  ] as ReviewIndexRow).concat(uncovered.map((u): ReviewIndexRow => [
+    u.hgab_id, u.row.id, u.row.title, officeAt(u.row.office), regionAt(u.row.region), programAt(u.row.program), u.row.amount,
+    uncoveredNep(u).map(flagAt), 0, 0, 0, 0, 0, 0, 0,
+  ])).sort((a, b) => parseHgabId(a[0])!.seq - parseHgabId(b[0])!.seq);
+  const unchecked = new Set(uncovered.map((u) => u.hgab_id));
   // Automatic review (AUTO_REVIEW): every rule each row meets, and its score.
   const autoRows: Record<string, { r: number[]; s: number }> = {};
   for (const r of rows) {
+    // Nobody looked for an uncovered line's documents, so "none found" says nothing about it.
+    if (unchecked.has(r[0])) continue;
     const codes = autoRules({ docs: r[8], files: r[9] });
     if (codes.length) autoRows[r[0]] = { r: codes.map((c) => AUTO_REVIEW.rules.findIndex((x) => x.code === c)), s: autoScore(codes) };
   }
@@ -636,6 +659,10 @@ function writeReviewer(
     auto: {
       method: AUTO_REVIEW.method, status: AUTO_REVIEW.status, note: AUTO_REVIEW.note,
       rules: AUTO_REVIEW.rules.map((x) => ({ ...x, team_flags: [...x.team_flags] })), bands: AUTO_REVIEW.bands.map((b) => ({ ...b })), rows: autoRows,
+    },
+    unchecked: {
+      note: "Outside research.bettergov.ph's document check (foreign-assisted projects and small facility lines): nobody has looked for these projects' documents yet.",
+      rows: uncovered.map((u) => u.hgab_id).sort(),
     },
   };
   writeFileSync(resolve(out, REVIEW_INDEX_PATH), JSON.stringify(index));
@@ -650,6 +677,15 @@ function writeReviewer(
       proposal_types_without_files: p.notes.includes("proposal_types_without_files"),
       flags: p.review_flags, missing_upstream: p.missing_flags_upstream, notes: p.notes,
       files: (filesBy.get(p.hgab_id) ?? []).map((f): DetailFile => [f.source, f.link_method, f.doc_type, f.source_type, f.name, f.url, f.bytes, f.archived, f.folder_code]),
+    };
+    shards.set(path, shard);
+  }
+  for (const u of uncovered) {
+    const path = detailShardPath(u.seq);
+    const shard = shards.get(path) ?? {};
+    shard[u.hgab_id] = {
+      page: u.row.page, bill_doc: u.row.doc, bill_page: u.row.page, pap: u.row.pap, join_method: "not_covered", proposal_code: null,
+      proposal_types_without_files: false, flags: [], missing_upstream: [], notes: ["documents_not_checked"], files: [],
     };
     shards.set(path, shard);
   }
@@ -669,6 +705,10 @@ function writeReviewer(
       both: projects.filter((p) => ourHouseOnly(p) && researchInsertion(p)).length,
       ours_only: projects.filter((p) => ourHouseOnly(p) && !researchInsertion(p)).length,
       research_only: projects.filter((p) => !ourHouseOnly(p) && researchInsertion(p)).length,
+    },
+    uncovered: {
+      rows: uncovered.length, php: uncovered.reduce((s, u) => s + u.row.amount, 0),
+      foreign_assisted: uncovered.filter((u) => u.row.pap === "Foreign-assisted projects").length,
     },
     index: { file: REVIEW_INDEX_PATH.replace(`${DOCUMENTS_DIR}/`, ""), rows: rows.length, bytes: statSync(resolve(out, REVIEW_INDEX_PATH)).size },
     detail: { shards: shards.size, rows_per_shard: DETAIL_SHARD_ROWS, bytes: [...shards.keys()].reduce((s, k) => s + statSync(resolve(out, k)).size, 0) },

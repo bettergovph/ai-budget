@@ -338,17 +338,19 @@ export function docsFrom(p: Pick<ReviewProject, 'docs' | 'files' | 'bySource'>, 
 
 /**
  * How complete a project's documents are: at least COMPLETE_AT of the five key documents, fewer, or nothing at all
- * (no key document and no other file: what the automatic rule marks).
+ * (no key document and no other file: what the automatic rule marks); or not checked yet (ReviewProject.unchecked:
+ * outside the research site's document check, so nothing was looked for).
  */
-export const DOC_LEVELS = ['complete', 'partial', 'none'] as const;
+export const DOC_LEVELS = ['complete', 'partial', 'none', 'unchecked'] as const;
 export type DocLevel = (typeof DOC_LEVELS)[number];
 export const DOC_LEVEL_LABEL: Record<DocLevel, string> = {
   complete: `${COMPLETE_AT} or 5 key documents`,
   partial: `Fewer than ${COMPLETE_AT} key documents`,
   none: 'No document found',
+  unchecked: 'Documents not checked yet',
 };
-export const docLevel = (p: { docs: number; files: number }): DocLevel =>
-  docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
+export const docLevel = (p: { docs: number; files: number; unchecked?: boolean }): DocLevel =>
+  p.unchecked ? 'unchecked' : docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
 
 export interface DocTally {
   key: string;
@@ -359,10 +361,10 @@ export interface DocTally {
   amount: number;
   /** Projects with each of the five key documents (NAMED_TYPES order). */
   byType: number[];
-  /** Projects with 0, 1, … 5 of the key documents. */
+  /** Projects with 0, 1, … 5 of the key documents (of those whose documents were checked). */
   byCount: number[];
   levels: Record<DocLevel, number>;
-  /** Projects by where their files come from. */
+  /** Projects by where their files come from (of those whose documents were checked). */
   sources: Record<SourceGroup, number>;
   /** Files tied to the projects, from the source counted. */
   files: number;
@@ -375,14 +377,16 @@ export interface DocTally {
 export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects', from: DocFrom = 'either'): DocTally {
   const t: DocTally = {
     key, label, from, withFile: 0, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
-    levels: { complete: 0, partial: 0, none: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
+    levels: { complete: 0, partial: 0, none: 0, unchecked: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
     amounts: {
-      byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0], levels: { complete: 0, partial: 0, none: 0 },
+      byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0], levels: { complete: 0, partial: 0, none: 0, unchecked: 0 },
       sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, withFile: 0,
     },
   };
   const a = t.amounts;
   for (const p of projects) {
+    // Not checked: counted as such, and nowhere else (its zeros mean nothing was looked for).
+    if (p.unchecked) { t.levels.unchecked++; a.levels.unchecked += p.amount; continue; }
     const d = docsFrom(p, from);
     NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) { t.byType[i]++; a.byType[i] += p.amount; } });
     t.byCount[docCount(d.docs)]++; a.byCount[docCount(d.docs)] += p.amount;

@@ -224,6 +224,9 @@
 .rv-dots { display: inline-flex; gap: 2px; }
 .rv-dots i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--ink-mute); }
 .rv-dots i.is-on { background: var(--positive); border-color: var(--positive); }
+/* A project whose documents nobody has looked for (outside the research site's document check). */
+.rv-unchecked { padding: 0 6px; border: 1px dashed var(--ink-mute); border-radius: 4px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+.rv-unchecked-note { margin: 6px 0; padding: 6px 10px; border: 1px dashed var(--ink-mute); border-radius: 6px; color: var(--ink-2); font-size: 13px; }
 
 /* --- one project -------------------------------------------------------------- */
 .rv-welcome { max-width: 420px; margin: 12vh auto 0; padding: 0 24px; text-align: center; color: var(--ink-3); }

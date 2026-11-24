@@ -106,8 +106,20 @@ export const PROPOSAL_LINKS = ["pairing", "title"] as const;
 export type ProposalLink = (typeof PROPOSAL_LINKS)[number];
 
 /** How a research-site row was tied to one of our DPWH project rows (dpwh/projects.parquet). */
-export const JOIN_METHODS = ["exact", "title_cleanup", "merged_duplicate"] as const;
+export const JOIN_METHODS = ["exact", "title_cleanup", "merged_duplicate", "not_covered"] as const;
 export type JoinMethod = (typeof JOIN_METHODS)[number];
+
+/**
+ * House bill DPWH lines outside the research site's document coverage (foreign-assisted projects, small facility lines):
+ * in the reviewer and the report since 2026-11-24, their documents not checked yet. They have no research row id, so
+ * theirs is ours: the bill page, then UNCOVERED_SEQ + our row number (`house-reading:N`), which no research row reaches.
+ */
+export const UNCOVERED_SEQ = 900_000;
+export function uncoveredId(projectId: string, page: number): string | null {
+  const m = /^house-reading:(\d+)$/.exec(projectId);
+  if (!m || Number(m[1]) >= 100_000 || !(page > 0 && page < 10_000)) return null;
+  return `HB10858-3-${String(page).padStart(4, "0")}-${String(UNCOVERED_SEQ + Number(m[1])).padStart(6, "0")}`;
+}
 
 /** Review flags whose label carries an amount ("Allocation decrease: 10,000,000 pesos"): one code, the amount as value. */
 export const AMOUNT_FLAG_RE = /^(Allocation (?:increase|decrease)): ([\d,]+) pesos$/;
@@ -354,6 +366,11 @@ export interface ReviewIndex {
   rows: ReviewIndexRow[];
   /** Automatic review (AUTO_REVIEW); absent in files built before it. */
   auto?: ReviewIndexAuto;
+  /**
+   * Rows whose documents nobody has checked yet: outside the research site's document coverage (uncoveredId). Their
+   * documents and files read 0, which here means "not looked for", and the automatic review leaves them out.
+   */
+  unchecked?: { note: string; rows: string[] };
 }
 
 /** One file in a detail shard: [source, link_method, doc_type, source_type, name, url, bytes | null, archived, folder code]. */
