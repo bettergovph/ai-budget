@@ -87,3 +87,19 @@ Everything submitted stays a report "subject to review and validation" (their da
 3. Estimated funds for excess: keep the flat ₱2.5M, or use each project's own budget per classroom (₱25.3B against ₱35.6B)?
 4. What is the source of school locations, and of LGU income class for cities?
 5. Can field reports collected here flow into their review queue (a CSV or API export in their four categories)?
+
+## 7. Cross-check with EDCOM 2's dashboard tiles (national, 2026-11-24)
+
+| Tile | EDCOM 2 | Ours | Gap | Explained by |
+|---|---:|---:|---:|---|
+| Schools with shortages | 25,823 | 25,680 with any shortage above 0 (our tile shows 25,104, schools still short after rounding to whole classrooms) | 143 | Schools in DepEd's shortage list but not in the registry. Our pack keeps registry schools only, and 151 linked projects already point to such IDs. |
+| Classroom shortage | 165,443 | 164,763 unrounded (our tile shows 164,685, rounded per school) | 680 | The same schools outside the registry. |
+| "out of … total classroom shortage" (allocation tile) | 165,364 | 164,685 | 679 | Their own second figure is 79 below their first: the rounding per school we use (ours drops 78). |
+| Total classrooms needed (available + shortage) | 821,724 | 815,530 | 6,194 | Available classrooms: 656,281 against our 650,767 (registry and LIS give the same figure). Partly the schools outside the registry; the rest unknown. |
+| Classrooms with allocation | 32,305 | 31,210 at registry schools; 31,905 counting all ID-linked projects; 32,419 in every project | 1,095 / 400 / −114 | 695 classrooms are at shortage-list schools outside the registry. The other 400 are probably some of the 92 projects the pack left for review (514 classrooms), which EDCOM 2 may have linked another way. No subset matches exactly. |
+
+**Conventions to align:**
+- EDCOM 2 counts schools with **any** shortage above zero, and shows the unrounded total.
+- The pages round each school to whole classrooms. That keeps covered + remaining = shortage exact, but understates the headline counts by 576 schools and 78 classrooms.
+
+**To close the rest:** the source workbook (`source/classroom_shared_source.xlsx`, with the full `shortages 2023` sheet), or EDCOM 2's own extract, with its shortage-list schools outside the registry and their project links.
