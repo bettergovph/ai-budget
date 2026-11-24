@@ -434,13 +434,15 @@ export type ShortageLevel = 'none' | 'moderate' | 'severe' | 'extreme' | 'unrate
  * Classroom shortage levels by the Classroom Shortage Rate, shortage ÷ (available classrooms + shortage) (EDCOM 2's
  * proposed change, adopted by Jason 2026-11-24): Moderate up to 20%, Severe more than 20% to 50%, Extreme more than 50%.
  * It reflects relative severity: 1 short of 6 needed (16.7%) is not 1 short of 31 (3.2%). The absolute shortage is
- * always shown beside it. Shortage is blue (EDCOM 2's legend).
+ * always shown beside it. Moderate and Severe are blue (shortage is blue in EDCOM 2's legend); Extreme is red.
  */
 export const SHORTAGE_LEVELS: { key: Exclude<ShortageLevel, 'unrated'>; label: string; range: string; max: number; color: string }[] = [
   { key: 'none', label: 'No recorded shortage', range: '0%', max: 0, color: '#c9d3df' },
-  { key: 'moderate', label: 'Moderate', range: 'up to 20%', max: 0.2, color: '#86b6ef' },
+  { key: 'moderate', label: 'Moderate', range: 'up to 20%', max: 0.2, color: '#74a9f2' },
   { key: 'severe', label: 'Severe', range: 'more than 20% to 50%', max: 0.5, color: '#2a78d6' },
-  { key: 'extreme', label: 'Extreme', range: 'more than 50%', max: Infinity, color: '#0d366b' },
+  // Extreme in red, to stand out (Jason, 2026-11-24: "Make the extreme reddish so it shows importance"); the three
+  // colours pass the colour-blindness checks against each other (dataviz validate_palette, all pairs).
+  { key: 'extreme', label: 'Extreme', range: 'more than 50%', max: Infinity, color: '#c62828' },
 ];
 /** A school short of classrooms whose classroom count is missing, so its rate is unknown (64 schools). */
 export const UNRATED = { key: 'unrated' as const, label: 'Short, rate unknown', range: 'no classroom count', color: '#2a78d6' };
