@@ -299,6 +299,13 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
   - **Data:** `npm run build:mpb-population` → `mpb-years/population.json` (schema 2) and `population.csv`. **Upload both (`upload:hgab -- --only=mpb-years/population.json,mpb-years/population.csv --skip-verify`) before #75 merges.**
   - **Carousel:** `npm run build:hgab-poster-mpb-people` renders five slides in the dark NEP vs House bill figure style; the fifth, "Too many multi-purpose buildings?", compares MPBs with flood control and with school and health facilities. The slides are not yet in the campaign gallery or on R2.
 
+### Schools directory data (`schools_*` in D1, started 2026-11-23)
+
+- **Goal:** a directory of basic-education facilities for EDCOM2 and DepEd, built from the Classroom Shortages & Projects Data Pack. Planned on top of it: structured feedback on the facility list, public field reports confirming classroom shortages (like the project reviewer, but for schools), a map of classroom allocations against shortages, and links to the DPWH contract history and the GAA/House bill data.
+- **Data (done):** `npm run build:schools-d1` normalises the workbook into 10 `schools_*` tables + the `schools_sbp_rollup_2026` view. They are loaded into **production D1 on 2026-11-23** (60,204 schools, 47,362 with 2023 shortages, 5,652 SBP 2026 projects). Contract, cleaning rules and caveats: `docs/schools-data.md`. Source files: `/data/schools-src/`. The build drops only `schools_*`, so **public reports must use another table prefix** and never be rebuilt.
+- **Pages (preview, 2026-11-24):** `/schools` (map), `/schools/list`, `/schools/shortage` (shortage vs 2026 classrooms by region and division), `/schools/:id` (school + field report form), `/schools/about`. Not in the nav, noindex. API `src/worker/schools-api.ts`; field reports in `school_reports` / `school_report_revisions` (reviewer's Clerk accounts, append-only; **never drop**). Their schema is applied only to the local D1. Details: `docs/schools-data.md`.
+- Branch `schools-directory`, worktree `~/.paseo/worktrees/241ehmra/schools` (its own `node_modules`), preview :5159. Committed 2026-11-24, not pushed: awaiting the maintainer's review.
+
 ### Outside this repo
 
 - **Philippine Statistics Explorer:** [statistics.bettergov.ph](https://statistics.bettergov.ph), code in `~/projects/psa`. It mirrors 3,660+ PSA OpenSTAT tables, with REST and MCP. It feeds the Indicators section (PR #75, `docs/indicators.md`).

@@ -247,6 +247,16 @@ export function pageMeta(pathname: string): PageMeta {
       };
     }
   }
+  // Schools directory: a preview until the data is reviewed with EDCOM2 and DepEd, so out of search results.
+  if (p === "/schools" || p.startsWith("/schools/")) {
+    return {
+      title: `Schools and classroom shortages · ${SITE}`,
+      description:
+        "Every school in DepEd's registry on a map, with its 2023 classroom shortage, the classrooms the 2026 " +
+        "School Building Program lists for it, and field reports from people who know the school.",
+      noindex: true,
+    };
+  }
   if (p === CITIZEN_REPORTS_ROOT) {
     return {
       title: `Citizen Reports — Philippine Budget Analysis by Citizens, Journalists and Civic Groups · ${SITE}`,

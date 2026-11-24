@@ -78,7 +78,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
   const coverage = location.pathname.startsWith('/learn') || location.pathname.startsWith('/glossary')
     || location.pathname.startsWith(CITIZEN_REPORTS_ROOT) || location.pathname.startsWith(INDICATORS_ROOT)
-    ? null // the guide, the glossary and the citizen reports span several documents; a fiscal-year tag would mislead
+    || location.pathname.startsWith('/schools')
+    ? null // the guide, the glossary, the citizen reports and the schools span several documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`
     : /^\/gaa\/(?:roads|multi-purpose|flood-control)(?:\/|$)/.test(location.pathname)
