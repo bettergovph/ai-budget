@@ -199,3 +199,10 @@
   .sch-listside { position: static; }
 }
 .sch-notice-info { background: var(--accent-soft); border-color: #c9d8f8; }
+.sch-button-sm { padding: 6px 12px; font-size: 12.5px; }
+.sch-reviewcell { white-space: nowrap; }
+.sch-reviewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
+.sch-cardactions { display: flex; align-items: center; gap: 14px; font-family: var(--font-body); font-size: 13px; }
+.sch-cardactions a:not(.sch-button) { color: var(--accent); }
+/* Scrolled to from a Review button: clear the sticky masthead and sub-nav. */
+.sch-report { scroll-margin-top: 240px; }

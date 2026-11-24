@@ -11,6 +11,9 @@ export const SCHOOLS_LIST = '/schools/list';
 export const SCHOOLS_SHORTAGE = '/schools/shortage';
 export const SCHOOLS_ABOUT = '/schools/about';
 export const schoolPath = (id: string) => `/schools/${encodeURIComponent(id)}`;
+/** A school's page opened at its review (field report) form. */
+export const REVIEW_HASH = 'review';
+export const schoolReviewPath = (id: string) => `${schoolPath(id)}#${REVIEW_HASH}`;
 export const SCHOOLS_API = '/api/schools';
 /**
  * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by

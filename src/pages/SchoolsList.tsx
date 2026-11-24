@@ -8,7 +8,7 @@ import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '.
 import { php } from '../lib/format';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import {
-  ALLOCATION_STATUS, PROJECT_SETS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, UNRATED, num, regionName, rooms, schoolPath,
+  ALLOCATION_STATUS, PROJECT_SETS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, UNRATED, num, regionName, rooms, schoolPath, schoolReviewPath,
   type ListFile, type ListSort,
 } from '../lib/schools';
 
@@ -49,7 +49,7 @@ export default function SchoolsList() {
       <div className="page-headline">
         <p className="page-eyebrow">Basic education · the registry</p>
         <h1 className="page-title">Every school</h1>
-        <p className="page-dek">Search by name, School ID or town, or narrow by region, shortage level and allocation status. Open a school to see all its data and to report what you know.</p>
+        <p className="page-dek">Search by name, School ID or town, or narrow by region, shortage level and allocation status. Know a school? Press <strong>Review</strong> to tell DepEd and EDCOM 2 whether it needs more classrooms.</p>
       </div>
       <PreviewNotice />
 
@@ -122,7 +122,7 @@ export default function SchoolsList() {
                       <tr>
                         <th>School</th><th>Where</th><th className="num">Learners</th><th className="num">Classrooms</th>
                         <th className="num">Shortage</th><th className="num">Allocated FY 2026</th>
-                        <th className="num">Remaining unfunded</th><th className="num">2027 House bill</th><th className="num">Reports</th>
+                        <th className="num">Remaining unfunded</th><th className="num">2027 House bill</th><th>Review</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -136,7 +136,10 @@ export default function SchoolsList() {
                           <td className="num">{r.allocated ? rooms(r.allocated) : '—'}<span className="sch-sub"><StatusBadge status={r.status} /></span>{r.modalities && <span className="sch-sub">{r.modalities.replace(/,/g, ', ')}</span>}</td>
                           <td className="num">{r.shortage == null ? '—' : rooms(Math.max(0, r.shortage - r.allocated))}</td>
                       <td className="num">{r.y27_house_php ? php(r.y27_house_php) : r.y27_nep_php ? 'removed' : '—'}{r.y27_added ? <span className="sch-sub">added by the House</span> : null}</td>
-                          <td className="num">{r.reports || '—'}</td>
+                          <td className="sch-reviewcell">
+                            <Link className="sch-button sch-button-sm" to={schoolReviewPath(r.school_id)} aria-label={`Review ${r.school_name}`}>Review</Link>
+                            <span className="sch-sub">{r.reports ? `${r.reports} ${r.reports === 1 ? 'review' : 'reviews'}` : 'No reviews yet'}</span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
