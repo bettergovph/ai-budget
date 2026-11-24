@@ -20,7 +20,7 @@ import { fail, login, memberFor, message, missingTable, reply, type ReviewEnv } 
 import {
   BEFF_FPAP_ID, LEVEL_INDEX, SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
   type AnalysisFile, type AnalysisProvince, type ShortageLevel,
-  type AreaRow, type DpwhProject, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
+  type AreaRow, type DpwhProject, type Line2027, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
 } from "../lib/schools";
 
 export const SCHOOLS_API = "/api/schools";
@@ -53,6 +53,17 @@ const SBP_BY_SCHOOL = `SELECT school_id,
     SUM(COALESCE(budget_php, 0)) AS budget,
     GROUP_CONCAT(DISTINCT modality) AS modalities
   FROM schools_sbp_projects_2026 WHERE link_status = 'ID-linked' GROUP BY school_id`;
+
+/**
+ * Per school: the FY 2027 DPWH lines that confidently name it (build_dpwh_links.py), in the NEP, in the House bill and
+ * added by the House, with their amounts (a line naming n schools counts 1/n toward each).
+ */
+const Y27_BY_SCHOOL = `SELECT l.school_id,
+    MAX(COALESCE(y.nep_php, 0) > 0) AS nep, MAX(COALESCE(y.house_php, 0) > 0) AS house, MAX(y.change = 'added') AS added,
+    SUM(COALESCE(y.nep_php, 0) * 1.0 / MAX(y.schools_confident, 1)) AS nep_php,
+    SUM(COALESCE(y.house_php, 0) * 1.0 / MAX(y.schools_confident, 1)) AS house_php
+  FROM schools_2027_links l JOIN schools_2027_lines y ON y.line_id = l.line_id
+  WHERE l.confident = 1 GROUP BY l.school_id`;
 
 // EDCOM 2's terms, per school (lib/schools.ts statusOf / levelOf / shortageRate, which the pages use, say the same).
 // Shortage is DepEd's SY 2023-2024 figure rounded to whole classrooms; `sh` is NULL for a school without one.
@@ -89,15 +100,17 @@ const TOTALS = [
 
 async function points(env: ReviewEnv): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, ${SHR} AS shortage, ${ALLOC} AS alloc, s.sector AS sector, ${LEVEL} AS level
+    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, ${SHR} AS shortage, ${ALLOC} AS alloc, s.sector AS sector, ${LEVEL} AS level,
+            COALESCE(y.nep, 0) + 2 * COALESCE(y.house, 0) + 4 * COALESCE(y.added, 0) AS y27
      ${SCHOOL_FROM}
-     JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1`,
-  ).all<{ id: string; lon: number; lat: number; shortage: number | null; alloc: number; sector: string; level: ShortageLevel | null }>();
+     JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1
+     LEFT JOIN (${Y27_BY_SCHOOL}) y ON y.school_id = s.school_id`,
+  ).all<{ id: string; lon: number; lat: number; shortage: number | null; alloc: number; sector: string; level: ShortageLevel | null; y27: number }>();
   const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM schools").first<{ n: number }>();
   const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
   return reply({
     meta: { generated_at: new Date().toISOString(), schools: total?.n ?? 0, with_coordinates: results.length },
-    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage, r.alloc, SECTOR_OF[r.sector] ?? 0, r.level ? LEVEL_INDEX[r.level] : -1]),
+    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage, r.alloc, SECTOR_OF[r.sector] ?? 0, r.level ? LEVEL_INDEX[r.level] : -1, r.y27]),
   });
 }
 
@@ -275,10 +288,17 @@ async function list(env: ReviewEnv, url: URL): Promise<Response> {
     if (!LEVEL_KEYS.has(level)) return fail(400, "bad_level", "Unknown shortage level.");
     where.push(`${LEVEL} = ${bind(level)}`);
   }
-  if (p.get("projects") === "yes") where.push("p.school_id IS NOT NULL");
+  // Projects: the FY 2026 SBP allocation ("yes", as before), or FY 2027 DPWH lines in the NEP, the House bill, or added by the House.
+  const projects = p.get("projects");
+  if (projects === "yes" || projects === "sbp2026") where.push("p.school_id IS NOT NULL");
+  else if (projects === "nep2027") where.push("y.nep = 1");
+  else if (projects === "house2027") where.push("y.house = 1");
+  else if (projects === "added2027") where.push("y.added = 1");
+  else if (projects) return fail(400, "bad_projects", "Unknown project filter.");
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const from = `${SCHOOL_FROM}
-    LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id`;
+    LEFT JOIN schools_enrollment_2023 e ON e.school_id = s.school_id
+    LEFT JOIN (${Y27_BY_SCHOOL}) y ON y.school_id = s.school_id`;
   let hasReports = true;
   const reportsCol = "(SELECT COUNT(*) FROM school_reports x WHERE x.school_id = s.school_id AND x.withdrawn_at IS NULL)";
   const run = (withReports: boolean) => Promise.all([
@@ -287,6 +307,7 @@ async function list(env: ReviewEnv, url: URL): Promise<Response> {
       `SELECT s.school_id, s.school_name, s.region_key, s.division, s.province, s.municipality, s.sector, s.curricular_offering, s.in_registry,
               e.enrolment_total, s.instructional_classrooms, ${SHR} AS shortage, ${ALLOC} AS allocated, ${STATUS} AS status,
               ${LEVEL} AS level, ${RATE} AS shortage_rate, p.modalities, p.budget AS sbp_budget_php,
+              y.nep_php AS y27_nep_php, y.house_php AS y27_house_php, COALESCE(y.added, 0) AS y27_added,
               ${withReports ? reportsCol : "0"} AS reports
        ${from} ${whereSql} ORDER BY ${withReports || sort !== "reports" ? SORTS[sort] : SORTS.shortage} LIMIT ${PER} OFFSET ${(page - 1) * PER}`,
     ).bind(...binds).all(),
@@ -338,6 +359,17 @@ async function school(env: ReviewEnv, id: string): Promise<Response> {
     env.DB.prepare(`SELECT source_sheet, join_outcome, fallback_method FROM schools_join_review WHERE primary_id = ?1 ORDER BY review_id`).bind(id).all(),
     tallyFor(env, id),
   ]);
+  let y2027: Line2027[] = [];
+  try {
+    y2027 = (await env.DB.prepare(
+      `SELECT y.line_id, y.title, y.office, y.nep_php, y.house_php, y.change, y.kind, y.nep_page, y.nep_doc, y.house_page, y.house_doc,
+              y.schools_confident, l.match, l.confident, l.distance_m
+       FROM schools_2027_links l JOIN schools_2027_lines y ON y.line_id = l.line_id
+       WHERE l.school_id = ?1 ORDER BY l.confident DESC, COALESCE(y.house_php, y.nep_php) DESC`,
+    ).bind(id).all<Line2027>()).results;
+  } catch (e) {
+    if (!missingTable(e)) throw e;
+  }
   let dpwh: DpwhProject[] = [];
   try {
     dpwh = (await env.DB.prepare(
@@ -361,7 +393,7 @@ async function school(env: ReviewEnv, id: string): Promise<Response> {
   return reply({
     school: s, shortage, coordinates, facilities, enrollment,
     projects: [...linked.results.map((p) => pickProject(p, false)), ...candidate.results.map((p) => pickProject(p, true))],
-    dpwh, join_review: review.results, reports,
+    dpwh, y2027, join_review: review.results, reports,
   });
 }
 

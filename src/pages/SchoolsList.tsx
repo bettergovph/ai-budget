@@ -5,9 +5,10 @@
  */
 import { useSearchParams, Link } from 'react-router-dom';
 import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '../components/SchoolsBits';
+import { php } from '../lib/format';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import {
-  ALLOCATION_STATUS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, UNRATED, num, regionName, rooms, schoolPath,
+  ALLOCATION_STATUS, PROJECT_SETS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, UNRATED, num, regionName, rooms, schoolPath,
   type ListFile, type ListSort,
 } from '../lib/schools';
 
@@ -40,6 +41,8 @@ export default function SchoolsList() {
   const pages = data ? Math.max(1, Math.ceil(data.meta.total / data.meta.per)) : 1;
   // The level select also offers "no shortage data", which the API takes as shortage=nodata.
   const levelValue = get('shortage') === 'nodata' ? 'nodata' : get('level');
+  // "projects=yes" (older links) is the FY 2026 allocation.
+  const projectsValue = get('projects') === 'yes' ? 'sbp2026' : get('projects');
 
   return (
     <SchoolsChrome>
@@ -94,10 +97,12 @@ export default function SchoolsList() {
               </select>
             </label>
           </form>
-          <label className="sch-check sch-check-line">
-            <input type="checkbox" checked={get('projects') === 'yes'} onChange={(e) => set('projects', e.target.checked ? 'yes' : '')} />
-            Only schools with FY 2026 classrooms for allocation
-          </label>
+          <label className="sch-field"><span>Projects</span>
+          <select value={projectsValue} onChange={(e) => set('projects', e.target.value)}>
+            <option value="">Any</option>
+            {PROJECT_SETS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+          </select>
+        </label>
           {CHIPS.filter(([k]) => get(k)).map(([k, t]) => (
             <p key={k} className="sch-chip">{t}: <strong>{get(k)}</strong> <button type="button" onClick={() => set(k, '')}>Clear</button></p>
           ))}
@@ -116,8 +121,8 @@ export default function SchoolsList() {
                     <thead>
                       <tr>
                         <th>School</th><th>Where</th><th className="num">Learners</th><th className="num">Classrooms</th>
-                        <th className="num">Shortage</th><th className="num">Shortage rate</th><th className="num">Allocated FY 2026</th>
-                        <th className="num">Remaining unfunded</th><th className="num">Reports</th>
+                        <th className="num">Shortage</th><th className="num">Allocated FY 2026</th>
+                        <th className="num">Remaining unfunded</th><th className="num">2027 House bill</th><th className="num">Reports</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -127,10 +132,10 @@ export default function SchoolsList() {
                           <td>{[r.municipality, r.province].filter(Boolean).join(', ')}<span className="sch-sub">{regionName(r.region_key)} · {r.division}</span></td>
                           <td className="num">{num(r.enrolment_total)}</td>
                           <td className="num">{num(r.instructional_classrooms)}</td>
-                          <td className="num">{r.shortage == null ? '—' : rooms(r.shortage)}<span className="sch-sub"><LevelBadge level={r.level} /></span></td>
-                          <td className="num">{r.shortage_rate == null ? '—' : `${Math.round(r.shortage_rate * 100)}%`}</td>
+                          <td className="num">{r.shortage == null ? '—' : rooms(r.shortage)}{r.shortage_rate != null && r.shortage ? <span className="sch-sub">rate {Math.round(r.shortage_rate * 100)}%</span> : null}<span className="sch-sub"><LevelBadge level={r.level} /></span></td>
                           <td className="num">{r.allocated ? rooms(r.allocated) : '—'}<span className="sch-sub"><StatusBadge status={r.status} /></span>{r.modalities && <span className="sch-sub">{r.modalities.replace(/,/g, ', ')}</span>}</td>
                           <td className="num">{r.shortage == null ? '—' : rooms(Math.max(0, r.shortage - r.allocated))}</td>
+                      <td className="num">{r.y27_house_php ? php(r.y27_house_php) : r.y27_nep_php ? 'removed' : '—'}{r.y27_added ? <span className="sch-sub">added by the House</span> : null}</td>
                           <td className="num">{r.reports || '—'}</td>
                         </tr>
                       ))}

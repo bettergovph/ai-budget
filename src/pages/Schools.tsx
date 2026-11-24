@@ -7,10 +7,11 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SchoolsMap from '../components/SchoolsMap';
 import { LevelBadge, PreviewNotice, SchoolsChrome, ShortageLegend, Stat, Status, StatusBadge, StatusLegend } from '../components/SchoolsBits';
+import { php } from '../lib/format';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import {
-  PROJECT_RING, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, levelOf, num, pct, regionName, rooms,
-  schoolPath, statusOf,
+  PROJECT_SETS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, SECTOR_LABEL, classrooms, levelOf, num, pct, regionName, rooms,
+  schoolPath, statusOf, type ProjectSet,
   type AreasFile, type ListFile, type PointsFile, type SchoolFile, type SectorCode,
 } from '../lib/schools';
 
@@ -21,12 +22,14 @@ export default function Schools() {
   const regions = useSchoolsApi<AreasFile>(`${SCHOOLS_API}/areas?level=region&v=${SCHOOLS_API_VERSION}`);
   const [sectors, setSectors] = useState<SectorCode[]>([0]);
   const [projectsOnly, setProjectsOnly] = useState(false);
+  const [ring, setRing] = useState<ProjectSet>('sbp2026');
   const [colorBy, setColorBy] = useState<'level' | 'status'>('level');
   const [picked, setPicked] = useState<string | null>(null);
   const [fit, setFit] = useState<[[number, number], [number, number]] | null>(null);
   const [q, setQ] = useState('');
   const search = useSchoolsApi<ListFile>(q.trim().length >= 3 ? `${SCHOOLS_API}/list?q=${encodeURIComponent(q.trim())}&sort=name` : null);
 
+  const ringInfo = PROJECT_SETS.find((x) => x.key === ring) ?? PROJECT_SETS[0];
   const where = useMemo(() => new Map((pts.data?.rows ?? []).map((r) => [r[0], r] as const)), [pts.data]);
   const totals = useMemo(() => {
     const rows = regions.data?.rows ?? [];
@@ -93,11 +96,19 @@ export default function Schools() {
                 {SECTOR_LABEL[s]} schools
               </label>
             ))}
+          </fieldset>
+
+          <div className="sch-field">
+            <label className="sch-field"><span>Projects</span>
+              <select value={ring} onChange={(e) => setRing(e.target.value as ProjectSet)}>
+                {PROJECT_SETS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+              </select>
+            </label>
             <label className="sch-check">
               <input type="checkbox" checked={projectsOnly} onChange={(e) => setProjectsOnly(e.target.checked)} />
-              Only schools with FY 2026 allocations
+              Only schools with these projects
             </label>
-          </fieldset>
+          </div>
 
           <div className="sch-field">
             <span>Colour schools by</span>
@@ -105,12 +116,10 @@ export default function Schools() {
               <button type="button" aria-pressed={colorBy === 'level'} onClick={() => setColorBy('level')}>Shortage level</button>
               <button type="button" aria-pressed={colorBy === 'status'} onClick={() => setColorBy('status')}>Allocation status</button>
             </div>
-            {colorBy === 'level' ? (
-              <>
-                <ShortageLegend />
-                <p className="sch-legend-note"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: PROJECT_RING }} /> Has FY 2026 classrooms for allocation</p>
-              </>
-            ) : <StatusLegend />}
+            {colorBy === 'level' ? <ShortageLegend /> : <StatusLegend />}
+            {(colorBy === 'level' || ring !== 'sbp2026') && (
+              <p className="sch-legend-note"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: ringInfo.color }} /> {ringInfo.label}</p>
+            )}
           </div>
 
           {picked ? <PickedCard id={picked} onClose={() => setPicked(null)} /> : (
@@ -120,7 +129,7 @@ export default function Schools() {
 
         <div className="sch-mapwrap">
           <Status error={pts.error} loading={false}>
-            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} projectsOnly={projectsOnly} colorBy={colorBy} selected={picked} onPick={pick} fit={fit} />
+            <SchoolsMap mode="points" points={pts.data?.rows ?? []} sectors={sectors} ring={ring} projectsOnly={projectsOnly} colorBy={colorBy} selected={picked} onPick={pick} fit={fit} />
           </Status>
           {pts.loading && <p className="sch-maploading">Loading {num(60204)} schools…</p>}
           {pts.data && (
@@ -139,6 +148,7 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
   const s = data?.school;
   const linked = data?.projects.filter((p) => !p.candidate) ?? [];
   const allocated = linked.reduce((a, p) => a + (p.classrooms ?? 0), 0);
+  const y27 = (data?.y2027 ?? []).filter((l) => l.confident === 1);
   const shortage = data?.shortage ? Math.round(data.shortage.total_shortage as number) : null;
   return (
     <div className="sch-card">
@@ -153,6 +163,7 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
               <div><dt>Shortage</dt><dd>{shortage == null ? 'No data' : classrooms(shortage)} <LevelBadge level={levelOf(shortage, s.instructional_classrooms as number | null)} /></dd></div>
               <div><dt>Allocated FY 2026</dt><dd>{classrooms(allocated)} <StatusBadge status={statusOf(shortage, allocated)} /></dd></div>
               <div><dt>Learners</dt><dd>{num(data?.enrollment?.enrolment_total as number | null)} · {num(s.instructional_classrooms as number | null)} classrooms</dd></div>
+              <div><dt>2027 proposals</dt><dd>{y27.length ? `${y27.length} DPWH ${y27.length === 1 ? 'project' : 'projects'}: ${php(y27.reduce((a, l) => a + (l.house_php ?? 0), 0))} in the House bill${y27.some((l) => l.change === 'added') ? ', added by the House' : ''}` : 'None naming it'}</dd></div>
               <div><dt>Field reports</dt><dd>{data?.reports.reports ? `${data.reports.reports} (${data.reports.confirmed} say it needs classrooms)` : 'None yet'}</dd></div>
             </dl>
             <Link className="sch-button" to={schoolPath(id)}>Open the school · report from the field</Link>
