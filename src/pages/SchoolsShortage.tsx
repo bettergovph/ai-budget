@@ -18,7 +18,7 @@ import {
 const SUM_KEYS: (keyof AreaTotals)[] = [
   'schools', 'public_schools', 'with_shortage_data', 'schools_short', 'shortage', 'sbp_projects', 'allocated', 'sbp_classrooms_funded',
   'sbp_classrooms_bidding', 'sbp_budget_php', 'covered', 'gap', 'excess', 'excess_no_shortage', 'excess_budget_php', 'allocated_no_data',
-  'schools_under', 'schools_fully', 'schools_over', 'schools_moderate', 'schools_severe', 'schools_extreme', 'instructional_classrooms', 'instructional_with_data',
+  'schools_under', 'schools_fully', 'schools_over', 'schools_moderate', 'schools_severe', 'schools_extreme', 'schools_unrated', 'instructional_classrooms', 'instructional_with_data',
 ];
 function total(rows: AreaTotals[]): AreaTotals {
   const out = Object.fromEntries(SUM_KEYS.map((k) => [k, 0])) as unknown as AreaTotals;

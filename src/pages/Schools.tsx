@@ -150,7 +150,7 @@ function PickedCard({ id, onClose }: { id: string; onClose: () => void }) {
             <h2 className="sch-card-title">{s.school_name}</h2>
             <p className="sch-muted">{[s.barangay, s.municipality, s.province].filter(Boolean).join(', ')} · {s.sector} · {s.curricular_offering}</p>
             <dl className="sch-facts">
-              <div><dt>Shortage</dt><dd>{shortage == null ? 'No data' : classrooms(shortage)} <LevelBadge level={levelOf(shortage)} /></dd></div>
+              <div><dt>Shortage</dt><dd>{shortage == null ? 'No data' : classrooms(shortage)} <LevelBadge level={levelOf(shortage, s.instructional_classrooms as number | null)} /></dd></div>
               <div><dt>Allocated FY 2026</dt><dd>{classrooms(allocated)} <StatusBadge status={statusOf(shortage, allocated)} /></dd></div>
               <div><dt>Learners</dt><dd>{num(data?.enrollment?.enrolment_total as number | null)} · {num(s.instructional_classrooms as number | null)} classrooms</dd></div>
               <div><dt>Field reports</dt><dd>{data?.reports.reports ? `${data.reports.reports} (${data.reports.confirmed} say it needs classrooms)` : 'None yet'}</dd></div>

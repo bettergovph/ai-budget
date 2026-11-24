@@ -18,8 +18,8 @@
  */
 import { fail, login, memberFor, message, missingTable, reply, type ReviewEnv } from "./hgab-reviews";
 import {
-  BEFF_FPAP_ID, SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
-  type AnalysisFile, type AnalysisProvince,
+  BEFF_FPAP_ID, LEVEL_INDEX, SCHOOL_ID_RE, SECTOR_OF, readSchoolReport,
+  type AnalysisFile, type AnalysisProvince, type ShortageLevel,
   type AreaRow, type DpwhProject, type ListSort, type ReportTally, type SchoolProject, type ShortageFilter,
 } from "../lib/schools";
 
@@ -63,10 +63,12 @@ const SHR = "ROUND(sh.total_shortage)";
 const ALLOC = "(COALESCE(p.funded, 0) + COALESCE(p.bidding, 0))";
 const STATUS = `(CASE WHEN sh.school_id IS NULL THEN 'no_data' WHEN ${ALLOC} = 0 AND ${SHR} = 0 THEN 'none'
   WHEN ${ALLOC} < ${SHR} THEN 'under' WHEN ${ALLOC} = ${SHR} THEN 'fully' ELSE 'over' END)`;
-const LEVEL = `(CASE WHEN sh.school_id IS NULL THEN NULL WHEN ${SHR} = 0 THEN 'none' WHEN ${SHR} <= 4 THEN 'moderate'
-  WHEN ${SHR} <= 10 THEN 'severe' ELSE 'extreme' END)`;
 const RATE = `(CASE WHEN sh.school_id IS NULL OR s.instructional_classrooms IS NULL OR s.instructional_classrooms + ${SHR} = 0 THEN NULL
   ELSE ${SHR} * 1.0 / (s.instructional_classrooms + ${SHR}) END)`;
+// Level by the Classroom Shortage Rate (lib/schools.ts levelOf): Moderate ≤ 20%, Severe ≤ 50%, Extreme above;
+// a school short of classrooms without a classroom count is 'unrated'.
+const LEVEL = `(CASE WHEN sh.school_id IS NULL THEN NULL WHEN ${SHR} = 0 THEN 'none' WHEN ${RATE} IS NULL THEN 'unrated'
+  WHEN ${RATE} <= 0.2 THEN 'moderate' WHEN ${RATE} <= 0.5 THEN 'severe' ELSE 'extreme' END)`;
 const z = (expr: string, as: string) => `COALESCE(${expr}, 0) AS ${as}`;
 /** AreaTotals (lib/schools.ts) over the grouped schools. */
 const TOTALS = [
@@ -80,22 +82,22 @@ const TOTALS = [
   z(`SUM(CASE WHEN sh.school_id IS NOT NULL AND ${ALLOC} > ${SHR} THEN p.budget * 1.0 * (${ALLOC} - ${SHR}) / ${ALLOC} END)`, "excess_budget_php"),
   z(`SUM(CASE WHEN sh.school_id IS NULL THEN ${ALLOC} END)`, "allocated_no_data"),
   ...["under", "fully", "over"].map((k) => z(`SUM(${STATUS} = '${k}')`, `schools_${k}`)),
-  ...["moderate", "severe", "extreme"].map((k) => z(`SUM(${LEVEL} = '${k}')`, `schools_${k}`)),
+  ...["moderate", "severe", "extreme", "unrated"].map((k) => z(`SUM(${LEVEL} = '${k}')`, `schools_${k}`)),
   z("SUM(s.instructional_classrooms)", "instructional_classrooms"),
   z("SUM(CASE WHEN sh.school_id IS NOT NULL THEN s.instructional_classrooms END)", "instructional_with_data"),
 ].join(",\n  ");
 
 async function points(env: ReviewEnv): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, ${SHR} AS shortage, ${ALLOC} AS alloc, s.sector AS sector
+    `SELECT s.school_id AS id, c.longitude AS lon, c.latitude AS lat, ${SHR} AS shortage, ${ALLOC} AS alloc, s.sector AS sector, ${LEVEL} AS level
      ${SCHOOL_FROM}
      JOIN schools_coordinates_2022 c ON c.school_id = s.school_id AND c.in_ph_bbox = 1`,
-  ).all<{ id: string; lon: number; lat: number; shortage: number | null; alloc: number; sector: string }>();
+  ).all<{ id: string; lon: number; lat: number; shortage: number | null; alloc: number; sector: string; level: ShortageLevel | null }>();
   const total = await env.DB.prepare("SELECT COUNT(*) AS n FROM schools").first<{ n: number }>();
   const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
   return reply({
     meta: { generated_at: new Date().toISOString(), schools: total?.n ?? 0, with_coordinates: results.length },
-    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage, r.alloc, SECTOR_OF[r.sector] ?? 0]),
+    rows: results.map((r) => [r.id, round(r.lon, 5), round(r.lat, 5), r.shortage, r.alloc, SECTOR_OF[r.sector] ?? 0, r.level ? LEVEL_INDEX[r.level] : -1]),
   });
 }
 
@@ -203,9 +205,10 @@ async function analysis(env: ReviewEnv): Promise<Response> {
       `SELECT CASE WHEN ${SHR} > 100 THEN 101 ELSE CAST((${SHR} - 1) / 10 AS INTEGER) * 10 + 1 END AS lo, COUNT(*) AS schools, SUM(${SHR}) AS shortage
        ${SCHOOL_FROM} WHERE ${SHR} >= 1 GROUP BY 1 ORDER BY 1`,
     ).all<AnalysisFile["shortage_sizes"][number]>(),
-    // Schools by Classroom Shortage Rate, in tenths (0–9%, 10–19%, … 90–100%)
+    // Schools short of classrooms by Classroom Shortage Rate, in tenths
     env.DB.prepare(
-      `SELECT MIN(9, CAST(${RATE} * 10 AS INTEGER)) AS tenth, COUNT(*) AS schools ${SCHOOL_FROM}
+      // tenths closed at the top, (0, 10%], (10%, 20%] …, so they meet the levels' "up to 20%" and "up to 50%"
+      `SELECT MAX(0, MIN(9, CAST(${RATE} * 10 AS INTEGER) - (${RATE} * 10 = CAST(${RATE} * 10 AS INTEGER)))) AS tenth, COUNT(*) AS schools ${SCHOOL_FROM}
        WHERE ${SHR} >= 1 AND ${RATE} IS NOT NULL GROUP BY 1 ORDER BY 1`,
     ).all<AnalysisFile["shortage_rates"][number]>(),
   ]);
@@ -231,7 +234,7 @@ const SORTS: Record<ListSort, string> = {
   reports: `reports DESC, ${SHR} DESC, s.school_name`,
 };
 const STATUS_KEYS = new Set(["under", "fully", "over", "none", "no_data"]);
-const LEVEL_KEYS = new Set(["none", "moderate", "severe", "extreme"]);
+const LEVEL_KEYS = new Set(["none", "moderate", "severe", "extreme", "unrated"]);
 
 async function list(env: ReviewEnv, url: URL): Promise<Response> {
   const p = url.searchParams;

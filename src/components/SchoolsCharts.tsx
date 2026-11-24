@@ -46,7 +46,7 @@ function ticks(max: number, n = 4) {
   return out;
 }
 
-export interface Column { key: string; label: string; sub?: string; value: number; muted?: boolean }
+export interface Column { key: string; label: string; sub?: string; value: number; muted?: boolean; /** Overrides the chart's colour (a level, say). */ color?: string }
 
 /** One series of columns, one hue; `muted` columns (another stage, say) are lighter, and say so in their label. */
 export function Columns({ data, color, format, title }: { data: Column[]; color: string; format: (v: number) => string; title: string }) {
@@ -75,7 +75,7 @@ export function Columns({ data, color, format, title }: { data: Column[]; color:
                 onMouseMove={(e) => show(e, e.currentTarget, <><strong>{d.label}</strong>{d.sub ? ` · ${d.sub}` : ''}<br />{format(d.value)}</>)}
                 onFocus={(e) => show(null, e.currentTarget, <><strong>{d.label}</strong>{d.sub ? ` · ${d.sub}` : ''}<br />{format(d.value)}</>)}
                 onBlur={hide} />
-              <path d={columnPath(x, y(d.value), bw, y(0) - y(d.value), 4)} fill={color} opacity={d.muted ? 0.45 : 1} pointerEvents="none" />
+              <path d={columnPath(x, y(d.value), bw, y(0) - y(d.value), 4)} fill={d.color ?? color} opacity={d.muted ? 0.45 : 1} pointerEvents="none" />
               <text x={x + bw / 2} y={y(d.value) - 6} className="sch-val" textAnchor="middle">{format(d.value)}</text>
               <text x={x + bw / 2} y={H - PAD.b + 16} className="sch-axis" textAnchor="middle">{d.label}</text>
               {d.sub && <text x={x + bw / 2} y={H - PAD.b + 30} className="sch-axis sch-axis-sub" textAnchor="middle">{d.sub}</text>}

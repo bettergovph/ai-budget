@@ -7,7 +7,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '../components/SchoolsBits';
 import { useSchoolsApi } from '../lib/use-schools-api';
 import {
-  ALLOCATION_STATUS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, num, regionName, rooms, schoolPath,
+  ALLOCATION_STATUS, REGION_KEYS, SCHOOLS_API, SHORTAGE_LEVELS, UNRATED, num, regionName, rooms, schoolPath,
   type ListFile, type ListSort,
 } from '../lib/schools';
 
@@ -77,8 +77,9 @@ export default function SchoolsList() {
                 setParams(next, { replace: true });
               }}>
                 <option value="">Any</option>
-                {SHORTAGE_LEVELS.map((l) => <option key={l.key} value={l.key}>{l.key === 'none' ? l.label : `${l.label} (${l.range})`}</option>)}
-                <option value="nodata">No shortage data</option>
+                {SHORTAGE_LEVELS.map((l) => <option key={l.key} value={l.key}>{l.key === 'none' ? l.label : `${l.label} (rate ${l.range})`}</option>)}
+                <option value="unrated">{UNRATED.label}</option>
+            <option value="nodata">No shortage data</option>
               </select>
             </label>
             <label className="sch-field"><span>Allocation status</span>

@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { GaaHeader } from './GaaBits';
 import SiteFooter from './SiteFooter';
 import {
-  ALLOCATION_STATUS, DATA_NOTE, DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SHORTAGE_LEVELS, statusInfo,
+  ALLOCATION_STATUS, DATA_NOTE, DATA_SOURCES, NO_SHORTAGE_DATA, OFFICIAL_SOURCES, SCHOOLS_ABOUT, SHORTAGE_LEVELS, UNRATED, levelInfo, statusInfo,
   type AllocationStatus, type SchoolSource, type ShortageLevel,
 } from '../lib/schools';
 import '../nep2027.css';
@@ -38,13 +38,14 @@ export function PreviewNotice() {
   );
 }
 
-/** EDCOM 2's shortage levels (blue) and the hollow brown ring for no data. */
+/** Shortage levels by the Classroom Shortage Rate (blue), and the hollow rings for no rate and no data. */
 export function ShortageLegend({ withNoData = true }: { withNoData?: boolean }) {
   return (
-    <ul className="sch-legend" aria-label="Classroom shortage level, SY 2023–2024">
+    <ul className="sch-legend" aria-label="Classroom shortage level by shortage rate, SY 2023–2024">
       {SHORTAGE_LEVELS.map((c) => (
-        <li key={c.key}><span className="sch-swatch" style={{ background: c.color }} />{c.key === 'none' ? 'None' : `${c.label} (${c.range})`}</li>
+        <li key={c.key}><span className="sch-swatch" style={{ background: c.color }} />{c.key === 'none' ? 'No shortage' : `${c.label} (${c.range})`}</li>
       ))}
+      <li><span className="sch-swatch sch-swatch-ring" style={{ borderColor: UNRATED.color }} />{UNRATED.label}</li>
       {withNoData && <li><span className="sch-swatch sch-swatch-ring" style={{ borderColor: NO_SHORTAGE_DATA }} />No shortage data</li>}
     </ul>
   );
@@ -70,8 +71,13 @@ export function StatusBadge({ status }: { status: AllocationStatus }) {
 
 export function LevelBadge({ level }: { level: ShortageLevel | null }) {
   if (!level) return <span className="sch-badge"><span className="sch-swatch sch-swatch-ring" style={{ borderColor: NO_SHORTAGE_DATA }} />No data</span>;
-  const l = SHORTAGE_LEVELS.find((x) => x.key === level)!;
-  return <span className="sch-badge"><span className="sch-swatch" style={{ background: l.color }} />{l.key === 'none' ? 'None' : l.label}</span>;
+  const l = levelInfo(level);
+  return (
+    <span className="sch-badge" title={level === 'none' ? undefined : `Shortage rate ${l.range}`}>
+      <span className={`sch-swatch${level === 'unrated' ? ' sch-swatch-ring' : ''}`} style={level === 'unrated' ? { borderColor: l.color } : { background: l.color }} />
+      {level === 'none' ? 'None' : level === 'unrated' ? 'Rate unknown' : l.label}
+    </span>
+  );
 }
 
 export function Stat({ value, label, note }: { value: ReactNode; label: ReactNode; note?: ReactNode }) {

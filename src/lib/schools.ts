@@ -16,7 +16,7 @@ export const SCHOOLS_API = '/api/schools';
  * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by
  * address, so a new address is how a new shape reaches readers at once.
  */
-export const SCHOOLS_API_VERSION = '6';
+export const SCHOOLS_API_VERSION = '7';
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -25,8 +25,8 @@ export const SCHOOLS_API_VERSION = '6';
 /** Map points, column-wise for size: one entry per school with usable 2022 coordinates. */
 export interface PointsFile {
   meta: { generated_at: string; schools: number; with_coordinates: number };
-  /** [school_id, lon, lat, shortage in whole classrooms (null: no SY 2023–2024 shortage row), FY 2026 classrooms allocated, sector code] */
-  rows: [string, number, number, number | null, number, SectorCode][];
+  /** [school_id, lon, lat, shortage in whole classrooms (null: no SY 2023–2024 shortage row), FY 2026 classrooms allocated, sector code, level index (LEVEL_INDEX; -1 no data)] */
+  rows: [string, number, number, number | null, number, SectorCode, number][];
 }
 /** 0 public (DepEd), 1 private, 2 SUC/LUC, 3 schools abroad (PSO). */
 export type SectorCode = 0 | 1 | 2 | 3;
@@ -92,6 +92,7 @@ export interface AreaTotals {
   schools_moderate: number;
   schools_severe: number;
   schools_extreme: number;
+  schools_unrated: number;
   instructional_classrooms: number;
   /** Instructional classrooms at the schools with shortage data: with the shortage, the "total classrooms needed". */
   instructional_with_data: number;
@@ -428,22 +429,34 @@ export function readSchoolReport(raw: unknown, depedShortage: number | null = nu
 // EDCOM 2's terms and levels (their Classroom Construction Dashboard v3; docs/schools-edcom2-reconciliation.md).
 // A school's shortage is DepEd's SY 2023–2024 figure rounded to whole classrooms; levels and status use that.
 
-export type ShortageLevel = 'none' | 'moderate' | 'severe' | 'extreme';
-/** Classroom shortage levels: Moderate 1–4, Severe 5–10, Extreme 11 or more (EDCOM 2). Shortage is blue (their legend). */
-export const SHORTAGE_LEVELS: { key: ShortageLevel; label: string; range: string; min: number; max: number; color: string }[] = [
-  { key: 'none', label: 'No recorded shortage', range: '0', min: 0, max: 0, color: '#c9d3df' },
-  { key: 'moderate', label: 'Moderate', range: '1–4', min: 1, max: 4, color: '#86b6ef' },
-  { key: 'severe', label: 'Severe', range: '5–10', min: 5, max: 10, color: '#2a78d6' },
-  { key: 'extreme', label: 'Extreme', range: '11 or more', min: 11, max: Infinity, color: '#0d366b' },
+export type ShortageLevel = 'none' | 'moderate' | 'severe' | 'extreme' | 'unrated';
+/**
+ * Classroom shortage levels by the Classroom Shortage Rate, shortage ÷ (available classrooms + shortage) (EDCOM 2's
+ * proposed change, adopted by Jason 2026-11-24): Moderate up to 20%, Severe more than 20% to 50%, Extreme more than 50%.
+ * It reflects relative severity: 1 short of 6 needed (16.7%) is not 1 short of 31 (3.2%). The absolute shortage is
+ * always shown beside it. Shortage is blue (EDCOM 2's legend).
+ */
+export const SHORTAGE_LEVELS: { key: Exclude<ShortageLevel, 'unrated'>; label: string; range: string; max: number; color: string }[] = [
+  { key: 'none', label: 'No recorded shortage', range: '0%', max: 0, color: '#c9d3df' },
+  { key: 'moderate', label: 'Moderate', range: 'up to 20%', max: 0.2, color: '#86b6ef' },
+  { key: 'severe', label: 'Severe', range: 'more than 20% to 50%', max: 0.5, color: '#2a78d6' },
+  { key: 'extreme', label: 'Extreme', range: 'more than 50%', max: Infinity, color: '#0d366b' },
 ];
-export const levelOf = (shortage: number | null | undefined): ShortageLevel | null =>
-  shortage == null ? null : SHORTAGE_LEVELS.find((l) => shortage >= l.min && shortage <= l.max)?.key ?? 'extreme';
-/** Kept for the map and badges: index into SHORTAGE_LEVELS, -1 for no data. */
+/** A school short of classrooms whose classroom count is missing, so its rate is unknown (64 schools). */
+export const UNRATED = { key: 'unrated' as const, label: 'Short, rate unknown', range: 'no classroom count', color: '#2a78d6' };
+/** The level of a school: shortage in whole classrooms (null = no data) and its available classrooms. */
+export function levelOf(shortage: number | null | undefined, available: number | null | undefined): ShortageLevel | null {
+  if (shortage == null) return null;
+  if (shortage === 0) return 'none';
+  const rate = shortageRate(shortage, available);
+  if (rate == null) return 'unrated';
+  return rate <= 0.2 ? 'moderate' : rate <= 0.5 ? 'severe' : 'extreme';
+}
+/** Index of a level for the map: 0–3 into SHORTAGE_LEVELS, 4 unrated, -1 no data. */
+export const LEVEL_INDEX: Record<ShortageLevel, number> = { none: 0, moderate: 1, severe: 2, extreme: 3, unrated: 4 };
+export const levelInfo = (k: ShortageLevel) => (k === 'unrated' ? UNRATED : SHORTAGE_LEVELS.find((x) => x.key === k)!);
+/** Kept for the map: SHORTAGE_LEVELS by index. */
 export const SHORTAGE_CLASSES = SHORTAGE_LEVELS;
-export const shortageClass = (v: number | null) => {
-  const l = levelOf(v == null ? null : Math.round(v));
-  return l == null ? -1 : SHORTAGE_LEVELS.findIndex((x) => x.key === l);
-};
 /** No shortage data: brown in EDCOM 2's legend; drawn as a hollow ring so it never reads as a filled red dot. */
 export const NO_SHORTAGE_DATA = '#9c5b1a';
 /** Allocation is green in EDCOM 2's legend: the ring around schools with FY 2026 classrooms. */
@@ -568,7 +581,7 @@ export interface AnalysisFile {
   status_levels: { level: ShortageLevel | null; status: AllocationStatus; schools: number; shortage: number; allocated: number }[];
   /** Schools short of classrooms by size, in steps of 10 (lo = 1, 11, … 91; 101 = over 100). */
   shortage_sizes: { lo: number; schools: number; shortage: number }[];
-  /** Short schools by Classroom Shortage Rate, in tenths (0 = under 10% … 9 = 90% or more). */
+  /** Short schools by Classroom Shortage Rate, in tenths closed at the top: 0 = up to 10%, 1 = more than 10% to 20%, … 9 = more than 90%. */
   shortage_rates: { tenth: number; schools: number }[];
 }
 

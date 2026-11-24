@@ -2,8 +2,8 @@
  * The schools maps (`/schools`, `/schools/shortage`). MapLibre GL over CARTO's Positron basemap, as the multi-purpose
  * buildings map (MpbMap.tsx).
  *
- * `points`: one dot per school at its 2022 coordinates, coloured by its SY 2023–2024 shortage level (EDCOM 2's Moderate,
- * Severe, Extreme, in blue; a brown ring: no shortage data, which is not zero), with a green ring where the FY 2026
+ * `points`: one dot per school at its 2022 coordinates, coloured by its SY 2023–2024 shortage level (by the Classroom
+ * Shortage Rate: Moderate, Severe, Extreme, in blue; a brown ring: no shortage data, which is not zero), with a green ring where the FY 2026
  * School Building Program allocates classrooms; or coloured by allocation status (under, fully, over).
  * `areas`: one disc per schools division at the middle of its schools, sized by its shortage and coloured by how
  * much of it the 2026 list covers. Every value on the map is also in the page's tables.
@@ -17,7 +17,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { FeatureCollection, Point } from 'geojson';
 import {
-  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, coverageClass, shortageClass, statusOf,
+  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, UNRATED, coverageClass, statusOf,
   type AreaRow, type PointsFile, type SectorCode,
 } from '../lib/schools';
 
@@ -39,6 +39,8 @@ export type MapProps =
 
 const levelColor: ExpressionSpecification = ['match', ['get', 'c'],
   0, SHORTAGE_CLASSES[0].color, 1, SHORTAGE_CLASSES[1].color, 2, SHORTAGE_CLASSES[2].color, 3, SHORTAGE_CLASSES[3].color, '#ffffff'];
+/** Hollow marks: no shortage data (brown ring), and short but no classroom count, so no rate (blue ring). */
+const HOLLOW: ExpressionSpecification = ['any', ['==', ['get', 'c'], -1], ['==', ['get', 'c'], 4]];
 /** `st` = index into ALLOCATION_STATUS; the last (no data) is drawn as a ring only. */
 const statusColor: ExpressionSpecification = ['match', ['get', 'st'],
   0, ALLOCATION_STATUS[0].color, 1, ALLOCATION_STATUS[1].color, 2, ALLOCATION_STATUS[2].color, 3, ALLOCATION_STATUS[3].color, '#ffffff'];
@@ -46,9 +48,9 @@ const statusColor: ExpressionSpecification = ['match', ['get', 'st'],
 function pointsData(rows: PointsFile['rows']): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
-    features: rows.map(([id, lon, lat, shortage, cr, sec]) => ({
+    features: rows.map(([id, lon, lat, shortage, cr, sec, level]) => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: { id, c: shortageClass(shortage), s: shortage ?? -1, cr, sec, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
+      properties: { id, c: level, s: shortage ?? -1, cr, sec, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
     })),
   };
 }
@@ -94,10 +96,10 @@ export default function SchoolsMap(props: MapProps) {
           layout: { 'circle-sort-key': ['get', 'c'] }, // the biggest shortages on top
           paint: {
             'circle-color': levelColor,
-            'circle-opacity': ['case', ['==', ['get', 'c'], -1], 0, 0.85],
+            'circle-opacity': ['case', HOLLOW, 0, 0.85],
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['>=', ['get', 'c'], 2], 2.4, 1.6], 9, 3.5, 13, 7],
-            'circle-stroke-color': ['case', ['==', ['get', 'c'], -1], NO_SHORTAGE_DATA, '#ffffff'],
-            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', ['==', ['get', 'c'], -1], 0.9, 0], 10, ['case', ['==', ['get', 'c'], -1], 1.6, 1]],
+            'circle-stroke-color': ['case', ['==', ['get', 'c'], -1], NO_SHORTAGE_DATA, ['==', ['get', 'c'], 4], UNRATED.color, '#ffffff'],
+            'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, ['case', HOLLOW, 0.9, 0], 10, ['case', HOLLOW, 1.6, 1]],
           },
         });
         m.addLayer({

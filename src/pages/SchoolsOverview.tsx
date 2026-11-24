@@ -12,19 +12,21 @@ import { INDICATORS_ROOT, type IndicatorsFile } from '../lib/indicators';
 import { loadIndicators } from '../lib/indicators-view';
 import { PreviewNotice, SchoolsChrome, Stat, Status, StatusBadge } from '../components/SchoolsBits';
 import {
-  BEFF_2027, DATA_SOURCES, DPWH_KINDS, EDCOM2_COST_PER_CLASSROOM, NO_DATA_EXPLAINED, SHORTAGE_LEVELS, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
+  BEFF_2027, DATA_SOURCES, DPWH_KINDS, EDCOM2_COST_PER_CLASSROOM, NO_DATA_EXPLAINED, SHORTAGE_LEVELS, levelInfo, SCHOOLS_API, SCHOOLS_API_VERSION, SCHOOLS_LIST, SCHOOLS_SHORTAGE, areaOfProvince, num, pct, regionName, rooms,
   type AllocationStatus, type AnalysisFile, type AnalysisProvince, type ShortageLevel,
 } from '../lib/schools';
 import { useSchoolsApi } from '../lib/use-schools-api';
 
 type Sums = Omit<AnalysisProvince, 'province' | 'region_key'>;
 const STATUS_COLS: AllocationStatus[] = ['under', 'fully', 'over', 'none', 'no_data'];
-const LEVEL_ROWS: (ShortageLevel | null)[] = ['moderate', 'severe', 'extreme', 'none', null];
+const LEVEL_ROWS: (ShortageLevel | null)[] = ['moderate', 'severe', 'extreme', 'unrated', 'none', null];
+/** The level of a tenth of the shortage rate (tenths closed at the top: 0–1 up to 20%, 2–4 up to 50%). */
+const tenthLevel = (t: number) => (t <= 1 ? 'moderate' : t <= 4 ? 'severe' : 'extreme');
 const KEYS: (keyof Sums)[] = [
   'schools', 'public_schools', 'with_shortage_data', 'schools_short', 'shortage', 'learners_with_shortage', 'learners', 'classrooms',
   'makeshift_tls', 'sbp_projects', 'allocated', 'sbp_classrooms_funded', 'sbp_classrooms_bidding', 'sbp_budget_php', 'covered', 'gap',
   'excess', 'excess_no_shortage', 'excess_budget_php', 'allocated_no_data', 'schools_under', 'schools_fully', 'schools_over',
-  'schools_moderate', 'schools_severe', 'schools_extreme', 'instructional_classrooms', 'instructional_with_data', 'dpwh_contracts', 'dpwh_budget_php',
+  'schools_moderate', 'schools_severe', 'schools_extreme', 'schools_unrated', 'instructional_classrooms', 'instructional_with_data', 'dpwh_contracts', 'dpwh_budget_php',
   'dpwh_buildings_php', 'dpwh_mpb_php',
 ];
 function sum(rows: AnalysisProvince[]): Sums {
@@ -151,6 +153,7 @@ export default function SchoolsOverview() {
               <h2 className="sch-h2">What the data says</h2>
               <ol>
                 <li>DepEd recorded a <strong>classroom shortage of {rooms(all.shortage)}</strong> for SY 2023–2024, at {num(all.schools_short)} of the {num(all.with_shortage_data)} schools with shortage data: {one(perThousand(all))} classrooms for every 1,000 learners. {num(sizes81)} schools are each short of more than 100.</li>
+                <li>By the Classroom Shortage Rate, <strong>{num(all.schools_extreme)} schools are Extreme</strong>: more than half the classrooms they need are missing. {num(all.schools_severe)} are Severe (more than 20% to 50%) and {num(all.schools_moderate)} Moderate (up to 20%).</li>
                 {costPerRoom != null && beff2026 != null && (
                   <li>At the 2026 list’s own average of <strong>{php(costPerRoom)} a classroom</strong>, building them all would cost about <strong>{billions(all.shortage * costPerRoom)}</strong>: {(all.shortage * costPerRoom / beff2026).toFixed(1)} times the {billions(beff2026)} in DepEd’s whole school-building line for 2026, and {(all.shortage * costPerRoom / BEFF_2027.nep).toFixed(1)} times the {billions(BEFF_2027.nep)} proposed for 2027.</li>
                 )}
@@ -193,7 +196,7 @@ export default function SchoolsOverview() {
             </div>
 
             <h2 className="sch-h2">How big the shortages are</h2>
-            <p className="sch-muted sch-lede">Schools short of classrooms, by how many they lack, in steps of 10; then by EDCOM 2’s proposed Classroom Shortage Rate, the shortage as a share of the classrooms the school needs (available + shortage), which tells a school lacking 1 of 6 from one lacking 1 of 31.</p>
+            <p className="sch-muted sch-lede">Schools short of classrooms, by how many they lack, in steps of 10; then by the Classroom Shortage Rate, the shortage as a share of the classrooms the school needs (available + shortage), which sets the shortage level: a school lacking 1 of 6 (16.7%) is in a worse state than one lacking 1 of 31 (3.2%).</p>
             <div className="sch-twocharts">
               <figure>
                 <figcaption>Schools by classrooms short</figcaption>
@@ -202,8 +205,14 @@ export default function SchoolsOverview() {
               </figure>
               <figure>
                 <figcaption>Schools by Classroom Shortage Rate</figcaption>
-                <Columns title="Schools short of classrooms by shortage rate, in tenths" color="#2a78d6" format={(v) => num(Math.round(v))}
-                  data={d.shortage_rates.map((x) => ({ key: String(x.tenth), label: x.tenth === 9 ? '90%+' : `${x.tenth * 10}%`, value: x.schools }))} />
+                <Columns title="Schools short of classrooms by shortage rate, in tenths, coloured by level" color="#2a78d6" format={(v) => num(Math.round(v))}
+                  data={d.shortage_rates.map((x) => ({
+                    key: String(x.tenth), label: `${x.tenth * 10}–${x.tenth * 10 + 10}%`, value: x.schools,
+                    color: SHORTAGE_LEVELS.find((l) => l.key === tenthLevel(x.tenth))?.color,
+                  }))} />
+                <ul className="sch-legend sch-chart-legend">
+                  {SHORTAGE_LEVELS.filter((l) => l.key !== 'none').map((l) => <li key={l.key}><span className="sch-swatch sch-swatch-sq" style={{ background: l.color }} />{l.label} ({l.range})</li>)}
+                </ul>
               </figure>
             </div>
             <div className="sch-tablewrap">
@@ -212,10 +221,10 @@ export default function SchoolsOverview() {
                 <tbody>
                   {LEVEL_ROWS.map((lv) => {
                     const cell = (st: AllocationStatus) => d.status_levels.find((x) => x.level === lv && x.status === st)?.schools ?? 0;
-                    const info = SHORTAGE_LEVELS.find((l) => l.key === lv);
+                    const info = lv ? levelInfo(lv) : null;
                     return (
                       <tr key={String(lv)}>
-                        <td>{lv == null ? 'No shortage data' : info?.key === 'none' ? 'No recorded shortage' : `${info?.label} (${info?.range})`}</td>
+                        <td>{lv == null ? 'No shortage data' : lv === 'none' ? 'No recorded shortage' : `${info?.label} (${info?.range})`}</td>
                         {STATUS_COLS.map((st) => <td key={st} className="num">{cell(st) ? num(cell(st)) : '—'}</td>)}
                         <td className="num">{rooms(d.status_levels.filter((x) => x.level === lv).reduce((a, x) => a + x.shortage, 0))}</td>
                       </tr>
@@ -224,7 +233,7 @@ export default function SchoolsOverview() {
                 </tbody>
               </table>
             </div>
-            <p className="sch-footnote">EDCOM 2’s “Classroom Allocation Status by Shortage Level”, in schools. Moderate 1–4 (the average is about 3.5), Severe 5–10, Extreme 11 or more. “No recorded shortage” with an allocation counts as overallocated. Shortages are DepEd’s figures rounded to whole classrooms per school.</p>
+            <p className="sch-footnote">EDCOM 2’s “Classroom Allocation Status by Shortage Level”, in schools, with the levels by Classroom Shortage Rate = shortage ÷ (available classrooms + shortage) × 100: Moderate up to 20%, Severe more than 20% to 50%, Extreme more than 50% (EDCOM 2’s proposed change from counts of 1–4, 5–10 and 11 or more classrooms). “Rate unknown”: short, but the registry has no classroom count. “No recorded shortage” with an allocation counts as overallocated. Shortages are DepEd’s figures rounded to whole classrooms per school.</p>
 
             <h2 className="sch-h2">DepEd’s school-building budget</h2>
             <p className="sch-muted sch-lede">“Basic Education Facilities” in DepEd’s budget, the line that pays for new classrooms, repairs and furniture: the GAA as enacted for 2020 to 2026, then the 2027 proposal (NEP) and the House bill.</p>

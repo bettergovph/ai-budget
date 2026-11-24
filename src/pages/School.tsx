@@ -112,7 +112,7 @@ function Headline({ data, tally }: { data: SchoolFile; tally: ReportTally | null
       <div className="sch-big">
         <span className="sch-big-value">{shortage == null ? '—' : num(shortage)}</span>
         <span className="sch-big-label">{shortage == null ? 'No shortage data' : `classroom shortage, SY 2023–2024`}</span>
-        <span className="sch-sub"><LevelBadge level={levelOf(shortage)} />{rate != null && ` · shortage rate ${Math.round(rate * 100)}%`}</span>
+        <span className="sch-sub"><LevelBadge level={levelOf(shortage, data.school.instructional_classrooms as number | null)} />{rate != null && ` · shortage rate ${Math.round(rate * 100)}%`}</span>
         {shortage == null
           ? <span className="sch-sub">{NO_DATA_EXPLAINED}</span>
           : <span className="sch-sub">Kinder to Grade 10: {rooms(sh?.shortage_k10 as number)} short, {rooms(sh?.excess_k10 as number)} extra · Senior high: {rooms(sh?.shortage_shs as number)} short</span>}
