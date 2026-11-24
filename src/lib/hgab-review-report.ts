@@ -81,6 +81,11 @@ export const ATTENTION_GROUPS: readonly ReportGroup[] = ['needs_immediate_attent
 export type ProjectGroup = ReportGroup | 'not_reviewed';
 export const PROJECT_GROUPS: readonly ProjectGroup[] = [...REPORT_GROUPS, 'not_reviewed'];
 export const PROJECT_GROUP_LABEL: Record<ProjectGroup, string> = { ...REPORT_GROUP_LABEL, not_reviewed: 'Not reviewed' };
+/** Column headers where every group is a column (the full label is the header's tooltip). */
+export const PROJECT_GROUP_SHORT: Record<ProjectGroup, string> = {
+  needs_immediate_attention: 'Immediate attention', needs_attention: 'Attention', auto: 'Auto-reviewed', satisfactory: 'Satisfactory',
+  none: 'No final status', not_reviewed: 'Not reviewed',
+};
 const severity = (v: Verdict | null) => (v ? RATINGS.indexOf(v) : -1);
 
 /** A reviewed project: the bill's line (from the project list when we have it, else the review's own copy) and its reviews. */
@@ -161,50 +166,27 @@ export function reportProjects(cases: readonly ReportCase[], projects: readonly 
 
 // --- Tallies -------------------------------------------------------------------------------------------------------
 
-export interface Tally {
-  key: string;
-  label: string;
-  projects: number;
-  amount: number;
-  reviews: number;
-  /** Projects and their budget by final status. */
-  groups: Record<ReportGroup, { projects: number; amount: number }>;
-  /** Projects of this kind in the House bill (for "reviewed of"), when the project list is loaded. */
-  of: number | null;
-}
-const emptyGroups = () => Object.fromEntries(REPORT_GROUPS.map((g) => [g, { projects: 0, amount: 0 }])) as Tally['groups'];
-const emptyTally = (key: string, label: string, of: number | null = null): Tally => ({ key, label, projects: 0, amount: 0, reviews: 0, groups: emptyGroups(), of });
-function add(t: Tally, p: ReportProject) {
-  t.projects++; t.amount += p.amount; t.reviews += p.reviews.length;
-  t.groups[p.group].projects++; t.groups[p.group].amount += p.amount;
-}
-
-export function totalTally(rows: readonly ReportProject[], billProjects: number | null): Tally {
-  const t = emptyTally('all', 'All reviewed projects', billProjects);
-  rows.forEach((p) => add(t, p));
-  return t;
-}
-
-/** Tallies by a key, most projects needing attention first (immediate, then any, the automatic review's included), then most reviewed. */
-const attention = (t: Tally) => ATTENTION_GROUPS.reduce((n, g) => n + t.groups[g].projects, 0);
-export function tallyBy(
-  rows: readonly ReportProject[], key: (p: ReportProject) => [string, string], of?: (key: string) => number | null,
-): Tally[] {
-  const out = new Map<string, Tally>();
-  for (const p of rows) {
+/**
+ * Every project's final status by a key (House insertion, region, DPWH office): all the projects in each group,
+ * reviewed or not, so a region or office nobody has reviewed yet is listed too (the maintainer, 2026-11-24: "display
+ * the projects as is"). Until then the tallies counted only the reviewed projects.
+ */
+export interface StatusTally { key: string; label: string; projects: number; amount: number; groups: GroupCounts }
+const attention = (t: StatusTally) => ATTENTION_GROUPS.reduce((n, g) => n + t.groups[g].projects, 0);
+/** Most needing immediate attention first, then any attention (the automatic review's included), then the largest. */
+export function statusTallies(
+  all: readonly ReviewProject[], groupOf: (hgabId: string) => ProjectGroup, key: (p: ReviewProject) => [string, string],
+): StatusTally[] {
+  const by = new Map<string, { label: string; ps: ReviewProject[] }>();
+  for (const p of all) {
     const [k, label] = key(p);
-    if (!out.has(k)) out.set(k, emptyTally(k, label, of?.(k) ?? null));
-    add(out.get(k)!, p);
+    if (!by.has(k)) by.set(k, { label, ps: [] });
+    by.get(k)!.ps.push(p);
   }
-  return [...out.values()].sort((a, b) =>
-    b.groups.needs_immediate_attention.projects - a.groups.needs_immediate_attention.projects
-    || attention(b) - attention(a)
-    || b.projects - a.projects || a.label.localeCompare(b.label));
+  return [...by.entries()].map(([k, g]): StatusTally => ({ key: k, label: g.label, projects: g.ps.length, amount: sumAmount(g.ps), groups: groupCounts(g.ps, groupOf) }))
+    .sort((a, b) => b.groups.needs_immediate_attention.projects - a.groups.needs_immediate_attention.projects
+      || attention(b) - attention(a) || b.projects - a.projects || a.label.localeCompare(b.label));
 }
-
-/** House insertion or NEP only (our comparison), as the reviewer's progress cards split them. */
-export const insertionKey = (p: ReportProject): [string, string] =>
-  p.insertion == null ? ['unknown', 'Not in the project list'] : p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only'];
 
 /** How members answered one of the 16 questions, over all reviews. */
 export interface QuestionTally {
@@ -356,17 +338,19 @@ export function docsFrom(p: Pick<ReviewProject, 'docs' | 'files' | 'bySource'>, 
 
 /**
  * How complete a project's documents are: at least COMPLETE_AT of the five key documents, fewer, or nothing at all
- * (no key document and no other file: what the automatic rule marks).
+ * (no key document and no other file: what the automatic rule marks); or not checked yet (ReviewProject.unchecked:
+ * outside the research site's document check, so nothing was looked for).
  */
-export const DOC_LEVELS = ['complete', 'partial', 'none'] as const;
+export const DOC_LEVELS = ['complete', 'partial', 'none', 'unchecked'] as const;
 export type DocLevel = (typeof DOC_LEVELS)[number];
 export const DOC_LEVEL_LABEL: Record<DocLevel, string> = {
   complete: `${COMPLETE_AT} or 5 key documents`,
   partial: `Fewer than ${COMPLETE_AT} key documents`,
   none: 'No document found',
+  unchecked: 'Documents not checked yet',
 };
-export const docLevel = (p: { docs: number; files: number }): DocLevel =>
-  docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
+export const docLevel = (p: { docs: number; files: number; unchecked?: boolean }): DocLevel =>
+  p.unchecked ? 'unchecked' : docCount(p.docs) >= COMPLETE_AT ? 'complete' : p.docs === 0 && p.files === 0 ? 'none' : 'partial';
 
 export interface DocTally {
   key: string;
@@ -377,10 +361,10 @@ export interface DocTally {
   amount: number;
   /** Projects with each of the five key documents (NAMED_TYPES order). */
   byType: number[];
-  /** Projects with 0, 1, … 5 of the key documents. */
+  /** Projects with 0, 1, … 5 of the key documents (of those whose documents were checked). */
   byCount: number[];
   levels: Record<DocLevel, number>;
-  /** Projects by where their files come from. */
+  /** Projects by where their files come from (of those whose documents were checked). */
   sources: Record<SourceGroup, number>;
   /** Files tied to the projects, from the source counted. */
   files: number;
@@ -393,14 +377,16 @@ export interface DocTally {
 export function docTally(projects: readonly ReviewProject[], key = 'all', label = 'All projects', from: DocFrom = 'either'): DocTally {
   const t: DocTally = {
     key, label, from, withFile: 0, projects: projects.length, amount: sumAmount(projects), byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0],
-    levels: { complete: 0, partial: 0, none: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
+    levels: { complete: 0, partial: 0, none: 0, unchecked: 0 }, sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, files: 0,
     amounts: {
-      byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0], levels: { complete: 0, partial: 0, none: 0 },
+      byType: NAMED_TYPES.map(() => 0), byCount: [0, 0, 0, 0, 0, 0], levels: { complete: 0, partial: 0, none: 0, unchecked: 0 },
       sources: Object.fromEntries(SOURCE_GROUPS.map((g) => [g, 0])) as Record<SourceGroup, number>, withFile: 0,
     },
   };
   const a = t.amounts;
   for (const p of projects) {
+    // Not checked: counted as such, and nowhere else (its zeros mean nothing was looked for).
+    if (p.unchecked) { t.levels.unchecked++; a.levels.unchecked += p.amount; continue; }
     const d = docsFrom(p, from);
     NAMED_TYPES.forEach((_, i) => { if (hasDoc(d.docs, i)) { t.byType[i]++; a.byType[i] += p.amount; } });
     t.byCount[docCount(d.docs)]++; a.byCount[docCount(d.docs)] += p.amount;

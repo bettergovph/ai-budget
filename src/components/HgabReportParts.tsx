@@ -8,8 +8,8 @@ import { useReport } from '../lib/hgab-report-data';
 import { PAGE_SIZE, SOURCE_GROUPS, docCount, foldText, pageCount, pageWindow, pesoFull, pesoShort, type ReviewProject, type SourceGroup } from '../lib/hgab-review';
 import { VERDICT_LABEL } from '../lib/hgab-redflags-team';
 import {
-  DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUPS, REPORT_GROUP_LABEL, answerLines, docLevel, n,
-  officeLine, projectPath, when, type DocLevel, type GroupCounts, type ProjectGroup, type ReportCase, type Tally,
+  DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, PROJECT_GROUP_SHORT, answerLines, docLevel, n,
+  officeLine, projectPath, when, type DocLevel, type GroupCounts, type ProjectGroup, type ReportCase, type StatusTally,
 } from '../lib/hgab-review-report';
 
 export function PageHead({ title, crumbs = [], children }: { title: ReactNode; crumbs?: { to: string; label: string }[]; children?: ReactNode }) {
@@ -54,17 +54,19 @@ export function Pill({ group }: { group: ProjectGroup }) {
   return <span className={`rr-pill is-${group}`}>{PROJECT_GROUP_LABEL[group]}</span>;
 }
 
-/** Projects by final status for each row of a tally (region, office, House insertion). */
-export function TallyTable({ rows, head }: { rows: Tally[]; head: string }) {
-  if (!rows.length) return <p className="rr-muted">No reviews yet.</p>;
+/**
+ * Every project's final status for each row of a tally (House insertion, region, office): all its projects, reviewed
+ * or not. `link` opens a row's projects in the project list.
+ */
+export function StatusTable({ rows, head, link }: { rows: StatusTally[]; head: string; link?: (key: string) => string }) {
   return (
     <div className="rr-table-wrap">
-      <table className="rr-table">
+      <table className="rr-table rr-status-table">
         <thead>
           <tr>
             <th scope="col">{head}</th>
-            <th scope="col" className="num">Reviewed</th>
-            {REPORT_GROUPS.map((g) => <th key={g} scope="col" className="num"><i className={`rr-dot is-${g}`} />{REPORT_GROUP_LABEL[g]}</th>)}
+            <th scope="col" className="num">Projects</th>
+            {PROJECT_GROUPS.map((g) => <th key={g} scope="col" className="num" title={PROJECT_GROUP_LABEL[g]}><i className={`rr-dot is-${g}`} />{PROJECT_GROUP_SHORT[g]}</th>)}
             <th scope="col" className="num">Budget</th>
             <th scope="col" className="rr-col-bar"><span className="rr-sr">Final status</span></th>
           </tr>
@@ -72,11 +74,11 @@ export function TallyTable({ rows, head }: { rows: Tally[]; head: string }) {
         <tbody>
           {rows.map((t) => (
             <tr key={t.key}>
-              <th scope="row">{t.label}</th>
-              <td className="num">{n(t.projects)}{t.of != null && <small> of {n(t.of)}</small>}</td>
-              {REPORT_GROUPS.map((g) => <td key={g} className={`num${t.groups[g].projects ? ` is-${g}` : ' is-zero'}`}>{n(t.groups[g].projects)}</td>)}
+              <th scope="row">{link ? <Link to={link(t.key)}>{t.label}</Link> : t.label}</th>
+              <td className="num">{n(t.projects)}</td>
+              {PROJECT_GROUPS.map((g) => <td key={g} className={`num${t.groups[g].projects ? ` is-${g}` : ' is-zero'}`}>{n(t.groups[g].projects)}</td>)}
               <td className="num" title={pesoFull(t.amount)}>{pesoShort(t.amount)}</td>
-              <td className="rr-col-bar"><GroupBar counts={t.groups} groups={REPORT_GROUPS} /></td>
+              <td className="rr-col-bar"><GroupBar counts={t.groups} /></td>
             </tr>
           ))}
         </tbody>
@@ -131,7 +133,8 @@ export function ReviewEntry({ c }: { c: ReportCase }) {
 
 // --- The project list ------------------------------------------------------------------------------------------------
 
-const SORTS = { status: 'Final status', amount: 'Largest budget', bill: 'Bill order' } as const;
+/** Bill order first: the projects as the House bill lists them (the maintainer, 2026-11-24: "display the projects as is"). */
+const SORTS = { bill: 'Bill order', status: 'Final status', amount: 'Largest budget' } as const;
 type Sort = keyof typeof SORTS;
 
 /** Where a project's files come from (SOURCE_GROUPS), as the report keeps the House bill's and the NEP's apart. */
@@ -140,6 +143,7 @@ const FILES_FROM: Record<SourceGroup, string> = {
 };
 /** "3/5" key documents from one source, with its file count in the tooltip; blank where review.json predates the split. */
 function SourceDocs({ p, from }: { p: ReviewProject; from: 'senate' | 'nep' }) {
+  if (p.unchecked) return <span className="rr-unchecked" title="Outside research.bettergov.ph’s document check: nobody has looked for its documents yet">not checked</span>;
   const d = p.bySource?.[from];
   if (!d) return <span className="rr-muted">—</span>;
   const label = from === 'senate' ? 'House bill' : 'NEP';
@@ -165,7 +169,7 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
   const docs = (DOC_LEVELS as readonly string[]).includes(params.get('docs') ?? '') ? params.get('docs') as DocLevel : '';
   const filesFrom = (SOURCE_GROUPS as readonly string[]).includes(params.get('from') ?? '') ? params.get('from') as SourceGroup : '';
   const q = params.get('q') ?? '';
-  const sort: Sort = (params.get('sort') ?? '') in SORTS ? params.get('sort') as Sort : 'status';
+  const sort: Sort = (params.get('sort') ?? '') in SORTS ? params.get('sort') as Sort : 'bill';
   const set = (changes: Record<string, string>) => setParams((prev) => {
     const next = new URLSearchParams(prev);
     for (const [k, v] of Object.entries(changes)) { if (v) next.set(k, v); else next.delete(k); }
@@ -229,7 +233,7 @@ export function ProjectTable({ projects, label = 'projects' }: { projects: reado
           {SOURCE_GROUPS.map((g) => <option key={g} value={g}>{FILES_FROM[g]}</option>)}
         </select>
         <input className="rr-input" type="search" placeholder="Search project, office, district, program, reviewer, remarks" value={q} onChange={(e) => set({ q: e.target.value })} />
-        <label className="rr-sort">Sort <select className="rr-select" value={sort} onChange={(e) => set({ sort: e.target.value === 'status' ? '' : e.target.value })}>
+        <label className="rr-sort">Sort <select className="rr-select" value={sort} onChange={(e) => set({ sort: e.target.value === 'bill' ? '' : e.target.value })}>
           {(Object.keys(SORTS) as Sort[]).map((k) => <option key={k} value={k}>{SORTS[k]}</option>)}
         </select></label>
         {filtered && <button type="button" className="rr-link" onClick={() => set({ st: '', region: '', src: '', docs: '', from: '', q: '' })}>Clear</button>}

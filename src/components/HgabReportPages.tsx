@@ -17,12 +17,12 @@ import {
 import { QUESTION_OF_FLAG, RATINGS, TEAM_FLAGS, VERDICT_LABEL } from '../lib/hgab-redflags-team';
 import {
   ATTENTION_GROUPS, DOC_FROM, DOC_FROM_LABEL, DOC_FROM_NOTE, DOC_LEVELS, DOC_LEVEL_LABEL, PROJECT_GROUPS, PROJECT_GROUP_LABEL, REPORT_GROUP_NOTE, REPORT_PAGES,
-  checkTallies, docTallies, docTally, flagPath, flagSource, flagTallies, groupCounts, insertionKey, n, officeLine, pct,
-  questionTallies, reportPath, rulePath, sumAmount, tallyBy, type DocFrom, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
+  checkTallies, docTallies, docTally, flagPath, flagSource, flagTallies, groupCounts, n, officeLine, pct,
+  questionTallies, reportPath, rulePath, statusTallies, sumAmount, type DocFrom, type DocTally, type GroupCounts, type ProjectGroup, type ReportProject,
 } from '../lib/hgab-review-report';
 import { fetchSenateStatus, senatePath, type SenateCopyStatus } from '../lib/hgab-review-api';
 import { useReport } from '../lib/hgab-report-data';
-import { Card, GroupBar, PageHead, Pill, ProjectLinks, ProjectTable, ReviewEntry, TallyTable } from './HgabReportParts';
+import { Card, GroupBar, PageHead, Pill, ProjectLinks, ProjectTable, ReviewEntry, StatusTable } from './HgabReportParts';
 
 const MEMBER_GROUPS: readonly ProjectGroup[] = ['needs_immediate_attention', 'needs_attention', 'satisfactory', 'none'];
 const total = (c: GroupCounts, gs: readonly ProjectGroup[]) => gs.reduce((s, g) => s + c[g].projects, 0);
@@ -36,6 +36,7 @@ export function Overview() {
   const counts = useMemo(() => groupCounts(all, groupOf), [all, groupOf]);
   const flagged = useMemo(() => all.filter((p) => p.flags.length > 0).length, [all]);
   const flagsOn = useMemo(() => all.reduce((s, p) => s + p.flags.length, 0), [all]);
+  const unchecked = useMemo(() => all.filter((p) => p.unchecked), [all]);
   const res = reviews.state === 'ready' ? reviews.res : null;
   const budget = sumAmount(all);
   return (
@@ -71,6 +72,13 @@ export function Overview() {
           </table>
         </div>
         <p className="rr-note">A project counts under the most serious final status any member gave it. Until a member reviews it, a project the automatic rule marked counts as “{PROJECT_GROUP_LABEL.auto}”.</p>
+        {unchecked.length > 0 && (
+          <p className="rr-note">
+            Every DPWH line of the House bill is here. {n(unchecked.length)} of them ({pesoShort(sumAmount(unchecked))}), the foreign-assisted projects and small facility
+            lines, are outside research.bettergov.ph’s document check: their documents are <Link to={`${reportPath('projects')}?docs=unchecked`}>not checked yet</Link>, and the
+            automatic rule leaves them out.
+          </p>
+        )}
       </section>
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">In this report</h3>
@@ -92,6 +100,7 @@ export function AutomaticPage() {
     return { fam, kinds: idx.size, on: all.reduce((s, p) => s + p.flags.filter((i) => idx.has(i)).length, 0), projects: all.filter((p) => p.flags.some((i) => idx.has(i))).length };
   }), [all, index.flags]);
   const ours = index.flags.filter((f) => f.source === 'bettergov').length;
+  const checked = all.filter((p) => !p.unchecked).length;
   return (
     <>
       <PageHead title="Automatic red flags">
@@ -108,7 +117,7 @@ export function AutomaticPage() {
             <h3 className="rr-h3 is-first"><Link to={rulePath(r.code)}>{r.label}</Link></h3>
             <p className="rr-rule-note">{r.note}</p>
             <dl className="rr-facts">
-              <div><dt>Applied to</dt><dd>All {n(all.length)} DPWH projects in the House bill</dd></div>
+              <div><dt>Applied to</dt><dd>{n(checked)} DPWH projects in the House bill{checked < all.length ? `: every one whose documents were checked (not the ${n(all.length - checked)} outside research.bettergov.ph’s document check)` : ''}</dd></div>
               <div><dt>Projects marked</dt><dd>{n(ps.length)} ({pct(ps.length, all.length)}) · {pesoShort(sumAmount(ps))}</dd></div>
               <div><dt>Score</dt><dd>{r.weight} of 100{scoreBand(r.weight) ? ` (${scoreBand(r.weight)})` : ''}, provisional</dd></div>
               <div><dt>The team’s checks</dt><dd>{r.team_flags.map((id) => {
@@ -368,6 +377,14 @@ export function DocumentsPage() {
                   <td className="rr-muted">{SOURCE_GROUP_NOTE[g]}</td>
                 </tr>
               ))}
+              {by.either.levels.unchecked > 0 && (
+                <tr>
+                  <th scope="row"><Link to={`${projects}?docs=unchecked`}>{DOC_LEVEL_LABEL.unchecked}</Link></th>
+                  <td className="num">{n(by.either.levels.unchecked)} <small>{pct(by.either.levels.unchecked, all.length)}</small></td>
+                  <td className="num" title={pesoFull(by.either.amounts.levels.unchecked)}>{pesoShort(by.either.amounts.levels.unchecked)} <small>{pct(by.either.amounts.levels.unchecked, budget)}</small></td>
+                  <td className="rr-muted">Outside research.bettergov.ph’s document check (foreign-assisted projects, small facility lines): nobody has looked for their documents yet</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -411,6 +428,7 @@ export function DocumentsPage() {
         </div>
         {from === 'either' && <p className="rr-note">“Without it” opens the projects missing it in both sources.</p>}
         <h4 className="rr-h4">How many of the five each project has</h4>
+        {t.levels.unchecked > 0 && <p className="rr-note">Not counting the {n(t.levels.unchecked)} projects whose documents weren’t checked.</p>}
         <div className="rr-table-wrap">
           <table className="rr-table rr-narrow">
             <thead><tr><th scope="col">Key documents found</th>{(['senate', 'nep', 'either'] as const).map((f) => <th key={f} scope="col" className="num">{DOC_FROM_LABEL[f]}</th>)}</tr></thead>
@@ -488,7 +506,7 @@ function LevelBar({ t, big }: { t: DocTally; big?: boolean }) {
 }
 
 /** Short headers, so the table fits; the full words are in each header's tooltip. */
-const LEVEL_SHORT: Record<(typeof DOC_LEVELS)[number], string> = { complete: '4–5 key docs', partial: 'Fewer', none: 'None found' };
+const LEVEL_SHORT: Record<(typeof DOC_LEVELS)[number], string> = { complete: '4–5 key docs', partial: 'Fewer', none: 'None found', unchecked: 'Not checked' };
 const TYPE_SHORT: Record<(typeof NAMED_TYPES)[number], string> = {
   POW: 'POW', 'BP 202': 'BP 202', 'Development Council': 'Council', 'Geotagged photos': 'Photos', 'Certificate of Implementability': 'Cert. impl.',
 };
@@ -529,33 +547,29 @@ function DocTable({ rows, head, link }: { rows: DocTally[]; head: string; link: 
 // --- By region -----------------------------------------------------------------------------------------------------------
 
 export function RegionsPage() {
-  const { all, rows } = useReport();
-  const billCount = useMemo(() => (key: (p: (typeof all)[number]) => string) => {
-    const m = new Map<string, number>();
-    for (const p of all) m.set(key(p), (m.get(key(p)) ?? 0) + 1);
-    return (k: string) => m.get(k) ?? 0;
-  }, [all]);
-  const bySource = useMemo(() => tallyBy(rows, insertionKey, billCount((p) => (p.insertion ? 'insertion' : 'nep'))), [rows, billCount]);
-  const byRegion = useMemo(() => tallyBy(rows, (p) => [p.region, p.region], billCount((p) => p.region)), [rows, billCount]);
-  const byOffice = useMemo(() => tallyBy(rows, (p) => [p.office, officeLine(p.office, p.districts)], billCount((p) => p.office.name)), [rows, billCount]);
+  const { all, groupOf } = useReport();
+  const projects = reportPath('projects');
+  const bySource = useMemo(() => statusTallies(all, groupOf, (p) => (p.insertion ? ['insertion', 'House insertions'] : ['nep', 'NEP only'])), [all, groupOf]);
+  const byRegion = useMemo(() => statusTallies(all, groupOf, (p) => [p.region, p.region]), [all, groupOf]);
+  const byOffice = useMemo(() => statusTallies(all, groupOf, (p) => [p.office.name, officeLine(p.office.name, p.office.districts)]), [all, groupOf]);
   return (
     <>
       <PageHead title="Final status by region">
-        <p>The projects members reviewed and those the automatic rule marked, by final status: House insertions and NEP only, region, and DPWH office. “Reviewed” counts both, of all the projects in that group.</p>
+        <p>Every project’s final status, reviewed or not: House insertions and NEP only, region, and DPWH office, each with all its projects. Members’ reviews come first, then the automatic rule’s; “Not reviewed” is the rest.</p>
       </PageHead>
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">House insertions and NEP only</h3>
         <p className="rr-note">House insertions are projects in the House bill but not in the NEP, by our comparison.</p>
-        <TallyTable rows={bySource} head="Projects" />
+        <StatusTable rows={bySource} head="Projects" link={(k) => `${projects}?src=${k}`} />
       </section>
       <section className="rr-sec">
         <h3 className="rr-h3 is-first">By region</h3>
-        <TallyTable rows={byRegion} head="Region" />
+        <StatusTable rows={byRegion} head="Region" link={(k) => `${projects}?region=${encodeURIComponent(k)}`} />
       </section>
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">By DPWH office</h3>
+        <h3 className="rr-h3 is-first">By DPWH office <span className="rr-muted">({n(byOffice.length)})</span></h3>
         <p className="rr-note">Each DPWH office with the legislative districts it serves. Districts are where the office works, not who asked for a project.</p>
-        <TallyTable rows={byOffice} head="Legislative districts [DPWH office]" />
+        <StatusTable rows={byOffice} head="Legislative districts [DPWH office]" />
       </section>
     </>
   );
@@ -632,7 +646,7 @@ export function ProjectsPage() {
   return (
     <>
       <PageHead title="Projects">
-        <p>Every DPWH project in the House bill. The most serious final status comes first; filter by final status, region, House insertion or documents, or search. Open a project for its red flags, documents and reviews.</p>
+        <p>Every DPWH project in the House bill, with or without a red flag, in the bill’s order. Sort by final status to see the most serious first; filter by final status, region, House insertion or documents, or search. Open a project for its red flags, documents and reviews.</p>
       </PageHead>
       <section className="rr-sec"><ProjectTable projects={all} /></section>
     </>
@@ -746,10 +760,14 @@ export function ProjectPage() {
       </section>
 
       <section className="rr-sec">
-        <h3 className="rr-h3 is-first">Documents <span className="rr-muted">({n(p.files)} file{p.files === 1 ? '' : 's'} · {docCount(p.docs)} of 5 key documents in either source)</span></h3>
+        <h3 className="rr-h3 is-first">Documents {p.unchecked
+          ? <span className="rr-unchecked">not checked yet</span>
+          : <span className="rr-muted">({n(p.files)} file{p.files === 1 ? '' : 's'} · {docCount(p.docs)} of 5 key documents in either source)</span>}</h3>
+        {p.unchecked && (d ? d.notes.map((k) => DETAIL_NOTE_TEXT[k]?.(d, d.files)).filter(Boolean).map((t) => <p key={t} className="rr-note">{t}</p>)
+          : <p className="rr-note">{DETAIL_NOTE_TEXT.documents_not_checked(null as never, [])}</p>)}
         {detail?.id === hgabId && detail.error && <p className="rr-error">{detail.error}</p>}
         {!d && !(detail?.id === hgabId && detail.error) && p.files > 0 && <p className="rr-muted" role="status">Loading the documents…</p>}
-        {(['senate', 'nep'] as const).map((src) => {
+        {!p.unchecked && (['senate', 'nep'] as const).map((src) => {
           const kind = src === 'senate' ? 'senate' : 'proposal';
           const mask = p.bySource?.[src].docs ?? null;
           const list = files.filter((f) => f[0] === kind);
