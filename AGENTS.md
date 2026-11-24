@@ -310,7 +310,7 @@ PSA statistics for the 87 areas PSA publishes poverty for (provinces with their 
 - **EDCOM 2 reconciliation (2026-11-24):** `docs/schools-edcom2-reconciliation.md` maps EDCOM 2's Classroom Construction Dashboard terms, allocation-status table, sources, field notes and feedback form onto ours, with what to adopt and the questions for them. **Built 2026-11-24**: EDCOM 2's terms, levels (by Classroom Shortage Rate: Moderate ≤20%, Severe ≤50%, Extreme >50%), per-school status, shortage rate, excess and its funds, city/municipality view, distributions, sources, data note and the merged feedback form. Shortages are rounded per school everywhere.
 - **Shortage-list schools (2026-11-24):** EDCOM 2's shortage sheet is the third input to `build:schools-d1`. 300 schools on DepEd's shortage list but not in the registry are in `schools` with `in_registry` = 0, so the totals match EDCOM 2's sheet exactly (165,364 classrooms short at 25,245 schools).
 - **2027 proposals (2026-11-24):** FY 2027 DPWH lines (NEP and House bill) that name a school are matched like the contracts (`schools_2027_lines`, `schools_2027_links`). They are on the map (a "Projects" picker rings them), as a list filter and column, and on school pages.
-- Branch `schools-directory`, worktree `~/.paseo/worktrees/241ehmra/schools` (its own `node_modules`), preview :5159. PR opened 2026-11-24.
+- Branch `schools-directory`, worktree `~/.paseo/worktrees/241ehmra/schools` (its own `node_modules`), preview :5159. PR #114 merged 2026-11-24; 2027 projects + Review buttons in a follow-up PR (branch schools-2027-review).
 
 ### Outside this repo
 
