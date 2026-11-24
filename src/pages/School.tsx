@@ -33,6 +33,14 @@ function School() {
   const setTally = (t: ReportTally) => setSent({ id, tally: t });
   const s = data?.school;
   useEffect(() => { if (s?.school_name) document.title = `${s.school_name} · Schools · BetterGov.ph`; }, [s?.school_name]);
+  // The review form is a modal; …#review (the Review buttons on the list and the map) opens it, and the address
+  // keeps #review while it is open, so signing in comes back to the form.
+  const [reviewing, setReviewing] = useState(() => typeof window !== 'undefined' && window.location.hash === `#${REVIEW_HASH}`);
+  const review = (open: boolean, keepHash = false) => {
+    setReviewing(open);
+    const { pathname, search } = window.location;
+    window.history.replaceState(window.history.state, '', `${pathname}${search}${open || keepHash ? `#${REVIEW_HASH}` : ''}`);
+  };
 
   return (
     <SchoolsChrome>
@@ -52,7 +60,7 @@ function School() {
             </div>
             <PreviewNotice />
             {s.in_registry === 0 && <p className="sch-notice sch-notice-info" role="note">{SHORTAGE_LIST_ONLY}</p>}
-            <p className="sch-reviewbar"><a className="sch-button" href={`#${REVIEW_HASH}`} onClick={(e) => { e.preventDefault(); document.getElementById(REVIEW_HASH)?.scrollIntoView({ behavior: 'smooth' }); }}>Review this school</a> <span className="sch-muted">Does it need more classrooms? Has a project been built? Tell DepEd and EDCOM 2.</span></p>
+            <p className="sch-reviewbar"><a className="sch-button" href={`#${REVIEW_HASH}`} onClick={(e) => { e.preventDefault(); review(true); }}>Review this school</a> <span className="sch-muted">Does it need more classrooms? Has a project been built? Tell DepEd and EDCOM 2.</span></p>
 
             <div className="sch-schoolgrid">
               <div className="sch-schoolmain">
@@ -93,7 +101,8 @@ function School() {
                 </Section>
               </div>
               <aside className="sch-schoolside">
-                <ReportBox schoolId={String(s.school_id)} projects={askAbout(data)}
+                <ReportBox schoolId={String(s.school_id)} schoolName={String(s.school_name)} projects={askAbout(data)}
+                  open={reviewing} onOpen={() => review(true)} onClose={(aside) => review(false, aside)}
                   shortage={data.shortage ? Math.round(data.shortage.total_shortage as number) : null}
                   allocated={data.projects.filter((p) => !p.candidate).reduce((a, p) => a + (p.classrooms ?? 0), 0)} onTally={setTally} />
               </aside>
@@ -329,20 +338,14 @@ function askAbout(data: SchoolFile): Asked[] {
   ];
 }
 
-function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
-  schoolId: string; projects: Asked[]; shortage: number | null; allocated: number; onTally: (t: ReportTally) => void;
+function ReportBox({ schoolId, schoolName, projects, shortage, allocated, onTally, open, onOpen, onClose }: {
+  schoolId: string; schoolName: string; projects: Asked[]; shortage: number | null; allocated: number; onTally: (t: ReportTally) => void;
+  open: boolean; onOpen: () => void; onClose: (aside: boolean) => void;
 }) {
   const member = useMember();
   const [report, setReport] = useState<SchoolReport>(() => emptyReport(schoolId));
   const [saved, setSaved] = useState<SchoolReport | null>(null);
   const [state, setState] = useState<{ busy: boolean; error: string | null; problems: string[]; done: string | null }>({ busy: false, error: null, problems: [], done: null });
-  // Arriving from a Review button (…#review): the form opens and comes into view.
-  const wantsReview = typeof window !== 'undefined' && window.location.hash === `#${REVIEW_HASH}`;
-  const [open, setOpen] = useState(wantsReview);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (wantsReview) box.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [wantsReview]);
 
   useEffect(() => {
     if (!member.userId) return;
@@ -351,8 +354,10 @@ function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
       const token = await member.getToken();
       const res = await fetch(`${SCHOOLS_API}/reports/mine?school=${encodeURIComponent(schoolId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: 'no-store' });
       const body = (await res.json().catch(() => null)) as { data?: SchoolReport | null } | null;
-      if (live && res.ok && body?.data) { setReport({ ...emptyReport(schoolId), ...body.data }); setSaved(body.data); setOpen(true); }
+      if (live && res.ok && body?.data) { setReport({ ...emptyReport(schoolId), ...body.data }); setSaved(body.data); }
     })();
+    // Back from signing in to review (the address kept #review): the form opens again.
+    if (!open && window.location.hash === `#${REVIEW_HASH}`) onOpen();
     return () => { live = false; };
   }, [member.userId, schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -379,93 +384,146 @@ function ReportBox({ schoolId, projects, shortage, allocated, onTally }: {
   const gone = report.listing === 'closed' || report.listing === 'not_found';
   const mustExplain = disputesData(report, shortage);
 
+  const intro = 'Know this school? Tell DepEd and EDCOM 2 whether it is here and whether it needs more classrooms. Your name is never shown; the page shows only how many reports agree, and every report is reviewed before any figure changes.';
+
   return (
-    <div className="sch-report" id={REVIEW_HASH} ref={box}>
+    <div className="sch-report">
       <h2 className="sch-h2">Review this school</h2>
-      <p className="sch-muted">Know this school? Tell DepEd and EDCOM 2 whether it is here and whether it needs more classrooms. Your name is never shown; the page shows only how many reports agree, and every report is reviewed before any figure changes.</p>
+      <p className="sch-muted">{intro}</p>
       <p className="sch-records">{records}</p>
-      {!member.enabled && <p className="sch-notice">Sign-in isn’t set up on this copy of the site, so this form can be tried but not sent.</p>}
-      {member.enabled && !member.loaded ? (
-        <p className="sch-muted">Checking your sign-in…</p>
-      ) : member.enabled && !member.userId ? (
-        <button type="button" className="sch-button" onClick={member.signIn}>Sign in to review (email code, no password)</button>
-      ) : !open ? (
-        <button type="button" className="sch-button" onClick={() => setOpen(true)}>Start a review of this school</button>
-      ) : (
-        <form className="sch-form" onSubmit={(e) => { e.preventDefault(); void call('POST'); }}>
-          <Choice legend="1. Is the school here and open?" list={LISTINGS} value={report.listing} onChange={(v) => set('listing', v)} />
-          {!gone && (
-            <>
-              <Choice legend="2. Does the school need more classrooms?" list={NEEDS} value={report.needs} onChange={(v) => set('needs', v)} />
-              {report.needs === 'yes' && (
-                <>
-                  <Checks legend="Why? (any that apply)" list={NEED_REASONS} value={report.need_reasons} onChange={(v) => set('need_reasons', v)} />
-                  <NumberField label="About how many more classrooms, if you know?" value={report.classrooms_needed} min={1} max={LIMITS.classrooms}
-                    onChange={(v) => set('classrooms_needed', v)} hint={records} />
-                </>
-              )}
-              {report.needs === 'no' && (
-                <Checks legend="Why not? (any that apply)" list={NO_NEED_REASONS} value={report.no_need_reasons} onChange={(v) => set('no_need_reasons', v)} />
-              )}
-              {report.needs && (
-                <fieldset className="sch-field">
-                  <legend>If you know them (optional)</legend>
-                  {COUNT_FIELDS.map(([k, t]) => (
-                    <NumberField key={k} label={t} value={report.counts[k]} min={0} max={LIMITS.count} inline
-                      onChange={(v) => set('counts', { ...report.counts, [k]: v })} />
-                  ))}
-                </fieldset>
-              )}
-              {(report.needs === 'yes' || allocated > 0) && (
-                <Choice legend="3. Is there space at the school to build classrooms?" list={SITE} value={report.site} onChange={(v) => set('site', v)} />
-              )}
-            </>
-          )}
-          {projects.length > 0 && (
-            <fieldset className="sch-field">
-              <legend>{gone ? '2' : '4'}. What is the status of {projects.length === 1 ? 'this project' : 'these projects'}?</legend>
-              {projects.map((p) => (
-                <label key={p.key} className="sch-field sch-ask">
-                  <span>{p.title}<span className="sch-sub">{p.sub}</span></span>
-                  <select value={report.projects[p.key] ?? ''} onChange={(e) => {
-                    const next = { ...report.projects };
-                    if (e.target.value) next[p.key] = e.target.value as SchoolReport['projects'][string]; else delete next[p.key];
-                    set('projects', next);
-                  }}>
-                    <option value="">Don’t know</option>
-                    {PROJECT_SEEN.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
-                  </select>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          <label className="sch-field"><span>When did you last see this?</span>
-            <input type="date" value={report.observed_on ?? ''} min="2016-01-01" max={new Date().toISOString().slice(0, 10)} onChange={(e) => set('observed_on', e.target.value || null)} />
-          </label>
-          <Choice legend="What is your relationship to the school?" list={RELATIONS} value={report.relation} onChange={(v) => set('relation', v)} />
-          <label className="sch-field"><span>{mustExplain ? 'Please explain the school’s situation (needed: your report differs from the records)' : 'Anything else? (optional)'}</span>
-            <textarea maxLength={LIMITS.notes} rows={3} value={report.notes} onChange={(e) => set('notes', e.target.value)} required={mustExplain}
-              placeholder={report.listing && report.listing !== 'open' ? 'Where is it now, or when did it close or merge?' : 'What DepEd and EDCOM 2 should know'} />
-            <span className="sch-sub">Don’t write anyone’s name or contact details.</span>
-          </label>
-          <label className="sch-field"><span>Links to photos or documents (optional, https, up to {LIMITS.photos})</span>
-            <textarea rows={2} value={report.photo_links.join('\n')} placeholder="https://…"
-              onChange={(e) => set('photo_links', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, LIMITS.photos))} />
-          </label>
-          {state.error && <p className="sch-error" role="alert">{state.error}{state.problems.length > 0 && <> ({state.problems.join(' ')})</>}</p>}
-          {state.done && <p className="sch-done" role="status">{state.done}</p>}
-          <div className="sch-actions">
-            <button type="submit" className="sch-button" disabled={state.busy || !member.enabled}>{saved ? 'Update my report' : 'Send my report'}</button>
-            {saved && <button type="button" className="sch-linkbtn" disabled={state.busy} onClick={() => void call('DELETE')}>Withdraw it</button>}
-          </div>
-          <p className="sch-sub">
-            {member.userId ? <>Signed in as {member.email}. </> : null}
-            Your name and email are seen only by the review team, never on the site.
-            {member.userId && <> <button type="button" className="sch-linkbtn" onClick={member.signOut}>Sign out</button></>}
-          </p>
-        </form>
-      )}
+      {saved && <p className="sch-done">You have sent a report on this school. You can change it or withdraw it at any time.</p>}
+      {!open && state.done && <p className="sch-done" role="status">{state.done}</p>}
+      <button type="button" className="sch-button" onClick={onOpen}>{saved ? 'Change my report' : 'Review this school'}</button>
+      <ReviewModal open={open} onClose={onClose} title={schoolName}>
+        <p className="sch-muted">{intro}</p>
+        <p className="sch-records">{records}</p>
+        {!member.enabled && <p className="sch-notice">Sign-in isn’t set up on this copy of the site, so this form can be tried but not sent.</p>}
+        {member.enabled && !member.loaded ? (
+          <p className="sch-muted">Checking your sign-in…</p>
+        ) : member.enabled && !member.userId ? (
+          // Clerk's sign-in opens over the page, so this dialog steps aside; the address keeps #review, so the form is
+          // back when the sign-in returns here.
+          <button type="button" className="sch-button" onClick={() => { closeDialog('aside'); member.signIn(); }}>Sign in to review (email code, no password)</button>
+        ) : (
+          <form className="sch-form" onSubmit={(e) => { e.preventDefault(); void call('POST'); }}>
+            <Choice legend="1. Is the school here and open?" list={LISTINGS} value={report.listing} onChange={(v) => set('listing', v)} />
+            {!gone && (
+              <>
+                <Choice legend="2. Does the school need more classrooms?" list={NEEDS} value={report.needs} onChange={(v) => set('needs', v)} />
+                {report.needs === 'yes' && (
+                  <>
+                    <Checks legend="Why? (any that apply)" list={NEED_REASONS} value={report.need_reasons} onChange={(v) => set('need_reasons', v)} />
+                    <NumberField label="About how many more classrooms, if you know?" value={report.classrooms_needed} min={1} max={LIMITS.classrooms}
+                      onChange={(v) => set('classrooms_needed', v)} hint={records} />
+                  </>
+                )}
+                {report.needs === 'no' && (
+                  <Checks legend="Why not? (any that apply)" list={NO_NEED_REASONS} value={report.no_need_reasons} onChange={(v) => set('no_need_reasons', v)} />
+                )}
+                {report.needs && (
+                  <fieldset className="sch-field">
+                    <legend>If you know them (optional)</legend>
+                    {COUNT_FIELDS.map(([k, t]) => (
+                      <NumberField key={k} label={t} value={report.counts[k]} min={0} max={LIMITS.count} inline
+                        onChange={(v) => set('counts', { ...report.counts, [k]: v })} />
+                    ))}
+                  </fieldset>
+                )}
+                {(report.needs === 'yes' || allocated > 0) && (
+                  <Choice legend="3. Is there space at the school to build classrooms?" list={SITE} value={report.site} onChange={(v) => set('site', v)} />
+                )}
+              </>
+            )}
+            {projects.length > 0 && (
+              <fieldset className="sch-field">
+                <legend>{gone ? '2' : '4'}. What is the status of {projects.length === 1 ? 'this project' : 'these projects'}?</legend>
+                {projects.map((p) => (
+                  <label key={p.key} className="sch-field sch-ask">
+                    <span>{p.title}<span className="sch-sub">{p.sub}</span></span>
+                    <select value={report.projects[p.key] ?? ''} onChange={(e) => {
+                      const next = { ...report.projects };
+                      if (e.target.value) next[p.key] = e.target.value as SchoolReport['projects'][string]; else delete next[p.key];
+                      set('projects', next);
+                    }}>
+                      <option value="">Don’t know</option>
+                      {PROJECT_SEEN.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            <label className="sch-field"><span>When did you last see this?</span>
+              <input type="date" value={report.observed_on ?? ''} min="2016-01-01" max={new Date().toISOString().slice(0, 10)} onChange={(e) => set('observed_on', e.target.value || null)} />
+            </label>
+            <Choice legend="What is your relationship to the school?" list={RELATIONS} value={report.relation} onChange={(v) => set('relation', v)} />
+            <label className="sch-field"><span>{mustExplain ? 'Please explain the school’s situation (needed: your report differs from the records)' : 'Anything else? (optional)'}</span>
+              <textarea maxLength={LIMITS.notes} rows={3} value={report.notes} onChange={(e) => set('notes', e.target.value)} required={mustExplain}
+                placeholder={report.listing && report.listing !== 'open' ? 'Where is it now, or when did it close or merge?' : 'What DepEd and EDCOM 2 should know'} />
+              <span className="sch-sub">Don’t write anyone’s name or contact details.</span>
+            </label>
+            <label className="sch-field"><span>Links to photos or documents (optional, https, up to {LIMITS.photos})</span>
+              <textarea rows={2} value={report.photo_links.join('\n')} placeholder="https://…"
+                onChange={(e) => set('photo_links', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, LIMITS.photos))} />
+            </label>
+            {state.error && <p className="sch-error" role="alert">{state.error}{state.problems.length > 0 && <> ({state.problems.join(' ')})</>}</p>}
+            {state.done && <p className="sch-done" role="status">{state.done}</p>}
+            <div className="sch-actions">
+              <button type="submit" className="sch-button" disabled={state.busy || !member.enabled}>{saved ? 'Update my report' : 'Send my report'}</button>
+              {saved && <button type="button" className="sch-linkbtn" disabled={state.busy} onClick={() => void call('DELETE')}>Withdraw it</button>}
+              {state.done && <button type="button" className="sch-linkbtn" onClick={() => closeDialog()}>Close</button>}
+            </div>
+            <p className="sch-sub">
+              {member.userId ? <>Signed in as {member.email}. </> : null}
+              Your name and email are seen only by the review team, never on the site.
+              {member.userId && <> <button type="button" className="sch-linkbtn" onClick={member.signOut}>Sign out</button></>}
+            </p>
+          </form>
+        )}
+      </ReviewModal>
     </div>
+  );
+}
+
+/** Closes the open review dialog; 'aside' keeps #review in the address (for Clerk's sign-in, which opens over the page). */
+function closeDialog(how: 'aside' | '' = '') {
+  document.querySelector<HTMLDialogElement>('dialog.sch-modal[open]')?.close(how);
+}
+
+/** A native modal dialog: focus stays inside, Escape or the backdrop or × closes it, the page behind doesn't scroll. */
+function ReviewModal({ open, onClose, title, children }: { open: boolean; onClose: (aside: boolean) => void; title: string; children: ReactNode }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = dialog.current;
+    if (!d || !open) return;
+    if (!d.open) d.showModal();
+    const root = document.documentElement;
+    const overflow = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = overflow;
+      // Closed by the page (unmounted, or React's dev double effect), not by the reader: the close handler ignores it.
+      if (d.open) d.close('unmount');
+    };
+  }, [open]);
+  return (
+    <dialog ref={dialog} className="sch-modal" aria-labelledby="sch-modal-title"
+      // close() keeps the last returnValue, so it is read once and cleared.
+      onClose={(e) => {
+        const d = e.currentTarget, how = d.returnValue;
+        d.returnValue = '';
+        if (how !== 'unmount') onClose(how === 'aside');
+      }}
+      // A click on the backdrop lands on the dialog itself (its content fills it edge to edge).
+      onClick={(e) => { if (e.target === e.currentTarget) e.currentTarget.close(); }}>
+      <div className="sch-modal-head">
+        <div>
+          <p className="sch-modal-eyebrow">Review this school</p>
+          <h2 id="sch-modal-title" className="sch-modal-title">{title}</h2>
+        </div>
+        <button type="button" className="sch-modal-x" aria-label="Close" onClick={() => dialog.current?.close('')}>×</button>
+      </div>
+      <div className="sch-modal-body">{open && children}</div>
+    </dialog>
   );
 }
 

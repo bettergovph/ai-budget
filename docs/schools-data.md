@@ -130,4 +130,4 @@ EDCOM 2's shortage sheet (`/data/schools-src/edcom2-sheet/shortage.csv`) is now 
 
 ## Review buttons (2026-11-24)
 
-Every row of `/schools/list` has a **Review** button with the school's review count. So do the map's school card and the top of each school page. The button opens the school's page at `#review`: the form ("Review this school") opens and scrolls into view, or the sign-in button shows first.
+Every row of `/schools/list` has a **Review** button with the school's review count. So do the map's school card and the top of each school page. The button opens the school's page at `#review`, and the form opens in a **modal** over the page (`ReviewModal` in `School.tsx`, a native `<dialog>`: focus stays inside, Escape, the backdrop or × closes it; full screen on phones). The address keeps `#review` while it is open. Signed out, the modal shows the sign-in button first; Clerk's sign-in opens over the page, so the modal steps aside and opens again after sign-in. The sidebar keeps a short card: what the records say and a Review (or "Change my report") button.
