@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
+import { SCHOOLS_OVERVIEW, SCHOOLS_ROOT } from '../lib/schools';
 import { INDICATORS_ROOT } from '../lib/indicators';
 
 /**
@@ -217,6 +218,13 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
               GAA 2000–2026
             </Link>
             <Link
+              to={SCHOOLS_OVERVIEW}
+              title="Schools: classroom shortages, allocations and field reports"
+              className={`primary-nav-link ${isActivePath(location.pathname, SCHOOLS_ROOT) ? 'active' : ''}`}
+            >
+              Schools
+            </Link>
+            <Link
               to={CITIZEN_REPORTS_ROOT}
               className={`primary-nav-link ${isActivePath(location.pathname, CITIZEN_REPORTS_ROOT) ? 'active' : ''}`}
             >
@@ -289,6 +297,9 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           )}
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>
+          </Link>
+          <Link className="drawer-link" to={SCHOOLS_OVERVIEW} onClick={() => setMenuOpen(false)}>
+            Schools <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to={CITIZEN_REPORTS_ROOT} onClick={() => setMenuOpen(false)}>
             Citizen Reports <span className="drawer-link-arrow">→</span>
