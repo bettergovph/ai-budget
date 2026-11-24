@@ -50,6 +50,7 @@ CREATE TABLE schools (
   join_enrollment TEXT,
   join_enrollment_method TEXT,
   registry_row INTEGER NOT NULL,
+  in_registry INTEGER,
   PRIMARY KEY (school_id)
 );
 CREATE TABLE schools_shortage_2023 (

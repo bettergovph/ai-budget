@@ -134,7 +134,8 @@ async function areas(env: ReviewEnv, url: URL): Promise<Response> {
     if (!missingTable(e)) throw e;
   }
   const unplaced = await env.DB.prepare(
-    `SELECT COUNT(*) AS n, COALESCE(SUM(classrooms), 0) AS cr FROM schools_sbp_projects_2026 WHERE school_in_registry = 0`,
+    // ID-linked projects whose school is in no table here (0 since the shortage-list-only schools were added)
+    `SELECT COUNT(*) AS n, COALESCE(SUM(classrooms), 0) AS cr FROM schools_sbp_projects_2026 WHERE school_id IS NOT NULL AND school_id NOT IN (SELECT school_id FROM schools)`,
   ).first<{ n: number; cr: number }>();
   return reply({
     meta: { generated_at: new Date().toISOString(), level, unplaced_projects: unplaced?.n ?? 0, unplaced_classrooms: unplaced?.cr ?? 0 },
@@ -283,7 +284,7 @@ async function list(env: ReviewEnv, url: URL): Promise<Response> {
   const run = (withReports: boolean) => Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS n ${from} ${whereSql}`).bind(...binds).first<{ n: number }>(),
     env.DB.prepare(
-      `SELECT s.school_id, s.school_name, s.region_key, s.division, s.province, s.municipality, s.sector, s.curricular_offering,
+      `SELECT s.school_id, s.school_name, s.region_key, s.division, s.province, s.municipality, s.sector, s.curricular_offering, s.in_registry,
               e.enrolment_total, s.instructional_classrooms, ${SHR} AS shortage, ${ALLOC} AS allocated, ${STATUS} AS status,
               ${LEVEL} AS level, ${RATE} AS shortage_rate, p.modalities, p.budget AS sbp_budget_php,
               ${withReports ? reportsCol : "0"} AS reports

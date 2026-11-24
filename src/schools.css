@@ -198,3 +198,4 @@
   .sch-listgrid { grid-template-columns: 1fr; }
   .sch-listside { position: static; }
 }
+.sch-notice-info { background: var(--accent-soft); border-color: #c9d8f8; }

@@ -351,7 +351,7 @@ export default function SchoolsOverview() {
 
             <h2 className="sch-h2">Reading these figures</h2>
             <ul className="sch-prose sch-notes">
-              <li>The shortage is DepEd’s for SY 2023–2024, for the {num(all.with_shortage_data)} schools with a figure; allocations are FY 2026. {NO_DATA_EXPLAINED} DepEd’s fractional counts are rounded to whole classrooms per school (the unrounded total is 164,763).</li>
+              <li>The shortage is DepEd’s for SY 2023–2024, for the {num(all.with_shortage_data)} schools with a figure; allocations are FY 2026. {NO_DATA_EXPLAINED} Shortages are in whole classrooms per school, as in EDCOM 2’s sheet (DepEd’s fractional figures add up to 165,443), and include 300 schools on DepEd’s shortage list that are not in its registry (no map location, facilities or enrolment).</li>
               <li>The dashboard follows EDCOM 2’s definitions. Reported concerns are subject to review and validation before any figure changes.</li>
               <li>The cost of the whole shortage is an estimate: the shortage times the 2026 list’s average cost of a classroom with a budget. Real costs vary with storeys, site and region.</li>
               <li>DepEd’s school-building line is not only classrooms: it also pays for repairs, furniture and other facilities. Much of it is carried out by DPWH, so DPWH’s “DepEd BEFF” contracts and the GAA line are the same budget seen from two sides: don’t add them.</li>

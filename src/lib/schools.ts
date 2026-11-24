@@ -16,7 +16,7 @@ export const SCHOOLS_API = '/api/schools';
  * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by
  * address, so a new address is how a new shape reaches readers at once.
  */
-export const SCHOOLS_API_VERSION = '7';
+export const SCHOOLS_API_VERSION = '8';
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -42,6 +42,8 @@ export interface ListRow {
   municipality: string | null;
   sector: string;
   curricular_offering: string | null;
+  /** 0: on DepEd's shortage list only, not in its registry (no location, facilities or enrolment). */
+  in_registry: 0 | 1;
   enrolment_total: number | null;
   instructional_classrooms: number | null;
   /** Whole classrooms (DepEd's figure rounded); null = no SY 2023–2024 shortage data. */
@@ -489,6 +491,9 @@ export const shortageRate = (shortage: number | null | undefined, available: num
 /** Why a school has no shortage figure (EDCOM 2's answer, 2026-10-16). */
 export const NO_DATA_EXPLAINED =
   'Shortage estimates use SY 2023–2024 as the reference year. No figure means the School ID was not found in that year’s data: it was missing from the dataset, or the school opened after SY 2023–2024.';
+/** What a school only on DepEd's shortage list (not in its registry) has, and lacks. */
+export const SHORTAGE_LIST_ONLY =
+  'This school is on DepEd’s SY 2023–2024 classroom shortage list but not in its school registry, so we have only its shortage and place: no map location, facilities or enrolment. Its School ID may have changed, or the school may have closed or merged; a field report helps.';
 /** EDCOM 2's assumed cost of a classroom, for the funds tied to excess allocations. */
 export const EDCOM2_COST_PER_CLASSROOM = 2_500_000;
 

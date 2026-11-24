@@ -2,7 +2,7 @@
 "School Shortage & Project Join Extract" workbook (EDCOM2 / DepEd data pack)
 and its field dictionary into `schools_*` tables.
 
-    npm run build:schools-d1 -- [extract.xlsx] [field_dictionary.csv]
+    npm run build:schools-d1 -- [extract.xlsx] [field_dictionary.csv] [shortage.csv]
     npx wrangler d1 execute budget --local --file=data/schools/d1-import.sql
 
 One wide registry row per school becomes one row per *source* that was
@@ -20,6 +20,10 @@ source's table (the workbook's rule "blank is not zero" holds by construction):
   schools_fields             the field dictionary + where each field lives in D1
   schools_meta               source file hashes, counts, build time
 
+The 300 schools on DepEd's SY 2023–2024 shortage list (EDCOM 2's sheet, third input) that are not in the registry
+are added to `schools` with `in_registry` = 0 and their shortage row; the sheet must equal every attached school's
+shortage rounded to whole classrooms.
+
 It also writes data/schools/registry-names.csv (names, place, 2022 point per school) for build_dpwh_links.py.
 
 The SBP_2026_* roll-ups are not stored: view `schools_sbp_rollup_2026`
@@ -34,6 +38,7 @@ as written. This file only ever drops and recreates `schools_*` tables and
 the one view; future public-report tables must use another prefix.
 """
 
+import collections
 import csv
 import hashlib
 import json
@@ -54,6 +59,8 @@ MAX_STATEMENT = 95_000  # D1 limit is 100 KB per statement
 
 XLSX = sys.argv[1] if len(sys.argv) > 1 else "/data/schools-src/school_shortage_allocation_join_extract.xlsx"
 DICT_CSV = sys.argv[2] if len(sys.argv) > 2 else "/data/schools-src/field_dictionary.csv"
+# DepEd's school-level shortage list, SY 2023–2024, in whole classrooms (EDCOM 2's shortage.xlsx, Sheet1, as CSV).
+SHEET = sys.argv[3] if len(sys.argv) > 3 else "/data/schools-src/edcom2-sheet/shortage.csv"
 
 PLACEHOLDERS = {"nan", "#N/A", "-", "N/A", "None", "NaN"}
 
@@ -102,6 +109,7 @@ SCHOOLS = [
     ("join_enrollment", "JOIN_enrollment_status", "text"),
     ("join_enrollment_method", "JOIN_enrollment_method", "text"),
     ("registry_row", None, "int"),
+    ("in_registry", None, "bool"),
 ]
 
 SHORTAGE = [
@@ -357,7 +365,7 @@ def attached(row, cols):
 
 
 def main():
-    for p in (XLSX, DICT_CSV):
+    for p in (XLSX, DICT_CSV, SHEET):
         if not os.path.exists(p):
             fail(f"missing input {p}")
     wb = openpyxl.load_workbook(XLSX, read_only=True, data_only=True)
@@ -409,6 +417,7 @@ def main():
             fail(f"schools: unknown region {s['region']!r}")
         s["region_key"] = REGION_KEYS[s["region"]]
         s["registry_row"] = i
+        s["in_registry"] = 1
         schools.append(s)
 
         def take(cols, status_col, sink, table):
@@ -435,6 +444,68 @@ def main():
                 else:
                     e[col + "_note"] = None
 
+    # --- DepEd's shortage list: the schools on it that are not in the registry ---
+    # EDCOM 2's sheet is the whole list in whole classrooms (47,662 schools). Every school the pack attached must have
+    # the sheet's value once rounded half up (as D1's ROUND does); the schools it could not attach (not in the registry,
+    # even by New School ID) are added as schools of their own, `in_registry` = 0, with only their shortage row.
+    with open(SHEET, encoding="utf-8-sig", newline="") as f:
+        sheet = [r for r in csv.DictReader(f)]
+    by_src = {r["School ID"].strip(): r for r in sheet}
+    if len(by_src) != len(sheet):
+        fail("shortage sheet: repeated School IDs")
+    reg_by_id = {x["school_id"]: x for x in schools}
+    off = 0
+    for sh in shortage:
+        r = by_src.get(sh["src_school_id"])
+        if r is None:
+            fail(f"shortage sheet: attached School ID {sh['src_school_id']} is not on the sheet")
+        if math.floor(sh["total_shortage"] + 0.5) != float(r["Total_Shortage"]):
+            off += 1
+    if off:
+        fail(f"shortage sheet: {off} attached schools differ from the sheet after rounding")
+    counts["shortage_sheet_rows"] = len(sheet)
+    # The sheet spells places its own way ("Bacarra", "Zamboanga Del Norte"); the registry's spelling, learnt from the
+    # attached schools, is used where known, else the sheet's in capitals.
+    up = lambda v: re.sub(r"\s+", " ", (v or "")).strip().upper()
+    learn = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
+    for sh in shortage:
+        r, x = by_src[sh["src_school_id"]], reg_by_id[sh["school_id"]]
+        learn["division"][up(r["Division"])][x["division"]] += 1
+        learn["province"][up(r["Province"])][x["province"]] += 1
+        learn["muni"][(up(r["Province"]), up(r["City/Municipality (24-25)"]))][x["municipality"]] += 1
+        learn["leg"][(up(r["Province"]), up(r["Leg District"]))][x["legislative_district"]] += 1
+    known = lambda kind, key: learn[kind][key].most_common(1)[0][0] if learn[kind].get(key) else None
+    attached_src = {sh["src_school_id"] for sh in shortage}
+    added = 0
+    for r in sheet:
+        sid = r["School ID"].strip()
+        if sid in attached_src:
+            continue
+        if sid in seen:
+            fail(f"shortage sheet: {sid} is in the registry but was not attached")
+        region = re.sub(r"\s+", " ", r["Region"]).strip()
+        if region not in REGION_KEYS:
+            fail(f"shortage sheet: unknown region {region!r}")
+        prov = known("province", up(r["Province"])) or up(r["Province"])
+        lms = {"LMS": "YES", "Not LMS": "NO"}.get((r["LMS"] or "").strip())
+        added += 1
+        sch = {
+            "school_id": sid, "new_school_id": clean(r["New School ID"], "id", "sheet.new_school_id"), "region": region,
+            "region_key": REGION_KEYS[region], "division": known("division", up(r["Division"])) or clean(r["Division"], "text", "x"),
+            "district": None, "school_name": clean(r["School Name"], "text", "x"), "street_address": clean(r["Street Address"], "addr", "schools.street_address"),
+            "mother_school_id": None, "school_head_name": None, "school_head_position": None, "province": prov,
+            "municipality": known("muni", (up(r["Province"]), up(r["City/Municipality (24-25)"]))) or up(r["City/Municipality (24-25)"]),
+            "legislative_district": known("leg", (up(r["Province"]), up(r["Leg District"]))) or clean(r["Leg District"], "text", "x"),
+            "barangay": clean(r["Barangay"], "text", "x"), "sector": "Public", "subclassification": None, "school_type": None,
+            "implementing_unit": None, "curricular_offering": clean(r["Level"], "text", "x"), "last_mile_school": lms,
+            "iped_implementing": None, "join_shortage": "Matched", "join_shortage_method": "DepEd shortage list only (not in the registry)",
+            "registry_row": len(extract) + added, "in_registry": 0,
+        }
+        schools.append(sch)
+        seen.add(sid)
+        shortage.append(project({"School_ID_Normalized": sid, **{f"SHORT_2023_{k}": v for k, v in r.items()}}, SHORTAGE, "schools_shortage_2023"))
+    counts["schools_from_shortage_list_only"] = added
+
     # --- registry names, place and points, for matching other datasets to schools (build_dpwh_links.py) ---
     os.makedirs(OUT_DIR, exist_ok=True)
     by_id = {c["school_id"]: c for c in coords}
@@ -449,7 +520,7 @@ def main():
                         s["province"] or "", s["municipality"] or "", c["latitude"] if ok else "", c["longitude"] if ok else ""])
 
     # --- projects + exploded review candidates ---
-    registry_ids = seen
+    registry_ids = {x["school_id"] for x in schools if x["in_registry"]}
     projects, candidates = [], []
     for row in projects_src:
         p = project(row, PROJECTS, "schools_sbp_projects_2026")
@@ -552,7 +623,8 @@ def main():
         fail(f"columns missing from the dictionary: {sorted(home)}")
     derived = {
         ("schools", "region_key"): "Region key shared with the House bill tables (I, II, … XIII for CARAGA, NIR, BARMM); NULL for PSO (schools abroad).",
-        ("schools", "registry_row"): "Row order of the school in the workbook's School Extract sheet (1 = first data row).",
+        ("schools", "registry_row"): "Row order of the school in the workbook's School Extract sheet (1 = first data row); schools from the shortage list only follow, from 60,205.",
+        ("schools", "in_registry"): "1 for a school in DepEd's registry (the data pack's base); 0 for a school only on DepEd's SY 2023–2024 shortage list (EDCOM 2's sheet), added with its shortage row only: no coordinates, facilities or enrolment.",
         ("schools_coordinates_2022", "in_ph_bbox"): "1 when the 2022 coordinates fall inside a rough Philippine bounding box (lat 4.2–21.5, lon 116–127); 0 flags a likely swapped or wrong point.",
         ("schools_enrollment_2023", "ratio_enrolment_instr_cr_note"): "Source text kept when the ratio is not a number (e.g. 'No instr. CR'); the ratio column is then NULL.",
         ("schools_enrollment_2023", "ratio_enrolment_all_rooms_note"): "Source text kept when the ratio is not a number; the ratio column is then NULL.",
@@ -570,6 +642,7 @@ def main():
         "source_workbook": os.path.basename(XLSX),
         "source_workbook_sha256": sha256(XLSX),
         "field_dictionary_sha256": sha256(DICT_CSV),
+        "shortage_sheet_sha256": sha256(SHEET),
         "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "rows": {"schools": len(schools), "shortage_2023": len(shortage), "coordinates_2022": len(coords),
                  "facilities_2023": len(facilities), "enrollment_2023": len(enrollment),
@@ -577,11 +650,11 @@ def main():
                  "fields": len(fields)},
         "checks": dict(sorted(counts.items())),
     }
-    expect = {"schools": 60204, "shortage_2023": 47362, "coordinates_2022": 47828, "facilities_2023": 59101,
+    expect = {"schools": 60504, "shortage_2023": 47662, "coordinates_2022": 47828, "facilities_2023": 59101,
               "enrollment_2023": 47449, "sbp_projects_2026": 5652, "join_review": 52641}
     for k, v in expect.items():
         if meta["rows"][k] != v:
-            fail(f"row count {k}: {meta['rows'][k]} (workbook Read Me says {v})")
+            fail(f"row count {k}: {meta['rows'][k]} (expected {v}: the workbook's Read Me, plus 300 schools from the shortage list)")
 
     tables = [
         ("schools", SCHOOLS, schools, "PRIMARY KEY (school_id)"),

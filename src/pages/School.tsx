@@ -13,7 +13,7 @@ import { useMember } from '../lib/hgab-review-member';
 import { php } from '../lib/format';
 import {
   COUNT_FIELDS, DPWH_MATCH_LABEL, LIMITS, LISTINGS, NEEDS, NEED_REASONS, NO_DATA_EXPLAINED, NO_NEED_REASONS, PROJECT_SEEN, RELATIONS,
-  SCHOOLS_API, SCHOOLS_LIST, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
+  SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_LIST_ONLY, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
   shortageRate, statusOf, type DpwhProject, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
 } from '../lib/schools';
 
@@ -50,6 +50,7 @@ function School() {
               </p>
             </div>
             <PreviewNotice />
+            {s.in_registry === 0 && <p className="sch-notice sch-notice-info" role="note">{SHORTAGE_LIST_ONLY}</p>}
 
             <div className="sch-schoolgrid">
               <div className="sch-schoolmain">

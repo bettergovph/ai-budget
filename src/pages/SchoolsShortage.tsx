@@ -158,10 +158,14 @@ export default function SchoolsShortage() {
       {divisions.data && divisions.data.meta.unplaced_projects > 0 && (
         <p className="sch-footnote">
           Not counted above: {num(divisions.data.meta.unplaced_projects)} projects ({num(divisions.data.meta.unplaced_classrooms)} classrooms) whose
-          School ID is in DepEd’s shortage list but not in its registry. Shortages are DepEd’s figures rounded to whole classrooms per school
-          (the unrounded national total is 164,763); schools without a shortage figure have no data, not zero.
+          School ID is in no list here.
         </p>
       )}
+      <p className="sch-footnote">
+        Shortages are DepEd’s SY 2023–2024 figures in whole classrooms, per school (EDCOM 2’s sheet; DepEd’s fractional figures add up to
+        165,443). They include 300 schools that are on DepEd’s shortage list but not in its school registry: they count in every total and
+        list, but have no map location, facilities or enrolment. Schools without a shortage figure have no data, not zero.
+      </p>
     </SchoolsChrome>
   );
 }

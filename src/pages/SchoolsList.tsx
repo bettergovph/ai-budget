@@ -123,7 +123,7 @@ export default function SchoolsList() {
                     <tbody>
                       {data.rows.map((r) => (
                         <tr key={r.school_id}>
-                          <td><Link to={schoolPath(r.school_id)}>{r.school_name}</Link><span className="sch-sub">{r.school_id} · {r.curricular_offering ?? r.sector}</span></td>
+                          <td><Link to={schoolPath(r.school_id)}>{r.school_name}</Link><span className="sch-sub">{r.school_id} · {r.curricular_offering ?? r.sector}{r.in_registry === 0 ? ' · shortage list only' : ''}</span></td>
                           <td>{[r.municipality, r.province].filter(Boolean).join(', ')}<span className="sch-sub">{regionName(r.region_key)} · {r.division}</span></td>
                           <td className="num">{num(r.enrolment_total)}</td>
                           <td className="num">{num(r.instructional_classrooms)}</td>
