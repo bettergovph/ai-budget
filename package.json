@@ -15,6 +15,8 @@
     "build:hgab-leaderboard": "tsx scripts/build-hgab-leaderboard.ts",
     "build:hgab-geo": "tsx scripts/build-hgab-geo.ts",
     "build:hgab-d1": "tsx scripts/build-hgab-d1.ts",
+    "build:schools-d1": "bash scripts/schools/run.sh build_d1.py",
+    "build:schools-dpwh": "bash scripts/schools/run.sh build_dpwh_links.py",
     "build:hgab-share": "tsx scripts/build-hgab-share-images.ts",
     "build:hgab-changes-list": "tsx scripts/build-hgab-changes-list.ts",
     "build:hgab-poster": "tsx scripts/build-hgab-poster.ts",

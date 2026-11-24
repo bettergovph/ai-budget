@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CHANGES_LIST_ROOT } from '../lib/hgab-changes-list';
 import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
+import { SCHOOLS_ROOT } from '../lib/schools';
 import { INDICATORS_ROOT } from '../lib/indicators';
 
 /**
@@ -78,7 +79,8 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
   const gaaYear = /^\/gaa\/(\d{4})(?:\/|$)/.exec(location.pathname)?.[1];
   const coverage = location.pathname.startsWith('/learn') || location.pathname.startsWith('/glossary')
     || location.pathname.startsWith(CITIZEN_REPORTS_ROOT) || location.pathname.startsWith(INDICATORS_ROOT)
-    ? null // the guide, the glossary and the citizen reports span several documents; a fiscal-year tag would mislead
+    || location.pathname.startsWith('/schools')
+    ? null // the guide, the glossary, the citizen reports and the schools span several documents; a fiscal-year tag would mislead
     : gaaYear
     ? `FY ${gaaYear}`
     : /^\/gaa\/(?:roads|multi-purpose|flood-control)(?:\/|$)/.test(location.pathname)
@@ -211,7 +213,7 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
             <Link
               to="/gaa"
               title="General Appropriations Acts, 2000–2026"
-              className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') ? 'active' : ''}`}
+              className={`primary-nav-link ${isActivePath(location.pathname, '/gaa') || location.pathname.startsWith('/d/') || isActivePath(location.pathname, SCHOOLS_ROOT) ? 'active' : ''}`}
             >
               GAA 2000–2026
             </Link>

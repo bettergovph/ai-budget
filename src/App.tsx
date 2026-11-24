@@ -14,6 +14,7 @@ import { MPB_POPULATION_ROOT } from './lib/mpb-population';
 import { MPB_DOCS_ROOT } from './lib/mpb-documents';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from './lib/mpb-compare';
 import { PARTY_DATA_ROOT } from './lib/hgab-congress-seats';
+import { SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE } from './lib/schools';
 import TermsGate from './components/TermsGate';
 
 const National = lazy(() => import('./pages/National'));
@@ -77,6 +78,12 @@ const HgabReviewReport = lazy(() => import('./pages/HgabReviewReport'));
 const HgabReviewHowto = lazy(() => import('./pages/HgabReviewHowto'));
 const HgabFap = lazy(() => import('./pages/HgabFap'));
 const HgabPartyData = lazy(() => import('./pages/HgabPartyData'));
+const Schools = lazy(() => import('./pages/Schools'));
+const SchoolsList = lazy(() => import('./pages/SchoolsList'));
+const SchoolsShortage = lazy(() => import('./pages/SchoolsShortage'));
+const SchoolsAbout = lazy(() => import('./pages/SchoolsAbout'));
+const SchoolsOverview = lazy(() => import('./pages/SchoolsOverview'));
+const SchoolPage = lazy(() => import('./pages/School'));
 
 /**
  * Lazy-chunk fallback. Chunks are a few KB and cached after first load, so a
@@ -154,6 +161,13 @@ export default function App() {
           <Route path="/learn" element={<Learn />} />
           <Route path="/glossary" element={<Glossary />} />
           <Route path="/citizen-reports" element={<CitizenReports />} />
+          {/* Schools directory: map, list, shortages vs 2026 classrooms, one page per school with field reports (lib/schools.ts). */}
+          <Route path={SCHOOLS_ROOT} element={<Schools />} />
+          <Route path={SCHOOLS_LIST} element={<SchoolsList />} />
+          <Route path={SCHOOLS_SHORTAGE} element={<SchoolsShortage />} />
+          <Route path={SCHOOLS_ABOUT} element={<SchoolsAbout />} />
+          <Route path={SCHOOLS_OVERVIEW} element={<SchoolsOverview />} />
+          <Route path="/schools/:id" element={<SchoolPage />} />
           <Route path="/indicators" element={<Indicators />} />
           <Route path="/indicators/places/:area" element={<IndicatorPlace />} />
           <Route path="/indicators/budget-by-region" element={<BudgetByRegion />} />

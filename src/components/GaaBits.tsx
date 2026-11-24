@@ -1,5 +1,5 @@
 /**
- * The GAA section's chrome for its topic pages (roads and bridges, multi-purpose buildings, flood control): the masthead
+ * The GAA section's chrome for its topic pages (roads and bridges, multi-purpose buildings, flood control, schools): the masthead
  * with the GAA tabs,
  * "All years" then a dropdown per topic, and a compact page heading whose breadcrumb leads back to the GAA explorer.
  * Jason (2026-11-23): "These are no longer hgab but rather should be in the GAA", then "Make the roads and bridges a
@@ -16,6 +16,7 @@ import { MPB_MAP_ROOT } from '../lib/hgab-mpb-years';
 import { FLOOD_COMPARE_ROOT, MPB_COMPARE_ROOT } from '../lib/mpb-compare';
 import { MPB_POPULATION_ROOT } from '../lib/mpb-population';
 import { MPB_DOCS_ROOT } from '../lib/mpb-documents';
+import { SCHOOLS_ABOUT, SCHOOLS_LIST, SCHOOLS_OVERVIEW, SCHOOLS_ROOT, SCHOOLS_SHORTAGE } from '../lib/schools';
 import '../hgab.css';
 
 /**
@@ -23,7 +24,11 @@ import '../hgab.css';
  * control came from the House bill nav on 2026-11-23 (Jason: "Next is we move the MPBs as well, Flood Control there as
  * well"), with the House menu's labels; their old addresses redirect (lib/moved-pages.ts).
  */
-const GAA_TOPICS: ReadonlyArray<{ key: string; label: string; items: ReadonlyArray<{ key: string; label: string; to: string }> }> = [
+const GAA_TOPICS: ReadonlyArray<{
+  key: string; label: string; items: ReadonlyArray<{ key: string; label: string; to: string }>;
+  /** Every page under this address belongs to the topic (a school's own page, say), not only the listed ones. */
+  prefix?: string;
+}> = [
   {
     key: 'roads',
     label: 'Roads and bridges',
@@ -44,6 +49,19 @@ const GAA_TOPICS: ReadonlyArray<{ key: string; label: string; items: ReadonlyArr
     ],
   },
   { key: 'flood-control', label: 'Flood control', items: [{ key: 'flood-control', label: 'Flood control', to: FLOOD_COMPARE_ROOT }] },
+  // Jason (2026-11-24): "The schools should be in the GAA 2000-2026 sub link for now."
+  {
+    key: 'schools',
+    label: 'Schools',
+    prefix: SCHOOLS_ROOT,
+    items: [
+      { key: 'overview', label: 'Overview', to: SCHOOLS_OVERVIEW },
+      { key: 'map', label: 'Map', to: SCHOOLS_ROOT },
+      { key: 'list', label: 'List', to: SCHOOLS_LIST },
+      { key: 'shortage', label: 'Shortages vs classrooms', to: SCHOOLS_SHORTAGE },
+      { key: 'about', label: 'About the data', to: SCHOOLS_ABOUT },
+    ],
+  },
 ];
 
 /** The topic dropdowns, for the GAA tabs (here and on /gaa). */
@@ -53,6 +71,7 @@ export function GaaTopicMenus() {
     <>
       {GAA_TOPICS.map((t) => {
         const current = t.items.find((x) => x.to === here)?.key ?? null;
+        const inside = current != null || (t.prefix != null && (here === t.prefix || here.startsWith(`${t.prefix}/`)));
         if (t.items.length === 1) {
           return (
             <Link key={t.key} to={t.items[0].to} className={current ? 'active' : ''} aria-current={current ? 'page' : undefined}>
@@ -60,7 +79,7 @@ export function GaaTopicMenus() {
             </Link>
           );
         }
-        return <SectionMenu key={t.key} label={t.label} items={t.items} active={current != null} currentKey={current} />;
+        return <SectionMenu key={t.key} label={t.label} items={t.items} active={inside} currentKey={current} />;
       })}
     </>
   );

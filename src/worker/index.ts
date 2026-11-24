@@ -38,6 +38,7 @@ import { handlePublicApi } from "./public-api";
 import { handleMcp } from "./mcp";
 import { handleHearings } from "./hearings";
 import { REVIEWS_API, handleReviews } from "./hgab-reviews";
+import { SCHOOLS_API, handleSchools } from "./schools-api";
 import { handleDocumentProxy } from "./hgab-document-proxy";
 import { DOCUMENT_PROXY_API } from "../lib/hgab-review-api";
 import { SENATE_COPIES_API, handleSenateCopies } from "./hgab-senate-copies";
@@ -1427,7 +1428,7 @@ async function handleNepRollup(env: Env, dimension: string, url: URL): Promise<R
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     // ---- short addresses for posters (/review → the project reviewer); 302 so a target can move ----
@@ -1484,6 +1485,11 @@ export default {
       if (!DEPT_ID_RE.test(deptId)) return badRequest("deptId must be two digits");
       try { return await handleProgramsPage(env, deptId, url); }
       catch (e) { return Response.json({ error: "query_failed", message: (e as Error).message }, { status: 500 }); }
+    }
+
+    // ---- Schools directory + field reports (D1 schools_*, school_reports) ----
+    if (url.pathname === SCHOOLS_API || url.pathname.startsWith(`${SCHOOLS_API}/`)) {
+      return handleSchools(request, env, url, ctx);
     }
 
     // ---- Project reviewer: reviews sent by signed-in members (D1) ----
