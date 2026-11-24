@@ -198,3 +198,4 @@
   .sch-listgrid { grid-template-columns: 1fr; }
   .sch-listside { position: static; }
 }
+.sch-sub-cell { font-size: 12px; color: var(--ink-3); }
