@@ -117,5 +117,7 @@ Jason uploaded EDCOM 2's `shortage.xlsx` (Sheet1). It is DepEd's school-level sh
 - **EDCOM 2's headline tiles (25,823 schools, 165,443 classrooms)** use the *fractional* version of the same figures, like our data pack: ours unrounded (25,680 schools, 164,763) plus the same schools outside the registry (≈143 schools, ≈680). This is why their two shortage figures differ by 79.
 - **One row in the sheet doesn't add up:** School ID 302501 has K–10 3 + SHS 4 but a total of 6.
 
-**Still open:** EDCOM 2's 32,305 classrooms with allocation. That needs the FY 2026 SBP Masterlist as they joined it.
+**Done 2026-11-24:** the 300 schools are added (`in_registry` = 0) and loaded into production. Our totals now equal the sheet: 165,364 classrooms short at 25,245 schools, out of 47,662 with shortage data. Every ID-linked project now lands on a school, so classrooms for allocation are 31,905.
+
+**Still open:** EDCOM 2's 32,305 classrooms with allocation, 400 more than ours. These are probably among the 92 projects the pack left for review (514 classrooms). Finding them needs the FY 2026 SBP Masterlist as EDCOM 2 joined it.
 
