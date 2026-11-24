@@ -17,17 +17,27 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { FeatureCollection, Point } from 'geojson';
 import {
-  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, UNRATED, coverageClass, statusOf,
-  type AreaRow, type PointsFile, type SectorCode,
+  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, PROJECT_SETS, SHORTAGE_CLASSES, UNRATED, coverageClass, statusOf,
+  type AreaRow, type PointsFile, type ProjectSet, type SectorCode,
 } from '../lib/schools';
 
 setWorkerUrl(workerUrl);
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const PH: [[number, number], [number, number]] = [[116.9, 4.6], [126.8, 21.1]];
+/** The schools a project set rings: FY 2026 allocations, or FY 2027 flags (Y27 bits: 1 NEP, 2 House bill, 4 added). */
+const RING_FILTER: Record<ProjectSet, ExpressionSpecification> = {
+  sbp2026: ['>', ['get', 'cr'], 0],
+  nep2027: ['==', ['%', ['get', 'y'], 2], 1],
+  house2027: ['>=', ['%', ['get', 'y'], 4], 2],
+  added2027: ['>=', ['get', 'y'], 4],
+};
+
 export type MapProps =
   | {
-    mode: 'points'; points: PointsFile['rows']; sectors: SectorCode[]; projectsOnly: boolean;
+    mode: 'points'; points: PointsFile['rows']; sectors: SectorCode[];
+    /** Which projects are ringed, and whether only schools with them are shown. */
+    ring: ProjectSet; projectsOnly: boolean;
     /** Colour each school by its shortage level (EDCOM 2's, blue) or by its allocation status. */
     colorBy?: 'level' | 'status';
     selected: string | null; onPick: (id: string) => void; fit?: [[number, number], [number, number]] | null;
@@ -48,9 +58,9 @@ const statusColor: ExpressionSpecification = ['match', ['get', 'st'],
 function pointsData(rows: PointsFile['rows']): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
-    features: rows.map(([id, lon, lat, shortage, cr, sec, level]) => ({
+    features: rows.map(([id, lon, lat, shortage, cr, sec, level, y]) => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: { id, c: level, s: shortage ?? -1, cr, sec, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
+      properties: { id, c: level, s: shortage ?? -1, cr, sec, y, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
     })),
   };
 }
@@ -158,8 +168,16 @@ export default function SchoolsMap(props: MapProps) {
     if (p.mode === 'points') {
       src.setData(pointsData(p.points));
       const sectorFilter: ExpressionSpecification = ['in', ['get', 'sec'], ['literal', p.sectors]];
-      m.setFilter('sch-dots', p.projectsOnly ? ['all', sectorFilter, ['>', ['get', 'cr'], 0]] : sectorFilter);
-      m.setFilter('sch-projects', p.colorBy === 'status' ? ['==', ['get', 'cr'], -1] : ['all', sectorFilter, ['>', ['get', 'cr'], 0]]);
+      const ringed = RING_FILTER[p.ring];
+      m.setFilter('sch-dots', p.projectsOnly ? ['all', sectorFilter, ringed] : sectorFilter);
+      // Allocation status already speaks of FY 2026 allocations; the 2026 ring would repeat it.
+      m.setFilter('sch-projects', p.colorBy === 'status' && p.ring === 'sbp2026' ? ['==', ['get', 'cr'], -1] : ['all', sectorFilter, ringed]);
+      m.setPaintProperty('sch-projects', 'circle-stroke-color', PROJECT_SETS.find((x) => x.key === p.ring)?.color ?? PROJECT_RING);
+      // FY 2026 rings (5,000 schools) stay faint at the country's scale; the FY 2027 sets (a few hundred) are solid throughout.
+      const few = p.ring !== 'sbp2026';
+      m.setPaintProperty('sch-projects', 'circle-stroke-opacity', few ? 1 : ['interpolate', ['linear'], ['zoom'], 5, 0.18, 8, 1]);
+      m.setPaintProperty('sch-projects', 'circle-stroke-width', few ? ['interpolate', ['linear'], ['zoom'], 5, 1.6, 12, 2.5] : ['interpolate', ['linear'], ['zoom'], 5, 0.6, 12, 2]);
+      m.setPaintProperty('sch-projects', 'circle-radius', few ? ['interpolate', ['linear'], ['zoom'], 5, 4.5, 9, 7, 13, 12] : ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 6, 13, 11]);
       m.setPaintProperty('sch-dots', 'circle-color', p.colorBy === 'status' ? statusColor : levelColor);
     } else {
       src.setData(areasData(p.areas));
@@ -168,7 +186,7 @@ export default function SchoolsMap(props: MapProps) {
   }
 
   const dataKey = props.mode === 'points'
-    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}|${props.colorBy ?? 'level'}`
+    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}|${props.ring}|${props.colorBy ?? 'level'}`
     : `${props.areas.length}|${props.areas[0]?.division ?? ''}`;
   useEffect(sync, [dataKey, props.selected]);
 

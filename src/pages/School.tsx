@@ -11,10 +11,11 @@ import { LevelBadge, PreviewNotice, SchoolsChrome, Status, StatusBadge } from '.
 import { useSchoolsApi } from '../lib/use-schools-api';
 import { useMember } from '../lib/hgab-review-member';
 import { php } from '../lib/format';
+import { pdfUrl, recordPath } from '../lib/hgab';
 import {
   COUNT_FIELDS, DPWH_MATCH_LABEL, LIMITS, LISTINGS, NEEDS, NEED_REASONS, NO_DATA_EXPLAINED, NO_NEED_REASONS, PROJECT_SEEN, RELATIONS,
-  SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_LIST_ONLY, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
-  shortageRate, statusOf, type DpwhProject, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
+  CHANGE_2027, SCHOOLS_API, SCHOOLS_LIST, SHORTAGE_LIST_ONLY, SITE, classrooms, disputesData, dpwhKey, emptyReport, levelOf, num, regionName, rooms, scopeLabel,
+  shortageRate, statusOf, type DpwhProject, type Line2027, type ReportTally, type SchoolFile, type SchoolProject, type SchoolReport,
 } from '../lib/schools';
 
 type Row = Record<string, string | number | null>;
@@ -56,6 +57,7 @@ function School() {
               <div className="sch-schoolmain">
                 <Headline data={data} tally={tally} />
                 <Projects projects={data.projects} />
+                <Proposals2027 lines={data.y2027 ?? []} />
                 <History dpwh={data.dpwh ?? []} />
                 <Section title="Classrooms and learners, SY 2023–2024">
                   {data.enrollment ? <Enrollment e={data.enrollment} s={s} /> : <Missing what="enrolment" />}
@@ -157,6 +159,42 @@ function Projects({ projects }: { projects: SchoolProject[] }) {
         </table>
       </div>
       <p className="sch-footnote">A listed classroom and its budget are what the 2026 list plans. They are not proof that the money was released or the classroom built. If you have seen the work, say so in a field report.</p>
+    </Section>
+  );
+}
+
+function Proposals2027({ lines }: { lines: Line2027[] }) {
+  const sure = lines.filter((l) => l.confident === 1);
+  const maybe = lines.filter((l) => l.confident !== 1);
+  if (!lines.length) return null;
+  const table = (rows: Line2027[]) => (
+    <div className="sch-tablewrap">
+      <table className="sch-table">
+        <thead><tr><th>DPWH project</th><th>What the House did</th><th className="num">2027 NEP</th><th className="num">2027 House bill</th></tr></thead>
+        <tbody>
+          {rows.map((l) => (
+            <tr key={l.line_id}>
+              <td className="sch-desc"><Link to={recordPath('dpwh', l.line_id)}>{l.title}</Link>
+                <span className="sch-sub">{DPWH_MATCH_LABEL[l.match]}{l.distance_m != null ? ` · ${num(l.distance_m)} m from the school’s point` : ''}{(l.schools_confident ?? 0) > 1 ? ` · one line for ${l.schools_confident} schools` : ''}</span></td>
+              <td>{CHANGE_2027[l.change]}</td>
+              <td className="num">{l.nep_php ? <a href={pdfUrl(l.nep_doc ?? '', l.nep_page)} target="_blank" rel="noopener noreferrer">{php(l.nep_php)}</a> : '—'}{l.nep_page ? <span className="sch-sub">p. {l.nep_page}</span> : null}</td>
+              <td className="num">{l.house_php ? <a href={pdfUrl(l.house_doc ?? '', l.house_page)} target="_blank" rel="noopener noreferrer">{php(l.house_php)}</a> : '—'}{l.house_page ? <span className="sch-sub">p. {l.house_page}</span> : null}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  return (
+    <Section title="2027 proposals: DPWH projects in the NEP and the House bill">
+      {sure.length > 0 ? table(sure) : <p className="sch-muted">No 2027 DPWH line names this school for certain.</p>}
+      {maybe.length > 0 && (
+        <details className="sch-details">
+          <summary>{maybe.length} possible {maybe.length === 1 ? 'match' : 'matches'} to check</summary>
+          {table(maybe)}
+        </details>
+      )}
+      <p className="sch-footnote">DPWH lines in the 2027 National Expenditure Program and the House bill (HB 10858) that name this school, matched as the project history is. Amounts link to the page of the document; a proposal is not yet law. DepEd’s own 2027 school-building line is a lump sum and names no school.</p>
     </Section>
   );
 }

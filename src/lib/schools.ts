@@ -16,7 +16,7 @@ export const SCHOOLS_API = '/api/schools';
  * Bump when the shape of a cached answer (points, areas, analysis) changes: the Worker caches them for an hour by
  * address, so a new address is how a new shape reaches readers at once.
  */
-export const SCHOOLS_API_VERSION = '8';
+export const SCHOOLS_API_VERSION = '9';
 
 // ---------------------------------------------------------------------------
 // API shapes
@@ -25,8 +25,11 @@ export const SCHOOLS_API_VERSION = '8';
 /** Map points, column-wise for size: one entry per school with usable 2022 coordinates. */
 export interface PointsFile {
   meta: { generated_at: string; schools: number; with_coordinates: number };
-  /** [school_id, lon, lat, shortage in whole classrooms (null: no SY 2023–2024 shortage row), FY 2026 classrooms allocated, sector code, level index (LEVEL_INDEX; -1 no data)] */
-  rows: [string, number, number, number | null, number, SectorCode, number][];
+  /**
+   * [school_id, lon, lat, shortage in whole classrooms (null: no SY 2023–2024 shortage row), FY 2026 classrooms allocated,
+   * sector code, level index (LEVEL_INDEX; -1 no data), FY 2027 flags (Y27: 1 in the NEP, 2 in the House bill, 4 added by the House)]
+   */
+  rows: [string, number, number, number | null, number, SectorCode, number, number][];
 }
 /** 0 public (DepEd), 1 private, 2 SUC/LUC, 3 schools abroad (PSO). */
 export type SectorCode = 0 | 1 | 2 | 3;
@@ -56,6 +59,10 @@ export interface ListRow {
   shortage_rate: number | null;
   modalities: string | null;
   sbp_budget_php: number | null;
+  /** FY 2027 DPWH lines naming the school: NEP and House bill amounts (shared lines split), and whether the House added one. */
+  y27_nep_php: number | null;
+  y27_house_php: number | null;
+  y27_added: 0 | 1;
   reports: number;
 }
 export interface ListFile {
@@ -163,16 +170,49 @@ export interface DpwhProject {
 }
 export type DpwhMatch = 'school_id' | 'school_id_name_differs' | 'name' | 'name_annex' | 'several' | 'near_name' | 'near';
 export const DPWH_MATCH_LABEL: Record<DpwhMatch, string> = {
-  school_id: 'School ID in the contract',
-  school_id_name_differs: 'School ID in the contract; the name is spelt differently',
-  name: 'School’s name in the contract',
-  name_annex: 'Name in the contract, but it says “annex”: maybe its annex',
-  several: 'Name in the contract, but other schools share it',
-  near_name: 'Near the school, and part of its name is in the contract',
+  school_id: 'School ID in the description',
+  school_id_name_differs: 'School ID in the description; the name is spelt differently',
+  name: 'School’s name in the description',
+  name_annex: 'Name in the description, but it says “annex”: maybe its annex',
+  several: 'Name in the description, but other schools share it',
+  near_name: 'Near the school, and part of its name is in the description',
   near: 'Near the school on DPWH’s map only',
 };
 /** Key of a DPWH contract in a report's `projects` (SBP projects use their own ids). */
 export const dpwhKey = (contractId: string) => `dpwh:${contractId}`;
+
+/** A FY 2027 DPWH project line that names the school (NEP and House bill, build_dpwh_links.py). */
+export interface Line2027 {
+  line_id: string;
+  title: string;
+  office: string | null;
+  nep_php: number | null;
+  house_php: number | null;
+  /** What the House did to the NEP's line. */
+  change: 'added' | 'removed' | 'same' | 'raised' | 'cut';
+  kind: DpwhKind;
+  nep_page: number | null;
+  nep_doc: string | null;
+  house_page: number | null;
+  house_doc: string | null;
+  schools_confident: number | null;
+  match: DpwhMatch;
+  confident: 0 | 1;
+  distance_m: number | null;
+}
+export const CHANGE_2027: Record<Line2027['change'], string> = {
+  added: 'Added by the House', removed: 'Removed by the House', same: 'Same in both', raised: 'Raised by the House', cut: 'Cut by the House',
+};
+/** FY 2027 flags in PointsFile rows. */
+export const Y27 = { nep: 1, house: 2, added: 4 } as const;
+/** Which projects the map rings and the filters pick. */
+export type ProjectSet = 'sbp2026' | 'nep2027' | 'house2027' | 'added2027';
+export const PROJECT_SETS: { key: ProjectSet; label: string; color: string }[] = [
+  { key: 'sbp2026', label: 'FY 2026 classroom allocations', color: '#1f8a70' },
+  { key: 'nep2027', label: '2027 NEP: DPWH projects naming the school', color: '#a21caf' },
+  { key: 'house2027', label: '2027 House bill: DPWH projects naming the school', color: '#a21caf' },
+  { key: 'added2027', label: '2027 House bill: projects the House added', color: '#a21caf' },
+];
 
 export interface ReportTally {
   reports: number;
@@ -193,6 +233,8 @@ export interface SchoolFile {
   projects: SchoolProject[];
   /** DPWH contracts linked to the school, newest first (confident and possible). */
   dpwh: DpwhProject[];
+  /** FY 2027 DPWH lines naming the school, NEP and House bill (confident first). */
+  y2027: Line2027[];
   join_review: { source_sheet: string; join_outcome: string; fallback_method: string | null }[];
   reports: ReportTally;
 }

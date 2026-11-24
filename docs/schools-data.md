@@ -107,3 +107,23 @@ EDCOM 2's shortage sheet (`/data/schools-src/edcom2-sheet/shortage.csv`) is now 
 - **Projects:** the 151 ID-linked projects that used to roll up to no school now all land on a school. 36 belong to the added schools. The other 115 quoted a shortage-list ID that the pack had attached to a registry school through its New School ID, so they now carry that school's registry ID, and `link_method` says so. The pack's roll-up check still runs on its original links. `school_in_registry` still says whether the school is in the *registry*.
 - **DPWH matching:** `build:schools-dpwh` now also matches these schools by name: 26,890 contracts are confidently linked, to 17,044 schools.
 - **Pages:** these schools appear in every total, list and school page ("shortage list only"), but not on the map.
+
+## FY 2027 proposals: DPWH lines in the NEP and the House bill (2026-11-24)
+
+`build:schools-dpwh` also matches the FY 2027 DPWH project lines (`data/hgab/2027/dpwh/projects.parquet`, GPS from `map.json`) to schools, with the same matcher as the contracts (`match_text`).
+
+- **Which lines:** only those whose normalised title mentions a school or classroom; abbreviations like ES and NHS are spelt out first.
+- **House amount:** the third reading's, else the second's, as `build-hgab-d1.ts` does. `change` says what the House did: added, removed, same, raised or cut.
+- **Tables:** `schools_2027_lines` (title, office, NEP and House amounts and pages, kind) and `schools_2027_links`.
+- **Results on 2026-11-24:** 299 lines name a school or classroom. 250 link to a school, 227 of them confidently, to 224 schools. 223 of the 250 are House additions.
+- **Matcher fixes, which also apply to the DPWH contracts:**
+  - six digits next to a decimal point are GPS, not a School ID;
+  - school names containing University, College or Institute match by ID only.
+
+  Contracts are now 26,875 confident, to 17,023 schools.
+
+**API and pages:**
+- Points carry FY 2027 flags (`Y27`: 1 in the NEP, 2 in the House bill, 4 added by the House).
+- The map's "Projects" picker rings one set: FY 2026 allocations in green, or a FY 2027 set in magenta (solid at every zoom). "Only schools with these projects" filters the map to that set.
+- The list's "Projects" filter takes `sbp2026` (older links: `yes`), `nep2027`, `house2027` or `added2027`, and a column gives the 2027 House bill amount, split when a line names several schools.
+- Each school page has a "2027 proposals" section with NEP and House amounts linked to the document pages. DepEd's 2027 school-building line is a lump sum and names no school.
