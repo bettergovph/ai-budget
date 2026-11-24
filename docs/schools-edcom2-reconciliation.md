@@ -103,3 +103,19 @@ Everything submitted stays a report "subject to review and validation" (their da
 - The pages round each school to whole classrooms. That keeps covered + remaining = shortage exact, but understates the headline counts by 576 schools and 78 classrooms.
 
 **To close the rest:** the source workbook (`source/classroom_shared_source.xlsx`, with the full `shortages 2023` sheet), or EDCOM 2's own extract, with its shortage-list schools outside the registry and their project links.
+
+### 7a. Checked against EDCOM 2's shortage sheet (2026-11-24)
+
+Jason uploaded EDCOM 2's `shortage.xlsx` (Sheet1). It is DepEd's school-level shortage list for SY 2023–2024 **in whole classrooms**: 47,662 schools, one row each, no fractions. The copy is kept in `/data/schools-src/edcom2-sheet/shortage.csv`.
+
+- **Total:** **165,364** classrooms short at **25,245** schools: EDCOM 2's "out of 165,364 total classroom shortage", to the classroom.
+- **Our 47,362 schools:** every value matches ours rounded to whole classrooms, with halves rounding up as D1's `ROUND` does (4.5 → 5).
+- **The 300 schools in the sheet but not in DepEd's registry:**
+  - They hold 679 classrooms short, at 141 schools that are short. 164,685 (ours) + 679 = 165,364.
+  - 134 have a New School ID, but only 4 of those IDs are in the registry. They are spread across regions (30 in Region V, 30 in Region VIII, 29 in CAR…). The biggest are Punta IS, Calamba (57), Dita ES, Santa Rosa (48) and Tamar ES, Maguindanao I (27).
+  - 130 of them are the schools behind the 151 ID-linked projects that roll up to no registry school.
+- **EDCOM 2's headline tiles (25,823 schools, 165,443 classrooms)** use the *fractional* version of the same figures, like our data pack: ours unrounded (25,680 schools, 164,763) plus the same schools outside the registry (≈143 schools, ≈680). This is why their two shortage figures differ by 79.
+- **One row in the sheet doesn't add up:** School ID 302501 has K–10 3 + SHS 4 but a total of 6.
+
+**Still open:** EDCOM 2's 32,305 classrooms with allocation. That needs the FY 2026 SBP Masterlist as they joined it.
+
