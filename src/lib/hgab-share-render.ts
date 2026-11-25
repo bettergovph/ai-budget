@@ -48,6 +48,7 @@ import {
   type LeaderboardData,
   type ListRow,
   type ShareFormat,
+  type StageAmounts,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
 import { CARD_DISCLAIMER, MPB_CARD_DISCLAIMER } from './hgab-disclaimers';
@@ -486,6 +487,8 @@ interface Item {
   offices: { id: string; name: string }[];
   value: number;
   detail: string | null;
+  /** The row's NEP, House bill and Senate amounts, printed under it (boards with `stages`). */
+  stages?: StageAmounts | null;
 }
 
 function isGroup(it: Item): boolean {
@@ -552,8 +555,90 @@ function rankingItems(data: LeaderboardData, board: BoardDef, region: string | n
   const { rows, eligible } = rankEntries(data, board, { region, limit });
   return {
     eligible,
-    items: rows.map((r) => ({ rank: r.rank, key: r.entry.key, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), offices: r.entry.offices, value: r.value, detail: board.detail?.(r.entry) ?? null })),
+    items: rows.map((r) => ({
+      rank: r.rank, key: r.entry.key, people: r.entry.people, tier: r.entry.tier, office: officeLabel(r.entry), offices: r.entry.offices, value: r.value,
+      detail: board.stages?.dropDetail ? null : board.detail?.(r.entry) ?? null, stages: board.stages?.entry?.(r.entry) ?? null,
+    })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// The amount in each version: "NEP ₱5.10B → House ₱12.31B → Senate ₱2.60B" (the Senate boards)
+// ---------------------------------------------------------------------------
+
+const STAGE_PARTS: ReadonlyArray<readonly [keyof StageAmounts, string]> = [['nep', 'NEP'], ['house', 'House'], ['senate', 'Senate']];
+
+function stageAmount(v: number | null): string {
+  return v == null ? '—' : formatValue(v, 'php');
+}
+
+interface StageInk { label: string; amount: string; last: string; arrow: string }
+const STAGE_INK: StageInk = { label: C.ink3, amount: C.ink2, last: C.ink, arrow: C.ink3 };
+const STAGE_INK_BAND: StageInk = { label: 'rgba(255,255,255,0.72)', amount: 'rgba(255,255,255,0.9)', last: '#ffffff', arrow: 'rgba(255,255,255,0.7)' };
+
+/** A piece of the line: text, or (no text) an arrow drawn `w` wide. */
+interface StagePiece { text: string | null; weight: number; ink: keyof StageInk; w: number; after: number }
+
+/** The pieces of the line at `size`: each label, its amount (the Senate's darkest), an arrow between versions. */
+function stagePieces(ctx: Ctx, st: StageAmounts, size: number): { pieces: StagePiece[]; w: number } {
+  const pieces: StagePiece[] = [];
+  const gap = size * 0.3;
+  const arrowGap = size * 0.45;
+  STAGE_PARTS.forEach(([key, label], i) => {
+    const last = i === STAGE_PARTS.length - 1;
+    setFont(ctx, 500, size, F.body);
+    pieces.push({ text: label, weight: 500, ink: 'label', w: tw(ctx, label), after: gap });
+    setFont(ctx, 700, size, F.body);
+    const amount = stageAmount(st[key]);
+    pieces.push({ text: amount, weight: 700, ink: last ? 'last' : 'amount', w: tw(ctx, amount), after: last ? 0 : arrowGap });
+    if (!last) pieces.push({ text: null, weight: 500, ink: 'arrow', w: size * 0.85, after: arrowGap });
+  });
+  return { pieces, w: pieces.reduce((a, p) => a + p.w + p.after, 0) };
+}
+
+/**
+ * The three amounts on one line from `x`, shrunk (to no less than 80% of `size`) to fit `max`; the card is flagged
+ * when even that does not fit.
+ */
+function drawStages(ctx: Ctx, st: StageAmounts, x: number, baseline: number, size: number, max: number, ink: StageInk = STAGE_INK): void {
+  let sz = size;
+  let laid = stagePieces(ctx, st, sz);
+  while (laid.w > max && sz > size * 0.8) laid = stagePieces(ctx, st, --sz);
+  if (laid.w > max) layoutFits = false;
+  let cx = x;
+  for (const p of laid.pieces) {
+    if (p.text == null) drawArrow(ctx, cx, baseline - sz * 0.34, p.w, sz, ink.arrow);
+    else {
+      setFont(ctx, p.weight, sz, F.body);
+      text(ctx, p.text, cx, baseline, ink[p.ink]);
+    }
+    cx += p.w + p.after;
+  }
+}
+
+/** A right arrow `w` long at height `y` (the font's arrow glyph sits low and small beside figures). */
+function drawArrow(ctx: Ctx, x: number, y: number, w: number, size: number, color: string): void {
+  const head = size * 0.24;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.5, size * 0.08);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w, y);
+  ctx.moveTo(x + w - head, y - head);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w - head, y + head);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** For alt text: "NEP ₱5.10B, House bill ₱12.31B, Senate ₱2.60B". */
+function stagesAlt(st: StageAmounts | null | undefined): string {
+  if (!st) return '';
+  const v = (x: number | null) => (x == null ? 'no matching line' : formatValue(x, 'php'));
+  return ` (NEP ${v(st.nep)}, House bill ${v(st.house)}, Senate ${v(st.senate)})`;
 }
 
 function entryItem(rank: number, e: LeaderEntry, value: number): Item {
@@ -1014,7 +1099,8 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
 }
 
 function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
-  const src = board.section === 'mpb'
+  const src = board.share ? board.share.source
+    : board.section === 'mpb'
     ? board.mpbSet === 'contractors'
       ? 'Source: GAA 2020 to 2026, multi-purpose building lines; DPWH contract list'
       : 'Source: GAA 2020 to 2026, multi-purpose building lines'
@@ -1033,7 +1119,7 @@ function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
 }
 
 function shareUrl(board: BoardDef, region: string | null): string {
-  return SHARE_SITE + leaderboardPath(board.id, { region });
+  return SHARE_SITE + (board.share ? board.share.path(region) : leaderboardPath(board.id, { region }));
 }
 
 interface FitUrl { lines: string[]; size: number; family: string; weight: number }
@@ -1262,10 +1348,10 @@ function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople):
   // or shared-office note then gives way to its first other note.
   const boardNote = board.kind === 'mpb' ? board.notes[0] ?? null
     : people.amounts
-      ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
+      ? board.share?.note ?? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
       : board.notes[0] ?? null;
-  const disclaimer = board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people.amounts ? CARD_DISCLAIMER : null;
-  const notes = [boardNote, disclaimer].filter(Boolean).join(' ');
+  const disclaimer = board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people.amounts ? board.share?.disclaimer ?? CARD_DISCLAIMER : null;
+  const notes = [boardNote, board.stages?.note ?? null, disclaimer].filter(Boolean).join(' ');
   return { notes, deo: deoText(people.deo ?? null), residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
 }
 
@@ -1591,6 +1677,8 @@ function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, plan: RowPlan,
   const ny = cy - nh / 2 + g.nameSize * 0.8;
   drawHeadlineWithBadges(ctx, it, tx, ny, g.nameSize, tmax, C.ink, '', !!g.refs?.get(it.key));
   drawRuns(ctx, plan.sub, tx, ny + lineGap + g.subSize * 1.02, g.subLH, g.subSize);
+  // The amount in each version: one more line (rowsBody counts it in the plan's extra lines).
+  if (it.stages) drawStages(ctx, it.stages, tx, ny + lineGap + g.subSize * 1.02 + plan.sub.lines.length * g.subLH, g.subSize, right - tx);
 }
 
 function valueColumnWidth(ctx: Ctx, board: BoardDef, items: Item[], valueSize: number, detailSize: number, cap: number): number {
@@ -1665,7 +1753,8 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
   const chipH = chip ? subLH : 0;
   const detailBelow = sp.stacked && it.detail ? vw + sp.detail + dw > tmax : false;
   const valueH = sp.stacked ? sp.sub * 0.5 + sp.value * 1.0 + (detailBelow ? sp.detail * 1.35 : 0) : 0;
-  const textH = nameLines.length * nLH + sp.sub * 0.4 + holders.lines.length * subLH + chipH + sub.lines.length * subLH + valueH;
+  const stagesH = it.stages ? subLH : 0;
+  const textH = nameLines.length * nLH + sp.sub * 0.4 + holders.lines.length * subLH + chipH + sub.lines.length * subLH + stagesH + valueH;
   const h = Math.max(d + sp.name * 0.5, textH) + sp.name * 0.2;
   return {
     h,
@@ -1712,6 +1801,10 @@ function spotlightBlock(ctx: Ctx, s: Spec, board: BoardDef, it: Item, images: Re
       }
       drawRuns(ctx, sub, tx, y + sp.sub * 1.0, subLH, sp.sub);
       y += sub.lines.length * subLH;
+      if (it.stages) {
+        drawStages(ctx, it.stages, tx, y + sp.sub * 1.0, sp.sub, tmax, STAGE_INK_BAND);
+        y += subLH;
+      }
       if (sp.stacked) {
         y += sp.sub * 0.5;
         const vy = y + sp.value * 0.84;
@@ -1875,7 +1968,11 @@ function rowsBody(ctx: Ctx, s: Spec, board: BoardDef, items: Item[], images: Rea
     tierMarks,
   };
   g.valueW = valueColumnWidth(ctx, board, items, g.valueSize, g.detailSize, w * 0.4);
-  const plans = items.map((it) => planRow(ctx, it, g));
+  // A row with the amount in each version takes one more line under its sub lines.
+  const plans = items.map((it) => {
+    const p = planRow(ctx, it, g);
+    return it.stages ? { ...p, extra: p.extra + 1 } : p;
+  });
   const exTotal = plans.reduce((a, p) => a + p.extra, 0) * g.subLH;
   return {
     minH: n * rowMin + exTotal + padMin * 2,
@@ -2531,22 +2628,28 @@ const LINE_SIZES: Record<ShareFormat, LineSizes> = {
  * One row per department, agency or budget line: rank, the name in bold with
  * where it sits under it and a bar for the size, the figure on the right with
  * "NEP → House bill" under it. Names are cut with an ellipsis, never wrapped,
- * so every row is the same height.
+ * so every row is the same height. Boards with `stages` add a line under the
+ * bar: the amount in each version.
  */
 function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: number, sz: LineSizes): Body {
   const n = rows.length;
   const maxAbs = Math.max(1, ...rows.map((r) => Math.abs(r.value)));
+  const extra = rows.some((r) => r.stages) ? sz.sub * 1.35 : 0;
+  const detailOf = (r: ListRow) => (board.stages?.dropDetail ? null : r.detail);
   return {
-    minH: n * sz.rowMin,
-    idealH: n * sz.rowMax,
+    minH: n * (sz.rowMin + extra),
+    idealH: n * (sz.rowMax + extra),
     draw(y0, hAvail) {
-      const rowH = Math.max(sz.rowMin, Math.min(sz.rowMax, hAvail / n));
+      const rowH = Math.max(sz.rowMin + extra, Math.min(sz.rowMax + extra, hAvail / n));
       const top = y0 + Math.max(0, hAvail - rowH * n) * 0.4;
       const rankW = sz.rank * 1.8;
       setFont(ctx, 700, sz.value, F.display);
       let valW = Math.max(...rows.map((r) => tabWidth(ctx, formatValue(r.value, board.value))));
       setFont(ctx, 500, sz.detail, F.body);
-      for (const r of rows) if (r.detail) valW = Math.max(valW, tw(ctx, r.detail));
+      for (const r of rows) {
+        const d = detailOf(r);
+        if (d) valW = Math.max(valW, tw(ctx, d));
+      }
       valW = Math.min(Math.ceil(valW) + sz.value * 0.8, w * 0.42);
       const tx = x + rankW;
       const tmax = w - rankW - valW;
@@ -2557,7 +2660,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: num
           ctx.fillRect(x, y, w, rowH);
         }
         const th = valueTheme(board, r.value);
-        const base = y + rowH * 0.4;
+        const base = y + (rowH - extra) * 0.4;
         setFont(ctx, 700, sz.rank, F.display);
         ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
         drawTab(ctx, String(r.rank), tx - sz.rank * 0.55, base, 'right');
@@ -2565,15 +2668,18 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: num
         text(ctx, ellipsize(ctx, r.label, tmax - sz.name * 0.4), tx, base, C.ink);
         setFont(ctx, 500, sz.sub, F.body);
         text(ctx, ellipsize(ctx, r.sub, tmax - sz.name * 0.4), tx, base + sz.sub * 1.3, C.ink3);
+        // The amount in each version on the line under the sub line; the bar then goes under it.
+        const lastLine = base + sz.sub * (r.stages ? 2.6 : 1.3);
+        if (r.stages) drawStages(ctx, r.stages, tx, lastLine, sz.sub, x + w - sz.value * 0.3 - tx);
         const bh = Math.max(4, Math.round(sz.sub * 0.28));
         const len = Math.max(bh, (Math.abs(r.value) / maxAbs) * (tmax - sz.name * 0.6));
         ctx.fillStyle = th.solid;
-        roundRect(ctx, tx, base + sz.sub * 1.3 + sz.sub * 0.42, len, bh, bh / 2);
+        roundRect(ctx, tx, lastLine + sz.sub * 0.42, len, bh, bh / 2);
         ctx.fill();
         setFont(ctx, 700, sz.value, F.display, -sz.value * 0.01);
         ctx.fillStyle = th.text;
         drawTab(ctx, formatValue(r.value, board.value), x + w - sz.value * 0.3, base, 'right');
-        const d = r.detail;
+        const d = detailOf(r);
         if (d) {
           setFont(ctx, 500, sz.detail, F.body);
           text(ctx, d, x + w - sz.value * 0.3, base + sz.sub * 1.3, C.mute, 'right');
@@ -2609,10 +2715,27 @@ function drawLinesVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: ShareC
 
 // --- regions -------------------------------------------------------------------
 
-interface RegionRow { rank: number; region: string; value: number }
+interface RegionRow { rank: number; region: string; value: number; stages: StageAmounts | null }
 
 function regionRows(data: LeaderboardData, board: BoardDef): RegionRow[] {
-  return rankRegions(data, board).map((r) => ({ rank: r.rank, region: r.region.region, value: r.value }));
+  return rankRegions(data, board).map((r) => ({ rank: r.rank, region: r.region.region, value: r.value, stages: board.stages?.region?.(r.region) ?? null }));
+}
+
+/**
+ * The regions boards' NEP, House and Senate columns (boards with `stages`): a small header over each, amounts
+ * right-aligned, the Senate's darkest. Widths are the widest header or amount plus a gap.
+ */
+function stageColumns(ctx: Ctx, rows: RegionRow[], size: number): { w: number[]; total: number; head: number } | null {
+  if (!rows.some((r) => r.stages)) return null;
+  const gap = size * 0.9;
+  const w = STAGE_PARTS.map(([key, label]) => {
+    setFont(ctx, 600, Math.round(size * 0.78), F.body);
+    let m = tw(ctx, label.toUpperCase());
+    setFont(ctx, 600, size, F.body);
+    for (const r of rows) if (r.stages) m = Math.max(m, tw(ctx, stageAmount(r.stages[key])));
+    return Math.ceil(m + gap);
+  });
+  return { w, total: w.reduce((a, b) => a + b, 0) + size * 0.4, head: size * 1.5 };
 }
 
 /**
@@ -2634,19 +2757,30 @@ function regionsBody(ctx: Ctx, board: BoardDef, all: RegionRow[], x: number, w: 
   const signed = board.value === 'signed_php' && all.some((r) => r.value < 0);
   const maxPos = Math.max(0, ...all.map((r) => r.value));
   const maxNeg = Math.max(0, ...all.map((r) => -r.value));
+  const stageSize = Math.round(sizes.value * 0.8);
+  const cols = stageColumns(ctx, all, stageSize);
+  const head = cols ? cols.head : 0;
   return {
-    minH: n * sizes.rowMin + sizes.name,
-    idealH: n * sizes.rowMax + sizes.name,
+    minH: n * sizes.rowMin + sizes.name + head,
+    idealH: n * sizes.rowMax + sizes.name + head,
     draw(y0, hAvail) {
-      const rowH = Math.max(sizes.rowMin, Math.min(sizes.rowMax, (hAvail - sizes.name) / n));
-      const top = y0 + sizes.name * 0.5 + Math.max(0, hAvail - sizes.name - rowH * n) * 0.4;
+      const rowH = Math.max(sizes.rowMin, Math.min(sizes.rowMax, (hAvail - sizes.name - head) / n));
+      const top = y0 + sizes.name * 0.5 + head + Math.max(0, hAvail - sizes.name - head - rowH * n) * 0.4;
       const rankW = sizes.rank * 1.7;
       setFont(ctx, 600, sizes.name, F.body);
-      const nameW = Math.min(w * 0.36, Math.max(...all.map((r) => tw(ctx, regionName(r.region) ?? r.region))) + sizes.name * 0.6);
+      const nameW = Math.min(w * (cols ? 0.3 : 0.36), Math.max(...all.map((r) => tw(ctx, regionName(r.region) ?? r.region))) + sizes.name * 0.6);
       setFont(ctx, 700, sizes.value, F.display);
       const valW = Math.max(...all.map((r) => tabWidth(ctx, formatValue(r.value, board.value)))) + sizes.value * 0.5;
+      const colsW = cols ? cols.total : 0;
       const bx = x + rankW + nameW;
-      const bw = w - rankW - nameW - valW;
+      const bw = w - rankW - nameW - valW - colsW;
+      if (cols && bw < w * 0.1) layoutFits = false;
+      // Column right edges, NEP first; the headers sit over them.
+      const colRight = cols ? cols.w.map((_, i) => x + w - cols.w.slice(i + 1).reduce((a, b) => a + b, 0)) : [];
+      if (cols) {
+        setFont(ctx, 600, Math.round(stageSize * 0.78), F.body);
+        STAGE_PARTS.forEach(([, label], i) => text(ctx, label.toUpperCase(), colRight[i], top - head * 0.35, C.ink3, 'right'));
+      }
       const zero = signed ? bx + bw * (maxNeg / (maxPos + maxNeg)) : bx;
       const scale = signed ? bw / (maxPos + maxNeg) : bw / Math.max(1, maxPos);
       if (signed) {
@@ -2680,7 +2814,15 @@ function regionsBody(ctx: Ctx, board: BoardDef, all: RegionRow[], x: number, w: 
         ctx.fill();
         setFont(ctx, 700, sizes.value, F.display);
         ctx.fillStyle = th.text;
-        drawTab(ctx, formatValue(r.value, board.value), x + w, cy + 1, 'right');
+        drawTab(ctx, formatValue(r.value, board.value), x + w - colsW, cy + 1, 'right');
+        if (cols && r.stages) {
+          const st = r.stages;
+          STAGE_PARTS.forEach(([key], i) => {
+            const last = i === STAGE_PARTS.length - 1;
+            setFont(ctx, last ? 700 : 500, stageSize, F.body);
+            text(ctx, stageAmount(st[key]), colRight[i], cy + 1, last ? C.ink : C.ink3, 'right');
+          });
+        }
         ctx.textBaseline = 'alphabetic';
       });
     },
@@ -2699,7 +2841,12 @@ function drawRegionsVertical(ctx: Ctx, s: Spec, format: ShareFormat, input: Shar
     : format === 'square'
       ? { name: 22, value: 22, rank: 22, rowMin: 27, rowMax: 46 }
       : { name: 25, value: 25, rank: 22, rowMin: 36, rowMax: 52 };
-  layoutVertical(ctx, s, input, t, () => ({ extra: null, body: regionsBody(ctx, input.board, rows, s.pad, s.W - s.pad * 2, sz) }), NO_PEOPLE);
+  // Every region is shown: where they do not all fit (a long footer, the Senate boards' column header), the rows
+  // step down a little before any is cut.
+  const at = (k: number) => ({ name: Math.round(sz.name * k), value: Math.round(sz.value * k), rank: Math.round(sz.rank * k), rowMin: Math.round(sz.rowMin * k), rowMax: sz.rowMax });
+  const draw = (k: number, dry: boolean) =>
+    layoutVertical(ctx, s, input, t, () => ({ extra: null, body: regionsBody(ctx, input.board, rows, s.pad, s.W - s.pad * 2, at(k)) }), NO_PEOPLE, dry);
+  draw([1, 0.92, 0.85].find((k) => draw(k, true)) ?? 0.85, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -2926,7 +3073,7 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     if (!items.length) top = [`${emptyMessage(board, r)}`];
     else {
       people = board.kind === 'ranking' || board.kind === 'mpb';
-      top = items.map((it) => `${it.rank}. ${altItem(it, tiers)}: ${formatValue(it.value, board.value)}${it.detail ? ` ${it.detail}` : ''}`);
+      top = items.map((it) => `${it.rank}. ${altItem(it, tiers)}: ${formatValue(it.value, board.value)}${it.detail ? ` ${it.detail}` : ''}${stagesAlt(it.stages)}`);
       // The card may fit fewer rows than the format holds; the alt text gives the field and the top three.
       top.unshift(`${countLine(board, eligible, eligible) ?? ''}; the top three`);
     }
@@ -2937,13 +3084,13 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
       top.push(`${CONGRESS_LABEL[c.congress]} (${c.years}): ` + c.rows.map((row) => `${row.rank}. ${altItem(entryItem(row.rank, row.entry, row.value), tiers)}: ${formatValue(row.value, board.value)}`).join('; '));
     }
   } else if (board.kind === 'regions') {
-    top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}`);
+    top = regionRows(data, board).slice(0, 3).map((row) => `${row.rank}. ${regionName(row.region)}: ${formatValue(row.value, board.value)}${stagesAlt(row.stages)}`);
   } else if (board.kind === 'lines' || board.kind === 'mpb') {
     const lr = board.kind === 'mpb' ? r : null;
     const { rows, eligible } = listRows(data, board, { region: lr, limit: 3 });
     top = rows.length
       ? [`${countLine(board, eligible, eligible)}; the top three`,
-        ...rows.map((x) => `${x.rank}. ${x.label} (${x.sub}): ${formatValue(x.value, board.value)}${x.detail ? `, ${x.detail}` : ''}`)]
+        ...rows.map((x) => `${x.rank}. ${x.label} (${x.sub}): ${formatValue(x.value, board.value)}${x.detail && !board.stages?.dropDetail ? `, ${x.detail}` : ''}${stagesAlt(x.stages)}`)]
       : [emptyMessage(board, lr)];
   } else if (board.kind === 'shift') {
     const part = (label: string, nep: number, house: number) => `${label}: NEP ${formatValue(nep, 'php')}, House bill ${formatValue(house, 'php')}, change ${formatValue(house - nep, 'signed_php')}`;
@@ -2956,14 +3103,14 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     });
   }
   const residual = residualText(data, board);
-  const tail = [residual, board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people ? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
+  const tail = [residual, board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people ? board.share?.disclaimer ?? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
   return `${head} ${[...top.filter(Boolean), ...tail].join('. ')}.`.replace(/\.\./g, '.').replace(/\.\s*\./g, '.');
 }
 
 /** "bettergov-house-bill-2027-<board>-<region?>-<format>.png" */
 export function shareCardFileName(board: BoardDef, format: ShareFormat, region?: string | null): string {
   const r = board.regionFilter && region ? `-${region.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : '';
-  return `bettergov-house-bill-2027-${board.id}${r}-${format}.png`;
+  return `${board.share?.filePrefix ?? 'bettergov-house-bill-2027'}-${board.id}${r}-${format}.png`;
 }
 
 // ---------------------------------------------------------------------------

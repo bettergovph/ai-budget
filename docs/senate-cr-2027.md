@@ -293,8 +293,43 @@ slightly from the House boards, which hold out lines that changed office.
 Page: `SenateLeaderboard.tsx`, with the House pieces (`BoardTile`, `PlaceCell`, `ValueCell`, `BoardPager`, ...) given
 the Senate boards and address through `LeaderboardSiteContext` (`src/lib/leaderboard-site.ts`; the House's by
 default). Its tables show the House bill and the Senate beside the ranked figure. Boards: `src/lib/senate-leaderboard.ts`
-(`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
-(`hgab-share-render.ts`) is House-specific.
+(`BoardDef.residual` gives each its "not in any district" footnote).
+
+**Titles in plain words** (Jason, 2026-11-25: "Titles like this are too complex for some filipinos"): about seven
+everyday words, past tense, "Senate" in each, "%" not "share", "biggest amount" not "most budget" ("most amount" isn't
+English), "House-added projects" for House insertions, "the President’s budget" for the NEP, "budget items" for
+budget lines; "removed" for DPWH projects taken out, "cut" for budgets that shrink. E.g. "Biggest % of budget removed
+by the Senate" (was "Largest share of the House bill budget the Senate removes"). Subtitles keep the exact
+definitions. Board ids, links and image file names are unchanged.
+
+**Share images** (Jason, 2026-11-25: "does not have the downloadable versions similar to hgab's leaderboard. Add an
+option for them per each"): every Senate board page has the House board page's image panel: a preview, four shapes
+(portrait 4:5, square, story 9:16, link 1.91:1), the region for office boards, Download image, Share (where the
+browser can share files) and Copy link. The House renderer draws them (`HgabShareCard`, `hgab-share-render.ts`); each
+Senate board carries a `share` block (`BoardShare` in `hgab-leaderboard.ts`, set by `shareOf` in
+`senate-leaderboard.ts`): the Senate source line, the Senate board's link, a short people note and disclaimer for
+the office boards, and `bettergov-senate-cr-2027-<board>[-<region>]-<shape>.png` file names. House boards leave
+`share` unset, so their images are unchanged. No pre-rendered link previews (og images) for the Senate boards yet.
+
+**NEP, House and Senate on every image** (Jason, 2026-11-25: "for the graphic we need to show the nep, house, senate
+amounts so there's a reference"): each Senate board also carries `stages` (`BoardStages` in `hgab-leaderboard.ts`,
+set by `stagesOf` in `senate-leaderboard.ts`). Office and budget-item rows, and the #1 spotlight, get one more line,
+"NEP ₱369M → House ₱4.74B → Senate ₱892M" (the Senate's amount darkest, drawn arrows); region boards get NEP, House
+and Senate columns. Office figures are the `senate` block's (`nep_php`, `house_php`, `senate_php`), regions' the
+same, departments', agencies' and lines' the whole-bill rows'. A dash is "no matching line in that version"
+(a Senate-only line has no House amount; a line the NEP data does not match has no NEP amount); the agency and
+line boards' images say so in their notes. Where the line under the value only repeats these amounts (Biggest DPWH
+budgets after the Senate, Biggest increases over the President's budget, all whole-bill boards) the image leaves
+it out. The extra line costs rows: "Biggest amount removed" holds 6 offices in portrait (was 8), 3 in square (5),
+7 in story (10), 2 in the link preview (3). Region cards step their rows down (to 92% or 85%) rather than cut a
+region. Alt text gives the three amounts for the top three.
+
+The whole-bill rows' NEP (`build_leaderboard.py`): departments from the General Summary; agencies from the House
+bill boards' agency rows (`data/hgab/2027/explorer/boards.json`, matched on department and House bill amount, the
+name where that is not enough; 361 of 364, adding up to each department's NEP); Annex A lines from Annex A, null
+where the NEP has no matching line (450 of 912). Unprogrammed appropriations take the NEP's printed
+₱111,984,494,000 (NEP Vol. III, p. 961; the fund-101 NEP data has none, and the House bill keeps the same amount),
+so the whole-bill NEP total equals the House bill's, ₱4,606,066,495,000.
 
 ## Districts
 
