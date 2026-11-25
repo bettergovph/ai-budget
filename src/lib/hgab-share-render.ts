@@ -1014,7 +1014,8 @@ function heroBlock(ctx: Ctx, s: Spec, t: HeroText, titleSize: number, x: number,
 }
 
 function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
-  const src = board.section === 'mpb'
+  const src = board.share ? board.share.source
+    : board.section === 'mpb'
     ? board.mpbSet === 'contractors'
       ? 'Source: GAA 2020 to 2026, multi-purpose building lines; DPWH contract list'
       : 'Source: GAA 2020 to 2026, multi-purpose building lines'
@@ -1033,7 +1034,7 @@ function sourceLines(board: BoardDef, withPhotos: boolean): string[] {
 }
 
 function shareUrl(board: BoardDef, region: string | null): string {
-  return SHARE_SITE + leaderboardPath(board.id, { region });
+  return SHARE_SITE + (board.share ? board.share.path(region) : leaderboardPath(board.id, { region }));
 }
 
 interface FitUrl { lines: string[]; size: number; family: string; weight: number }
@@ -1262,9 +1263,9 @@ function footerText(data: LeaderboardData, board: BoardDef, people: CardPeople):
   // or shared-office note then gives way to its first other note.
   const boardNote = board.kind === 'mpb' ? board.notes[0] ?? null
     : people.amounts
-      ? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
+      ? board.share?.note ?? board.notes.find((n) => !n.includes(PEOPLE_NOTE_MARK) && !n.includes(SHARED_NOTE_MARK)) ?? null
       : board.notes[0] ?? null;
-  const disclaimer = board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people.amounts ? CARD_DISCLAIMER : null;
+  const disclaimer = board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people.amounts ? board.share?.disclaimer ?? CARD_DISCLAIMER : null;
   const notes = [boardNote, disclaimer].filter(Boolean).join(' ');
   return { notes, deo: deoText(people.deo ?? null), residual: residualText(data, board), source: sourceLines(board, people.photos).join(' ') };
 }
@@ -2956,14 +2957,14 @@ export function shareCardAlt(data: LeaderboardData, board: BoardDef, format: Sha
     });
   }
   const residual = residualText(data, board);
-  const tail = [residual, board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people ? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
+  const tail = [residual, board.kind === 'mpb' ? MPB_CARD_DISCLAIMER : people ? board.share?.disclaimer ?? CARD_DISCLAIMER : null, tiers && people ? DEO_MEANING : null].filter(Boolean);
   return `${head} ${[...top.filter(Boolean), ...tail].join('. ')}.`.replace(/\.\./g, '.').replace(/\.\s*\./g, '.');
 }
 
 /** "bettergov-house-bill-2027-<board>-<region?>-<format>.png" */
 export function shareCardFileName(board: BoardDef, format: ShareFormat, region?: string | null): string {
   const r = board.regionFilter && region ? `-${region.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : '';
-  return `bettergov-house-bill-2027-${board.id}${r}-${format}.png`;
+  return `${board.share?.filePrefix ?? 'bettergov-house-bill-2027'}-${board.id}${r}-${format}.png`;
 }
 
 // ---------------------------------------------------------------------------

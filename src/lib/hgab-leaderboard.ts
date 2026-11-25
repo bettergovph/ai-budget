@@ -391,6 +391,25 @@ export interface BoardDef {
   mpbDetail?: (r: MpbBoardRow) => string | null;
   /** The board's own "not in any district" footnote (the Senate boards); otherwise residualLine's by board id. */
   residual?: (d: LeaderboardData) => string | null;
+  /** Share images for another leaderboard (the Senate's): what its images print instead of the House bill's. */
+  share?: BoardShare;
+}
+
+/**
+ * What a share image prints for a board outside the House bill leaderboards (hgab-share-render.ts). The House boards
+ * leave it unset and keep their own source lines, link, disclaimer and file names.
+ */
+export interface BoardShare {
+  /** The source line at the foot of the image. */
+  source: string;
+  /** The board's address on the site (no origin), printed on the image. */
+  path: (region: string | null) => string;
+  /** The note printed on images that show people beside amounts, in place of the board's first other note. */
+  note?: string;
+  /** Printed on images that show people beside amounts, in place of CARD_DISCLAIMER. */
+  disclaimer?: string;
+  /** The PNG's file name before the board id: "bettergov-senate-cr-2027". */
+  filePrefix: string;
 }
 
 const PEOPLE_NOTE = 'Amounts are for the DPWH office serving each legislative district. The documents do not say who asked for any project.';
