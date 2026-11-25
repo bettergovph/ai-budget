@@ -27,7 +27,7 @@ import { REGION_LABELS, type RegionKey } from '../lib/hgab';
 import { DeoBadges } from './HgabBits';
 import {
   displayName, entryTitle, formatPesoFull, formatValue, leaderboardPath, officeLabel, rankByCongress,
-  rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, tierText,
+  rankEntries, seatHolders, rankMembers, rankRegions, residualLine, shortDistrict, stageChange, tierText, valueTone,
   type BoardDef, type LeaderEntry, type LeaderPerson, type LeaderRegion, type LeaderSlice, type LeaderboardData,
   type RankedPerson, type RankedRow, type ShareFormat, type ValueKind,
   rankLines, type RankedLine, rankMpb, type RankedMpb,
@@ -123,6 +123,11 @@ const isMoney = (k: ValueKind) => k === 'php' || k === 'signed_php';
 function toneOf(v: number, kind: ValueKind): string {
   if (kind !== 'signed_php' && kind !== 'pct') return '';
   return v > 0 ? 'is-up' : v < 0 ? 'is-down' : '';
+}
+
+/** A tile's bar takes the figure's colour only on boards with a `tone` (the House tiles keep their blue bars). */
+function barTone(board: BoardDef, tone: string): string {
+  return board.tone && tone ? ` ${tone}` : '';
 }
 
 /** "Metro Manila", or the key itself when it is not one of the eighteen. */
@@ -242,6 +247,8 @@ interface TileRow {
   /** Every district served, for the title tooltip. */
   title?: string;
   value: number;
+  /** Senate minus House bill (boards with `stages`), for a 'change' board's colour. */
+  change?: number | null;
 }
 
 /**
@@ -357,32 +364,35 @@ export function BoardTile({ data, board, region }: { data: LeaderboardData; boar
   } else {
     const rows: TileRow[] = board.kind === 'members'
       ? rankMembers(data, { region: scoped, limit: 3 }).rows.map((r) => personTileRow(r, districtOffices(data, r.person.district_id)))
-      : rankEntries(data, board, { region: scoped, limit: 3 }).rows.map((r) => entryTileRow(r.rank, r.entry, r.value));
+      : rankEntries(data, board, { region: scoped, limit: 3 }).rows.map((r) => ({ ...entryTileRow(r.rank, r.entry, r.value), change: stageChange(board.stages?.entry?.(r.entry)) }));
     const max = Math.max(...rows.map((r) => Math.abs(r.value)), 0) || 1;
     body = rows.length === 0 ? (
       <p className="hgab-lb-top-none">No DPWH office {scoped ? `in ${regionName(scoped)} ` : ''}is on this board.</p>
     ) : (
       <ol className="hgab-lb-top">
-        {rows.map((r, i) => (
-          <li key={r.key} className={i === 0 ? 'is-first' : undefined}>
-            <span className="hgab-lb-top-rank">{r.rank}</span>
-            <Faces people={r.people} size={i === 0 ? 44 : 32} />
-            <span className="hgab-lb-top-who">
-              <strong>{r.label}</strong>
-              <small>{r.sub}{board.kind === 'members' && r.deo && <DeoBadges {...r.deo} />}</small>
-              {r.sub2 && <small title={r.title}>{r.sub2}{r.deo && <DeoBadges {...r.deo} />}</small>}
-              <span className="hgab-lb-top-bar" aria-hidden="true">
-                <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+        {rows.map((r, i) => {
+          const tone = valueTone(board, r.value, r.change);
+          return (
+            <li key={r.key} className={i === 0 ? 'is-first' : undefined}>
+              <span className="hgab-lb-top-rank">{r.rank}</span>
+              <Faces people={r.people} size={i === 0 ? 44 : 32} />
+              <span className="hgab-lb-top-who">
+                <strong>{r.label}</strong>
+                <small>{r.sub}{board.kind === 'members' && r.deo && <DeoBadges {...r.deo} />}</small>
+                {r.sub2 && <small title={r.title}>{r.sub2}{r.deo && <DeoBadges {...r.deo} />}</small>}
+                <span className={`hgab-lb-top-bar${barTone(board, tone)}`} aria-hidden="true">
+                  <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+                </span>
               </span>
-            </span>
-            <span
-              className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()}
-              title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}
-            >
-              {tileValue(board, r.value)}
-            </span>
-          </li>
-        ))}
+              <span
+                className={`hgab-lb-top-val ${tone}`.trim()}
+                title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}
+              >
+                {tileValue(board, r.value)}
+              </span>
+            </li>
+          );
+        })}
       </ol>
     );
   }
@@ -460,21 +470,24 @@ function RegionsMini({ data, board }: { data: LeaderboardData; board: BoardDef }
   const max = Math.max(...rows.map((r) => Math.abs(r.value)), 0) || 1;
   return (
     <ol className="hgab-lb-top is-regions">
-      {rows.map((r) => (
-        <li key={r.region.region}>
-          <span className="hgab-lb-top-rank">{r.rank}</span>
-          <span className="hgab-lb-top-who">
-            <strong>{regionName(r.region.region)}</strong>
-            <small>{REGION_LABELS[r.region.region as RegionKey]?.short ?? r.region.region} · {r.region.units.toLocaleString()} DEOs</small>
-            <span className="hgab-lb-top-bar" aria-hidden="true">
-              <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+      {rows.map((r) => {
+        const tone = valueTone(board, r.value, stageChange(board.stages?.region?.(r.region)));
+        return (
+          <li key={r.region.region}>
+            <span className="hgab-lb-top-rank">{r.rank}</span>
+            <span className="hgab-lb-top-who">
+              <strong>{regionName(r.region.region)}</strong>
+              <small>{REGION_LABELS[r.region.region as RegionKey]?.short ?? r.region.region} · {r.region.units.toLocaleString()} DEOs</small>
+              <span className={`hgab-lb-top-bar${barTone(board, tone)}`} aria-hidden="true">
+                <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+              </span>
             </span>
-          </span>
-          <span className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()} title={formatPesoFull(r.value)}>
-            {formatValue(r.value, board.value)}
-          </span>
-        </li>
-      ))}
+            <span className={`hgab-lb-top-val ${tone}`.trim()} title={formatPesoFull(r.value)}>
+              {formatValue(r.value, board.value)}
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -487,21 +500,24 @@ function LinesMini({ data, board }: { data: LeaderboardData; board: BoardDef }) 
   const max = Math.max(...rows.map((r) => Math.abs(r.value)), 0) || 1;
   return (
     <ol className="hgab-lb-top is-lines">
-      {rows.map((r, i) => (
-        <li key={`${r.row.label}|${r.row.sub}`} className={i === 0 ? 'is-first' : undefined}>
-          <span className="hgab-lb-top-rank">{r.rank}</span>
-          <span className="hgab-lb-top-who">
-            <strong>{r.row.label}</strong>
-            <small>{r.row.sub}</small>
-            <span className="hgab-lb-top-bar" aria-hidden="true">
-              <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+      {rows.map((r, i) => {
+        const tone = valueTone(board, r.value, stageChange(board.stages?.row?.(r.row)));
+        return (
+          <li key={`${r.row.label}|${r.row.sub}`} className={i === 0 ? 'is-first' : undefined}>
+            <span className="hgab-lb-top-rank">{r.rank}</span>
+            <span className="hgab-lb-top-who">
+              <strong>{r.row.label}</strong>
+              <small>{r.row.sub}</small>
+              <span className={`hgab-lb-top-bar${barTone(board, tone)}`} aria-hidden="true">
+                <span style={{ width: `${Math.max(4, (Math.abs(r.value) / max) * 100)}%` }} />
+              </span>
             </span>
-          </span>
-          <span className={`hgab-lb-top-val ${toneOf(r.value, board.value)}`.trim()} title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}>
-            {formatValue(r.value, board.value)}
-          </span>
-        </li>
-      ))}
+            <span className={`hgab-lb-top-val ${tone}`.trim()} title={isMoney(board.value) ? formatPesoFull(r.value) : undefined}>
+              {formatValue(r.value, board.value)}
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -549,6 +565,7 @@ export function ValueCell({
   title,
   sub,
   notes,
+  tone,
 }: {
   value: number;
   kind: ValueKind;
@@ -556,9 +573,11 @@ export function ValueCell({
   sub?: string | null;
   /** The source's uncertainty annotations for this row, under the figure. */
   notes?: ReactNode;
+  /** The colour class ('is-up' / 'is-down', from valueTone) in place of the value's own sign. */
+  tone?: string;
 }) {
   return (
-    <td className={`num hgab-lb-val ${toneOf(value, kind)}`.trim()} title={title ?? (isMoney(kind) ? formatPesoFull(value) : undefined)}>
+    <td className={`num hgab-lb-val ${tone ?? toneOf(value, kind)}`.trim()} title={title ?? (isMoney(kind) ? formatPesoFull(value) : undefined)}>
       {formatValue(value, kind)}
       {sub && <small className="hgab-lb-phone">{sub}</small>}
       {notes}
