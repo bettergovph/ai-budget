@@ -396,6 +396,34 @@ export interface BoardDef {
   share?: BoardShare;
   /** Share images: each row's NEP, House bill and Senate amounts, printed with it for reference (the Senate boards). */
   stages?: BoardStages;
+  /**
+   * The colour of the ranked figure (the Senate boards; Jason, 2026-11-25: "If the numbers went down in senate, show
+   * the numbers as red. Green if it increased"): 'down' red (what the Senate removed or cut), 'up' green (what it
+   * added), 'change' each row by its Senate amount against the House bill's (`stages`). Unset: a change takes its
+   * sign's colour, anything else the board's.
+   */
+  tone?: 'down' | 'up' | 'change';
+}
+
+/** Senate minus House bill for a row's amounts (no House amount counts as zero); null without a Senate amount. */
+export function stageChange(st: StageAmounts | null | undefined): number | null {
+  return st && st.senate != null ? st.senate - (st.house ?? 0) : null;
+}
+
+/** 'is-up' / 'is-down' (the tables' and tiles' colour classes) for a change, '' for none. */
+export function changeTone(change: number | null | undefined): string {
+  return change == null || change === 0 ? '' : change > 0 ? 'is-up' : 'is-down';
+}
+
+/**
+ * The class that colours a ranked figure on the page: the board's `tone` where it has one (the Senate boards: red for
+ * what the Senate removed, green for what it added, or each row's own Senate change), else a change's sign.
+ */
+export function valueTone(board: BoardDef, v: number, change?: number | null): string {
+  if (board.tone === 'down') return 'is-down';
+  if (board.tone === 'up') return 'is-up';
+  if (board.tone === 'change') return changeTone(change);
+  return board.value === 'signed_php' || board.value === 'pct' ? changeTone(v) : '';
 }
 
 /** A row's amount in each version of the budget; null where that version has no matching line. */

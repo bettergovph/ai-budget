@@ -49,6 +49,7 @@ import {
   type ListRow,
   type ShareFormat,
   type StageAmounts,
+  stageChange,
 } from './hgab-leaderboard';
 import { REGION_LABELS, type RegionKey } from './hgab';
 import { CARD_DISCLAIMER, MPB_CARD_DISCLAIMER } from './hgab-disclaimers';
@@ -117,6 +118,8 @@ const THEME = {
 } satisfies Record<string, Theme>;
 
 function boardTheme(board: BoardDef): Theme {
+  if (board.tone === 'down') return THEME.red;
+  if (board.tone === 'up') return THEME.green;
   if (board.id.startsWith('added') || board.id === 'regions-added' || board.id === 'lines-added') return THEME.gold;
   if (board.id.startsWith('increase') || board.id === 'growth') return THEME.green;
   if (board.id === 'cuts' || board.id === 'decline') return THEME.red;
@@ -124,8 +127,13 @@ function boardTheme(board: BoardDef): Theme {
   return THEME.blue;
 }
 
-/** Signed values take their own sign's colour; everything else the board's. */
-function valueTheme(board: BoardDef, v: number): Theme {
+/** Signed values take their own sign's colour; a 'change' board's rows their Senate change's; everything else the board's. */
+function valueTheme(board: BoardDef, v: number, st?: StageAmounts | null): Theme {
+  if (board.tone === 'change') {
+    const c = stageChange(st);
+    if (c != null && c > 0) return THEME.green;
+    if (c != null && c < 0) return THEME.red;
+  }
   if (board.value === 'signed_php' || board.value === 'pct') {
     if (v > 0) return THEME.green;
     if (v < 0) return THEME.red;
@@ -572,9 +580,17 @@ function stageAmount(v: number | null): string {
   return v == null ? '—' : formatValue(v, 'php');
 }
 
-interface StageInk { label: string; amount: string; last: string; arrow: string }
-const STAGE_INK: StageInk = { label: C.ink3, amount: C.ink2, last: C.ink, arrow: C.ink3 };
-const STAGE_INK_BAND: StageInk = { label: 'rgba(255,255,255,0.72)', amount: 'rgba(255,255,255,0.9)', last: '#ffffff', arrow: 'rgba(255,255,255,0.7)' };
+interface StageInk { label: string; amount: string; last: string; down: string; up: string; arrow: string }
+const STAGE_INK: StageInk = { label: C.ink3, amount: C.ink2, last: C.ink, down: C.negative, up: C.positive, arrow: C.ink3 };
+const STAGE_INK_BAND: StageInk = {
+  label: 'rgba(255,255,255,0.72)', amount: 'rgba(255,255,255,0.9)', last: '#ffffff', down: '#ffb4a8', up: '#b4ecb0', arrow: 'rgba(255,255,255,0.7)',
+};
+
+/** The Senate amount's ink: red below the House bill's, green above (no House amount counts as zero). */
+function senateInk(st: StageAmounts): 'down' | 'up' | 'last' {
+  const c = stageChange(st);
+  return c == null || c === 0 ? 'last' : c < 0 ? 'down' : 'up';
+}
 
 /** A piece of the line: text, or (no text) an arrow drawn `w` wide. */
 interface StagePiece { text: string | null; weight: number; ink: keyof StageInk; w: number; after: number }
@@ -590,7 +606,7 @@ function stagePieces(ctx: Ctx, st: StageAmounts, size: number): { pieces: StageP
     pieces.push({ text: label, weight: 500, ink: 'label', w: tw(ctx, label), after: gap });
     setFont(ctx, 700, size, F.body);
     const amount = stageAmount(st[key]);
-    pieces.push({ text: amount, weight: 700, ink: last ? 'last' : 'amount', w: tw(ctx, amount), after: last ? 0 : arrowGap });
+    pieces.push({ text: amount, weight: 700, ink: last ? senateInk(st) : 'amount', w: tw(ctx, amount), after: last ? 0 : arrowGap });
     if (!last) pieces.push({ text: null, weight: 500, ink: 'arrow', w: size * 0.85, after: arrowGap });
   });
   return { pieces, w: pieces.reduce((a, p) => a + p.w + p.after, 0) };
@@ -1624,7 +1640,7 @@ function planRow(ctx: Ctx, it: Item, g: RowGeom): RowPlan {
  * district lines of the plan.
  */
 function drawRow(ctx: Ctx, board: BoardDef, it: Item, g: RowGeom, plan: RowPlan, y: number, h: number, maxAbs: number, images: ReadonlyMap<string, ShareImageSource>): void {
-  const th = valueTheme(board, it.value);
+  const th = valueTheme(board, it.value, it.stages);
   const { ax, right, tx } = rowX(g);
   const exH = plan.extra * g.subLH;
   const baseH = h - exH;
@@ -2659,7 +2675,7 @@ function linesBody(ctx: Ctx, board: BoardDef, rows: ListRow[], x: number, w: num
           ctx.fillStyle = 'rgba(244, 247, 252, 0.9)';
           ctx.fillRect(x, y, w, rowH);
         }
-        const th = valueTheme(board, r.value);
+        const th = valueTheme(board, r.value, r.stages);
         const base = y + (rowH - extra) * 0.4;
         setFont(ctx, 700, sz.rank, F.display);
         ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
@@ -2799,7 +2815,7 @@ function regionsBody(ctx: Ctx, board: BoardDef, all: RegionRow[], x: number, w: 
           ctx.fillStyle = 'rgba(244, 247, 252, 0.9)';
           ctx.fillRect(x, y, w, rowH);
         }
-        const th = valueTheme(board, r.value);
+        const th = valueTheme(board, r.value, r.stages);
         setFont(ctx, 700, sizes.rank, F.display);
         ctx.fillStyle = r.rank === 1 ? th.text : C.mute;
         ctx.textBaseline = 'middle';
@@ -2820,7 +2836,7 @@ function regionsBody(ctx: Ctx, board: BoardDef, all: RegionRow[], x: number, w: 
           STAGE_PARTS.forEach(([key], i) => {
             const last = i === STAGE_PARTS.length - 1;
             setFont(ctx, last ? 700 : 500, stageSize, F.body);
-            text(ctx, stageAmount(st[key]), colRight[i], cy + 1, last ? C.ink : C.ink3, 'right');
+            text(ctx, stageAmount(st[key]), colRight[i], cy + 1, last ? STAGE_INK[senateInk(st)] : C.ink3, 'right');
           });
         }
         ctx.textBaseline = 'alphabetic';

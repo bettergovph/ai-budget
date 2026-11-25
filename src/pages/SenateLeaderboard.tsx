@@ -19,7 +19,7 @@ import { pageMeta } from '../lib/seo';
 import { REGION_LABELS, REGION_ORDER, type RegionKey } from '../lib/hgab';
 import {
   DEO_MEANING, SHARE_FORMATS, SHARE_FORMAT_ORDER, asOfText, formatPesoFull, formatValue, isShareFormat, rankEntries, rankLines,
-  rankRegions, type BoardDef, type LeaderboardData, type ShareFormat,
+  rankRegions, changeTone, valueTone, type BoardDef, type LeaderboardData, type ShareFormat,
 } from '../lib/hgab-leaderboard';
 import { LeaderboardSiteContext } from '../lib/leaderboard-site';
 import {
@@ -336,14 +336,15 @@ function RankingTable({ data, board, region }: { data: SenateLeaderboardData; bo
             {shown.length === 0 && <EmptyRow cols={cols}>No DPWH office {region ? `in ${regionName(region)} ` : ''}is on this board.</EmptyRow>}
             {shown.map((r) => {
               const s = (r.entry as SenateLeaderEntry).senate;
+              const change = s.senate_php - s.house_php;
               return (
                 <tr key={r.entry.key} className={r.entry.tier === 'B' ? 'is-shared' : undefined}>
                   <td className="num hgab-lb-rank">{r.rank}</td>
                   <PlaceCell entry={r.entry} />
                   {!region && <td className="hgab-lb-region hgab-lb-col-wide">{regionName(r.entry.region)}</td>}
-                  <ValueCell value={r.value} kind={board.value} sub={board.detail?.(r.entry)} />
+                  <ValueCell value={r.value} kind={board.value} sub={board.detail?.(r.entry)} tone={valueTone(board, r.value, change)} />
                   <td className="num hgab-lb-col-wide" title={formatPesoFull(s.house_php)}>{formatValue(s.house_php, 'php')}</td>
-                  <td className="num hgab-lb-col-wide" title={formatPesoFull(s.senate_php)}>{formatValue(s.senate_php, 'php')}</td>
+                  <td className={`num hgab-lb-col-wide hgab-lb-senate ${changeTone(change)}`.trim()} title={formatPesoFull(s.senate_php)}>{formatValue(s.senate_php, 'php')}</td>
                   <td className="hgab-lb-detail hgab-lb-col-wide">{board.detail?.(r.entry) ?? '—'}</td>
                 </tr>
               );
@@ -378,23 +379,26 @@ function LinesTable({ data, board }: { data: SenateLeaderboardData; board: Board
           </thead>
           <tbody>
             {shown.length === 0 && <EmptyRow cols={6}>Nothing is on this board.</EmptyRow>}
-            {shown.map((r) => (
+            {shown.map((r) => {
+              const change = (r.row.senate_php ?? 0) - (r.row.hgab3_php ?? 0);
+              return (
               <tr key={`${r.row.label}|${r.row.sub}|${r.row.page ?? ''}`}>
                 <td className="num hgab-lb-rank">{r.rank}</td>
                 <td className="nep-td-name">
                   <strong>{r.row.label}</strong>
                   <span className="hgab-lb-line-sub">{r.row.sub}</span>
                 </td>
-                <ValueCell value={r.value} kind={board.value} sub={board.rowDetail?.(r.row) ?? null} />
+                <ValueCell value={r.value} kind={board.value} sub={board.rowDetail?.(r.row) ?? null} tone={valueTone(board, r.value, change)} />
                 <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.hgab3_php)}>{r.row.hgab3_php ? formatValue(r.row.hgab3_php, 'php') : '—'}</td>
-                <td className="num hgab-lb-col-wide" title={formatPesoFull(r.row.senate_php ?? 0)}>{formatValue(r.row.senate_php ?? 0, 'php')}</td>
+                <td className={`num hgab-lb-col-wide hgab-lb-senate ${changeTone(change)}`.trim()} title={formatPesoFull(r.row.senate_php ?? 0)}>{formatValue(r.row.senate_php ?? 0, 'php')}</td>
                 <td className="hgab-lb-go">
                   {r.row.page
                     ? <a href={senatePdfUrl('senate-cr-annex-a', r.row.page)} target="_blank" rel="noreferrer" title="The page of Annex A that prints it">Annex A p.{r.row.page}</a>
                     : <Link to={r.row.href}>Lines →</Link>}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -423,13 +427,14 @@ function RegionsTable({ data, board }: { data: SenateLeaderboardData; board: Boa
         <tbody>
           {rows.map((r) => {
             const s = (r.region as SenateLeaderRegion).senate;
+            const change = s ? s.senate_php - s.house_php : null;
             return (
               <tr key={r.region.region}>
                 <td className="num hgab-lb-rank">{r.rank}</td>
                 <td className="nep-td-name"><strong>{regionName(r.region.region)}</strong></td>
-                <ValueCell value={r.value} kind={board.value} />
+                <ValueCell value={r.value} kind={board.value} tone={valueTone(board, r.value, change)} />
                 <td className="num hgab-lb-col-wide">{formatValue(s?.house_php ?? null, 'php')}</td>
-                <td className="num hgab-lb-col-wide">{formatValue(s?.senate_php ?? null, 'php')}</td>
+                <td className={`num hgab-lb-col-wide hgab-lb-senate ${changeTone(change)}`.trim()}>{formatValue(s?.senate_php ?? null, 'php')}</td>
                 <td className="num hgab-lb-col-wide">{s?.removed_rows.toLocaleString() ?? '—'}</td>
                 <td className="hgab-lb-go"><Link to={senateLeaderboardPath('removed', { region: r.region.region })}>Offices →</Link></td>
               </tr>

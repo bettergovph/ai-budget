@@ -324,6 +324,16 @@ it out. The extra line costs rows: "Biggest amount removed" holds 6 offices in p
 7 in story (10), 2 in the link preview (3). Region cards step their rows down (to 92% or 85%) rather than cut a
 region. Alt text gives the three amounts for the top three.
 
+**Red for cuts, green for additions** (Jason, 2026-11-25: "If the numbers went down in senate, show the numbers as
+red. Green if it increased. I want the highlight/emphasis of what was changed by the Senate"): each Senate board has a
+`tone` (`BoardDef.tone`). Boards of what the Senate removed (the two region boards, the three "removed" boards, House-
+added projects removed) are red: figures, bars, tile bars. "Biggest new items the Senate added" is green. "Biggest
+DPWH budgets after the Senate" colours each office by its Senate amount against the House bill's. Changes keep their
+sign's colour (cuts red, increases green). Everywhere, the Senate amount itself is red when it is below the House
+bill's and green when above: the images' "NEP → House → Senate" line and Senate column, and the Senate column of the
+page tables (`.hgab-lb-senate`). Helpers: `stageChange`, `changeTone`, `valueTone` in `hgab-leaderboard.ts`. House
+boards have no `tone`, so their colours are unchanged. "Kept for House-added projects" stays blue: nothing changed.
+
 The whole-bill rows' NEP (`build_leaderboard.py`): departments from the General Summary; agencies from the House
 bill boards' agency rows (`data/hgab/2027/explorer/boards.json`, matched on department and House bill amount, the
 name where that is not enough; 361 of 364, adding up to each department's NEP); Annex A lines from Annex A, null
