@@ -131,3 +131,14 @@ EDCOM 2's shortage sheet (`/data/schools-src/edcom2-sheet/shortage.csv`) is now 
 ## Review buttons (2026-11-24)
 
 Every row of `/schools/list` has a **Review** button with the school's review count. So do the map's school card and the top of each school page. The button opens the school's page at `#review`, and the form opens in a **modal** over the page (`ReviewModal` in `School.tsx`, a native `<dialog>`: focus stays inside, Escape, the backdrop or × closes it; full screen on phones). The address keeps `#review` while it is open. Signed out, the modal shows the sign-in button first; Clerk's sign-in opens over the page, so the modal steps aside and opens again after sign-in. The sidebar keeps a short card: what the records say and a Review (or "Change my report") button.
+
+## Infographic: schools short of classrooms (2026-11-25)
+
+`npm run build:poster-schools` (`scripts/build-poster-schools.ts`) draws a three-slide carousel, 1080×1350, in the dark figure style of the multi-purpose building and flood control images:
+
+1. the Classroom Shortage Rate by region on a map, the regions with the most classrooms unfunded and the least of their shortage covered;
+2. every region ranked by classrooms unfunded, each shortage split into covered (grey) and unfunded (red);
+3. the unfunded classrooms at EDCOM 2's ₱2.5 million each (₱370.5 billion), and DepEd school facilities beside DPWH multi-purpose buildings in each budget, FY 2020 to the 2027 NEP, House bill and Senate committee report (`history.json`).
+
+It reads the live schools API (`--api`, production by default) and `history.json`, checks that nothing is clipped or overflows, and stops if a figure the titles state has changed. The output goes to `data/hgab/2027/campaign/` (gitignored). The first drafts are in `campaign/drafts/` and are not in the campaign gallery yet: add them to the gallery's CAMPAIGNS once approved.
+

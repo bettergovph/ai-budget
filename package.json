@@ -23,6 +23,7 @@
     "build:hgab-poster-mpb": "tsx scripts/build-hgab-poster-mpb.ts",
     "build:hgab-poster-redflags": "tsx scripts/build-hgab-poster-redflags.ts",
     "build:hgab-poster-mpb-people": "tsx scripts/build-hgab-poster-mpb-people.ts",
+    "build:poster-schools": "tsx scripts/build-poster-schools.ts",
     "build:hgab-poster-mpb-classrooms": "tsx scripts/build-hgab-poster-mpb-classrooms.ts",
     "build:hgab-poster-mpb-classrooms-taglish": "tsx scripts/build-hgab-poster-mpb-classrooms-taglish.ts",
     "build:hgab-poster-review": "tsx scripts/build-hgab-poster-review.ts",
