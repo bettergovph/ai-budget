@@ -95,6 +95,11 @@ const houseOutside = (d: LeaderboardData) =>
 const houseToSenate = (r: WholeBillRow) => `${php(r.hgab3_php)} → ${php(r.senate_php)}`;
 
 /**
+ * Colours (Jason, 2026-11-25: "I want the highlight/emphasis of what was changed by the Senate"): boards of what the
+ * Senate removed are red (`tone: 'down'`), its new lines green ('up'), changes by their sign, and "Biggest DPWH budgets
+ * after the Senate" each office by its Senate amount against the House bill's ('change'). The images colour each
+ * row's Senate amount the same way.
+ *
  * Titles in plain words (Jason, 2026-11-25: titles like "Largest share of the House bill budget the Senate removes" are
  * "too complex for some filipinos"): about seven everyday words, past tense, "Senate" in each, "%" not "share",
  * "biggest amount" not "most budget"; "removed" for DPWH projects taken out (the Removed status), "cut" for budgets
@@ -103,7 +108,7 @@ const houseToSenate = (r: WholeBillRow) => `${php(r.hgab3_php)} → ${php(r.sena
 const BOARDS_BASE: readonly BoardDef[] = [
   // The big picture
   {
-    id: 'regions-removed', section: 'senate-picture', kind: 'regions', value: 'php', order: 'desc',
+    id: 'regions-removed', section: 'senate-picture', kind: 'regions', value: 'php', order: 'desc', tone: 'down',
     kicker: '2027 Senate · DPWH projects · by region',
     title: 'Budget the Senate removed, per region',
     subtitle: 'DPWH projects the Senate committee report removes, by the region of their district office.',
@@ -111,7 +116,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     notes: [SCOPE_NOTE], regionFilter: false, residual: removedOutside,
   },
   {
-    id: 'regions-removed-share', section: 'senate-picture', kind: 'regions', value: 'share', order: 'desc',
+    id: 'regions-removed-share', section: 'senate-picture', kind: 'regions', value: 'share', order: 'desc', tone: 'down',
     kicker: '2027 Senate · DPWH projects · by region',
     title: '% of budget the Senate removed, per region',
     subtitle: 'The part of each region’s House bill DPWH budget (district offices) the Senate committee report removes.',
@@ -121,7 +126,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
 
   // 2027: the Senate against the House bill
   {
-    id: 'removed', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc',
+    id: 'removed', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc', tone: 'down',
     kicker: '2027 Senate · DPWH projects removed',
     title: 'Biggest amount removed by the Senate',
     subtitle: 'House bill DPWH projects the Senate committee report removes (no budget), by DPWH office.',
@@ -130,7 +135,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     notes: [PEOPLE_NOTE, SHARED_NOTE, SCOPE_NOTE], regionFilter: true, residual: removedOutside,
   },
   {
-    id: 'removed-share', section: 'senate-dpwh', kind: 'ranking', value: 'share', order: 'desc',
+    id: 'removed-share', section: 'senate-dpwh', kind: 'ranking', value: 'share', order: 'desc', tone: 'down',
     kicker: '2027 Senate · DPWH projects removed',
     title: 'Biggest % of budget removed by the Senate',
     subtitle: 'The part of each office’s House bill DPWH budget the Senate committee report removes.',
@@ -140,7 +145,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     notes: ['Only offices with at least ₱1 billion in the House bill.', PEOPLE_NOTE, SHARED_NOTE], regionFilter: true, residual: removedOutside,
   },
   {
-    id: 'removed-count', section: 'senate-dpwh', kind: 'ranking', value: 'count', order: 'desc',
+    id: 'removed-count', section: 'senate-dpwh', kind: 'ranking', value: 'count', order: 'desc', tone: 'down',
     kicker: '2027 Senate · DPWH projects removed',
     title: 'Most projects removed by the Senate',
     subtitle: 'House bill DPWH projects the Senate committee report removes, counted by DPWH office.',
@@ -149,7 +154,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     notes: [PEOPLE_NOTE, SHARED_NOTE], regionFilter: true, residual: removedOutside,
   },
   {
-    id: 'insertions-removed', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc',
+    id: 'insertions-removed', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc', tone: 'down',
     kicker: '2027 Senate · House insertions removed',
     title: 'Biggest amount removed from House-added projects',
     subtitle: 'House bill projects with no matching NEP line that the Senate committee report removes, by DPWH office.',
@@ -169,7 +174,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     residual: (d) => outside(d, (b) => b.inserted_kept_php, (v) => `Not in any district: ${v} in House insertions kept under the Central Office and regional offices.`),
   },
   {
-    id: 'senate-largest', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc',
+    id: 'senate-largest', section: 'senate-dpwh', kind: 'ranking', value: 'php', order: 'desc', tone: 'change',
     kicker: '2027 Senate · DPWH projects',
     title: 'Biggest DPWH budgets after the Senate',
     subtitle: 'DPWH offices ranked by their project total in the Senate committee report.',
@@ -253,7 +258,7 @@ const BOARDS_BASE: readonly BoardDef[] = [
     notes: [LINE_NOTE], regionFilter: false,
   },
   {
-    id: 'lines-new', section: 'senate-wholebill', kind: 'lines', value: 'php', order: 'desc',
+    id: 'lines-new', section: 'senate-wholebill', kind: 'lines', value: 'php', order: 'desc', tone: 'up',
     kicker: '2027 Senate · whole bill · budget lines',
     title: 'Biggest new items the Senate added',
     subtitle: 'Annex A lines with no House bill amount: what the Senate adds, outside DPWH projects.',

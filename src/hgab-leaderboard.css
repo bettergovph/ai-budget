@@ -244,6 +244,9 @@
   overflow: hidden;
 }
 .hgab-lb-top-bar span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+/* Boards with a tone (the Senate's): the bar takes the figure's colour, red for what was removed or cut, green for what was added. */
+.hgab-lb-top-bar.is-down span { background: var(--negative); }
+.hgab-lb-top-bar.is-up span { background: var(--positive); }
 .hgab-lb-top-val {
   font-family: var(--font-hero);
   font-weight: 700;
@@ -559,6 +562,9 @@
 .hgab-lb-people-cell { min-width: 200px; }
 .hgab-lb-region { color: var(--ink-3); white-space: nowrap; padding-top: 14px !important; }
 .hgab-lb-val { font-weight: 600; color: var(--ink); }
+/* The Senate column of the Senate boards: red where the Senate's amount is lower than the House bill's, green where higher. */
+.hgab-lb-senate.is-down { color: var(--negative); font-weight: 600; }
+.hgab-lb-senate.is-up { color: var(--positive); font-weight: 600; }
 .hgab-lb-detail { padding-top: 14px !important; color: var(--ink-3); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
 .hgab-lb-detail a { font-family: var(--font-body); color: var(--accent); white-space: nowrap; }
 .hgab-lb-roles { display: block; margin-bottom: 2px; font-family: var(--font-body); white-space: normal; color: var(--ink-2); }
