@@ -295,6 +295,13 @@ the Senate boards and address through `LeaderboardSiteContext` (`src/lib/leaderb
 default). Its tables show the House bill and the Senate beside the ranked figure. Boards: `src/lib/senate-leaderboard.ts`
 (`BoardDef.residual` gives each its "not in any district" footnote).
 
+**Titles in plain words** (Jason, 2026-11-25: "Titles like this are too complex for some filipinos"): about seven
+everyday words, past tense, "Senate" in each, "%" not "share", "biggest amount" not "most budget" ("most amount" isn't
+English), "House-added projects" for House insertions, "the President’s budget" for the NEP, "budget items" for
+budget lines; "removed" for DPWH projects taken out, "cut" for budgets that shrink. E.g. "Biggest % of budget removed
+by the Senate" (was "Largest share of the House bill budget the Senate removes"). Subtitles keep the exact
+definitions. Board ids, links and image file names are unchanged.
+
 **Share images** (Jason, 2026-11-25: "does not have the downloadable versions similar to hgab's leaderboard. Add an
 option for them per each"): every Senate board page has the House board page's image panel: a preview, four shapes
 (portrait 4:5, square, story 9:16, link 1.91:1), the region for office boards, Download image, Share (where the
