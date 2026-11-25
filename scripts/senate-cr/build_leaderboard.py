@@ -9,7 +9,10 @@ report analyses, with the House bill leaderboards' units and rules (src/lib/hgab
   lists for it (districts.json, the office's 2027 hgab3 `matched_label`). Rows under no ranked office (Central
   Office, regional offices) are carried as `outside`, never ranked.
 - Whole-bill boards rank departments, agencies (the General Summary) and budget lines (Annex A, outside DPWH) by the
-  Senate's change, with no offices, districts or people.
+  Senate's change, with no offices, districts or people. Every row carries its NEP, House bill and Senate amounts (the
+  share images print all three): departments from the General Summary, agencies from the House bill boards' agency
+  rows (data/hgab/2027/explorer/boards.json, matched on department and House bill amount), lines from Annex A. A
+  missing NEP figure is null, never 0.
 
 The file has LeaderboardData's shape (entries, regions, totals, whole_bill) so the House board pieces can draw it;
 each entry and region also carries a `senate` block. Integer pesos; null is "no figure".
@@ -83,6 +86,34 @@ def add(a, b):
     return out
 
 
+# The NEP proposes ₱111,984,494,000 in unprogrammed appropriations and the House bill keeps it to the peso (NEP Vol. III,
+# "XLV. Unprogrammed Appropriations", printed p. 961; NEP Vol. I, Table II). The NEP data (fund 101) has no unprogrammed
+# lines, so without this the department would read as "NEP —", as if the House had added it.
+UNPROGRAMMED_NEP = 111_984_494_000
+
+
+def norm(s):
+    """Names compared loosely: case, punctuation and spacing aside."""
+    return " ".join("".join(c if c.isalnum() else " " for c in (s or "").lower()).split())
+
+
+def agency_nep(boards):
+    """NEP by agency from the House bill boards: (department, House bill amount) -> [(agency, NEP)]."""
+    out = defaultdict(list)
+    for r in boards.get("agencies", []):
+        out[(norm(r["sub"]), r["hgab3_php"])].append((norm(r["label"]), r["nep_php"]))
+    return out
+
+
+def find_agency_nep(index, dept, label, house):
+    """The House bill boards' NEP for an agency: same department and House bill amount, the name where that is not
+    enough. None when nothing (or more than one) matches."""
+    c = index.get((norm(dept), house), [])
+    if len(c) > 1:
+        c = [x for x in c if x[0] == norm(label)]
+    return c[0][1] if len(c) == 1 else None
+
+
 def senate_href(href):
     """A House bill district page's address as the Senate district page's (same district id)."""
     return href.replace("/hgab/2027/districts/", "/senate/2027/districts/", 1) if href and href.startswith("/hgab/2027/districts/") else href
@@ -130,13 +161,17 @@ def main(site, hgab):
 
     # Whole bill: General Summary departments and agencies, Annex A lines (DPWH has its own boards).
     gs = json.load(open(f"{site}/departments.json"))
+    nep_index = agency_nep(json.load(open(f"{hgab}/explorer/boards.json")))
     dep_rows, agency_rows = [], []
     for d in gs["departments"]:
         if not d.get("roman"):
             continue
         href = f"{EXPLORER}/{d['id']}" if d.get("id") else EXPLORER
-        house, senate = d.get("house") or 0, d.get("senate") or 0
-        dep_rows.append({"label": title(d["name"]), "sub": f"General Summary, {d['roman']}", "nep_php": d.get("nep") or 0,
+        house, senate, nep = d.get("house") or 0, d.get("senate") or 0, d.get("nep")
+        if nep is None and norm(d["name"]) == "unprogrammed appropriations":
+            assert house == UNPROGRAMMED_NEP, f"unprogrammed appropriations: House bill {house:,}, NEP {UNPROGRAMMED_NEP:,}"
+            nep = UNPROGRAMMED_NEP
+        dep_rows.append({"label": title(d["name"]), "sub": f"General Summary, {d['roman']}", "nep_php": nep,
                          "hgab3_php": house, "senate_php": senate, "delta_php": senate - house,
                          "delta_pct": round((senate - house) / house * 100, 2) if house else None, "href": href})
         ags = d.get("agencies") or []
@@ -149,7 +184,8 @@ def main(site, hgab):
             kids = [k for k in ags if (k.get("no") or "").startswith(no + ".")]
             for x, sub in ([(k, f"{title(a['name'])} · {title(d['name'])}") for k in kids] if kids else [(a, title(d["name"]))]):
                 ah, asn = x.get("house") or 0, x.get("senate") or 0
-                agency_rows.append({"label": title(x["name"]), "sub": sub, "nep_php": 0, "hgab3_php": ah, "senate_php": asn,
+                nep = find_agency_nep(nep_index, d["name"], x["name"], ah)
+                agency_rows.append({"label": title(x["name"]), "sub": sub, "nep_php": nep, "hgab3_php": ah, "senate_php": asn,
                                     "delta_php": asn - ah, "delta_pct": round((asn - ah) / ah * 100, 2) if ah else None, "href": href})
     a = pd.read_parquet(f"{site}/downloads/senate-2027-annex-a.parquet")
     c = a[(a.kind == "class") & (~a.is_total_row) & a.net_php.notna() & (a.department_id != "department-of-public-works-and-highways")]
@@ -158,7 +194,7 @@ def main(site, hgab):
     for r in c.itertuples():
         house, senate, nep = i(r.house_php), i(r.senate_php), i(r.nep_php)
         line_rows.append({"label": title(amendment_name(r)), "sub": " · ".join(x for x in (title(r.department), r.agency, r.label) if isinstance(x, str) and x),
-                          "nep_php": nep or 0, "hgab3_php": house or 0, "senate_php": senate or 0, "delta_php": i(r.net_php),
+                          "nep_php": nep, "hgab3_php": house or 0, "senate_php": senate or 0, "delta_php": i(r.net_php),
                           "delta_pct": round(r.net_php / house * 100, 2) if house else None,
                           "href": f"{EXPLORER}/{r.department_id}", "status": "senate_new" if house is None else None,
                           "page": i(r.senate_page)})
@@ -180,14 +216,14 @@ def main(site, hgab):
             "Under citizen review: confirm a figure on its page of the committee report before you cite it.",
         ],
         "whole_bill": {"schema": 1, "built_at": gs.get("built_at"),
-                       "scope": {"hgab3_php": sum(r["hgab3_php"] for r in dep_rows), "nep_php": sum(r["nep_php"] for r in dep_rows),
+                       "scope": {"hgab3_php": sum(r["hgab3_php"] for r in dep_rows), "nep_php": sum(r["nep_php"] or 0 for r in dep_rows),
                                  "unprogrammed_php": 0, "line_groups": len(line_rows)},
                        "departments": dep_rows, "agencies": agency_rows, "lines": line_rows},
     }
     json.dump(out, open(f"{site}/leaderboard.json", "w"), ensure_ascii=False, separators=(",", ":"))
     top = sorted(entries, key=lambda x: -x["senate"]["removed_php"])[0]
     print(f"leaderboard: {len(entries)} office groups, {len(regions)} regions, {len(dep_rows)} departments, {len(agency_rows)} agencies, "
-          f"{len(line_rows)} lines; most removed {top['offices'][0]['name']} {top['senate']['removed_php']:,}; "
+          f"{len(line_rows)} lines ({sum(r['nep_php'] is not None for r in agency_rows)} agencies with an NEP figure); most removed {top['offices'][0]['name']} {top['senate']['removed_php']:,}; "
           f"outside {block(outside)['removed_php']:,} removed", file=sys.stderr)
 
 
