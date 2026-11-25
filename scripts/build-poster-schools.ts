@@ -1,7 +1,9 @@
 /**
  * "Schools short of classrooms": a three-slide carousel for /schools, in the dark figure style of the multi-purpose
  * building and flood control images (scripts/build-hgab-poster-mpb-people.ts, src/lib/mpb-compare-image.ts): the navy
- * ground, a Figtree headline with red runs, a strip of figures, then the notes, the disclaimer, the source and the address.
+ * ground, a Figtree headline with red runs, a strip of figures, then a band of logos (the People’s Budget Coalition; the
+ * data from DepEd and EDCOM 2, their logos on white tiles so their colours stay true), the notes, the disclaimer, the
+ * source and the address.
  *
  *   1/3  the classroom shortage by region on a map (EDCOM 2's Classroom Shortage Rate), the regions with the most
  *        classrooms still unfunded and those with the least of their shortage covered by FY 2026 allocations
@@ -131,8 +133,10 @@ type Run = string | { red: string };
 interface Cell { strong: string; span: string; red?: boolean }
 interface Slide { n: number; kicker: string; title: Run[][]; strip?: Cell[]; body: string; notes: string; source: string }
 
-const DISCLAIMER = `${COMPARE_CARD_DISCLAIMER} DepEd’s counts are self-reported by schools; field reports on each school’s page help check them.`;
-const SOURCE = "Source: DepEd SY 2023–2024 classroom shortage and school registry; DepEd FY 2026 School Building Program; EDCOM 2";
+const DISCLAIMER =
+  `${COMPARE_CARD_DISCLAIMER} DepEd’s counts are self-reported by schools; field reports on each school’s page help check them. ` +
+  "The DepEd and EDCOM 2 logos mark where the data comes from: the reading is ours, and neither made nor endorsed these slides.";
+const SOURCE = "Data: DepEd SY 2023–2024 classroom shortage, school registry and FY 2026 School Building Program; EDCOM 2 shortage list";
 const COVERED_IS =
   "Covered: FY 2026 School Building Program classrooms allocated to a school, up to its shortage; classrooms beyond a school’s own shortage do not cover another’s. Unfunded: the rest of the shortage. Shortages are DepEd’s SY 2023–2024 counts, rounded to whole classrooms per school, as EDCOM 2 does.";
 
@@ -164,9 +168,9 @@ function slideCover(rows: Region[], ph: AreaRow): Slide {
         <div class="map">${mapSvg(classOf)}</div>
         <div class="side">
           <p class="h">Most classrooms unfunded</p>
-          <ul class="list">${byGap.slice(0, 4).map((r) => item(r, `${count(r.a.gap)} of ${count(r.a.shortage)}`)).join("")}</ul>
+          <ul class="list">${byGap.slice(0, 3).map((r) => item(r, `${count(r.a.gap)} of ${count(r.a.shortage)}`)).join("")}</ul>
           <p class="h">Least of the shortage covered</p>
-          <ul class="list">${byCover.slice(0, 4).map((r) => item(r, `${Math.round(100 * r.coveredPct)}% of ${count(r.a.shortage)} covered`)).join("")}</ul>
+          <ul class="list">${byCover.slice(0, 3).map((r) => item(r, `${Math.round(100 * r.coveredPct)}% of ${count(r.a.shortage)} covered`)).join("")}</ul>
           <p class="h">Map: classroom shortage rate</p>
           <ul class="legend">${legend}</ul>
           <p class="swipe">Every region on the next slide →</p>
@@ -236,7 +240,7 @@ function slideBudget(ph: AreaRow): Slide {
     notes:
       `School facilities: DepEd’s Basic Education Facilities lines, which pay for new classrooms and also repairs, furniture, electrification and more, so not all of it builds classrooms. Multi-purpose buildings: DPWH lines for multi-purpose buildings and facilities, as on the budget-by-year chart. ` +
       `The ₱2.5 million a classroom is EDCOM 2’s assumed cost; real costs vary by storeys, site and region. Pesos are not adjusted for inflation; amounts are allocations, not spending.`,
-    source: "Source: DepEd SY 2023–2024 classroom shortage; GAA 2020–2026, NEP 2027 (DBM), House Bill 10858, Senate Committee Report; EDCOM 2",
+    source: "Data: DepEd SY 2023–2024 classroom shortage; EDCOM 2; GAA 2020–2026, NEP 2027 (DBM), House Bill 10858, Senate Committee Report",
   };
 }
 
@@ -248,6 +252,11 @@ const W = 1080, H = 1350, PAD = 48;
 const C = { ground: COMPARE_COLORS.ground, land: COMPARE_COLORS.land, ink: "#f3f6fb", ink2: "#c3cddd", ink3: "#8592a8", red: "#ff5a5a", cell: "#121b2e", rule: "#24304a", blue: COMPARE_COLORS.swatch.blue, cov: "#8f9bb0" };
 const dataUri = (path: string, type: string) => `data:${type};base64,${readFileSync(path).toString("base64")}`;
 const LOGO = dataUri(join(ROOT, "public/brand/bettergov-horizontal-white.png"), "image/png");
+const PBC_LOGO = dataUri(join(ROOT, "public/brand/pbc-logo-color-dark.png"), "image/png");
+// DepEd: Wikimedia Commons "Department of Education (DepEd).svg" (public domain). EDCOM 2: Commons "EDCOM 2 Logo.png",
+// trimmed and scaled to 1600 px. Both are drawn on white, as their own colours are made for it.
+const DEPED_LOGO = dataUri(join(ROOT, "public/brand/deped-logo.svg"), "image/svg+xml");
+const EDCOM_LOGO = dataUri(join(ROOT, "public/brand/edcom2-logo.png"), "image/png");
 
 const CSS = `
   @page { size: ${W}px ${H}px; margin: 0; }
@@ -320,8 +329,16 @@ const CSS = `
   .colchart .c > b { font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 13.5px; color: ${C.ink2}; margin-top: 7px; white-space: nowrap; }
   .colchart .c > small { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: ${C.ink3}; white-space: nowrap; height: 14px; }
   .pb-note { margin-top: 12px; font-size: 13.5px; line-height: 1.4; color: ${C.ink2}; }
+  /* The logos */
+  .brands { margin-top: 18px; padding-top: 14px; border-top: 1px solid ${C.rule}; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+  .brands > div { display: flex; align-items: center; gap: 12px; }
+  .brands .lbl { font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: ${C.ink3}; white-space: nowrap; }
+  .brands .pbc { height: 58px; }
+  .brands .tile { height: 50px; padding: 6px 12px; background: #fff; border-radius: 4px; display: flex; align-items: center; }
+  .brands .tile img { height: 100%; }
+  .brands .tile.is-edcom img { height: 82%; }
   /* The foot */
-  .foot { margin-top: 18px; }
+  .foot { margin-top: 14px; }
   .notes { font-size: 13px; line-height: 1.45; color: ${C.ink3}; }
   .disc { margin-top: 7px; font-size: 13px; line-height: 1.45; color: ${C.ink2}; }
   .disc b { color: ${C.ink}; font-weight: 600; }
@@ -343,6 +360,10 @@ function html(s: Slide): string {
   </div>${s.strip ? `
   <div class="strip">${s.strip.map((c) => `<div class="cell"><b${c.red ? ' class="r"' : ""}>${esc(c.strong)}</b><span>${esc(c.span)}</span></div>`).join("")}</div>` : ""}
   <div class="body">${s.body}</div>
+  <div class="brands">
+    <div><span class="lbl">With</span><img class="pbc" src="${PBC_LOGO}" alt="People’s Budget Coalition"></div>
+    <div><span class="lbl">Data from</span><span class="tile"><img src="${DEPED_LOGO}" alt="Department of Education"></span><span class="tile is-edcom"><img src="${EDCOM_LOGO}" alt="EDCOM 2"></span></div>
+  </div>
   <div class="foot">
     <p class="notes">${esc(s.notes)}</p>
     <p class="disc"><b>Disclaimer.</b> ${esc(DISCLAIMER)}</p>
