@@ -244,13 +244,12 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   with its Senate amount, Senate name and status (renames linked).
 - **DPWH:** 3,479 projects cut to zero (−₱99.30B), 13 foreign-assisted raised (+₱33.10B), 5,182 renamed.
 - Our House data's Taysan, Batangas MPB row is two printed lines (₱15M + ₱10M); the doc has the details.
-- **Primary nav** (2026-11-21, Jason: "rename our navs to NEP, HOUSE, SENATE, GAA 2000-2026 … remove budget hearings
-  and put it under House"): the tabs read NEP, House, Senate, GAA 2000–2026 (full names in each tab's `title`), then
-  Citizen Reports and Learn (`SiteHeader.tsx`). Budget hearings (`/hearings`) left the primary nav: "Hearings" in the
-  House bill sub-nav (`TAIL_LINKS`, `HgabBits.tsx`), the hearings pages use `HgabHeader`, and House is the active tab
-  there. **The Senate tab is hidden for now** (Jason, 2026-11-21): `SHOW_SENATE_TAB = false` in `SiteHeader.tsx` (tab and
-  drawer); the /senate/2027 pages stay at their addresses and other links to them (the budget-stage timeline, the
-  House pages' Senate column) remain.
+- **Primary nav** (Jason, 2026-11-25: "NEP 2027, House Bill 2027, Senate CR 2027 (let's now make the senate link
+  public)"; 2026-11-21: budget hearings under House): the tabs read NEP 2027, House Bill 2027, Senate CR 2027,
+  GAA 2000–2026 (full names in each tab's `title`), then Citizen Reports and Learn (`SiteHeader.tsx`, tab and drawer).
+  The Senate tab is public (its hide switch, `SHOW_SENATE_TAB`, is gone). Budget hearings (`/hearings`) are not in the
+  primary nav: "Hearings" in the House bill sub-nav (`TAIL_LINKS`, `HgabBits.tsx`), the hearings pages use
+  `HgabHeader`, and House Bill 2027 is the active tab there.
 - **The section** (PR #106 follow-up, branch `senate-cr-2027`): `/senate/2027` with its own primary tab
   ("Senate"): overview, line by line, the four programs project by project, provisions, sources,
   methodology. It reads `data/senate/2027/` from R2 `senate/2027/` (`npm run upload:senate`; upload before
