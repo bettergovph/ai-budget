@@ -14,8 +14,8 @@
 import { dataUrl } from './data-url';
 import { cached, getJson } from './hgab';
 import {
-  formatValue, type BoardDef, type BoardSection, type LeaderEntry, type LeaderRegion, type LeaderboardData, type ShareFormat,
-  type WholeBillRow,
+  formatValue, type BoardDef, type BoardSection, type BoardShare, type LeaderEntry, type LeaderRegion, type LeaderboardData,
+  type ShareFormat, type WholeBillRow,
 } from './hgab-leaderboard';
 import { SENATE_BASE, SENATE_ROOT } from './senate';
 
@@ -56,6 +56,7 @@ export const loadSenateLeaderboard = () =>
 export function senateLeaderboardPath(boardId?: string, opts: { region?: string | null; format?: ShareFormat | null } = {}): string {
   const q = new URLSearchParams();
   if (opts.region) q.set('region', opts.region);
+  if (opts.format && opts.format !== 'portrait') q.set('format', opts.format);
   const s = q.toString();
   return `${SENATE_LEADERBOARD_ROOT}${boardId ? `/${boardId}` : ''}${s ? `?${s}` : ''}`;
 }
@@ -93,7 +94,7 @@ const houseOutside = (d: LeaderboardData) =>
 
 const houseToSenate = (r: WholeBillRow) => `${php(r.hgab3_php)} → ${php(r.senate_php)}`;
 
-export const SENATE_BOARDS: readonly BoardDef[] = [
+const BOARDS_BASE: readonly BoardDef[] = [
   // The big picture
   {
     id: 'regions-removed', section: 'senate-picture', kind: 'regions', value: 'php', order: 'desc',
@@ -255,6 +256,27 @@ export const SENATE_BOARDS: readonly BoardDef[] = [
     notes: [LINE_NOTE], regionFilter: false,
   },
 ];
+
+/**
+ * What each board's share image prints (hgab-share-render.ts, BoardShare): the Senate committee report as the source,
+ * the Senate board's address, a short people note and disclaimer for the office boards, and Senate file names.
+ */
+const SHARE_SOURCE_DPWH = 'Source: Senate committee report on HB 10858 (Annex A-4) and House Bill 10858, DPWH project lists';
+const SHARE_SOURCE_WHOLE = 'Source: Senate committee report on HB 10858 (General Summary, Annex A) and House Bill 10858';
+const SHARE_NOTE = 'Amounts are for the DPWH office serving each district, as the House bill lists it. The Senate report does not say why it removes a project.';
+const SHARE_DISCLAIMER = 'Figures belong to DPWH offices, not to representatives. A Senate change is a document comparison, not evidence of wrongdoing.';
+
+function shareOf(b: BoardDef): BoardShare {
+  return {
+    source: b.kind === 'lines' ? SHARE_SOURCE_WHOLE : SHARE_SOURCE_DPWH,
+    path: (region) => senateLeaderboardPath(b.id, { region: b.regionFilter ? region : null }),
+    note: SHARE_NOTE,
+    disclaimer: SHARE_DISCLAIMER,
+    filePrefix: 'bettergov-senate-cr-2027',
+  };
+}
+
+export const SENATE_BOARDS: readonly BoardDef[] = BOARDS_BASE.map((b) => ({ ...b, share: shareOf(b) }));
 
 export function senateBoardById(id: string | undefined): BoardDef | undefined {
   return id ? SENATE_BOARDS.find((b) => b.id === id) : undefined;
