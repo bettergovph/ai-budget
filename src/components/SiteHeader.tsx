@@ -5,11 +5,6 @@ import { CITIZEN_REPORTS_ROOT } from '../lib/citizen-reports';
 import { SCHOOLS_ROOT } from '../lib/schools';
 import { INDICATORS_ROOT } from '../lib/indicators';
 
-/**
- * The Senate tab (the FY2027 Senate committee report, /senate/2027): hidden for now (Jason, 2026-11-21: "hide the
- * Senate link from the nav for now"). The pages stay at their addresses; set true to show the tab again.
- */
-const SHOW_SENATE_TAB = false;
 
 const LOGO_URL = 'https://assets.bettergov.ph/logos/png/horizontal-primary.png';
 
@@ -186,30 +181,29 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
           </div>
 
           <nav className="primary-nav" aria-label="Primary">
-            {/* The budget's stages, short (Jason, 2026-11-21); the House's budget hearings sit under House. */}
+            {/* The budget's stages (Jason, 2026-11-25: "NEP 2027, House Bill 2027, Senate CR 2027"; the Senate tab public);
+                the House's budget hearings sit under the House bill. */}
             <Link
               to="/2027"
               title="National Expenditure Program 2027"
               className={`primary-nav-link ${location.pathname.startsWith('/2027') ? 'active' : ''}`}
             >
-              NEP
+              NEP 2027
             </Link>
             <Link
               to="/hgab"
               title="House Appropriations Bill 2027, and the House's budget hearings"
               className={`primary-nav-link ${location.pathname.startsWith('/hgab') || location.pathname.startsWith('/hearings') ? 'active' : ''}`}
             >
-              House
+              House Bill 2027
             </Link>
-            {SHOW_SENATE_TAB && (
-              <Link
-                to="/senate/2027/overview"
-                title="Senate committee report on the 2027 budget"
-                className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
-              >
-                Senate
-              </Link>
-            )}
+            <Link
+              to="/senate/2027/overview"
+              title="Senate committee report (CR) on the 2027 budget"
+              className={`primary-nav-link ${location.pathname.startsWith('/senate') ? 'active' : ''}`}
+            >
+              Senate CR 2027
+            </Link>
             <Link
               to="/gaa"
               title="General Appropriations Acts, 2000–2026"
@@ -278,16 +272,14 @@ export default function SiteHeader({ headerClassName, subNav, drawerExtras, crum
         </div>
         <nav className="drawer-nav" aria-label="Site sections">
           <Link className="drawer-link" to="/2027" onClick={() => setMenuOpen(false)}>
-            NEP <span className="drawer-link-arrow">→</span>
+            NEP 2027 <span className="drawer-link-arrow">→</span>
           </Link>
           <Link className="drawer-link" to="/hgab" onClick={() => setMenuOpen(false)}>
-            House <span className="drawer-link-arrow">→</span>
+            House Bill 2027 <span className="drawer-link-arrow">→</span>
           </Link>
-          {SHOW_SENATE_TAB && (
-            <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
-              Senate <span className="drawer-link-arrow">→</span>
-            </Link>
-          )}
+          <Link className="drawer-link" to="/senate/2027/overview" onClick={() => setMenuOpen(false)}>
+            Senate CR 2027 <span className="drawer-link-arrow">→</span>
+          </Link>
           <Link className="drawer-link" to="/gaa" onClick={() => setMenuOpen(false)}>
             GAA 2000–2026 <span className="drawer-link-arrow">→</span>
           </Link>
