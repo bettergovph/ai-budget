@@ -14,8 +14,8 @@
 import { dataUrl } from './data-url';
 import { cached, getJson } from './hgab';
 import {
-  formatValue, type BoardDef, type BoardSection, type BoardShare, type LeaderEntry, type LeaderRegion, type LeaderboardData,
-  type ShareFormat, type WholeBillRow,
+  formatValue, type BoardDef, type BoardSection, type BoardShare, type BoardStages, type LeaderEntry, type LeaderRegion,
+  type LeaderboardData, type ShareFormat, type StageAmounts, type WholeBillRow,
 } from './hgab-leaderboard';
 import { SENATE_BASE, SENATE_ROOT } from './senate';
 
@@ -282,7 +282,29 @@ function shareOf(b: BoardDef): BoardShare {
   };
 }
 
-export const SENATE_BOARDS: readonly BoardDef[] = BOARDS_BASE.map((b) => ({ ...b, share: shareOf(b) }));
+/**
+ * The NEP, House bill and Senate amounts each image prints with its rows, for reference (Jason, 2026-11-25: "for the
+ * graphic we need to show the nep, house, senate amounts so there's a reference"): the office's DPWH projects, the
+ * region's, or the department's, agency's or line's. A Senate-only line has no House bill amount; a line or agency the
+ * NEP data does not match has no NEP amount (a dash, explained on the image).
+ */
+const entryStages = (e: LeaderEntry): StageAmounts => ({ nep: S(e).nep_php, house: S(e).house_php, senate: S(e).senate_php });
+const regionStages = (r: LeaderRegion): StageAmounts | null => {
+  const s = SR(r);
+  return s ? { nep: s.nep_php, house: s.house_php, senate: s.senate_php } : null;
+};
+const rowStages = (r: WholeBillRow): StageAmounts => ({ nep: r.nep_php, house: r.status === 'senate_new' ? null : r.hgab3_php, senate: r.senate_php ?? null });
+const DASH_NOTE = 'A dash (—) means that version has no matching line.';
+/** Boards whose line under the value only repeats the three amounts: the image leaves it out. */
+const DETAIL_REPEATS = new Set(['senate-largest', 'over-nep']);
+
+function stagesOf(b: BoardDef): BoardStages {
+  if (b.kind === 'regions') return { region: regionStages };
+  if (b.kind === 'lines') return { row: rowStages, dropDetail: true, note: b.rowSet === 'departments' ? undefined : DASH_NOTE };
+  return { entry: entryStages, dropDetail: DETAIL_REPEATS.has(b.id) };
+}
+
+export const SENATE_BOARDS: readonly BoardDef[] = BOARDS_BASE.map((b) => ({ ...b, share: shareOf(b), stages: stagesOf(b) }));
 
 export function senateBoardById(id: string | undefined): BoardDef | undefined {
   return id ? SENATE_BOARDS.find((b) => b.id === id) : undefined;

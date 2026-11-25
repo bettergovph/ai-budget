@@ -311,6 +311,26 @@ Senate board carries a `share` block (`BoardShare` in `hgab-leaderboard.ts`, set
 the office boards, and `bettergov-senate-cr-2027-<board>[-<region>]-<shape>.png` file names. House boards leave
 `share` unset, so their images are unchanged. No pre-rendered link previews (og images) for the Senate boards yet.
 
+**NEP, House and Senate on every image** (Jason, 2026-11-25: "for the graphic we need to show the nep, house, senate
+amounts so there's a reference"): each Senate board also carries `stages` (`BoardStages` in `hgab-leaderboard.ts`,
+set by `stagesOf` in `senate-leaderboard.ts`). Office and budget-item rows, and the #1 spotlight, get one more line,
+"NEP ₱369M → House ₱4.74B → Senate ₱892M" (the Senate's amount darkest, drawn arrows); region boards get NEP, House
+and Senate columns. Office figures are the `senate` block's (`nep_php`, `house_php`, `senate_php`), regions' the
+same, departments', agencies' and lines' the whole-bill rows'. A dash is "no matching line in that version"
+(a Senate-only line has no House amount; a line the NEP data does not match has no NEP amount); the agency and
+line boards' images say so in their notes. Where the line under the value only repeats these amounts (Biggest DPWH
+budgets after the Senate, Biggest increases over the President's budget, all whole-bill boards) the image leaves
+it out. The extra line costs rows: "Biggest amount removed" holds 6 offices in portrait (was 8), 3 in square (5),
+7 in story (10), 2 in the link preview (3). Region cards step their rows down (to 92% or 85%) rather than cut a
+region. Alt text gives the three amounts for the top three.
+
+The whole-bill rows' NEP (`build_leaderboard.py`): departments from the General Summary; agencies from the House
+bill boards' agency rows (`data/hgab/2027/explorer/boards.json`, matched on department and House bill amount, the
+name where that is not enough; 361 of 364, adding up to each department's NEP); Annex A lines from Annex A, null
+where the NEP has no matching line (450 of 912). Unprogrammed appropriations take the NEP's printed
+₱111,984,494,000 (NEP Vol. III, p. 961; the fund-101 NEP data has none, and the House bill keeps the same amount),
+so the whole-bill NEP total equals the House bill's, ₱4,606,066,495,000.
+
 ## Districts
 
 `/senate/2027/districts` and `/senate/2027/districts/:id` (Jason, 2026-11-23: "Next is do the district, similar to HGAB's

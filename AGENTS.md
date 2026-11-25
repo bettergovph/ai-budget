@@ -266,7 +266,8 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   Leaderboards `/senate/2027/leaderboard` (2026-11-21): 18 boards on the House leaderboards' office groups and people
   (`build_leaderboard.py`, `SenateLeaderboard.tsx`, `src/lib/senate-leaderboard.ts`); the House board pieces take
   their boards and address from `LeaderboardSiteContext`. Share images per board (2026-11-25): the House renderer,
-  with each Senate board's `share` block (`BoardShare`: source, link, note, disclaimer, file prefix).
+  with each Senate board's `share` block (`BoardShare`: source, link, note, disclaimer, file prefix), and its `stages`
+  block (`BoardStages`): every row's NEP → House → Senate amounts under it (regions: three columns).
   Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
   Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
 

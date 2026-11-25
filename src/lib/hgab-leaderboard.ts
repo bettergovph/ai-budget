@@ -306,7 +306,8 @@ export interface WholeBillRow {
   label: string;
   /** Where it sits: the department's full name, or "DOH · Office of the Secretary" for a line. */
   sub: string;
-  nep_php: number;
+  /** Null where the NEP has no matching line (the Senate boards' agencies and Annex A lines); the House boards always have one. */
+  nep_php: number | null;
   hgab3_php: number;
   /** hgab3_php − nep_php. */
   delta_php: number;
@@ -393,6 +394,30 @@ export interface BoardDef {
   residual?: (d: LeaderboardData) => string | null;
   /** Share images for another leaderboard (the Senate's): what its images print instead of the House bill's. */
   share?: BoardShare;
+  /** Share images: each row's NEP, House bill and Senate amounts, printed with it for reference (the Senate boards). */
+  stages?: BoardStages;
+}
+
+/** A row's amount in each version of the budget; null where that version has no matching line. */
+export interface StageAmounts {
+  nep: number | null;
+  house: number | null;
+  senate: number | null;
+}
+
+/**
+ * Jason, 2026-11-25: "for the graphic we need to show the nep, house, senate amounts so there's a reference". Each
+ * ranked row's three amounts, by board kind; the image prints them as "NEP ₱… → House ₱… → Senate ₱…" under the row
+ * (regions: three columns).
+ */
+export interface BoardStages {
+  entry?: (e: LeaderEntry) => StageAmounts | null;
+  region?: (r: LeaderRegion) => StageAmounts | null;
+  row?: (r: WholeBillRow) => StageAmounts | null;
+  /** The image leaves out the line under the value, which only repeats these amounts. */
+  dropDetail?: boolean;
+  /** Added to the image's notes (what a dash means). */
+  note?: string;
 }
 
 /**
@@ -588,7 +613,7 @@ export const BOARDS: readonly BoardDef[] = [
     kicker: '2027 · whole House bill · by department',
     title: 'Biggest increases in percent, by department',
     subtitle: 'Percent change from the NEP to the House bill, for departments and funds with ₱1 billion or more in the NEP.',
-    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) > 0, rowDetail: nepToHouse,
+    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => (r.nep_php ?? 0) >= 1_000_000_000 && (r.delta_pct ?? 0) > 0, rowDetail: nepToHouse,
     notes: [PCT_FLOOR_NOTE, WHOLE_NOTE],
     regionFilter: false,
   },
@@ -597,7 +622,7 @@ export const BOARDS: readonly BoardDef[] = [
     kicker: '2027 · whole House bill · by department',
     title: 'Biggest cuts in percent, by department',
     subtitle: 'Percent change from the NEP to the House bill, for departments and funds with ₱1 billion or more in the NEP.',
-    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => r.nep_php >= 1_000_000_000 && (r.delta_pct ?? 0) < 0, rowDetail: nepToHouse,
+    rowSet: 'departments', rowMetric: (r) => r.delta_pct, rowKeep: (r) => (r.nep_php ?? 0) >= 1_000_000_000 && (r.delta_pct ?? 0) < 0, rowDetail: nepToHouse,
     notes: [PCT_FLOOR_NOTE, WHOLE_NOTE],
     regionFilter: false,
   },
@@ -993,6 +1018,8 @@ export interface ListRow {
   sub: string;
   value: number;
   detail: string | null;
+  /** The row's NEP, House bill and Senate amounts (boards with `stages`). */
+  stages?: StageAmounts | null;
 }
 
 /** The rows a list board draws, best first. */
@@ -1002,7 +1029,10 @@ export function listRows(data: LeaderboardData, board: BoardDef, opts: { region?
     return { rows: r.rows.map((x) => ({ rank: x.rank, label: x.row.label, sub: x.row.sub, value: x.value, detail: board.mpbDetail?.(x.row) ?? null })), eligible: r.eligible };
   }
   const r = rankLines(data, board, { limit: opts.limit });
-  return { rows: r.rows.map((x) => ({ rank: x.rank, label: x.row.label, sub: x.row.sub, value: x.value, detail: board.rowDetail?.(x.row) ?? null })), eligible: r.eligible };
+  return {
+    rows: r.rows.map((x) => ({ rank: x.rank, label: x.row.label, sub: x.row.sub, value: x.value, detail: board.rowDetail?.(x.row) ?? null, stages: board.stages?.row?.(x.row) ?? null })),
+    eligible: r.eligible,
+  };
 }
 
 /** What a list board counts. */
