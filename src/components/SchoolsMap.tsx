@@ -7,30 +7,44 @@
  * School Building Program allocates classrooms; or coloured by allocation status (under, fully, over).
  * `areas`: one disc per schools division at the middle of its schools, sized by its shortage and coloured by how
  * much of it the 2026 list covers. Every value on the map is also in the page's tables.
+ * A picked school's card (`popup`) opens above its dot, in a MapLibre popup the page fills through a portal.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  AttributionControl, LngLatBounds, Map as MapLibreMap, NavigationControl, setWorkerUrl,
+  AttributionControl, LngLatBounds, Map as MapLibreMap, NavigationControl, Popup, setWorkerUrl,
   type ExpressionSpecification, type GeoJSONSource, type MapLayerMouseEvent,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { FeatureCollection, Point } from 'geojson';
 import {
-  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, SHORTAGE_CLASSES, UNRATED, coverageClass, statusOf,
-  type AreaRow, type PointsFile, type SectorCode,
+  ALLOCATION_STATUS, COVERAGE_CLASSES, NO_SHORTAGE_DATA, PROJECT_RING, PROJECT_SETS, SHORTAGE_CLASSES, UNRATED, coverageClass, statusOf,
+  type AreaRow, type PointsFile, type ProjectSet, type SectorCode,
 } from '../lib/schools';
 
 setWorkerUrl(workerUrl);
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 const PH: [[number, number], [number, number]] = [[116.9, 4.6], [126.8, 21.1]];
+/** The schools a project set rings: FY 2026 allocations, or FY 2027 flags (Y27 bits: 1 NEP, 2 House bill, 4 added). */
+const RING_FILTER: Record<ProjectSet, ExpressionSpecification> = {
+  sbp2026: ['>', ['get', 'cr'], 0],
+  nep2027: ['==', ['%', ['get', 'y'], 2], 1],
+  house2027: ['>=', ['%', ['get', 'y'], 4], 2],
+  added2027: ['>=', ['get', 'y'], 4],
+};
+
 export type MapProps =
   | {
-    mode: 'points'; points: PointsFile['rows']; sectors: SectorCode[]; projectsOnly: boolean;
+    mode: 'points'; points: PointsFile['rows']; sectors: SectorCode[];
+    /** Which projects are ringed, and whether only schools with them are shown. */
+    ring: ProjectSet; projectsOnly: boolean;
     /** Colour each school by its shortage level (EDCOM 2's, blue) or by its allocation status. */
     colorBy?: 'level' | 'status';
     selected: string | null; onPick: (id: string) => void; fit?: [[number, number], [number, number]] | null;
+    /** A card over the map, its tip on `at` (the picked school); closed by Escape or a click on the map away from a school. */
+    popup?: { at: [number, number]; content: ReactNode; onClose: () => void } | null;
   }
   | {
     mode: 'areas'; areas: AreaRow[]; selected: string | null; onPick: (division: string) => void;
@@ -48,9 +62,9 @@ const statusColor: ExpressionSpecification = ['match', ['get', 'st'],
 function pointsData(rows: PointsFile['rows']): FeatureCollection<Point> {
   return {
     type: 'FeatureCollection',
-    features: rows.map(([id, lon, lat, shortage, cr, sec, level]) => ({
+    features: rows.map(([id, lon, lat, shortage, cr, sec, level, y]) => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: { id, c: level, s: shortage ?? -1, cr, sec, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
+      properties: { id, c: level, s: shortage ?? -1, cr, sec, y, st: ALLOCATION_STATUS.findIndex((x) => x.key === statusOf(shortage, cr)) },
     })),
   };
 }
@@ -141,6 +155,10 @@ export default function SchoolsMap(props: MapProps) {
         if (typeof id === 'string') latest.current.onPick(id);
       };
       m.on('click', 'sch-dots', pick);
+      m.on('click', (e) => {
+        const q = latest.current;
+        if (q.mode === 'points' && q.popup && !m.queryRenderedFeatures(e.point, { layers: ['sch-dots'] }).length) q.popup.onClose();
+      });
       m.on('mouseenter', 'sch-dots', () => { m.getCanvas().style.cursor = 'pointer'; });
       m.on('mouseleave', 'sch-dots', () => { m.getCanvas().style.cursor = ''; });
       ready.current = true;
@@ -158,8 +176,16 @@ export default function SchoolsMap(props: MapProps) {
     if (p.mode === 'points') {
       src.setData(pointsData(p.points));
       const sectorFilter: ExpressionSpecification = ['in', ['get', 'sec'], ['literal', p.sectors]];
-      m.setFilter('sch-dots', p.projectsOnly ? ['all', sectorFilter, ['>', ['get', 'cr'], 0]] : sectorFilter);
-      m.setFilter('sch-projects', p.colorBy === 'status' ? ['==', ['get', 'cr'], -1] : ['all', sectorFilter, ['>', ['get', 'cr'], 0]]);
+      const ringed = RING_FILTER[p.ring];
+      m.setFilter('sch-dots', p.projectsOnly ? ['all', sectorFilter, ringed] : sectorFilter);
+      // Allocation status already speaks of FY 2026 allocations; the 2026 ring would repeat it.
+      m.setFilter('sch-projects', p.colorBy === 'status' && p.ring === 'sbp2026' ? ['==', ['get', 'cr'], -1] : ['all', sectorFilter, ringed]);
+      m.setPaintProperty('sch-projects', 'circle-stroke-color', PROJECT_SETS.find((x) => x.key === p.ring)?.color ?? PROJECT_RING);
+      // FY 2026 rings (5,000 schools) stay faint at the country's scale; the FY 2027 sets (a few hundred) are solid throughout.
+      const few = p.ring !== 'sbp2026';
+      m.setPaintProperty('sch-projects', 'circle-stroke-opacity', few ? 1 : ['interpolate', ['linear'], ['zoom'], 5, 0.18, 8, 1]);
+      m.setPaintProperty('sch-projects', 'circle-stroke-width', few ? ['interpolate', ['linear'], ['zoom'], 5, 1.6, 12, 2.5] : ['interpolate', ['linear'], ['zoom'], 5, 0.6, 12, 2]);
+      m.setPaintProperty('sch-projects', 'circle-radius', few ? ['interpolate', ['linear'], ['zoom'], 5, 4.5, 9, 7, 13, 12] : ['interpolate', ['linear'], ['zoom'], 5, 3, 9, 6, 13, 11]);
       m.setPaintProperty('sch-dots', 'circle-color', p.colorBy === 'status' ? statusColor : levelColor);
     } else {
       src.setData(areasData(p.areas));
@@ -168,7 +194,7 @@ export default function SchoolsMap(props: MapProps) {
   }
 
   const dataKey = props.mode === 'points'
-    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}|${props.colorBy ?? 'level'}`
+    ? `${props.points.length}|${props.sectors.join(',')}|${props.projectsOnly}|${props.ring}|${props.colorBy ?? 'level'}`
     : `${props.areas.length}|${props.areas[0]?.division ?? ''}`;
   useEffect(sync, [dataKey, props.selected]);
 
@@ -176,9 +202,46 @@ export default function SchoolsMap(props: MapProps) {
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    const go = () => m.fitBounds(new LngLatBounds(props.fit ?? PH), { padding: 32, maxZoom: 12, duration: 600 });
+    const go = () => {
+      const bounds = new LngLatBounds(props.fit ?? PH);
+      if (props.mode !== 'points' || !props.popup) { m.fitBounds(bounds, { padding: 32, maxZoom: 12, duration: 600 }); return; }
+      // A card opens above the school: the school goes about 400 px down (the card's height), not past the bottom.
+      const h = m.getContainer().clientHeight;
+      const y = Math.min(h - 30, Math.max(h / 2, 400));
+      const zoom = Math.min(12, m.cameraForBounds(bounds, { padding: 32 })?.zoom ?? 12);
+      m.easeTo({ center: bounds.getCenter(), zoom, offset: [0, y - h / 2], duration: 600 });
+    };
     if (ready.current) go(); else m.once('load', go);
   }, [fitKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={box} className="sch-map" role="region" aria-label="Map of schools" />;
+  // The popup: MapLibre places it (anchored at its bottom, so it always opens above the dot); React fills it.
+  const pop = props.mode === 'points' ? props.popup ?? null : null;
+  const [popBox] = useState(() => (typeof document === 'undefined' ? null : document.createElement('div')));
+  const popup = useRef<Popup | null>(null);
+  const atKey = pop ? pop.at.join(',') : '';
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !popBox || !pop) { popup.current?.remove(); popup.current = null; return; }
+    popup.current ??= new Popup({
+      anchor: 'bottom', offset: 14, closeButton: false, closeOnClick: false, focusAfterOpen: false, maxWidth: '340px', className: 'sch-popup',
+    }).setDOMContent(popBox);
+    popup.current.setLngLat(pop.at).addTo(m);
+  }, [atKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { popup.current?.remove(); }, []);
+  useEffect(() => {
+    if (!pop) return;
+    const onKey = (e: KeyboardEvent) => {
+      const q = latest.current;
+      if (e.key === 'Escape' && q.mode === 'points') q.popup?.onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [!!pop]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      <div ref={box} className="sch-map" role="region" aria-label="Map of schools" />
+      {pop && popBox && createPortal(pop.content, popBox)}
+    </>
+  );
 }

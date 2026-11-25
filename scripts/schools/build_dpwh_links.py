@@ -1,6 +1,8 @@
 """Links DPWH contracts (infra years 2016-2026) to the schools in the registry, for each school's project history
 (`/schools/:id`). Writes data/schools/dpwh-import.sql: `schools_dpwh_contracts` (the school-related contracts that
-link to a school) and `schools_dpwh_links` (contract x school, with how the link was made).
+link to a school) and `schools_dpwh_links` (contract x school, with how the link was made). With the same matcher,
+the FY 2027 DPWH project lines that name a school, in the NEP and the House bill (data/hgab/2027/dpwh):
+`schools_2027_lines` (NEP and House amounts, what the House did, pages) and `schools_2027_links`.
 
     npm run build:schools-d1          (first: writes data/schools/registry-names.csv)
     npm run build:schools-dpwh
@@ -20,8 +22,9 @@ DPWH rarely writes the School ID, so most links come from the school's name. Eac
   near                    the contract's GPS is within 150 m of the school and no other school is close
 
 Names are compared after normalising (upper case, no punctuation, ES/NHS/IS/CS... spelt out). A name is only used
-when it has a word that is not generic ("Central Elementary School" alone never matches), and a matched name inside a
-longer matched name is dropped ("San Jose ES" when "San Jose ES Annex" also matched). The contract's office
+when it has a word that is not generic and does not name a university, college or institute ("Central Elementary School" alone never matches), and a matched name inside a
+longer matched name is dropped ("San Jose ES" when "San Jose ES Annex" also matched). A School ID is six digits on
+their own, never part of a decimal (GPS printed in a description). The contract's office
 ("Cagayan 2nd DEO") gives the province; regional and city offices map to theirs, or to the whole country when unknown.
 """
 
@@ -101,6 +104,22 @@ def has_words(words, text):
     return bool(words) and all(re.search(r"\b" + t + r"\b", text) for t in words)
 
 
+CONFIDENT = ("school_id", "school_id_name_differs", "name")
+
+
+def kind_of(t):
+    """A project's kind from its normalised title, as DPWH_KIND in src/worker/schools-api.ts: repair, then
+    multi-purpose and covered courts, then buildings, else other."""
+    has = lambda *ws: any(re.search(w, t) for w in ws)
+    if has(r"REPAIR", r"REHAB", r"RENOVAT", r"RETROFIT", r"IMPROVEMENT"):
+        return "repair"
+    if has(r"MULTI ?PURPOSE", r"\bMPB\b", r"COVERED COURT", r"\bGYM", r"CANOPY", r"GRANDSTAND", r"SPORT"):
+        return "mpb"
+    if has(r"CLASSROOM", r"SCHOOL BUILDING", r"SCHOOL BLDG", r"STOREY", r"\bSTY", r"WORKSHOP", r"LABORATOR", r"BUILDING"):
+        return "buildings"
+    return "other"
+
+
 RANK = ["school_id", "school_id_name_differs", "name", "name_annex", "several", "near_name", "near"]
 
 
@@ -125,7 +144,9 @@ def main():
                             "words": distinct(r["school_name"])}
             for n in {r["school_name"], r["shortage_name"], r["coord_name"]}:
                 k = norm(n)
-                if len(k) >= 12 and distinct(n):
+                # University, college and institute names (lab schools) name the institution, not a basic-education
+                # school: "Mindanao State University" sits inside "North Eastern Mindanao State University". ID only.
+                if len(k) >= 12 and distinct(n) and not re.search(r"\b(UNIVERSITY|COLLEGE|INSTITUTE)\b", k):
                     by_prov[p][k].add(sid)
             if lat is not None:
                 grid[(round(lat, 2), round(lon, 2))].append(sid)
@@ -158,21 +179,17 @@ def main():
     links, contracts = [], {}
     stats = collections.Counter()
     seen_ids = set()
-    for row in rows:
-        c = dict(zip(cols, row))
-        cid = c["contract_id"]
-        if not cid or cid in seen_ids:
-            stats["skipped_duplicate_or_blank_id"] += 1
-            continue
-        seen_ids.add(cid)
-        d = norm(c["description"])
-        p = prov(c["deo"])
-        has_gps = c["latitude"] is not None and c["longitude"] is not None and 4 < c["latitude"] < 22 and 116 < c["longitude"] < 127
-        nb = near(c["latitude"], c["longitude"], 400) if has_gps else []
+    def match_text(text, deo, lat, lon):
+        """The schools a text names: by School ID, by full name in the office's province, or near its GPS point.
+        Returns ([(school_id, how)], {school_id: metres}, has_gps), one entry per school, its strongest match."""
+        d = norm(text)
+        p = prov(deo)
+        has_gps = lat is not None and lon is not None and 4 < lat < 22 and 116 < lon < 127
+        nb = near(lat, lon, 400) if has_gps else []
         dist = {sid: m for m, sid in nb}
         found = []  # (school_id, match)
-
-        ids = [m for m in dict.fromkeys(re.findall(r"(?<!\d)(\d{6})(?!\d)", c["description"] or "")) if m in schools]
+        # six digits on their own, not part of a decimal (GPS printed in titles: "15.836801")
+        ids = [m for m in dict.fromkeys(re.findall(r"(?<![\d.])(\d{6})(?![\d.]|°)", text or "")) if m in schools]
         for sid in ids:
             found.append((sid, "school_id" if has_words(schools[sid]["words"], d) else "school_id_name_differs"))
         if not found:
@@ -202,15 +219,24 @@ def main():
                 found.append((close[0][1], "near_name"))
             elif nb[0][0] <= 150 and (len(nb) == 1 or nb[1][0] > 2 * nb[0][0]):
                 found.append((nb[0][1], "near"))
-        if not found:
-            stats["contracts_unplaced"] += 1
-            continue
         # one link per school: its strongest match (two spellings of a name can both hit)
         best = {}
         for x, how in found:
             if x not in best or RANK.index(how) < RANK.index(best[x]):
                 best[x] = how
-        found = list(best.items())
+        return list(best.items()), dist, has_gps
+
+    for row in rows:
+        c = dict(zip(cols, row))
+        cid = c["contract_id"]
+        if not cid or cid in seen_ids:
+            stats["skipped_duplicate_or_blank_id"] += 1
+            continue
+        seen_ids.add(cid)
+        found, dist, has_gps = match_text(c["description"], c["deo"], c["latitude"], c["longitude"])
+        if not found:
+            stats["contracts_unplaced"] += 1
+            continue
         confident = [x for x, how in found if how in ("school_id", "school_id_name_differs", "name")]
         stats["contracts_linked_confident" if confident else "contracts_linked_possible_only"] += 1
         for x, how in found:
@@ -227,6 +253,52 @@ def main():
             c["latitude"] = c["longitude"] = None
         contracts[cid] = c
 
+    # --- FY 2027 DPWH project lines that name a school: the NEP and the House bill (data/hgab/2027/dpwh) ---
+    # The House amount is the third reading's, else the second's (as build-hgab-d1.ts); GPS from map.json.
+    hgab = os.path.join(ROOT, "data", "hgab", "2027", "dpwh")
+    with open(os.path.join(hgab, "map.json")) as f:
+        pts = {pt["id"]: pt for pt in json.load(f)["points"]}
+    hrows = con.execute(f"""
+        SELECT id, title, program, region, office, nep_php, hgab3_php, hgab2_php, nep_page, nep_doc, hgab3_page, hgab3_doc,
+               hgab2_page, hgab2_doc
+        FROM read_parquet('{os.path.join(hgab, "projects.parquet")}')
+    """).fetchall()
+    lines27, links27 = {}, []
+    for (lid, title, program, region, office, nep, h3, h2, nep_page, nep_doc, h3p, h3d, h2p, h2d) in hrows:
+        t = norm(title)
+        if "SCHOOL" not in t and "CLASSROOM" not in t:
+            continue
+        stats["lines2027_school_related"] += 1
+        pt = pts.get(lid)
+        found, dist, has_gps = match_text(title, office, pt["lat"] if pt else None, pt["lon"] if pt else None)
+        if not found:
+            stats["lines2027_unplaced"] += 1
+            continue
+        house = h3 if h3 is not None else h2
+        hp, hd = (h3p, h3d) if h3 is not None else (h2p, h2d)
+        nep_i = int(nep) if nep is not None else None
+        house_i = int(house) if house is not None else None
+        if nep_i is None and house_i:
+            change = "added"
+        elif nep_i and not house_i:
+            change = "removed"
+        elif nep_i == house_i:
+            change = "same"
+        else:
+            change = "raised" if (house_i or 0) > (nep_i or 0) else "cut"
+        confident = {x for x, how in found if how in CONFIDENT}
+        stats["lines2027_linked_confident" if confident else "lines2027_linked_possible_only"] += 1
+        stats[f"lines2027_{change}"] += 1
+        lines27[lid] = {"line_id": lid, "title": title, "program": program, "region": region, "office": office,
+                        "nep_php": nep_i, "house_php": house_i, "change": change, "kind": kind_of(t),
+                        "nep_page": nep_page, "nep_doc": nep_doc, "house_page": hp, "house_doc": hd,
+                        "latitude": pt["lat"] if pt else None, "longitude": pt["lon"] if pt else None,
+                        "schools_confident": len(confident)}
+        for x, how in found:
+            links27.append({"line_id": lid, "school_id": x, "match": how, "confident": int(how in CONFIDENT),
+                            "distance_m": round(dist[x]) if x in dist else None})
+    stats["schools_with_confident_2027_line"] = len({l["school_id"] for l in links27 if l["confident"]})
+
     stats["contracts_school_related"] = len(seen_ids)
     stats["schools_with_confident_link"] = len({l["school_id"] for l in links if l["confident"]})
     meta = {"built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": "data/dpwh-contracts/contracts.parquet",
@@ -239,8 +311,16 @@ def main():
     L_COLS = [("contract_id", "TEXT NOT NULL"), ("school_id", "TEXT NOT NULL"), ("match", "TEXT NOT NULL"),
               ("confident", "INTEGER NOT NULL"), ("distance_m", "INTEGER")]
     M_COLS = [("key", "TEXT NOT NULL"), ("value", "TEXT")]
+    Y_COLS = [("line_id", "TEXT NOT NULL"), ("title", "TEXT"), ("program", "TEXT"), ("region", "TEXT"), ("office", "TEXT"),
+              ("nep_php", "INTEGER"), ("house_php", "INTEGER"), ("change", "TEXT"), ("kind", "TEXT"), ("nep_page", "INTEGER"),
+              ("nep_doc", "TEXT"), ("house_page", "INTEGER"), ("house_doc", "TEXT"), ("latitude", "REAL"), ("longitude", "REAL"),
+              ("schools_confident", "INTEGER")]
+    YL_COLS = [("line_id", "TEXT NOT NULL"), ("school_id", "TEXT NOT NULL"), ("match", "TEXT NOT NULL"),
+               ("confident", "INTEGER NOT NULL"), ("distance_m", "INTEGER")]
     tables = [("schools_dpwh_contracts", C_COLS, list(contracts.values()), "PRIMARY KEY (contract_id)"),
               ("schools_dpwh_links", L_COLS, links, "PRIMARY KEY (contract_id, school_id)"),
+              ("schools_2027_lines", Y_COLS, list(lines27.values()), "PRIMARY KEY (line_id)"),
+              ("schools_2027_links", YL_COLS, links27, "PRIMARY KEY (line_id, school_id)"),
               ("schools_dpwh_meta", M_COLS, [{"key": k, "value": v if isinstance(v, str) else json.dumps(v)} for k, v in meta.items()],
                "PRIMARY KEY (key)")]
     out = ["-- Generated by scripts/schools/build_dpwh_links.py; do not edit by hand."]
@@ -248,6 +328,7 @@ def main():
     for t, cs, _, pk in tables:
         out.append(f"CREATE TABLE {t} (\n" + ",\n".join(f"  {n} {ty}" for n, ty in cs) + f",\n  {pk}\n);")
     out.append("CREATE INDEX schools_dpwh_links_school ON schools_dpwh_links (school_id, confident);")
+    out.append("CREATE INDEX schools_2027_links_school ON schools_2027_links (school_id, confident);")
     path = os.path.join(OUT_DIR, "dpwh-import.sql")
     with open(path, "w") as f:
         f.write("\n".join(out) + "\n")
@@ -277,7 +358,8 @@ def main():
             if batch:
                 f.write(head + ",\n".join(batch) + ";\n")
     print(json.dumps(meta["stats"], indent=1))
-    print(f"wrote {path} ({os.path.getsize(path) / 1e6:.1f} MB): {len(contracts)} contracts, {len(links)} links")
+    print(f"wrote {path} ({os.path.getsize(path) / 1e6:.1f} MB): {len(contracts)} contracts, {len(links)} links; "
+          f"{len(lines27)} FY 2027 lines, {len(links27)} links")
 
 
 if __name__ == "__main__":

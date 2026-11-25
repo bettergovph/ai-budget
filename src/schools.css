@@ -199,3 +199,43 @@
   .sch-listside { position: static; }
 }
 .sch-notice-info { background: var(--accent-soft); border-color: #c9d8f8; }
+.sch-button-sm { padding: 6px 12px; font-size: 12.5px; }
+.sch-reviewcell { white-space: nowrap; }
+.sch-reviewbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 20px; }
+.sch-cardactions { display: flex; align-items: center; gap: 14px; font-family: var(--font-body); font-size: 13px; }
+.sch-cardactions a:not(.sch-button) { color: var(--accent); }
+
+/* The review form (pages/School.tsx ReviewModal): a native modal dialog over the school page. */
+.sch-modal[open] {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(17, 21, 28, 0.35);
+  overflow: hidden;
+}
+.sch-modal::backdrop { background: rgba(17, 21, 28, 0.6); backdrop-filter: blur(2px); }
+.sch-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 22px 14px; border-bottom: 1px solid var(--rule); background: var(--paper-2); }
+.sch-modal-eyebrow { margin: 0 0 4px; font-family: var(--font-hero); font-weight: 600; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); }
+.sch-modal-title { margin: 0; font-family: var(--font-hero); font-size: 20px; font-weight: 800; line-height: 1.2; color: var(--ink); }
+.sch-modal-x { all: unset; flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; font-size: 22px; line-height: 1; color: var(--ink-2); cursor: pointer; }
+.sch-modal-x:hover { background: var(--rule-soft); color: var(--ink); }
+.sch-modal-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sch-modal-body { overflow-y: auto; overscroll-behavior: contain; padding: 14px 22px 22px; }
+.sch-modal-body .sch-form { margin-top: 4px; }
+@media (max-width: 640px) {
+  .sch-modal[open] { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+}
+.sch-report > .sch-button { margin-top: 4px; }
+
+/* The picked school's card on the map (SchoolsMap `popup`): MapLibre's popup, anchored above the dot. */
+.sch-popup { z-index: 3; }
+.sch-popup .maplibregl-popup-content { padding: 0; border-radius: 10px; background: none; box-shadow: 0 10px 28px rgba(17, 21, 28, 0.22); }
+.sch-popup .sch-card { width: min(320px, calc(100vw - 48px)); max-height: min(60vh, 420px); overflow-y: auto; border-color: var(--rule); }
+.sch-popup .maplibregl-popup-tip { border-top-color: var(--paper); }
