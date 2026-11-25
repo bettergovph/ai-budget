@@ -293,8 +293,16 @@ slightly from the House boards, which hold out lines that changed office.
 Page: `SenateLeaderboard.tsx`, with the House pieces (`BoardTile`, `PlaceCell`, `ValueCell`, `BoardPager`, ...) given
 the Senate boards and address through `LeaderboardSiteContext` (`src/lib/leaderboard-site.ts`; the House's by
 default). Its tables show the House bill and the Senate beside the ranked figure. Boards: `src/lib/senate-leaderboard.ts`
-(`BoardDef.residual` gives each its "not in any district" footnote). No share images yet: the renderer
-(`hgab-share-render.ts`) is House-specific.
+(`BoardDef.residual` gives each its "not in any district" footnote).
+
+**Share images** (Jason, 2026-11-25: "does not have the downloadable versions similar to hgab's leaderboard. Add an
+option for them per each"): every Senate board page has the House board page's image panel: a preview, four shapes
+(portrait 4:5, square, story 9:16, link 1.91:1), the region for office boards, Download image, Share (where the
+browser can share files) and Copy link. The House renderer draws them (`HgabShareCard`, `hgab-share-render.ts`); each
+Senate board carries a `share` block (`BoardShare` in `hgab-leaderboard.ts`, set by `shareOf` in
+`senate-leaderboard.ts`): the Senate source line, the Senate board's link, a short people note and disclaimer for
+the office boards, and `bettergov-senate-cr-2027-<board>[-<region>]-<shape>.png` file names. House boards leave
+`share` unset, so their images are unchanged. No pre-rendered link previews (og images) for the Senate boards yet.
 
 ## Districts
 
