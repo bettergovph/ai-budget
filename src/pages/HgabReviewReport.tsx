@@ -13,7 +13,9 @@ import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { cached, getJson } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
 import { REVIEW_INDEX_PATH, type ReviewIndex } from '../lib/hgab-documents';
-import { REVIEW_ROOT, decodeIndex } from '../lib/hgab-review';
+import { REVIEW_DATA_CHANGES, REVIEW_ROOT, decodeIndex } from '../lib/hgab-review';
+import { longDate } from '../lib/page-changes';
+import { PageChanges } from '../components/PageChanges';
 import { toCsv } from '../lib/hgab-redflags-team';
 import {
   REPORT_ANSWER_COLUMNS, REPORT_API, REPORT_PAGES, REPORT_REVIEW_COLUMNS, REPORT_ROOT, REPORT_TITLE, answerRows, groupIndex, memberNames,
@@ -108,6 +110,7 @@ export default function HgabReviewReport() {
             {/* The stamp locks in what a printed or shared page shows (the maintainer, 2026-11-18). */}
             <p className="rr-stamp" role="status">
               <b>Partial and unofficial</b> as of {readAt ? <time dateTime={readAt}>{stamp(readAt)}</time> : '…'} (Philippine time)
+              {REVIEW_DATA_CHANGES[0] && <> · <a href="#changes">Updated {longDate(REVIEW_DATA_CHANGES[0].date)}</a></>}
               {reviews.state !== 'loading' && <span className="rr-noprint"> · <button type="button" className="rr-link" onClick={reload}>Refresh</button></span>}
             </p>
             <p>
@@ -146,6 +149,7 @@ export default function HgabReviewReport() {
                 <Route path="project/:hgabId" element={<ProjectPage />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              <PageChanges changes={REVIEW_DATA_CHANGES} className="rr-changes" title="Changes to this report" />
             </ReportDataContext.Provider>
           )}
         </main>

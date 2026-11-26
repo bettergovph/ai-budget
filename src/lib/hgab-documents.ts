@@ -115,6 +115,9 @@ export type JoinMethod = (typeof JOIN_METHODS)[number];
  * theirs is ours: the bill page, then UNCOVERED_SEQ + our row number (`house-reading:N`), which no research row reaches.
  */
 export const UNCOVERED_SEQ = 900_000;
+/** Our region names (dpwh/projects.parquet) as the reviewer names them, which is the research site's way. */
+export const OUR_REGION_NAMES: Readonly<Record<string, string>> = { NCR: "National Capital Region", NIR: "Negros Island Region" };
+export const ourRegionName = (region: string) => OUR_REGION_NAMES[region] ?? region;
 export function uncoveredId(projectId: string, page: number): string | null {
   const m = /^house-reading:(\d+)$/.exec(projectId);
   if (!m || Number(m[1]) >= 100_000 || !(page > 0 && page < 10_000)) return null;
@@ -148,7 +151,14 @@ export interface DocumentProject {
   seq: number;
   title: string;
   office: string;
+  /**
+   * Region from our reading of the bill (the project's office; `OUR_REGION_NAMES`). Since 2026-11-26: the research
+   * site's reading carries the region heading printed above an NCR office onto its projects (612 read Region XIII, XII,
+   * X or XI), and onto 17 Central Office "Nationwide" lines.
+   */
   region: string;
+  /** The research site's region, kept so the correction is traceable. */
+  region_upstream: string;
   amount_php: number;
   /** Our row's amount; differs only for merged_duplicate rows (the bill lists the same project twice). */
   project_amount_php: number;

@@ -937,6 +937,30 @@ the <a href="#overview">REST API</a> returns. Invalid inputs come back as a resu
 <p>Recent additions to the site, the API and the data, newest first. Endpoints and MCP tools are
 noted where a feature has them; the rest are pages and <a href="#hgab-files">data files</a>.</p>
 
+<h3>26 November 2026</h3>
+<ul>
+  <li><b>Project reviewer: regions corrected.</b> Each project's region in the
+      <a href="${SITE}/hgab/2027/review">project reviewer</a>, its report and the House bill DPWH dataset now comes from our
+      own reading of the House bill, by the project's office. research.bettergov.ph's reading gave 612 projects of NCR's
+      district engineering offices the region heading printed above them (561 Region XIII, 46 Region XII, 4 Region X,
+      1 Region XI) and 17 Central Office "Nationwide" lines a region. Parañaque–Sucat Rd (Metro Manila 2nd District
+      Engineering Office, ₱1.4 million) read Region X; it now reads National Capital Region, which has 970 projects
+      (₱93.0 billion) instead of 358 (₱80.8 billion). Totals did not change. Changed data files:
+      <code>hgab/2027/documents/review.json</code>, <code>documents/projects.parquet</code> (with the research site's
+      region kept as <code>region_upstream</code>) and the downloads in <code>documents/downloads/</code>. The API did not
+      change.</li>
+</ul>
+
+<h3>24 November 2026</h3>
+<ul>
+  <li><b>Project reviewer: every DPWH line of the House bill.</b> The <a href="${SITE}/hgab/2027/review">project
+      reviewer</a> and its report add the 296 DPWH lines outside research.bettergov.ph's document check: 29
+      foreign-assisted projects and 267 small facility lines (₱46.3 billion), among them the Metro Manila Priority Bridges
+      Seismic Improvement Project, JICA Loan No. PH-P272. Their documents read "not checked yet", and the automatic review
+      leaves them out: 16,275 projects (₱587.1 billion) instead of 15,979 (₱540.8 billion). <code>review.json</code> lists
+      them in <code>unchecked</code>; the dataset gains a <code>documents_checked</code> column. The API did not change.</li>
+</ul>
+
 <h3>23 November 2026</h3>
 <ul>
   <li><b>Multi-purpose buildings: the Senate committee report.</b> The

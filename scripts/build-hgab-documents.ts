@@ -29,7 +29,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import {
-  AMOUNT_FLAG_RE, AUTO_REVIEW, FROM_PROPOSAL, FROM_SENATE, uncoveredId, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
+  AMOUNT_FLAG_RE, AUTO_REVIEW, FROM_PROPOSAL, FROM_SENATE, ourRegionName, uncoveredId, COMPLETE_AT, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoRules, autoScore, DETAIL_SHARD_ROWS, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, NAMED_TYPES,
   PROPOSAL_TYPE_MAP, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, missingCode, parseHgabId, senateFileType,
   type DetailFile, type DocumentFile, type DocumentProject, type JoinMethod, type LinkMethod, type NamedType, type ProposalLink,
   type ReviewDetailShard, type ReviewFlag, type ReviewIndex, type ReviewIndexOffice, type ReviewIndexRow,
@@ -99,8 +99,6 @@ interface PowResult { code: string; matchStatus: string; hgabId: string | null }
 interface LinkRow { id: number; region: string; path: string; url: string; bytes: number; sha256: string }
 interface TrackerRow { code: string; title: string; amount_php: number; office: string }
 interface OurRow { id: string; title: string; amount: number; page: number; office: string; apiId: string | null; doc: string | null; program: string; pap: string | null; trace: string; region: string }
-/** Our region names as the research site's (the reviewer's) read them. */
-const REGION_NAMES: Readonly<Record<string, string>> = { NCR: "National Capital Region", NIR: "Negros Island Region" };
 /** A House bill line outside the research site's coverage: our row, and the id the reviewer gives it (uncoveredId). */
 interface Uncovered { hgab_id: string; seq: number; row: OurRow }
 
@@ -147,7 +145,7 @@ async function readOurs(c: DuckDBConnection, path: string): Promise<OurRow[]> {
   return (r.getRows() as unknown[][]).map(([id, title, amt, page, office, api, doc, program, pap, trace, region]) => ({
     id: String(id), title: String(title), amount: Number(amt), page: Number(page), office: String(office), apiId: api == null ? null : String(api),
     doc: doc == null ? null : String(doc), program: String(program), pap: pap == null ? null : String(pap), trace: String(trace),
-    region: REGION_NAMES[String(region)] ?? String(region),
+    region: ourRegionName(String(region)),
   }));
 }
 
@@ -455,7 +453,8 @@ async function main(): Promise<void> {
     if (F.tracker.reviewed_moved.some((d) => d.to === r.hgabId)) notes.push("senate_folder_moved_from_another_row");
     if (new Set(rowFiles.filter((x) => x.source === "senate").map((x) => x.folder_code)).size > 1) notes.push("several_senate_folders");
     return {
-      hgab_id: r.hgabId, project_id: j.row.id, join_method: j.method, page, seq, title: r.title, office: r.office, region: r.region,
+      // The region from our reading (by office): the research site's carries the heading above an NCR office onto it.
+      hgab_id: r.hgabId, project_id: j.row.id, join_method: j.method, page, seq, title: r.title, office: r.office, region: j.row.region, region_upstream: r.region,
       amount_php: r.amountPesos, project_amount_php: j.row.amount,
       proposal_types: r.proposalDocumentTypes, proposal_sources: r.proposalDocumentSources, proposal_file_records: r.proposalMatchedFileRecords,
       proposal_code: prop?.rec.code ?? null, proposal_link: prop?.how ?? null, proposal_files: rowFiles.length - senate.length,
@@ -486,7 +485,7 @@ async function main(): Promise<void> {
     || Number(a.archived) - Number(b.archived) || a.name.localeCompare(b.name));
   await writeParquet(c, resolve(dir, "projects.parquet"), projects, {
     hgab_id: "VARCHAR", project_id: "VARCHAR", join_method: "VARCHAR", page: "INTEGER", seq: "INTEGER", title: "VARCHAR", office: "VARCHAR",
-    region: "VARCHAR", amount_php: "BIGINT", project_amount_php: "BIGINT", proposal_types: "VARCHAR[]", proposal_sources: "VARCHAR[]",
+    region: "VARCHAR", region_upstream: "VARCHAR", amount_php: "BIGINT", project_amount_php: "BIGINT", proposal_types: "VARCHAR[]", proposal_sources: "VARCHAR[]",
     proposal_file_records: "INTEGER", proposal_code: "VARCHAR", proposal_link: "VARCHAR", proposal_files: "INTEGER",
     senate_types: "VARCHAR[]", senate_folders: "VARCHAR[]", senate_files: "INTEGER",
     senate_matched_without_files: "BOOLEAN", named_present: "VARCHAR[]", named_present_upstream: "VARCHAR[]", complete: "BOOLEAN",

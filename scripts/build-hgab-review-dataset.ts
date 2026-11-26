@@ -198,7 +198,7 @@ const tables: Table[] = [
       { name: "bill_row", type: "INTEGER", about: "Row number in the bill's DPWH list (research.bettergov.ph's numbering); empty for lines outside that list." },
       { name: "title", type: "VARCHAR", about: "Project title, as published." },
       { name: "amount_php", type: "BIGINT", about: "Amount in the House bill, in pesos." },
-      { name: "region", type: "VARCHAR", about: "Region, as the bill groups the project." },
+      { name: "region", type: "VARCHAR", about: "Region, from our reading of the bill by the project's office (since 2026-11-26; research.bettergov.ph's reading gave 629 NCR-office and Nationwide projects the region heading printed above them)." },
       { name: "dpwh_office", type: "VARCHAR", about: "DPWH implementing office (district engineering office, regional office or Central Office)." },
       { name: "office_scope", type: "VARCHAR", about: "lone_district: the office serves one legislative district; shared_districts: several; no_district: Central Office or a regional office." },
       { name: "legislative_districts", type: "VARCHAR", about: "Legislative districts the office serves, separated by \"; \". Where the office serves several, the project is not split among them." },

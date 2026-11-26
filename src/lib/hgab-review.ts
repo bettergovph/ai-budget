@@ -12,8 +12,34 @@ import {
   type ReviewIndexFlag, type ReviewIndexOffice, type ReviewSenateIndex,
 } from './hgab-documents';
 import { QUESTION_OF_FLAG, RATINGS, VERDICT_LABEL, readVerdict, worseRating, type Verdict } from './hgab-redflags-team';
+import type { PageChange } from './page-changes';
 
 export const REVIEW_ROOT = '/hgab/2027/review';
+
+/**
+ * Changes to the project list's figures that readers had seen, newest first: shown in the reviewer's "How it works"
+ * and at the foot of every page of the report (AGENTS.md: "Never change a published figure silently").
+ */
+export const REVIEW_DATA_CHANGES: readonly PageChange[] = [
+  {
+    date: '2026-11-26',
+    text:
+      'Corrected: each project’s region now comes from our own reading of the House bill, by its office. research.bettergov.ph’s ' +
+      'reading gave the region heading printed just above an NCR office in the bill to that office’s projects: 612 projects of NCR’s ' +
+      'district engineering offices read Region XIII (561), Region XII (46), Region X (4) or Region XI (1), and 17 Central Office ' +
+      '“Nationwide” lines read a region. Parañaque–Sucat Rd (Metro Manila 2nd District Engineering Office, ₱1.4M) read Region X; ' +
+      'it now reads National Capital Region. The National Capital Region now has 970 projects (₱93.0B) instead of 358 (₱80.8B), ' +
+      'and Region XIII 456 (₱19.6B) instead of 1,030 (₱33.8B). Totals did not change.',
+  },
+  {
+    date: '2026-11-24',
+    text:
+      'Added: the 296 DPWH lines of the House bill outside research.bettergov.ph’s document check, 29 foreign-assisted projects and ' +
+      '267 small facility lines (₱46.3B), among them the Metro Manila Priority Bridges Seismic Improvement Project, JICA Loan No. ' +
+      'PH-P272 (₱793.0M). Their documents read “not checked yet”, and the automatic review leaves them out. The list went from ' +
+      '15,979 projects (₱540.8B) to 16,275 (₱587.1B).',
+  },
+];
 export const REVIEW_TITLE = 'Project reviewer';
 
 /** A project, decoded from a review.json row. */
