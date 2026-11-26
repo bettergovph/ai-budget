@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   COMPLETE_AT, DOCUMENTS_DIR, DOCUMENTS_SCHEMA, FOLDER_CODE_RE, FOLDER_REVIEWS, LINK_METHODS, NAMED_TYPES, PROPOSAL_TYPE_MAP,
-  AUTO_REVIEW, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoScore, uncoveredId, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
+  AUTO_REVIEW, HOUSE_ONLY_TRACES, OUR_NEP_FLAGS, autoScore, ourRegionName, uncoveredId, REVIEW_INDEX_PATH, detailShardPath, flagCode, flagFamily, parseHgabId, senateFileType, type ReviewDetailShard, type ReviewIndex,
 } from "../src/lib/hgab-documents";
 
 type Check = (name: string, ok: boolean, detail?: string) => void;
@@ -52,7 +52,7 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
 
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_p AS SELECT * FROM read_parquet('${q(P)}')`);
   await c.run(`CREATE OR REPLACE TEMP TABLE doc_f AS SELECT * FROM read_parquet('${q(F)}')`);
-  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page, trace, title, office, pap FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
+  await c.run(`CREATE OR REPLACE TEMP TABLE doc_ours AS SELECT id, hgab3_php, hgab3_page, trace, title, office, pap, coalesce(region, '') region FROM read_parquet('${q(resolve(o.out, "dpwh/projects.parquet"))}') WHERE hgab3_php IS NOT NULL`);
 
   // Rows: the research site's rows, once each, on one of our House bill rows.
   const cov = readJson<{ projects: { hgabId: string; amountPesos: number; senateDocuments: { fileLinkId: number; path: string; documentType: string }[]; senateDocumentTypes: string[]; proposalDocumentTypes: string[]; proposalDocumentsMatched: boolean }[] }>(src("coverage"));
@@ -80,6 +80,16 @@ export async function verifyDocuments(c: DuckDBConnection, check: Check, o: Opts
     merged.map((m) => `${m.project_id}: ${m.n} lines ₱${m.s} vs ₱${m.ours}`).join("; "));
   const exact = pRows.filter((r) => r.join_method === "exact").length;
   check("at least 15,960 rows tie on exact page, amount and title", exact >= 15_960, String(exact));
+  // Regions from our reading of the bill, by office (2026-11-26): the research site's reading carries the heading printed
+  // above an NCR office onto its projects, and onto Central Office "Nationwide" lines. Kept as region_upstream.
+  const regions = await rows<{ hgab_id: string; region: string; region_upstream: string; ours: string }>(c,
+    "SELECT p.hgab_id, p.region, p.region_upstream, o.region ours FROM doc_p p JOIN doc_ours o ON o.id = p.project_id");
+  const regionOff = regions.filter((r) => r.region !== ourRegionName(r.ours));
+  const regionDiffer = regions.filter((r) => r.region !== r.region_upstream);
+  check(`regions are our reading's, by office; ${regionDiffer.length.toLocaleString("en-US")} differ from the research site's, all NCR offices' projects or Nationwide lines`,
+    regions.length === pRows.length && regionOff.length === 0 && regionDiffer.length < 1_000
+      && regionDiffer.every((r) => r.region === "National Capital Region" || r.region === "Nationwide"),
+    `${regionOff.slice(0, 3).map((r) => r.hgab_id).join(", ")}; ${regionDiffer.length} differ`);
 
   // Files: from their sources as published, on one row each.
   const index = new Map(readFileSync(src("links"), "utf8").split("\n").filter(Boolean).map((l) => { const x = JSON.parse(l) as { id: number; url: string; sha256: string; path: string; bytes: number }; return [x.id, x]; }));

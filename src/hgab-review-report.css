@@ -257,6 +257,13 @@ a.rr-card:hover { border-color: var(--accent); }
 .rr-remark { display: block; color: var(--ink-2); white-space: pre-wrap; }
 .rr-fine { display: flex; align-items: baseline; margin: 0; color: var(--ink-3); font-size: 12.5px; }
 
+/* --- changes to this report ----------------------------------------------------------- */
+.rr-changes { max-width: 900px; margin: 8px 0 0; padding: 14px 20px; scroll-margin-top: calc(var(--rr-bar-h) + 12px); }
+.rr-changes h2 { margin: 0 0 6px; color: var(--ink-3); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.rr-changes ul { margin: 0; padding: 0; list-style: none; }
+.rr-changes li { margin-bottom: 6px; color: var(--ink-3); font-size: 12.5px; line-height: 1.55; }
+.rr-changes time { margin-right: 6px; color: var(--ink-2); font-weight: 700; }
+
 /* --- narrow ------------------------------------------------------------------------ */
 @media (max-width: 900px) {
   .rr-layout { grid-template-columns: 1fr; padding: 12px; }

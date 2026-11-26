@@ -71,6 +71,8 @@ import {
   type RegionTotals, type SidebarDistrict, type SidebarOffice, type TierFilter,
 } from '../lib/hgab-districts';
 import '../hgab-districts.css';
+import { PageChanges } from '../components/PageChanges';
+import { longDate, type PageChange } from '../lib/page-changes';
 
 /** Cards drawn before "Show more": 250 SVG cards at once is a 60,000 px wall and a slow mount. */
 const PAGE = 60;
@@ -213,7 +215,7 @@ function DistrictsOverview({ index }: { index: HgabDistrictIndex }) {
         </section>
 
         <DisclaimerNotice compact offices />
-        <PageChanges />
+        <DistrictChanges />
         <Provenance />
         <DistrictsDetails index={index} />
       </main>
@@ -819,7 +821,7 @@ export function DistrictsCardsList({ index }: { index: HgabDistrictIndex }) {
             {copy.foot ?? (
               <>
                 <DisclaimerNotice compact offices />
-                <PageChanges />
+                <DistrictChanges />
                 <Provenance />
                 <DistrictsDetails index={index} />
               </>
@@ -916,7 +918,7 @@ function UnitCard({ unit, index, level }: { unit: ListUnit; index: HgabDistrictI
 // ---------------------------------------------------------------------------
 
 /** Corrections and other changes to the Districts pages, newest first. Add one when a figure changes. */
-const PAGE_CHANGES: readonly { date: string; text: string }[] = [
+const PAGE_CHANGES: readonly PageChange[] = [
   {
     date: '2026-11-07',
     text:
@@ -927,11 +929,6 @@ const PAGE_CHANGES: readonly { date: string; text: string }[] = [
   },
 ];
 const CHANGES_ID = 'changes';
-
-function longDate(iso: string): string {
-  const d = new Date(iso.length === 10 ? `${iso}T00:00:00+08:00` : iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' });
-}
 
 /** "As of …": when the figures were built, what they compare, and the latest change to the page. */
 function AsOf({ index }: { index: HgabDistrictIndex }) {
@@ -945,20 +942,8 @@ function AsOf({ index }: { index: HgabDistrictIndex }) {
   );
 }
 
-function PageChanges() {
-  if (!PAGE_CHANGES.length) return null;
-  return (
-    <section className="hgab-dx-changes" id={CHANGES_ID} aria-labelledby={`${CHANGES_ID}-title`}>
-      <h2 id={`${CHANGES_ID}-title`}>Changes to this page</h2>
-      <ul>
-        {PAGE_CHANGES.map((c) => (
-          <li key={c.date + c.text.slice(0, 20)}>
-            <time dateTime={c.date}>{longDate(c.date)}</time> {c.text}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
+function DistrictChanges() {
+  return <PageChanges changes={PAGE_CHANGES} id={CHANGES_ID} className="hgab-dx-changes" />;
 }
 
 function Provenance() {

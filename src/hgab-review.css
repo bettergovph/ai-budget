@@ -942,3 +942,10 @@ textarea.rf-input { resize: vertical; }
 .rv-project-senate { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
 .rv-project-senate .rv-senate { margin-right: 4px; }
 .rv-check-label .rv-senate { margin-left: 4px; }
+
+/* "Changes to the project list" in How it works (src/components/PageChanges.tsx). */
+.rv-changes { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.rv-changes h2 { margin: 0 0 6px; font-size: 13px; }
+.rv-changes ul { margin: 0; padding: 0; list-style: none; }
+.rv-changes li { margin-bottom: 6px; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
+.rv-changes time { margin-right: 6px; color: var(--ink-2); font-weight: 600; }

@@ -23,7 +23,7 @@ import {
   type ReviewIndex, type ReviewSenateIndex,
 } from '../lib/hgab-documents';
 import {
-  DETAIL_NOTE_TEXT as NOTE_TEXT, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
+  DETAIL_NOTE_TEXT as NOTE_TEXT, REVIEW_DATA_CHANGES, FAMILY_LABEL, FAMILY_ORDER, LINK_LABEL, LINK_WEAK, NAMED_MEANING, NAMED_SHORT,
   DEFAULT_SORT, INSERTION_FLAG, PROGRESS_GROUP_LABEL, PROGRESS_GROUP_NOTE, reviewProgress, LIST_STATUS_LABEL, NOT_REVIEWED_STATUSES, PAGE_SIZE, PRESETS, REVIEW_TITLE, SORT_LABEL, SOURCE_LABEL, decodeIndex, docCount, isReviewed, listStatus, pageCount, pageOf, pageWindow, projectVerdict,
   hasDoc, pesoFull, pesoShort, readerText, runFunnel, sortProjects, stepToParam, stepsFromSearch, type ListStatus, type ProgressGroup, type ProgressRow, type ReviewProject, type ReviewStatusIndex, type SortKey, type Step, type VerdictCounts,
 } from '../lib/hgab-review';
@@ -47,6 +47,7 @@ import {
 } from '../lib/hgab-review-member';
 import { heldBackRegion } from '../lib/senate-copies-held-back';
 import { HOWTO_ROOT } from '../lib/hgab-review-howto';
+import { PageChanges } from '../components/PageChanges';
 import '../hgab-review.css';
 
 const HGAB_BASE = 'hgab/2027';
@@ -917,6 +918,7 @@ function About({ index, onClose }: { index: ReviewIndex; onClose: () => void }) 
           <Link to={`${HGAB_ROOT}/methodology`}>Methodology</Link> · <a href="https://research.bettergov.ph/static/nep-preview/dpwh.html" target="_blank" rel="noopener noreferrer">research.bettergov.ph</a>
         </p>
         <DisclaimerNotice compact />
+        <PageChanges changes={REVIEW_DATA_CHANGES} id="review-changes" className="rv-changes" title="Changes to the project list" />
       </div>
     </div>
   );
