@@ -271,7 +271,8 @@ Every amount reconciles with the report's printed totals. Docs: `docs/senate-cr-
   block (`BoardStages`): every row's NEP → House → Senate amounts under it (regions: three columns). Colours by
   `BoardDef.tone`: what the Senate removed or cut red, what it added green, the Senate amount red/green against the
   House bill's on images, tiles and tables.
-  Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, ten pages): **unlinked on purpose** (no menu, no sitemap, noindex) until
+  Executive report `/senate/2027/report/*` (2026-11-21, in the review report's shell, eleven pages; Documents 2026-11-27: the House report's
+  document tally, 5 of 5 to 0 of 5, with Senate budget and removals per row): **unlinked on purpose** (no menu, no sitemap, noindex) until
   Jason says; figures from `report.json` (`build_report.py`, from the dataset). Docs: "Executive report (unlinked)".
 
 ### Citizen Reports (`/citizen-reports`, #53)

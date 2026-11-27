@@ -7,11 +7,13 @@
  * (senate/2027/downloads/) and, for DPWH red flags and documents, the House bill reviewer's index.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import * as fmt from '../lib/format';
 import { cached, getJson, type DatasetKey } from '../lib/hgab';
 import { dataUrl } from '../lib/data-url';
-import { REVIEW_ROOT } from '../lib/hgab-review';
+import { NAMED_TYPES } from '../lib/hgab-documents';
+import { NAMED_MEANING, REVIEW_ROOT } from '../lib/hgab-review';
+import { DOC_FROM, DOC_FROM_LABEL, DOC_FROM_NOTE, DOC_LEVEL_LABEL, type DocFrom } from '../lib/hgab-review-report';
 import {
   SENATE_BASE, SENATE_DATA_ROOT, SENATE_EXPLORER_ROOT, SENATE_PROVISIONS_ROOT, SENATE_REPORT_ROOT, SENATE_ROOT, nameCase, senateListPath,
   senatePdfUrl, senateProgramPath, senateRecordPath,
@@ -32,6 +34,18 @@ interface Program {
   regions: Array<{ region: string; n: number; house: number; senate: number; removed_n: number }>;
 }
 interface Profile { n: number; insertion_flag: number; five_plus_flags: number; avg_flags: number; no_key_document: number; all_five_documents: number }
+/** Projects, their House bill and Senate budget, and those the Senate removes (cut to zero) with their House bill budget. */
+interface DocCell { n: number; house: number; senate: number; removed_n: number; removed: number }
+type DocLvl = 'complete' | 'partial' | 'none' | 'unchecked';
+/** report.json `dpwh_documents` (build_report.py `documents`): the House bill review report's document counts, with the Senate's. */
+interface Documents {
+  projects: DocCell; checked: number; complete_at: number; reviewer_built_at: string | null;
+  /** By the source counted: 5 of 5 down to 0 of 5 (checked projects), the levels, each key document with and without. */
+  by: Record<DocFrom, { count: DocCell[]; levels: Record<DocLvl, DocCell>; types: Array<{ with: DocCell; without: DocCell }>; with_file: DocCell }>;
+  sources: Record<'senate' | 'nep' | 'both' | 'none', DocCell>;
+  insertion: Record<'insertion' | 'nep', Record<DocLvl, DocCell>>;
+  regions: Array<{ region: string; all: DocCell; complete: DocCell; partial: DocCell; none: DocCell }>;
+}
 interface Report {
   built_at: string; dataset_built_at: string; source_commit: string | null;
   totals: Record<'total' | 'programmed' | 'unprogrammed' | 'departments' | 'spf', Amt>;
@@ -42,6 +56,8 @@ interface Report {
   dpwh_program_lines: Array<{ line: string; n: number; house: number; senate: number; removed_n: number }>;
   dpwh_mpb: { n: number; house: number; senate: number; removed_n: number; removed: number; inserted_n: number; inserted: number; inserted_removed_n: number; inserted_removed: number };
   dpwh_flags: { removed: Profile; kept: Profile; in_reviewer: number; projects: number };
+  /** Absent in a report.json built before 2026-11-27. */
+  dpwh_documents?: Documents;
   dpwh_offices: Array<{ office: string; districts: string[]; tier: string | null; removed_n: number; removed: number; house: number }>;
   dpwh_central_office: { house: number; senate: number; removed_n: number; removed: number };
   hfep_kinds: Array<{ kind: string; n: number; change: number }>;
@@ -62,6 +78,7 @@ const PAGES: ReadonlyArray<{ slug: string; label: string; note: string }> = [
   { slug: 'dpwh', label: 'DPWH', note: 'Where the Senate’s DPWH cuts fall, and the foreign-assisted projects it raises.' },
   { slug: 'offices', label: 'District offices', note: 'The district engineering offices that lose the most budget.' },
   { slug: 'red-flags', label: 'Red flags', note: 'Removed and kept DPWH projects, by red flags and documents.' },
+  { slug: 'documents', label: 'Documents', note: 'DPWH projects by how many of the five key documents were found (5 of 5 to 0 of 5), and what the Senate did to them.' },
   { slug: 'provisions', label: 'Provisions', note: 'The Senate’s amendments to the bill’s provisions.' },
   { slug: 'about', label: 'About this report', note: 'What it does not say, and where every figure comes from.' },
 ];
@@ -146,6 +163,7 @@ export default function SenateReport() {
                 <Route path="dpwh" element={<DpwhPage r={r} />} />
                 <Route path="offices" element={<OfficesPage r={r} />} />
                 <Route path="red-flags" element={<FlagsPage r={r} />} />
+                <Route path="documents" element={<DocumentsPage r={r} />} />
                 <Route path="provisions" element={<ProvisionsPage r={r} />} />
                 <Route path="about" element={<AboutPage r={r} />} />
                 <Route path="*" element={<PageHead title="No such page"><p><Link to={SENATE_REPORT_ROOT}>Back to the overview</Link></p></PageHead>} />
@@ -261,6 +279,7 @@ function Overview({ r }: { r: Report }) {
           <Finding head="The projects the Senate removes carried more red flags.">
             {fl.removed.insertion_flag}% of the removed DPWH projects were flagged as potential NEP insertions, against {fl.kept.insertion_flag}% of those kept;{' '}
             {fl.removed.no_key_document}% had none of the five key documents, against {fl.kept.no_key_document}%. A pattern in the data, not the Senate’s stated reason.
+            {' '}By document count, 5 of 5 to 0 of 5: <Link to={pagePath('documents')}>Documents</Link>.
           </Finding>
           <Finding head="Unprogrammed appropriations are rebuilt.">
             The Senate adds {php(t.unprogrammed.increase)} and takes out {php(Math.abs(t.unprogrammed.decrease))}; they end at {php(t.unprogrammed.senate)} ({signed(t.unprogrammed.net)}).
@@ -596,9 +615,280 @@ function FlagsPage({ r }: { r: Report }) {
         <p className="rr-note">
           A red flag is a reason to look, not a finding. The committee report gives no reason for each project it removes: this is a pattern in the data, not the
           Senate’s stated reason. The red flags and documents are the House bill’s (research.bettergov.ph and ours), as built for the reviewer.
+          Documents project by project, 5 of 5 to 0 of 5: <Link to={pagePath('documents')}>Documents</Link>.
         </p>
       </section>
     </>
+  );
+}
+
+// --- Documents -------------------------------------------------------------------------------------------------------
+
+/**
+ * The House bill review report's document breakdown (HgabReportPages.tsx DocumentsPage: the five key documents, from
+ * the Senate copies, DPWH Transparency or either) with the Senate's figures on every row (Jason, 2026-11-27: "the
+ * document breakdown again ... similar to the hgab report but include the Senate numbers ... 5 of 5, 4 of 5, 3 of 5,
+ * the tally based on the document count"). Project counts and House bill budgets are the House report's own
+ * (checked against its docTally when built).
+ */
+function DocumentsPage({ r }: { r: Report }) {
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('from') ?? '';
+  const from: DocFrom = (DOC_FROM as readonly string[]).includes(raw) ? raw as DocFrom : 'either';
+  const setFrom = (f: DocFrom) => setParams((prev) => { const next = new URLSearchParams(prev); if (f === 'either') next.delete('from'); else next.set('from', f); return next; }, { replace: true });
+  const d = r.dpwh_documents;
+  if (!d) return <PageHead title="Documents"><p>This build of the report doesn’t have the document breakdown yet.</p></PageHead>;
+  const t = d.by[from];
+  const zero = t.count[5];
+  const five = t.count[0];
+  const unchecked = d.projects.n - d.checked;
+  return (
+    <>
+      <PageHead title="Documents">
+        <p>
+          The DPWH projects in the House bill by how many of the five key documents were found for them, counted as in the House bill{' '}
+          <Link to={REVIEW_ROOT}>project reviewer</Link>, and what the Senate committee report does to each: its budget in the House bill and in the Senate’s
+          version, and the projects the Senate removes (cuts to zero).
+        </p>
+      </PageHead>
+
+      <div className="rr-switch" role="group" aria-label="Count documents from">
+        <span className="rr-filters-l">Count documents from</span>
+        {DOC_FROM.map((f) => (
+          <button key={f} type="button" className={`rr-chip${from === f ? ' is-on' : ''}`} aria-pressed={from === f} onClick={() => setFrom(f)} title={DOC_FROM_NOTE[f]}>{DOC_FROM_LABEL[f]}</button>
+        ))}
+      </div>
+
+      <section className="rr-sec">
+        <div className="rr-cards is-4">
+          <Card label="0 of 5 key documents: removed" value={pct(zero.removed_n, zero.n)} tone="down" note={<CardNote c={zero} />} />
+          <Card label="5 of 5 key documents: removed" value={pct(five.removed_n, five.n)} note={<CardNote c={five} />} />
+          <Card label={`${DOC_LEVEL_LABEL.complete}: removed`} value={pct(t.levels.complete.removed_n, t.levels.complete.n)} note={<CardNote c={t.levels.complete} />} />
+          <Card label="All DPWH projects: removed" value={pct(d.projects.removed_n, d.projects.n)} note={<CardNote c={d.projects} />} />
+        </div>
+
+        <h3 className="rr-h3">By how many of the five key documents <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table">
+            <DocHead first="Key documents found" />
+            <tbody>
+              {t.count.map((c, i) => <DocRow key={i} label={`${5 - i} of 5`} c={c} all={d.projects} />)}
+              {unchecked > 0 && <DocRow label="Not checked yet" c={t.levels.unchecked} all={d.projects} muted />}
+              <DocRow label="All DPWH projects" c={d.projects} all={d.projects} total />
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">
+          Each row: the projects with that many of the five key documents (program of work, BP 202, development council endorsement, geotagged photos,
+          certificate of implementability) in {from === 'either' ? 'either source' : `the ${DOC_FROM_LABEL[from]}`} and their House bill budget; the projects
+          the Senate removes (cuts to zero) and their House bill budget; and what remains in the Senate committee report: the projects it keeps and its budget
+          for them, which also counts what it raises or reduces. Small figures: the share of all projects in the House bill, then of all remaining ones.
+          Remaining budget in red is lower than the House bill’s.
+          {unchecked > 0 && <> “Not checked yet”: {n(unchecked)} lines outside research.bettergov.ph’s document check (foreign-assisted projects, small facility lines).</>}
+        </p>
+        {from === 'senate' && (
+          <p className="rr-note">
+            DPWH gave the Senate documents mostly for House insertions, the projects the Senate removes most often: so here, more documents go with more removals.
+            Compare House insertions and NEP projects below.
+          </p>
+        )}
+
+        <h3 className="rr-h3">Complete, partial or none <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table">
+            <DocHead first="Documents" />
+            <tbody>
+              {(['complete', 'partial', 'none'] as const).map((l) => <DocRow key={l} label={DOC_LEVEL_LABEL[l]} c={t.levels[l]} all={d.projects} />)}
+              {unchecked > 0 && <DocRow label={DOC_LEVEL_LABEL.unchecked} c={t.levels.unchecked} all={d.projects} muted />}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">“No document found”: none of the five and no other file in {from === 'either' ? 'either source' : 'this source'}.</p>
+      </section>
+
+      <section className="rr-sec">
+        <h3 className="rr-h3 is-first">The five key documents <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table">
+            <thead>
+              <tr>
+                <th scope="col">Document</th><th scope="col">What it is</th>
+                <th scope="col" className="num">With it</th><th scope="col" className="num">Removed</th>
+                <th scope="col" className="num">Without it</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Budget removed without it</th>
+              </tr>
+            </thead>
+            <tbody>
+              {NAMED_TYPES.map((type, i) => {
+                const x = t.types[i];
+                if (!x) return null;
+                return (
+                  <tr key={type}>
+                    <th scope="row">{type === 'POW' ? 'Program of work (POW)' : type}</th>
+                    <td className="rr-muted">{NAMED_MEANING[type]}</td>
+                    <td className="num">{n(x.with.n)}</td><td className="num"><RemovedShare c={x.with} /></td>
+                    <td className="num">{n(x.without.n)}</td><td className="num"><RemovedShare c={x.without} /></td>
+                    <td className="num">{php(x.without.removed)} <small>{pct(x.without.removed, x.without.house)}</small></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">Of the {n(d.checked)} projects whose documents were checked. “Removed”: the share of those projects the Senate removes.</p>
+      </section>
+
+      <section className="rr-sec">
+        <h3 className="rr-h3 is-first">Where each project’s files come from</h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table">
+            <DocHead first="Files from" />
+            <tbody>
+              {(['senate', 'nep', 'both', 'none'] as const).map((g) => <DocRow key={g} label={FILES_FROM[g]} c={d.sources[g]} all={d.projects} />)}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">Either source, of the {n(d.checked)} projects whose documents were checked. Senate copies: what DPWH gave the Senate for the House bill’s projects, with signatures redacted. DPWH Transparency: what DPWH published for the NEP proposal.</p>
+      </section>
+
+      <section className="rr-sec">
+        <h3 className="rr-h3 is-first">House insertions and NEP projects</h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table rr-narrow">
+            <thead>
+              <tr className="sr-doc-groups">
+                <th scope="col" rowSpan={2}>Documents (either source)</th>
+                <th scope="colgroup" colSpan={3}>House insertions</th><th scope="colgroup" colSpan={3} className="sr-grp">NEP projects</th>
+              </tr>
+              <tr>
+                <th scope="col" className="num">Projects</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th>
+                <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(['complete', 'partial', 'none', 'unchecked'] as const).filter((l) => d.insertion.insertion[l].n + d.insertion.nep[l].n > 0).map((l) => (
+                <tr key={l}>
+                  <th scope="row">{DOC_LEVEL_LABEL[l]}</th>
+                  {(['insertion', 'nep'] as const).map((g) => {
+                    const c = d.insertion[g][l];
+                    return [
+                      <td key={`${g}n`} className={`num${g === 'nep' ? ' sr-grp' : ''}`}>{n(c.n)}</td>,
+                      <td key={`${g}r`} className="num"><RemovedShare c={c} /></td>,
+                      <td key={`${g}l`} className="num"><b>{n(c.n - c.removed_n)}</b> <small><SenateAmt c={c} /></small></td>,
+                    ];
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">House insertions: in the House bill but not in the NEP, by our comparison. NEP projects: the rest. Remaining: the projects the Senate keeps, and its budget for them.</p>
+      </section>
+
+      <section className="rr-sec">
+        <h3 className="rr-h3 is-first">By region</h3>
+        <div className="rr-table-wrap">
+          <table className="rr-table">
+            <thead>
+              <tr>
+                <th scope="col">Region</th><th scope="col" className="num">Projects</th><th scope="col" className="num">House bill</th>
+                <th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th><th scope="col" className="num">Remaining budget</th>
+                <th scope="col" className="num" title="Of the projects with none of the five and no file">No document: removed</th>
+                <th scope="col" className="num" title={`Of the projects with ${DOC_LEVEL_LABEL.complete.toLowerCase()}`}>{DOC_LEVEL_LABEL.complete}: removed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.regions.map((x) => (
+                <tr key={x.region}>
+                  <th scope="row">{x.region}</th>
+                  <td className="num">{n(x.all.n)}</td><td className="num">{php(x.all.house)}</td>
+                  <td className="num"><RemovedShare c={x.all} /></td><td className="num"><b>{n(x.all.n - x.all.removed_n)}</b></td><td className="num"><b><SenateAmt c={x.all} /></b></td>
+                  <td className="num"><RemovedShare c={x.none} /></td><td className="num"><RemovedShare c={x.complete} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="rr-note">Either source; the most budget removed first. A region’s projects are those its DPWH offices list.</p>
+      </section>
+
+      <section className="rr-sec">
+        <p className="rr-note">
+          The committee report gives no reason for each project it removes: this is a pattern in the data, not the Senate’s stated reason. Having a document
+          doesn’t verify what’s in it. Documents as found for the House bill reviewer{d.reviewer_built_at && <> (as of {d.reviewer_built_at.slice(0, 10)})</>}:
+          research.bettergov.ph’s document check and our links to the files.
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** A card's note: removed of the House bill's, then what remains in the Senate's version. */
+function CardNote({ c }: { c: DocCell }) {
+  return (
+    <>
+      {n(c.removed_n)} of {n(c.n)} projects · {php(c.removed)} of {php(c.house)}
+      <br />Remaining: {n(c.n - c.removed_n)} projects · {php(c.senate)}
+    </>
+  );
+}
+
+const FILES_FROM: Record<'senate' | 'nep' | 'both' | 'none', string> = {
+  senate: 'House bill only (Senate copies)', nep: 'NEP only (DPWH Transparency)', both: 'Both', none: 'No file found',
+};
+
+/**
+ * Each row reads left to right: the projects and budget in the House bill, what the Senate removes, and what remains
+ * in the Senate's version (Jason, 2026-11-27: "add the remaining numbers after senate removal"). The remaining budget
+ * is the Senate's: removed projects have none, and it includes what the Senate raises or reduces in those it keeps.
+ */
+function DocHead({ first }: { first: string }) {
+  return (
+    <thead>
+      <tr className="sr-doc-groups">
+        <th scope="col" rowSpan={2}>{first}</th>
+        <th scope="colgroup" colSpan={2}>House bill</th>
+        <th scope="colgroup" colSpan={2} className="sr-grp">Removed by the Senate</th>
+        <th scope="colgroup" colSpan={3} className="sr-grp">Remaining after the Senate</th>
+      </tr>
+      <tr>
+        <th scope="col" className="num">Projects</th><th scope="col" className="num">Budget</th>
+        <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Budget</th>
+        <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Budget</th><th scope="col" className="num">Change</th>
+      </tr>
+    </thead>
+  );
+}
+
+/** One row; `all` gives each project count its share of all projects (House bill) or of all remaining ones. */
+function DocRow({ label, c, all, total, muted }: { label: ReactNode; c: DocCell; all: DocCell; total?: boolean; muted?: boolean }) {
+  const left = c.n - c.removed_n;
+  return (
+    <tr className={total ? 'rr-total' : muted ? 'rr-muted' : undefined}>
+      <th scope="row">{label}</th>
+      <td className="num">{n(c.n)}{!total && <small> {pct(c.n, all.n)}</small>}</td>
+      <td className="num">{php(c.house)}</td>
+      <td className="num sr-grp"><RemovedShare c={c} count /></td>
+      <td className="num">{php(c.removed)} <small>{pct(c.removed, c.house)}</small></td>
+      <td className="num sr-grp"><b>{n(left)}</b>{!total && <small> {pct(left, all.n - all.removed_n)}</small>}</td>
+      <td className="num"><b><SenateAmt c={c} /></b></td>
+      <td className="num"><Chg v={c.senate - c.house} base={c.house} /></td>
+    </tr>
+  );
+}
+
+/** The Senate's amount: red when lower than the House bill's, green when higher. */
+function SenateAmt({ c }: { c: DocCell }) {
+  return <span className={c.senate < c.house ? 'sr-chg is-down' : c.senate > c.house ? 'sr-chg is-up' : undefined}>{php(c.senate)}</span>;
+}
+
+/** The share of the projects the Senate removes, as a red meter (and the count). */
+function RemovedShare({ c, count }: { c: DocCell; count?: boolean }) {
+  if (!c.n) return <span className="rr-muted">—</span>;
+  return (
+    <span className="rr-meter sr-meter-down" title={`${n(c.removed_n)} of ${n(c.n)} projects removed`}>
+      <span className="rr-meter-track" aria-hidden="true"><span style={{ width: `${(100 * c.removed_n) / c.n}%` }} /></span>
+      <b>{pct(c.removed_n, c.n)}</b>{count && <small>{n(c.removed_n)}</small>}
+    </span>
   );
 }
 
