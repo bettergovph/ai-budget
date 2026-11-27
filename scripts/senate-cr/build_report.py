@@ -127,11 +127,18 @@ def main(site, hgab):
     fl = ix["flags"]
     ins_flag = next(n for n, f in enumerate(fl) if f["code"] == "potential-nep-insertion")
     auto = (ix.get("auto") or {}).get("rows", {})
+    unchecked = set((ix.get("unchecked") or {}).get("rows") or [])
     rv = pd.DataFrame([{"house_id": r[1], "flags": [f for f in r[7] if not fl[f].get("computed")], "ins": ins_flag in r[7],
                         "docs": bin(r[8]).count("1"), "auto": r[0] in auto, "deo": ix["offices"][r[3]]["name"],
-                        "districts": ix["offices"][r[3]]["districts"], "tier": ix["offices"][r[3]].get("tier")} for r in ix["rows"]])
-    m = dp.merge(rv, on="house_id", how="inner")
+                        "districts": ix["offices"][r[3]]["districts"], "tier": ix["offices"][r[3]].get("tier"),
+                        "unchecked": r[0] in unchecked} for r in ix["rows"]])
+    # One row per Senate project: three projects are printed twice in the House bill (two reviewer rows each), and a
+    # second row would count their budget twice.
+    m = dp.merge(rv.drop_duplicates("house_id"), on="house_id", how="inner", validate="one_to_one")
     m["removed"] = m.status == "cut"
+    # The red-flag profile reads the projects whose documents were checked (296 lines outside research.bettergov.ph's
+    # document check read "no documents" because nobody looked).
+    mc = m[~m.unchecked]
 
     def profile(x):
         return {"n": len(x), "insertion_flag": round(float(x.ins.mean()) * 100, 1),
@@ -139,7 +146,7 @@ def main(site, hgab):
                 "avg_flags": round(float(x["flags"].map(len).mean()), 2),
                 "no_key_document": round(float((x.docs == 0).mean()) * 100, 1),
                 "all_five_documents": round(float((x.docs == 5).mean()) * 100, 1)}
-    out["dpwh_flags"] = {"removed": profile(m[m.removed]), "kept": profile(m[~m.removed]), "in_reviewer": len(m), "projects": len(dp)}
+    out["dpwh_flags"] = {"removed": profile(mc[mc.removed]), "kept": profile(mc[~mc.removed]), "in_reviewer": len(mc), "projects": len(dp)}
 
     # Offices that lose the largest part of their House bill DPWH budget (district engineering offices only).
     house_by = m.groupby("deo").house_php.sum()
