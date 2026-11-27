@@ -41,6 +41,80 @@ def amendment_name(r):
     return " ".join(parts[:at]).strip("[] ") or r.label
 
 
+# A project with at least this many of the five key documents has a "complete set" (COMPLETE_AT in src/lib/hgab-documents.ts).
+COMPLETE_AT = 4
+# Where a project's files come from (review.json row element 10; sourceGroup in src/lib/hgab-review.ts).
+FROM_SENATE, FROM_PROPOSAL = 1, 2
+
+
+def documents(ix, dp):
+    """The House bill DPWH projects by their documents, as the House bill review report counts them (docTally in
+    src/lib/hgab-review-report.ts: the five key documents and files from the Senate copies, DPWH Transparency, or
+    either), each count with what the Senate committee report did: House bill and Senate budget, projects removed.
+
+    Jason, 2026-11-27: "the document breakdown again ... similar to the hgab report but include the Senate numbers ...
+    5 of 5, 4 of 5, 3 of 5, the tally based on the document count."
+
+    One row per reviewer project (review.json). Six House bill rows print three projects twice; our House data merged
+    each pair into one project. They keep their own House bill amounts here, and the project's Senate amount is split
+    in the same shares, so the totals are the Senate DPWH totals.
+    """
+    unchecked = set((ix.get("unchecked") or {}).get("rows") or [])
+    ins = next(k for k, f in enumerate(ix["flags"]) if f["code"] == "potential-nep-insertion")
+    rows = pd.DataFrame([{
+        "house_id": r[1], "hgab_id": r[0], "amount": r[6], "region": ix["regions"][r[4]], "insertion": ins in r[7],
+        "either_docs": r[8], "either_files": r[9], "from": r[10] or 0,
+        "senate_docs": r[11] or 0, "nep_docs": r[12] or 0, "senate_files": r[13] or 0, "nep_files": r[14] or 0,
+        "unchecked": r[0] in unchecked,
+    } for r in ix["rows"]])
+    x = rows.merge(dp[["house_id", "status", "house_php", "senate_php"]], on="house_id", how="left", validate="many_to_one")
+    assert x.status.notna().all(), f"{int(x.status.isna().sum())} reviewer projects not in the Senate DPWH rows"
+    x["house"] = x.amount
+    # The share first: amount × amount overflows 64-bit integers.
+    share = x.amount.astype(float) / x.house_php.astype(float).where(x.house_php != 0)
+    x["senate"] = (x.senate_php.astype(float) * share).fillna(x.senate_php.astype(float)).round()
+    x["removed"] = x.status == "cut"
+    assert x.house.sum() == dp.house_php.sum(), (int(x.house.sum()), int(dp.house_php.sum()))
+    assert abs(x.senate.sum() - dp.senate_php.sum()) < len(x), (int(x.senate.sum()), int(dp.senate_php.sum()))
+
+    def cell(y):
+        return {"n": len(y), "house": i(y.house.sum()), "senate": i(y.senate.sum()),
+                "removed_n": int(y.removed.sum()), "removed": i(y[y.removed].house.sum())}
+
+    count = lambda mask: bin(int(mask)).count("1")
+    checked = x[~x.unchecked]
+
+    def level(docs, files, unch):
+        return "unchecked" if unch else "complete" if count(docs) >= COMPLETE_AT else "none" if docs == 0 and files == 0 else "partial"
+
+    by = {}
+    for f in ("either", "senate", "nep"):
+        k = checked[f"{f}_docs"].map(count)
+        lv = x.apply(lambda r: level(r[f"{f}_docs"], r[f"{f}_files"], r.unchecked), axis=1)
+        by[f] = {
+            # 5 of 5 down to 0 of 5, of the projects whose documents were checked.
+            "count": [cell(checked[k == c]) for c in range(5, -1, -1)],
+            "levels": {v: cell(x[lv == v]) for v in ("complete", "partial", "none", "unchecked")},
+            "types": [{"with": cell(checked[has]), "without": cell(checked[~has])}
+                      for has in (checked[f"{f}_docs"].map(lambda v, t=t: (int(v) >> t) & 1 == 1) for t in range(len(ix["named_types"])))],
+            "with_file": cell(checked[checked[f"{f}_files"] > 0]),
+        }
+    src = checked["from"].map(lambda v: "both" if v & FROM_SENATE and v & FROM_PROPOSAL else "senate" if v & FROM_SENATE else "nep" if v & FROM_PROPOSAL else "none")
+    lv = x.apply(lambda r: level(r.either_docs, r.either_files, r.unchecked), axis=1)
+    regions = []
+    for reg, y in x.groupby("region"):
+        ly = lv[y.index]
+        regions.append({"region": reg, "all": cell(y), **{v: cell(y[ly == v]) for v in ("complete", "partial", "none")}})
+    return {
+        "projects": cell(x), "checked": len(checked), "named_types": ix["named_types"], "complete_at": COMPLETE_AT,
+        "reviewer_built_at": ix.get("built_at"), "by": by,
+        "sources": {g: cell(checked[src == g]) for g in ("senate", "nep", "both", "none")},
+        "insertion": {g: {v: cell(x[(x.insertion == (g == "insertion")) & (lv == v)]) for v in ("complete", "partial", "none", "unchecked")}
+                      for g in ("insertion", "nep")},
+        "regions": sorted(regions, key=lambda r: -(r["all"]["removed"] or 0)),
+    }
+
+
 def main(site, hgab):
     d = f"{site}/downloads"
     p = pd.read_parquet(f"{d}/senate-2027-projects.parquet")
@@ -147,6 +221,7 @@ def main(site, hgab):
                 "no_key_document": round(float((x.docs == 0).mean()) * 100, 1),
                 "all_five_documents": round(float((x.docs == 5).mean()) * 100, 1)}
     out["dpwh_flags"] = {"removed": profile(mc[mc.removed]), "kept": profile(mc[~mc.removed]), "in_reviewer": len(mc), "projects": len(dp)}
+    out["dpwh_documents"] = documents(ix, dp)
 
     # Offices that lose the largest part of their House bill DPWH budget (district engineering offices only).
     house_by = m.groupby("deo").house_php.sum()

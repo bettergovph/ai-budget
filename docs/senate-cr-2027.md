@@ -253,9 +253,9 @@ with rows and SHA-256, the five ways to check, every check with its result, and 
 `/senate/2027/report/*` (Jason, 2026-11-21: "an executive report of what was changed and our analysis based on that
 data ... don't link it for now"): no menu, not in the sitemap, noindex (`seo.ts` and a robots meta tag). It looks like
 the House bill review report ("make it look like our hgab's review report"): its own bar, pages listed on the left,
-a notice box, cards and tables, with `hgab-review-report.css`. Ten pages: Overview (key findings), The whole bill,
-Largest amendments, Unprogrammed, Infrastructure programs, DPWH, District offices, Red flags, Provisions, About this
-report. `SenateReport.tsx` renders
+a notice box, cards and tables, with `hgab-review-report.css`. Eleven pages: Overview (key findings), The whole bill,
+Largest amendments, Unprogrammed, Infrastructure programs, DPWH, District offices, Red flags, Documents, Provisions,
+About this report. `SenateReport.tsx` renders
 `senate/2027/report.json`, which `build_report.py` (after `build_downloads.py` in `build:senate-cr`) computes from
 the published dataset and, for DPWH red flags and documents, the reviewer's `documents/review.json`. Sections: key
 findings; the whole bill and departments; the largest single amendments (Annex A, one per printed amount, DPWH
@@ -264,6 +264,25 @@ multi-purpose buildings, region, district engineering office (office, not distri
 kept by red flags and documents; the foreign-assisted projects raised; FMR, NIA, HFEP; provisions; what the report
 does not say. The red-flag comparison is a pattern in the data, never the Senate's reason: the report gives none.
 To publish it, link it from the Senate overview and drop `noindex`.
+
+**Documents page** (`/senate/2027/report/documents`; Jason, 2026-11-27: "the document breakdown again ... similar to
+the hgab report but include the Senate numbers ... 5 of 5, 4 of 5, 3 of 5, the tally based on the document count"):
+the House bill review report's Documents page (`HgabReportPages.tsx`) with the Senate on every row. The tally by
+document count (5 of 5 down to 0 of 5, then "not checked yet" and the total), complete/partial/none, each key
+document with and without, where the files come from, House insertions against NEP projects, and regions; each row
+gives projects, House bill and Senate budget (Senate red when lower), the change, the share of projects the Senate
+removes and their budget. "Count documents from" switches between either source, the Senate copies and DPWH
+Transparency (`?from=`), as on the House page. Figures: `report.json` `dpwh_documents`, from `documents()` in
+`build_report.py`, one row per reviewer project (16,275; the six bill rows that print three projects twice keep
+their own House bill amounts and split the Senate amount in the same shares, so totals equal the Senate DPWH
+totals: ₱587.08B → ₱520.88B, 3,479 removed). The House-side counts and budgets were checked against the House
+report's own `docTally` for all three sources (all equal). The Senate-copies view needs its note: DPWH gave the
+Senate documents mostly for House insertions (86.7% of projects with Senate copies), which the Senate removes most
+(49.7% against 6.7% of NEP projects), so there more documents go with more removals.
+
+The same build (2026-11-27) fixed two things the reviewer's growth exposed: one row per Senate project in the office
+table (three twice-printed projects counted twice), office and Central Office totals from every DPWH line (Central
+Office ₱365.7B → ₱410.8B House bill, as the Senate rows give it), and the red-flag profile over checked projects only.
 
 **Program cards on the overview** (Jason, 2026-11-21: "needs a better design. They are hard to understand. Will a pie
 chart for each help as well?"): each program is two bars on one scale, House bill above and Senate below. What stays

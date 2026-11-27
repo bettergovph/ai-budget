@@ -146,6 +146,9 @@
 .sr-chg.is-up { color: var(--positive); }
 .rr-card.sr-down { border-top: 3px solid var(--negative); }
 .rr-card.sr-up { border-top: 3px solid var(--positive); }
+/* The Senate report's Documents page: the share of projects the Senate removes. */
+.sr-meter-down .rr-meter-track span { background: var(--negative); }
+.sr-meter-down small { margin-left: 6px; color: var(--ink-3); }
 @media (max-width: 900px) { .sr-split { grid-template-columns: 1fr; } }
 
 /* An insertion our matching paired or flagged (scripts/senate-cr/pairs.py): what to check. */
