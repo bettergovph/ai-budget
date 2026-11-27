@@ -270,8 +270,12 @@ the hgab report but include the Senate numbers ... 5 of 5, 4 of 5, 3 of 5, the t
 the House bill review report's Documents page (`HgabReportPages.tsx`) with the Senate on every row. The tally by
 document count (5 of 5 down to 0 of 5, then "not checked yet" and the total), complete/partial/none, each key
 document with and without, where the files come from, House insertions against NEP projects, and regions; each row
-gives projects, House bill and Senate budget (Senate red when lower), the change, the share of projects the Senate
-removes and their budget. "Count documents from" switches between either source, the Senate copies and DPWH
+reads left to right as three column groups (Jason, 2026-11-27: "add the remaining numbers after senate removal"):
+House bill (projects, budget), removed by the Senate (share and count of projects, House bill budget) and remaining
+after the Senate (projects kept, the Senate's budget for them, the change against the House bill; red when lower).
+Small figures give each count's share of all House bill projects, then of all remaining ones (0 of 5: 13.0% of the
+House bill's projects, 8.5% of what remains). The cards, the insertions table and the regions table carry the
+remaining figures too. "Count documents from" switches between either source, the Senate copies and DPWH
 Transparency (`?from=`), as on the House page. Figures: `report.json` `dpwh_documents`, from `documents()` in
 `build_report.py`, one row per reviewer project (16,275; the six bill rows that print three projects twice keep
 their own House bill amounts and split the Senate amount in the same shares, so totals equal the Senate DPWH

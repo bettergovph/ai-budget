@@ -661,12 +661,10 @@ function DocumentsPage({ r }: { r: Report }) {
 
       <section className="rr-sec">
         <div className="rr-cards is-4">
-          <Card label="0 of 5 key documents: removed" value={pct(zero.removed_n, zero.n)} tone="down" note={`${n(zero.removed_n)} of ${n(zero.n)} projects · ${php(zero.removed)} of ${php(zero.house)}`} />
-          <Card label="5 of 5 key documents: removed" value={pct(five.removed_n, five.n)} note={`${n(five.removed_n)} of ${n(five.n)} projects · ${php(five.removed)} of ${php(five.house)}`} />
-          <Card label={`${DOC_LEVEL_LABEL.complete}: removed`} value={pct(t.levels.complete.removed_n, t.levels.complete.n)}
-            note={`${n(t.levels.complete.removed_n)} of ${n(t.levels.complete.n)} projects · ${php(t.levels.complete.removed)}`} />
-          <Card label="All DPWH projects: removed" value={pct(d.projects.removed_n, d.projects.n)}
-            note={`${n(d.projects.removed_n)} of ${n(d.projects.n)} projects · ${php(d.projects.removed)} of ${php(d.projects.house)}`} />
+          <Card label="0 of 5 key documents: removed" value={pct(zero.removed_n, zero.n)} tone="down" note={<CardNote c={zero} />} />
+          <Card label="5 of 5 key documents: removed" value={pct(five.removed_n, five.n)} note={<CardNote c={five} />} />
+          <Card label={`${DOC_LEVEL_LABEL.complete}: removed`} value={pct(t.levels.complete.removed_n, t.levels.complete.n)} note={<CardNote c={t.levels.complete} />} />
+          <Card label="All DPWH projects: removed" value={pct(d.projects.removed_n, d.projects.n)} note={<CardNote c={d.projects} />} />
         </div>
 
         <h3 className="rr-h3">By how many of the five key documents <span className="rr-muted">· {DOC_FROM_LABEL[from]}</span></h3>
@@ -674,16 +672,18 @@ function DocumentsPage({ r }: { r: Report }) {
           <table className="rr-table">
             <DocHead first="Key documents found" />
             <tbody>
-              {t.count.map((c, i) => <DocRow key={i} label={`${5 - i} of 5`} c={c} />)}
-              {unchecked > 0 && <DocRow label="Not checked yet" c={t.levels.unchecked} muted />}
-              <DocRow label="All DPWH projects" c={d.projects} total />
+              {t.count.map((c, i) => <DocRow key={i} label={`${5 - i} of 5`} c={c} all={d.projects} />)}
+              {unchecked > 0 && <DocRow label="Not checked yet" c={t.levels.unchecked} all={d.projects} muted />}
+              <DocRow label="All DPWH projects" c={d.projects} all={d.projects} total />
             </tbody>
           </table>
         </div>
         <p className="rr-note">
           Each row: the projects with that many of the five key documents (program of work, BP 202, development council endorsement, geotagged photos,
-          certificate of implementability) in {from === 'either' ? 'either source' : `the ${DOC_FROM_LABEL[from]}`}; their budget in the House bill and in the
-          Senate committee report; and the projects the Senate removes, with their House bill budget. Senate amounts in red are lower than the House bill’s.
+          certificate of implementability) in {from === 'either' ? 'either source' : `the ${DOC_FROM_LABEL[from]}`} and their House bill budget; the projects
+          the Senate removes (cuts to zero) and their House bill budget; and what remains in the Senate committee report: the projects it keeps and its budget
+          for them, which also counts what it raises or reduces. Small figures: the share of all projects in the House bill, then of all remaining ones.
+          Remaining budget in red is lower than the House bill’s.
           {unchecked > 0 && <> “Not checked yet”: {n(unchecked)} lines outside research.bettergov.ph’s document check (foreign-assisted projects, small facility lines).</>}
         </p>
         {from === 'senate' && (
@@ -698,8 +698,8 @@ function DocumentsPage({ r }: { r: Report }) {
           <table className="rr-table">
             <DocHead first="Documents" />
             <tbody>
-              {(['complete', 'partial', 'none'] as const).map((l) => <DocRow key={l} label={DOC_LEVEL_LABEL[l]} c={t.levels[l]} />)}
-              {unchecked > 0 && <DocRow label={DOC_LEVEL_LABEL.unchecked} c={t.levels.unchecked} muted />}
+              {(['complete', 'partial', 'none'] as const).map((l) => <DocRow key={l} label={DOC_LEVEL_LABEL[l]} c={t.levels[l]} all={d.projects} />)}
+              {unchecked > 0 && <DocRow label={DOC_LEVEL_LABEL.unchecked} c={t.levels.unchecked} all={d.projects} muted />}
             </tbody>
           </table>
         </div>
@@ -743,7 +743,7 @@ function DocumentsPage({ r }: { r: Report }) {
           <table className="rr-table">
             <DocHead first="Files from" />
             <tbody>
-              {(['senate', 'nep', 'both', 'none'] as const).map((g) => <DocRow key={g} label={FILES_FROM[g]} c={d.sources[g]} />)}
+              {(['senate', 'nep', 'both', 'none'] as const).map((g) => <DocRow key={g} label={FILES_FROM[g]} c={d.sources[g]} all={d.projects} />)}
             </tbody>
           </table>
         </div>
@@ -755,24 +755,33 @@ function DocumentsPage({ r }: { r: Report }) {
         <div className="rr-table-wrap">
           <table className="rr-table rr-narrow">
             <thead>
+              <tr className="sr-doc-groups">
+                <th scope="col" rowSpan={2}>Documents (either source)</th>
+                <th scope="colgroup" colSpan={3}>House insertions</th><th scope="colgroup" colSpan={3} className="sr-grp">NEP projects</th>
+              </tr>
               <tr>
-                <th scope="col">Documents (either source)</th>
-                <th scope="col" className="num">House insertions</th><th scope="col" className="num">Removed</th>
-                <th scope="col" className="num">NEP projects</th><th scope="col" className="num">Removed</th>
+                <th scope="col" className="num">Projects</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th>
+                <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th>
               </tr>
             </thead>
             <tbody>
               {(['complete', 'partial', 'none', 'unchecked'] as const).filter((l) => d.insertion.insertion[l].n + d.insertion.nep[l].n > 0).map((l) => (
                 <tr key={l}>
                   <th scope="row">{DOC_LEVEL_LABEL[l]}</th>
-                  <td className="num">{n(d.insertion.insertion[l].n)}</td><td className="num"><RemovedShare c={d.insertion.insertion[l]} /></td>
-                  <td className="num">{n(d.insertion.nep[l].n)}</td><td className="num"><RemovedShare c={d.insertion.nep[l]} /></td>
+                  {(['insertion', 'nep'] as const).map((g) => {
+                    const c = d.insertion[g][l];
+                    return [
+                      <td key={`${g}n`} className={`num${g === 'nep' ? ' sr-grp' : ''}`}>{n(c.n)}</td>,
+                      <td key={`${g}r`} className="num"><RemovedShare c={c} /></td>,
+                      <td key={`${g}l`} className="num"><b>{n(c.n - c.removed_n)}</b> <small><SenateAmt c={c} /></small></td>,
+                    ];
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="rr-note">House insertions: in the House bill but not in the NEP, by our comparison. NEP projects: the rest.</p>
+        <p className="rr-note">House insertions: in the House bill but not in the NEP, by our comparison. NEP projects: the rest. Remaining: the projects the Senate keeps, and its budget for them.</p>
       </section>
 
       <section className="rr-sec">
@@ -781,8 +790,9 @@ function DocumentsPage({ r }: { r: Report }) {
           <table className="rr-table">
             <thead>
               <tr>
-                <th scope="col">Region</th><th scope="col" className="num">Projects</th><th scope="col" className="num">House bill</th><th scope="col" className="num">Senate</th>
-                <th scope="col" className="num">Removed</th><th scope="col" className="num" title="Of the projects with none of the five and no file">No document: removed</th>
+                <th scope="col">Region</th><th scope="col" className="num">Projects</th><th scope="col" className="num">House bill</th>
+                <th scope="col" className="num">Removed</th><th scope="col" className="num">Remaining</th><th scope="col" className="num">Remaining budget</th>
+                <th scope="col" className="num" title="Of the projects with none of the five and no file">No document: removed</th>
                 <th scope="col" className="num" title={`Of the projects with ${DOC_LEVEL_LABEL.complete.toLowerCase()}`}>{DOC_LEVEL_LABEL.complete}: removed</th>
               </tr>
             </thead>
@@ -790,8 +800,9 @@ function DocumentsPage({ r }: { r: Report }) {
               {d.regions.map((x) => (
                 <tr key={x.region}>
                   <th scope="row">{x.region}</th>
-                  <td className="num">{n(x.all.n)}</td><td className="num">{php(x.all.house)}</td><td className="num"><SenateAmt c={x.all} /></td>
-                  <td className="num"><RemovedShare c={x.all} /></td><td className="num"><RemovedShare c={x.none} /></td><td className="num"><RemovedShare c={x.complete} /></td>
+                  <td className="num">{n(x.all.n)}</td><td className="num">{php(x.all.house)}</td>
+                  <td className="num"><RemovedShare c={x.all} /></td><td className="num"><b>{n(x.all.n - x.all.removed_n)}</b></td><td className="num"><b><SenateAmt c={x.all} /></b></td>
+                  <td className="num"><RemovedShare c={x.none} /></td><td className="num"><RemovedShare c={x.complete} /></td>
                 </tr>
               ))}
             </tbody>
@@ -811,31 +822,56 @@ function DocumentsPage({ r }: { r: Report }) {
   );
 }
 
+/** A card's note: removed of the House bill's, then what remains in the Senate's version. */
+function CardNote({ c }: { c: DocCell }) {
+  return (
+    <>
+      {n(c.removed_n)} of {n(c.n)} projects · {php(c.removed)} of {php(c.house)}
+      <br />Remaining: {n(c.n - c.removed_n)} projects · {php(c.senate)}
+    </>
+  );
+}
+
 const FILES_FROM: Record<'senate' | 'nep' | 'both' | 'none', string> = {
   senate: 'House bill only (Senate copies)', nep: 'NEP only (DPWH Transparency)', both: 'Both', none: 'No file found',
 };
 
+/**
+ * Each row reads left to right: the projects and budget in the House bill, what the Senate removes, and what remains
+ * in the Senate's version (Jason, 2026-11-27: "add the remaining numbers after senate removal"). The remaining budget
+ * is the Senate's: removed projects have none, and it includes what the Senate raises or reduces in those it keeps.
+ */
 function DocHead({ first }: { first: string }) {
   return (
     <thead>
+      <tr className="sr-doc-groups">
+        <th scope="col" rowSpan={2}>{first}</th>
+        <th scope="colgroup" colSpan={2}>House bill</th>
+        <th scope="colgroup" colSpan={2} className="sr-grp">Removed by the Senate</th>
+        <th scope="colgroup" colSpan={3} className="sr-grp">Remaining after the Senate</th>
+      </tr>
       <tr>
-        <th scope="col">{first}</th><th scope="col" className="num">Projects</th><th scope="col" className="num">House bill</th><th scope="col" className="num">Senate</th>
-        <th scope="col" className="num">Change</th><th scope="col" className="num">Removed by the Senate</th><th scope="col" className="num">Budget removed</th>
+        <th scope="col" className="num">Projects</th><th scope="col" className="num">Budget</th>
+        <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Budget</th>
+        <th scope="col" className="num sr-grp">Projects</th><th scope="col" className="num">Budget</th><th scope="col" className="num">Change</th>
       </tr>
     </thead>
   );
 }
 
-function DocRow({ label, c, total, muted }: { label: ReactNode; c: DocCell; total?: boolean; muted?: boolean }) {
+/** One row; `all` gives each project count its share of all projects (House bill) or of all remaining ones. */
+function DocRow({ label, c, all, total, muted }: { label: ReactNode; c: DocCell; all: DocCell; total?: boolean; muted?: boolean }) {
+  const left = c.n - c.removed_n;
   return (
     <tr className={total ? 'rr-total' : muted ? 'rr-muted' : undefined}>
       <th scope="row">{label}</th>
-      <td className="num">{n(c.n)}</td>
+      <td className="num">{n(c.n)}{!total && <small> {pct(c.n, all.n)}</small>}</td>
       <td className="num">{php(c.house)}</td>
-      <td className="num"><SenateAmt c={c} /></td>
-      <td className="num"><Chg v={c.senate - c.house} base={c.house} /></td>
-      <td className="num"><RemovedShare c={c} count /></td>
+      <td className="num sr-grp"><RemovedShare c={c} count /></td>
       <td className="num">{php(c.removed)} <small>{pct(c.removed, c.house)}</small></td>
+      <td className="num sr-grp"><b>{n(left)}</b>{!total && <small> {pct(left, all.n - all.removed_n)}</small>}</td>
+      <td className="num"><b><SenateAmt c={c} /></b></td>
+      <td className="num"><Chg v={c.senate - c.house} base={c.house} /></td>
     </tr>
   );
 }
