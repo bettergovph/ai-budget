@@ -68,9 +68,14 @@ ensure(E.count.length === 6, "unexpected shape of dpwh_documents");
 // The committee report's DPWH totals (Annex A-4), so a rebuilt file can't quietly change the posters.
 ensure(all.n === 16_275 && all.removed_n === 3_479 && all.house === 587_075_661_000 && all.senate === 520_876_384_250,
   `DPWH totals changed: ${JSON.stringify(all)}`);
-/** None of the 5 key documents (0 of 5). In either source it is also "no file at all", so "walang dokumento" holds. */
+/**
+ * "Walang dokumento" means 0 documents (Jason, 2026-11-28: "when we say 'walang dokumento', it should mean 0
+ * documents"): no key document and no other file, in the Senate copies or on DPWH Transparency. The projects with 0
+ * of the 5 key documents are exactly those (the "no document found" level), so the two must stay the same set.
+ */
 const none = E.count[5];
-ensure(none.n === E.levels.none.n && none.removed_n === E.levels.none.removed_n, "0 of 5 is no longer the same as no document found");
+ensure(none.n === E.levels.none.n && none.removed_n === E.levels.none.removed_n && none.house === E.levels.none.house,
+  "some projects with 0 of the 5 key documents now have another file: “walang dokumento” would no longer mean 0 documents");
 const some = E.levels.partial;
 ensure(some.removed_n === E.count[2].removed_n + E.count[3].removed_n + E.count[4].removed_n, "1–3 of 5 is no longer the partial level");
 const full = E.levels.complete;
@@ -177,6 +182,7 @@ const css = `
 
 const FINE = `<strong>Source:</strong> Committee Report ng Senate Committee on Finance sa House Bill 10858 (2027 budget), Annex A-4, at ang key
   documents na nakita para sa bawat DPWH project (research.bettergov.ph at BetterGov.PH)${asOf ? `, as of ${asOf}` : ""}.
+  <strong>Walang dokumento</strong> = 0 dokumento: walang kahit isang file na nakita, sa kopya ng DPWH para sa Senado at sa DPWH Transparency.
   <strong>Tinanggal</strong> = ginawang zero ang budget. Hindi sinabi ng Senado ang dahilan ng bawat pagtanggal: pattern ito sa data, hindi
   paliwanag ng Senado. Hindi patunay ang dokumento na tama ang laman nito. Hindi pa final ang report: boboto pa ang Senado, at
   pagkakasunduin pa ng Senado at Kamara ang iisang bersyon.`;
@@ -194,19 +200,19 @@ function slide1(): string {
     </div>`;
   return `${kicker(1)}
     <div class="title" id="title"><span>${n(none.removed_n)} DPWH projects</span><span>na walang dokumento,</span><span class="red">tinanggal ng Senado</span></div>
-    <p class="strap"><span>Walang kahit isa sa 5 key documents ang mga project na ito. ${php(none.removed)} ang budget nila sa House bill.</span></p>
+    <p class="strap"><span>0 dokumento: walang kahit isang file na nakita para sa mga project na ito. ${php(none.removed)} ang budget nila sa House bill.</span></p>
     <div class="body">
       <div class="duo">
-        ${card(none, "Walang kahit isang key document", true)}
+        ${card(none, "0 dokumento", true)}
         ${card(full, "May 4 o 5 key documents", false)}
       </div>
-      <p class="note">Sa <strong>${n(none.n)}</strong> DPWH projects na walang kahit isang key document, <b>${n(none.removed_n)}</b> ang tinanggal: halos kalahati (${p0(none.removed_n, none.n)}).
+      <p class="note">Sa <strong>${n(none.n)}</strong> DPWH projects na walang kahit isang dokumento, <b>${n(none.removed_n)}</b> ang tinanggal: halos kalahati (${p0(none.removed_n, none.n)}).
         Sa mga may 4 o 5 key documents, ${p0(full.removed_n, full.n)} lang ang tinanggal.</p>
     </div>`;
 }
 
 function slide2(): string {
-  const parts: [string, Cell, string][] = [["none", none, "Walang dokumento"], ["some", some, "Kulang (1–3 sa 5)"], ["full", full, "May 4 o 5 key documents"]];
+  const parts: [string, Cell, string][] = [["none", none, "Walang dokumento (0)"], ["some", some, "Kulang (1–3 sa 5)"], ["full", full, "May 4 o 5 key documents"]];
   const bar = (by: "removed_n" | "removed", show: (c: Cell) => string) => `<div class="stack">${parts.map(([cls, c]) => {
     const w = pct(c[by], all[by]);
     return `<div class="${cls}" style="width:${w.toFixed(2)}%">${w >= 9 ? show(c) : ""}</div>`;
